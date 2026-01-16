@@ -1,0 +1,7 @@
+# Temporary files
+*.tmp
+*.bak
+*~
+
+# Generated files
+*.pdf
