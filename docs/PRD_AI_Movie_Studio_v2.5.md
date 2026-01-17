@@ -1,6 +1,6 @@
 # 🎬 AI Movie Studio - Product Requirements Document (PRD)
 
-> **버전**: 2.5.1  
+> **버전**: 2.5.3  
 > **최종 수정일**: 2026-01-15  
 > **프로젝트 기간**: 6주  
 
@@ -66,9 +66,9 @@
 └─────────────────────────────────────────────────────────────────┘
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│ 4️⃣ 음악/효과음 추가                                              │
-│    • 외부에서 생성한 배경음악 파일 업로드                         │
-│    • (향후) AI 음악 생성 API 연동 검토                            │
+│ 4️⃣ 음악 파일 업로드/보관                                         │
+│    • 외부에서 생성한 배경음악 파일 업로드 (P1, 저장용)            │
+│    • 편집/믹싱은 P2에서 검토                                      │
 └─────────────────────────────────────────────────────────────────┘
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
@@ -83,7 +83,7 @@
 │    • 미리보기 및 다운로드                                         │
 └─────────────────────────────────────────────────────────────────┘
 ```
-> 범위 메모: **P0는 배경음악/효과음 없이** 씬별 확정 영상 병합까지를 목표로 하고, **음악 업로드/믹싱은 P1**로 둡니다.
+> 범위 메모: **P0는 배경음악/효과음 없이** 씬별 확정 영상 병합까지를 목표로 하고, **P1은 음악 업로드/보관**, **P2에서 믹싱/병합**을 검토합니다.
 
 
 ### 1.4 기술 스택
@@ -96,7 +96,7 @@
 | 실시간 동기화 | Yjs / CRDT (P1, 피그마 스타일 협업) |
 | AI 이미지 생성 | Google Gemini API (Gemini 2.5 Pro Image) |
 | AI 영상 생성 | Google Veo 3.1 API (P0), 오픈소스 모델 (P1: Stable Video Diffusion 등) |
-| 음악/효과음 | 외부 파일 업로드 (AI 음악 API는 향후 검토) |
+| 음악/효과음 | 외부 파일 업로드/보관 (편집/믹싱은 향후 검토) |
 | 영상 편집/병합 | Server-side FFmpeg (Worker 비동기 Job) |
 | 데이터베이스 | MySQL (MVP 기준) |
 | 파일 저장소 | AWS S3 (MVP 기준, 로컬 개발 시 MinIO 대체 가능) |
@@ -169,7 +169,7 @@
 | **P1** | AI 영상 생성 (오픈소스) | Stable Video Diffusion 등 오픈소스 모델 선택 옵션 | ⬜ |
 | **P0** | 영상 병합 | 씬별 영상을 하나로 조합 (확정된 영상 기준) | ✅ |
 | **P0** | 순차 재생 | 씬 내 클립 / 프로젝트 전체 영상 순차 자동 재생 | ✅ |
-| **P0** | 진행률 표시 | AI 생성 **상태(Queued/Running/Done/Failed)** + 완료/실패 알림 표시 (실제 %는 미보장) | ✅ |
+| **P0** | 진행률 표시 | AI 생성 **상태(대기/진행중/완료/실패)** + 완료/실패 알림 표시 (job status: pending/running/succeeded/failed, 실제 %는 미보장) | ✅ |
 | **P1** | 외부 파일 업로드 | 이미지/영상/음악 직접 업로드 | ⬜ |
 | **P1** | 퀵 프리뷰 | 프로젝트 상세에서 씬 연결 미리보기 | ⬜ |
 | **P1** | 실시간 알림 | 협업 중 팀원 편집 알림 | ⬜ |
@@ -232,7 +232,7 @@
 |---|---|---|
 | **Story** | 시나리오/스토리 관리 | AI 시나리오 생성, 씬 목록/순서 관리, 씬 설명 편집 |
 | **Scenes** | 영상 진행 현황 | 씬별 확정 영상 현황, 프로젝트 미리보기, 씬 편집 진입점 |
-| **Characters** | 오브젝트 시트 관리 | 캐릭터/소품 레퍼런스 이미지 생성 |
+| **Objects** | 오브젝트 시트 관리 | 캐릭터/소품 레퍼런스 이미지 생성 |
 
 **Scenes 탭 상세 (P0):**
 ```
@@ -454,6 +454,7 @@ STEP 4️⃣ 씬별 스토리 생성 및 편집
 | 영상 | 🎥 | 영상 클립 | 샷의 [+] | 입력 → AI 생성 → **검토/수정** → 승인 |
 
 > 💡 **모든 생성 노드**에 "입력 → AI 프롬프트 생성 → 검토/수정 → 승인 → 결과 생성" 플로우 적용
+> 💡 **씬 헤더 노드**는 씬 제목/설명 표시용 메타 노드로 AI 생성 대상이 아니며, 자동 생성/동기화됩니다. (생성/삭제 불가)
 
 **노드 구조 (마인드맵 스타일):**
 ```
@@ -667,7 +668,7 @@ STEP 4️⃣ 씬별 스토리 생성 및 편집
 
 처리:
 - 비동기 Job 생성 → 상태 추적 (대기/처리중/완료/실패)
-- 진행률 표시: 기본은 상태(Queued/Running/Done/Failed)이며, Provider가 세부 단계를 제공하면 Running 내 세부 단계(Generating/Uploading 등)로 표시
+- 진행률 표시: 기본은 상태(대기/진행중/완료/실패)이며, Provider가 세부 단계를 제공하면 진행중 내 세부 단계(Generating/Uploading 등)로 표시
 - 백그라운드 생성 지원 (다른 씬 작업 가능)
 
 출력:
@@ -689,16 +690,17 @@ STEP 4️⃣ 씬별 스토리 생성 및 편집
 
 #### 4.2.8 음악/효과음 추가
 ```
-P1 (외부 업로드):
+P1 (외부 업로드/보관):
 - 외부에서 생성한 음악 파일 업로드 (MP3, WAV)
 - Suno, Udio 등 외부 AI 음악 서비스에서 생성 후 업로드
-- 타임라인에서 배경음악 트랙 지정
-- 음악 미리듣기
+- 프로젝트별 음악 파일 보관 (메타데이터 저장)
+- (선택) 음악 미리듣기
 
 💡 MVP(P0)에서는 배경음악 없이 영상만 병합
-💡 음악 업로드는 P1에서 지원
+💡 P1은 저장/보관까지만, 타임라인 배치/믹싱은 P2
 
 P2 (향후 검토):
+- 타임라인 배치/믹싱 및 최종 병합 반영
 - AI 음악 생성 API 연동 (API 가용성 확인 필요)
 - 현재 Suno 공식 API 미제공으로 보류
 ```
@@ -751,10 +753,11 @@ P2 (향후 검토):
 │                                                         │
 │  ⚠️ 씬 4: 씬 영상 미생성 (씬 편집에서 먼저 생성 필요)      │
 │                                                         │
-│  🎵 오디오 트랙 (P1)                                     │
+│  🎵 음악 파일 보관 (P1)                                  │
 │  ┌─────────────────────────────────────────────────┐   │
-│  │ ♪ 배경음악.mp3                                   │   │
+│  │ ♪ 배경음악.mp3 (저장됨)                          │   │
 │  └─────────────────────────────────────────────────┘   │
+│  ※ 최종 병합에는 미포함 (P2에서 믹싱)                   │
 │                                                         │
 │  총 길이: 45초 / 최대 60초                               │
 │                                                         │
@@ -779,14 +782,15 @@ P2 (향후 검토):
 **MVP (P0):**
 - 씬 타임라인: 클립 순서 조정, **순차 재생**, 씬 영상 생성
 - 프로젝트 타임라인: 씬 순서 조정, **순차 재생**, 최종 영상 병합
-- 출력 규격: 720p / 24fps / H.264 (audio: 없음)
+- 출력 규격: 720p/1080p / 24fps / H.264 (audio: 없음)
 - 다운로드: MP4
 
 **P1:**
 - 분할/트리밍: 영상 시작/끝 지점 조절
-- 음악 트랙: 배경음악 업로드/배치
+- 음악 파일 업로드/보관 (편집/믹싱은 P2)
 
 **P2:**
+- 음악 트랙 편집/믹싱: 배경음악을 타임라인에 배치하고 최종 병합에 반영
 - 자막 추가: 텍스트 오버레이
 - 위치/폰트/색상 설정
 
@@ -882,7 +886,7 @@ P2 (향후 검토):
 └─────────────────────────────────────────────────────────┘
 
 원칙:
-- 진행 상태(Queued/Running/Done/Failed) + 예상 시간(가능한 경우) 표시
+- 진행 상태(대기/진행중/완료/실패) + 예상 시간(가능한 경우) 표시
 - 대기 시간에 할 수 있는 작업 링크 제공
 - 백그라운드 생성 지원으로 다른 씬 작업 가능
 ```
@@ -954,7 +958,7 @@ P2 (향후 검토):
 - 토스트 알림(실패): "영상 생성 실패" [재시도] [프롬프트 수정]
 
 원칙:
-- AI Provider가 % 진행률을 제공하지 않으면, 상태 기반(Queued/Running/Done/Failed)으로 표시
+- AI Provider가 % 진행률을 제공하지 않으면, 상태 기반(대기/진행중/완료/실패)으로 표시
 - 완료/실패는 WebSocket 이벤트로 즉시 반영하고, 상세는 필요 시 Job 조회 API로 확인
 ```
 
@@ -1008,9 +1012,10 @@ P2 (향후 검토):
 └──────────────────────────────────────────────────────────────────┘
                               ▼
 ┌──────────────────────────────────────────────────────────────────┐
-│ 3️⃣ 음악/효과음 단계                                              │
+│ 3️⃣ 음악 파일 업로드/보관 (P1)                                    │
 │    • 외부에서 생성한 배경음악 파일 업로드                         │
 │    • (Suno, Udio 등에서 생성 후 업로드)                           │
+│    • 타임라인 편집/믹싱은 P2                                      │
 └──────────────────────────────────────────────────────────────────┘
                               ▼
 ┌──────────────────────────────────────────────────────────────────┐
@@ -1112,7 +1117,7 @@ P2 (향후 검토):
 │                                                                 │
 │  [타임라인으로 이동 →]                                          │
 │                                                                 │
-│  💡 배경음악은 타임라인 화면에서 추가할 수 있습니다.             │
+│  💡 배경음악은 업로드/보관(P1)만 지원하며, 믹싱은 P2에서 검토합니다. │
 │  💡 협업은 상단 [협업 시작] 버튼으로 언제든 시작할 수 있습니다.  │
 │                                                                 │
 └─────────────────────────────────────────────────────────────────┘
@@ -1227,7 +1232,7 @@ P2 (향후 검토):
 │  └─────────────────────────────────────────────────────────┘   │
 │  0s        15s        30s        50s        60s                 │
 │                                                                 │
-│  🎵 오디오 트랙                                                 │
+│  🎵 오디오 트랙 (P2)                                            │
 │  ┌─────────────────────────────────────────────────────────┐   │
 │  │ |♪ epic_adventure.mp3                                   │   │
 │  │ |░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░   │   │
@@ -1240,7 +1245,7 @@ P2 (향후 검토):
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-> 💡 MVP(P0)에서는 배경음악 없이 영상만 병합하므로, 오디오 트랙 UI는 숨김/비활성화하고 P1에서 활성화합니다.
+> 💡 MVP(P0)에서는 배경음악 없이 영상만 병합합니다. P1은 업로드/보관까지만 제공하며, 오디오 트랙 편집/믹싱 UI는 P2에서 활성화합니다.
 
 #### 6.2.6 새 프로젝트 생성 모달
 ```
@@ -1320,7 +1325,7 @@ P2 (향후 검토):
   └─ Redis Streams 소비 → AI API 호출/FFmpeg 병합 → S3 저장 → DB 업데이트
 
 [DevOps / Infra]
-  ├─ GitHub Actions (CI/CD)
+  ├─ Jenkins (CI/CD)
   ├─ Docker Hub / AWS ECR (컨테이너 레지스트리)
   ├─ AWS EC2 / Docker (배포)
   └─ Prometheus + Grafana (모니터링)
@@ -1347,8 +1352,8 @@ Redis 이벤트(Pub/Sub 또는 Streams) 발행
 API 서버(WebSocket 브릿지) → 프로젝트 이벤트 WebSocket으로 완료/실패 알림
 ```
 
-**작업 상태:**
-| status (API/DB) | 의미 |
+**AI Job 상태:**
+| status (API) | 의미 |
 |---|---|
 | pending | 대기열에서 대기 중 |
 | running | AI 처리 중 |
@@ -1360,6 +1365,7 @@ API 서버(WebSocket 브릿지) → 프로젝트 이벤트 WebSocket으로 완�
 ### 7.5 노드 기반 워크플로우 DB 스키마
 
 노드 기반 씬 편집을 위해 다음 테이블 구조가 필요합니다:
+- **scene_header 노드**는 씬 메타(제목/설명) 표시용 **가상 노드**로, `scenes` 테이블 기반으로 API 응답 시 합성되며 `scene_nodes`에 저장하지 않습니다.
 
 ```sql
 -- 씬 내 노드 (마스터/그리드/샷/영상)
@@ -1368,7 +1374,7 @@ CREATE TABLE scene_nodes (
     scene_id BIGINT NOT NULL,
     node_type ENUM('master', 'grid', 'shot', 'video') NOT NULL,
     parent_node_id BIGINT NULL,          -- 분기 구조 표현 (NULL이면 루트)
-    status ENUM('pending', 'running', 'succeeded', 'failed') DEFAULT 'pending', -- (API도 동일: pending/running/succeeded/failed)
+    status ENUM('PENDING', 'RUNNING', 'SUCCEEDED', 'FAILED') DEFAULT 'PENDING', -- (API 노드 status와 동일)
     is_active BOOLEAN DEFAULT FALSE,     -- master 전용: Active Master 여부 (scene당 최대 1개)
     is_confirmed BOOLEAN DEFAULT FALSE,  -- 타임라인 확정 여부 (video만)
     content_url VARCHAR(500),            -- S3 이미지/영상 URL
@@ -1420,10 +1426,11 @@ CREATE TABLE node_edges (
 
 | 노드 타입 | 필수 속성 | 가능한 상태 | 연결 가능 대상 |
 |-----------|-----------|-------------|----------------|
-| **master** | prompt, object_ids, style, time_of_day, mood, is_active | pending/running/succeeded/failed | → grid |
-| **grid** | layout (2x2, 2x3 등), shot_types[] | pending/running/succeeded/failed | → shot |
-| **shot** | shot_number, expression_option | pending/running/succeeded/failed | → video |
-| **video** | start_shot_node_id, end_shot_node_id(선택), camera_motion, duration, motion_description | pending/running/succeeded/failed, **is_confirmed** | (종단) |
+| **scene_header** | title, description (scene 메타) | — (읽기 전용) | — |
+| **master** | prompt, object_ids, style, time_of_day, mood, is_active | PENDING/RUNNING/SUCCEEDED/FAILED | → grid |
+| **grid** | layout (2x2, 2x3 등), shot_types[] | PENDING/RUNNING/SUCCEEDED/FAILED | → shot |
+| **shot** | shot_number, expression_option | PENDING/RUNNING/SUCCEEDED/FAILED | → video |
+| **video** | start_shot_node_id, end_shot_node_id(선택), camera_motion, duration, motion_description | PENDING/RUNNING/SUCCEEDED/FAILED, **is_confirmed** | (종단) |
 
 추가 규칙:
 - `video.parent_node_id`는 **시작 샷(start_shot)** 기준으로 연결(트리 구조 유지)
@@ -1644,6 +1651,10 @@ POST   /api/nodes/{id}/activate        - Active Master 변경 (master 노드만)
 POST   /api/nodes/{id}/confirm         - 타임라인 확정 (영상 노드만)
 DELETE /api/nodes/{id}/confirm         - 확정 취소
 
+💡 scene_header 노드:
+  - 씬 메타(제목/설명) 표시용 가상 노드로 `GET /api/scenes/{sceneId}/nodes` 응답에 포함됩니다.
+  - 생성/삭제 대상이 아니며, 씬 정보와 자동 동기화됩니다.
+
 💡 P0 연결 규칙: 노드 연결은 `parent_node_id` 기반 트리 구조로만 생성(마스터→그리드→샷→영상)
    - Vue Flow용 edge는 서버가 트리로부터 계산해 내려줌(수동 edge 편집은 P1)
 💡 Active Master: master는 여러 개 생성 가능하지만 scene당 Active는 최대 1개이며, 신규 그리드는 기본적으로 Active 아래에 생성됩니다.
@@ -1657,7 +1668,7 @@ DELETE /api/nodes/{id}/confirm         - 확정 취소
   - 노드 삭제 시 하위 노드가 함께 삭제됩니다.
   - 삭제된 노드에 대해 뒤늦게 도착한 Job 결과는 서버가 무시(무효화)합니다.
 💡 다운로드(export) 정책(MVP):
-  - `status=succeeded`인 노드만 다운로드 URL을 발급합니다.
+  - `status=SUCCEEDED`인 노드만 다운로드 URL을 발급합니다.
   - response(예): `{ downloadUrl }` (S3 Presigned URL)
 ```
 
@@ -1688,7 +1699,7 @@ POST /api/nodes/{id}/regenerate
 POST /api/music/upload [P1]
   - body: multipart/form-data (file, projectId)
   - response: { musicId, url, duration }
-  - 💡 음악 업로드는 P1 기능, MVP에서는 배경음악 없이 영상만 병합
+  - 💡 음악 업로드/보관은 P1 기능, 최종 병합 반영은 P2에서 검토
 
 GET /api/ai/jobs/{jobId}
   - response: { status, progress?, target, resultUrl?, error? }
@@ -1717,9 +1728,9 @@ PUT    /api/projects/{id}/timeline
   - 💡 정렬 대상 = `videoNodeId` (확정된 video 노드)
 
 POST /api/projects/{id}/merge
-  - body: { includeMusic: boolean }
+  - body: { includeMusic: boolean } // P2 (음악 믹싱 반영)
   - response: { jobId }
-  - 💡 merge 결과는 타임라인 순서를 기준으로 병합됩니다.
+  - 💡 merge 결과는 타임라인 순서를 기준으로 병합됩니다. (P1은 영상만 병합)
 
 GET /api/projects/{id}/export
   - response: { downloadUrl }
@@ -1959,3 +1970,7 @@ Week 6: 마무리 & 발표
   - **씬 타임라인**: 씬 편집 화면 하단, 씬 내 클립들 → 씬 영상 병합
   - **프로젝트 타임라인**: 별도 화면, 모든 씬 영상들 → 최종 영화 병합
   - 씬별 미리보기 + 전체 미리보기 기능 명시
+  - 음악 기능 범위 정리: **P1 업로드/보관**, **P2 믹싱/병합 반영**
+  - CI/CD: Jenkins로 통일
+  - 상태값 정리: Job status(pending/running/succeeded/failed), Node status(PENDING/RUNNING/SUCCEEDED/FAILED)
+  - 탭명: Characters → Objects
