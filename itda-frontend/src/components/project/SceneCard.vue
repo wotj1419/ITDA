@@ -10,10 +10,12 @@ interface Props {
   scene: Scene
   projectId: number
   draggable?: boolean
+  showThumbnail?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
   draggable: true,
+  showThumbnail: true,
 })
 
 const statusConfig = computed(() => {
@@ -37,7 +39,10 @@ const editLink = computed(() => ({
 <template>
   <div
     class="scene-card"
-    :class="{ 'scene-card-draggable': draggable }"
+    :class="{
+      'scene-card-draggable': draggable,
+      'scene-card-compact': !showThumbnail,
+    }"
     :draggable="draggable"
   >
     <div class="scene-card-content">
@@ -45,7 +50,7 @@ const editLink = computed(() => ({
       <GripVertical v-if="draggable" class="drag-handle" />
 
       <!-- Thumbnail -->
-      <div class="scene-thumbnail">
+      <div v-if="showThumbnail" class="scene-thumbnail">
         <img
           v-if="scene.thumbnailUrl"
           :src="scene.thumbnailUrl"
@@ -79,7 +84,7 @@ const editLink = computed(() => ({
             size="sm"
             @click="navigate"
           >
-            <Pencil class="btn-icon" />
+            <Pencil class="icon-sm" />
             Edit
           </Button>
         </RouterLink>
@@ -114,6 +119,10 @@ const editLink = computed(() => ({
   display: flex;
   align-items: center;
   gap: 1rem;
+}
+
+.scene-card-compact .scene-card-content {
+  gap: 0.75rem;
 }
 
 .drag-handle {
@@ -165,6 +174,10 @@ const editLink = computed(() => ({
   margin-bottom: 0.25rem;
 }
 
+.scene-card-compact .scene-header {
+  flex-wrap: wrap;
+}
+
 .scene-title {
   font-weight: 600;
   font-size: 0.9375rem;
@@ -203,6 +216,13 @@ const editLink = computed(() => ({
   white-space: nowrap;
 }
 
+.scene-card-compact .scene-description {
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
 .scene-actions {
   display: flex;
   align-items: center;
@@ -210,10 +230,7 @@ const editLink = computed(() => ({
   flex-shrink: 0;
 }
 
-.btn-icon {
-  width: 16px;
-  height: 16px;
-}
+/* Uses global .icon-sm from base.css */
 
 /* Drag states */
 .scene-card.dragging {

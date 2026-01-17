@@ -66,11 +66,11 @@ const emit = defineEmits<{
       <!-- Actions -->
       <div class="node-actions">
         <Button variant="secondary" size="sm" @click.stop="emit('regenerate')">
-          <RefreshCw class="btn-icon" />
+          <RefreshCw class="icon-sm" />
           Regenerate
         </Button>
         <Button variant="primary" size="sm" @click.stop="emit('add-grid')">
-          <Plus class="btn-icon" />
+          <Plus class="icon-sm" />
           Grid
         </Button>
       </div>
@@ -179,10 +179,7 @@ const emit = defineEmits<{
   gap: 0.5rem;
 }
 
-.btn-icon {
-  width: 14px;
-  height: 14px;
-}
+/* Uses global .icon-sm from base.css */
 
 /* ==========================================================================
    Node Handle

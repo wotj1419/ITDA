@@ -147,41 +147,7 @@ const handleSearch = () => {
   box-shadow: 0 0 0 3px rgba(244, 63, 94, 0.1);
 }
 
-/* Buttons */
-.btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.5rem 1rem;
-  font-size: 0.875rem;
-  font-weight: 500;
-  border-radius: 8px;
-  border: none;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.btn-ghost {
-  background: transparent;
-  color: var(--gray-600);
-}
-
-.btn-ghost:hover {
-  background: var(--gray-100);
-}
-
-.btn-primary {
-  background: linear-gradient(135deg, var(--rose-400), var(--rose-500));
-  color: white;
-  box-shadow: 0 2px 8px rgba(244, 63, 94, 0.25);
-}
-
-.btn-primary:hover {
-  background: linear-gradient(135deg, var(--rose-500), var(--rose-600));
-  box-shadow: 0 4px 12px rgba(244, 63, 94, 0.35);
-  transform: translateY(-1px);
-}
-
+/* Icons */
 .icon-sm {
   width: 16px;
   height: 16px;

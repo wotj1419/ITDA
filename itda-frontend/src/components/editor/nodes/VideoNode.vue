@@ -89,7 +89,7 @@ const cameraMotion = props.node.settings?.cameraMotion || 'STATIC';
       <!-- Actions -->
       <div class="node-actions">
         <Button variant="secondary" size="sm" @click.stop="emit('regenerate')">
-          <RefreshCw class="btn-icon" />
+          <RefreshCw class="icon-sm" />
           Regen
         </Button>
         <Button
@@ -98,7 +98,7 @@ const cameraMotion = props.node.settings?.cameraMotion || 'STATIC';
           size="sm"
           @click.stop="emit('confirm')"
         >
-          <Star class="btn-icon" />
+          <Star class="icon-sm" />
           확정
         </Button>
         <Button
@@ -284,10 +284,7 @@ const cameraMotion = props.node.settings?.cameraMotion || 'STATIC';
   gap: 0.5rem;
 }
 
-.btn-icon {
-  width: 14px;
-  height: 14px;
-}
+/* Uses global .icon-sm from base.css */
 
 /* ==========================================================================
    Node Handle

@@ -48,11 +48,11 @@ const emit = defineEmits<{
       </div>
       <div class="complete-actions">
         <Button variant="secondary" @click="emit('preview')">
-          <Play class="btn-icon" />
+          <Play class="icon-sm" />
           미리보기
         </Button>
         <Button variant="primary" @click="emit('download')">
-          <Download class="btn-icon" />
+          <Download class="icon-sm" />
           다운로드 (MP4)
         </Button>
       </div>
@@ -187,10 +187,7 @@ const emit = defineEmits<{
   gap: 0.75rem;
 }
 
-.btn-icon {
-  width: 16px;
-  height: 16px;
-}
+/* Uses global .icon-sm from base.css */
 
 /* Error */
 .merge-error {

@@ -392,46 +392,7 @@ const handleClose = () => {
   color: var(--rose-600);
 }
 
-/* Buttons */
-.btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  padding: 0.75rem 1.25rem;
-  font-size: 0.875rem;
-  font-weight: 500;
-  border-radius: 8px;
-  border: none;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.btn-primary {
-  background: linear-gradient(135deg, var(--rose-400), var(--rose-500));
-  color: white;
-  box-shadow: 0 2px 8px rgba(244, 63, 94, 0.25);
-}
-
-.btn-primary:hover:not(:disabled) {
-  background: linear-gradient(135deg, var(--rose-500), var(--rose-600));
-}
-
-.btn-secondary {
-  background: white;
-  color: var(--gray-700);
-  border: 1px solid var(--rose-200);
-}
-
-.btn-secondary:hover:not(:disabled) {
-  background: var(--rose-50);
-}
-
+/* Utility */
 .w-full {
   width: 100%;
 }
@@ -441,6 +402,7 @@ const handleClose = () => {
   height: 16px;
 }
 
+/* Button spinner - 컴포넌트 전용 */
 .btn-spinner {
   width: 16px;
   height: 16px;

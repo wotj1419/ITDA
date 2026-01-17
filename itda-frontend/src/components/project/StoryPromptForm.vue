@@ -120,7 +120,7 @@ const handleGenerate = () => {
       :disabled="isGenerating"
       @click="handleGenerate"
     >
-      <Sparkles class="btn-icon" />
+      <Sparkles class="icon-sm" />
       AI로 씬 생성
     </Button>
   </Card>
@@ -197,10 +197,7 @@ const handleGenerate = () => {
   font-family: inherit;
 }
 
-.btn-icon {
-  width: 18px;
-  height: 18px;
-}
+/* Uses global .icon-sm from base.css */
 
 @media (max-width: 640px) {
   .form-row {

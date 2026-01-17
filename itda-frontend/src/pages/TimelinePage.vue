@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useProjectStore } from '../stores/project'
 import { useTimelineStore } from '../stores/timeline'
 import { useUIStore } from '../stores/ui'
+import { useCollabStore } from '../stores/collab'
 
 import TimelineLayout from '../layouts/TimelineLayout.vue'
 import VideoPreview from '../components/timeline/VideoPreview.vue'
@@ -18,6 +19,7 @@ const route = useRoute()
 const projectStore = useProjectStore()
 const timelineStore = useTimelineStore()
 const uiStore = useUIStore()
+const collabStore = useCollabStore()
 
 const projectId = computed(() => Number(route.params.id))
 const project = computed(() => projectStore.currentProject)
@@ -28,7 +30,16 @@ onMounted(async () => {
       projectStore.loadProject(projectId.value),
       timelineStore.loadClips(projectId.value),
     ])
+    
+    // 협업 방 입장
+    collabStore.joinRoom(projectId.value)
+    collabStore.updateLocation('Timeline 편집 중')
   }
+})
+
+onUnmounted(() => {
+  // 페이지 이탈 시 협업 방 퇴장
+  collabStore.leaveRoom()
 })
 
 async function handleReorder(clipIds: string[]) {
@@ -143,7 +154,7 @@ function handleReset() {
             variant="ghost"
             @click="handleReset"
           >
-            <RefreshCw class="btn-icon" />
+            <RefreshCw class="icon-sm" />
             다시 병합
           </Button>
           <Button
@@ -151,7 +162,7 @@ function handleReset() {
             :disabled="!timelineStore.canMerge"
             @click="handleMerge"
           >
-            <GitMerge class="btn-icon" />
+            <GitMerge class="icon-sm" />
             영상 병합하기
           </Button>
           <Button
@@ -159,7 +170,7 @@ function handleReset() {
             :disabled="!timelineStore.canDownload"
             @click="handleDownload"
           >
-            <Download class="btn-icon" />
+            <Download class="icon-sm" />
             다운로드 (MP4)
           </Button>
         </div>
@@ -253,8 +264,5 @@ function handleReset() {
   padding-top: 0.5rem;
 }
 
-.btn-icon {
-  width: 16px;
-  height: 16px;
-}
+/* Uses global .icon-sm from base.css */
 </style>

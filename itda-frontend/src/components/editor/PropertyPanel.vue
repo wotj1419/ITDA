@@ -117,7 +117,7 @@ function handleDurationChange(duration: number): void {
           readonly
         />
         <button class="improve-prompt-btn">
-          <Wand2 class="btn-icon" />
+          <Wand2 class="icon-sm" />
           Improve Prompt
         </button>
       </div>
@@ -147,7 +147,7 @@ function handleDurationChange(duration: number): void {
     <!-- Footer -->
     <div class="panel-footer">
       <Button variant="secondary" class="delete-btn" @click="emit('delete-node')">
-        <Trash2 class="btn-icon" />
+        <Trash2 class="icon-sm" />
         Delete Node
       </Button>
     </div>
@@ -379,10 +379,7 @@ function handleDurationChange(duration: number): void {
   color: #ef4444;
 }
 
-.btn-icon {
-  width: 16px;
-  height: 16px;
-}
+/* Uses global .icon-sm from base.css */
 
 /* ==========================================================================
    Empty State

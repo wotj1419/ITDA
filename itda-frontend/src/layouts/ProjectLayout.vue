@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed, type Component } from 'vue'
+import { computed, type Component, ref, onUnmounted } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import type { RouteLocationRaw } from 'vue-router'
 import { useUIStore } from '../stores/ui'
+import { useSidebarShortcut } from '../composables/useSidebarShortcut'
 import type { ProjectDetail } from '../types'
 import Badge from '../components/common/Badge.vue'
 import AvatarGroup from '../components/common/AvatarGroup.vue'
@@ -40,6 +41,42 @@ const emit = defineEmits<{
 const route = useRoute()
 const uiStore = useUIStore()
 
+// Keyboard shortcut (Ctrl+B)
+useSidebarShortcut()
+
+// Hover edge trigger state
+const isEdgeHovered = ref(false)
+
+// Auto-expand timer (300ms delay)
+let hoverTimer: ReturnType<typeof setTimeout> | null = null
+
+const handleSidebarEnter = () => {
+  // Only auto-expand if sidebar is collapsed and not pinned
+  if (!uiStore.sidebarExpanded && !uiStore.sidebarPinned) {
+    hoverTimer = setTimeout(() => {
+      uiStore.peekSidebar()
+    }, 300)
+  }
+}
+
+const handleSidebarLeave = () => {
+  // Clear timer if leaving before delay
+  if (hoverTimer) {
+    clearTimeout(hoverTimer)
+    hoverTimer = null
+  }
+  // Auto-collapse if not pinned
+  uiStore.unpeekSidebar()
+  isEdgeHovered.value = false
+}
+
+// Cleanup timer on unmount
+onUnmounted(() => {
+  if (hoverTimer) {
+    clearTimeout(hoverTimer)
+  }
+})
+
 const projectId = computed(() => props.project?.projectId || Number(route.params.id))
 
 interface NavItem {
@@ -54,7 +91,7 @@ const navItems = computed<NavItem[]>(() => [
   { key: 'story', icon: BookOpen, label: 'Story', to: null },
   { key: 'scenes', icon: Clapperboard, label: 'Scenes', badge: props.sceneCount, to: null },
   { key: 'characters', icon: User, label: 'Characters', to: null },
-  { key: 'timeline', icon: Layers, label: 'Timeline', to: { name: 'timeline', params: { id: projectId.value } } },
+  { key: 'timeline', icon: Layers, label: 'Full Timeline', to: { name: 'timeline', params: { id: projectId.value } } },
   { key: 'settings', icon: Settings, label: 'Settings', to: null },
 ])
 
@@ -87,7 +124,11 @@ const progressPercentage = computed(() => {
 <template>
   <div class="app-container">
     <!-- Project Sidebar -->
-    <aside :class="sidebarClasses">
+    <aside
+      :class="sidebarClasses"
+      @mouseenter="handleSidebarEnter"
+      @mouseleave="handleSidebarLeave"
+    >
       <!-- Back Link -->
       <div class="sidebar-section border-bottom">
         <RouterLink to="/dashboard" class="nav-item" data-tooltip="Back to Projects">
@@ -136,12 +177,23 @@ const progressPercentage = computed(() => {
             <AvatarGroup :avatars="avatarItems" :max="3" size="sm" />
           </div>
           <Button variant="secondary" class="start-call-btn">
-            <Phone class="btn-icon" />
+            <Phone class="icon-sm" />
             <span class="nav-label">Start Call</span>
           </Button>
         </div>
-        <!-- Sidebar Toggle -->
-        <button class="sidebar-toggle" @click="uiStore.toggleSidebar">
+      </div>
+
+      <!-- Hover Edge Zone for Toggle -->
+      <div
+        class="sidebar-edge-zone"
+        @mouseenter="isEdgeHovered = true"
+        @mouseleave="isEdgeHovered = false"
+      >
+        <button
+          :class="['sidebar-toggle', { visible: isEdgeHovered }]"
+          :title="uiStore.sidebarExpanded ? 'Collapse (Ctrl+B)' : 'Expand (Ctrl+B)'"
+          @click="uiStore.toggleSidebar"
+        >
           <ChevronLeft v-if="uiStore.sidebarExpanded" class="toggle-icon" />
           <ChevronRight v-else class="toggle-icon" />
         </button>
@@ -168,12 +220,12 @@ const progressPercentage = computed(() => {
           </div>
 
           <Button variant="secondary">
-            <Users class="btn-icon" />
+            <Users class="icon-sm" />
             협업 시작
           </Button>
 
           <Button variant="primary">
-            <Play class="btn-icon" />
+            <Play class="icon-sm" />
             Preview
           </Button>
         </div>
@@ -202,18 +254,31 @@ const progressPercentage = computed(() => {
   border-right: 1px solid var(--rose-100);
   display: flex;
   flex-direction: column;
-  transition: width 0.3s ease;
+  transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
   flex-shrink: 0;
+  position: relative;
 }
 
 .sidebar-collapsed {
   width: 72px;
 }
 
+/* Text elements - smooth fade transition */
+.sidebar-text,
+.nav-label,
+.nav-badge {
+  opacity: 1;
+  transition: opacity 0.15s ease 0.2s; /* Fade in after sidebar expands */
+  white-space: nowrap;
+  overflow: hidden;
+}
+
 .sidebar-collapsed .sidebar-text,
 .sidebar-collapsed .nav-label,
 .sidebar-collapsed .nav-badge {
-  display: none;
+  opacity: 0;
+  transition: opacity 0.1s ease; /* Fade out quickly when collapsing */
+  pointer-events: none;
 }
 
 .sidebar-section {
@@ -335,19 +400,27 @@ const progressPercentage = computed(() => {
   font-size: 0.75rem;
 }
 
-.btn-icon {
-  width: 16px;
-  height: 16px;
+/* Uses global .icon-sm from base.css */
+
+/* Sidebar Edge Zone - Hover Trigger */
+.sidebar-edge-zone {
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 30px;
+  z-index: 10;
+  cursor: pointer;
 }
 
 /* Sidebar Toggle */
 .sidebar-toggle {
   position: absolute;
-  right: -12px;
+  right: -16px;
   top: 50%;
   transform: translateY(-50%);
-  width: 24px;
-  height: 24px;
+  width: 32px;
+  height: 32px;
   background: white;
   border: 1px solid var(--rose-200);
   border-radius: 50%;
@@ -356,13 +429,21 @@ const progressPercentage = computed(() => {
   align-items: center;
   justify-content: center;
   color: var(--gray-500);
-  z-index: 10;
+  opacity: 0;
+  visibility: hidden;
   transition: all 0.2s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.sidebar-toggle.visible {
+  opacity: 1;
+  visibility: visible;
 }
 
 .sidebar-toggle:hover {
   background: var(--rose-50);
   color: var(--rose-500);
+  transform: translateY(-50%) scale(1.1);
 }
 
 .toggle-icon {
@@ -442,7 +523,7 @@ const progressPercentage = computed(() => {
   height: 100%;
   background: linear-gradient(90deg, var(--rose-400), var(--rose-500));
   border-radius: 3px;
-  transition: width 0.3s ease;
+  transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .progress-text {
