@@ -104,7 +104,7 @@ function formatTime(timestamp: number): string {
           placeholder="메시지 입력..."
         />
         <Button type="submit" variant="primary" size="sm">
-          <Send class="btn-icon" />
+          <Send class="icon-sm" />
         </Button>
       </form>
 
@@ -326,10 +326,7 @@ function formatTime(timestamp: number): string {
   box-shadow: 0 0 0 3px rgba(244, 63, 94, 0.1);
 }
 
-.btn-icon {
-  width: 14px;
-  height: 14px;
-}
+/* Uses global .icon-sm from base.css */
 
 .controls {
   display: flex;
