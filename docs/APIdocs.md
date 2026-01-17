@@ -6,6 +6,65 @@
 
 ---
 
+## 0. API 요약 (핵심 엔드포인트)
+
+### 인증 (8)
+- 회원가입: `POST /api/auth/signup`
+- 로그인: `POST /api/auth/login`
+- 내 정보 조회: `GET /api/auth/me`
+
+### 프로젝트 (10)
+- 프로젝트 생성: `POST /api/projects`
+- 프로젝트 목록: `GET /api/projects`
+- 프로젝트 상세: `GET /api/projects/{id}`
+
+### 멤버 (3)
+- 멤버 목록: `GET /api/projects/{id}/members`
+- 멤버 초대: `POST /api/projects/{id}/members`
+- 권한 변경: `PATCH /api/projects/{id}/members/{memberId}`
+
+### 오브젝트 시트 (5)
+- 오브젝트 생성: `POST /api/projects/{id}/objects`
+- 오브젝트 목록: `GET /api/projects/{id}/objects`
+- 오브젝트 상세: `GET /api/objects/{id}`
+
+### 씬 (6)
+- 씬 생성: `POST /api/projects/{id}/scenes`
+- 씬 목록: `GET /api/projects/{id}/scenes`
+- 씬 상세: `GET /api/scenes/{id}`
+
+### 노드/캔버스 (12)
+- 노드 생성: `POST /api/scenes/{sceneId}/nodes`
+- 결과 생성: `POST /api/nodes/{id}/generate`
+- 영상 확정: `POST /api/nodes/{id}/confirm`
+
+### 시나리오 (10)
+- 시나리오 조회: `GET /api/projects/{id}/scenario`
+- 프롬프트 생성: `POST /api/projects/{id}/scenario/prompt/generate`
+- 씬 스토리 생성: `POST /api/projects/{id}/scenario/scenes/generate`
+
+### AI/프롬프트/작업 (4)
+- 프롬프트 생성: `POST /api/ai/prompts/generate`
+- 프롬프트 개선: `POST /api/ai/prompts/improve`
+- 작업 상태 조회: `GET /api/ai/jobs/{jobId}`
+
+### 타임라인/병합 (7)
+- 씬 타임라인 조회: `GET /api/scenes/{id}/timeline`
+- 프로젝트 타임라인 조회: `GET /api/projects/{id}/timeline`
+- 최종 병합 요청: `POST /api/projects/{id}/merge`
+
+### 파일 (5)
+- 업로드 URL 발급: `POST /api/files/presign` (P1)
+- 업로드 완료 등록: `POST /api/files/complete` (P1)
+- 파일 정보 조회: `GET /api/files/{id}` (P1)
+
+### WebSocket (2)
+- WebRTC 시그널링: `WS /ws/room/{roomId}?token=<JWT>`
+- 프로젝트 이벤트: `WS /ws/projects/{projectId}?token=<JWT>`
+
+괄호의 개수는 카테고리별 전체 엔드포인트 수입니다.
+상세 엔드포인트는 각 섹션에서 확인합니다.
+
 ## 1. 개요
 본 문서는 AI Movie Studio 프로젝트의 서버 API 연동 규격을 정의합니다.
 클라이언트(Front-end)와 서버(Back-end) 간의 데이터 통신을 위한 약속으로 사용됩니다.
@@ -21,24 +80,21 @@
 예외: 비-JSON 응답(파일 다운로드/스트리밍 등)과 WebSocket 이벤트만 제외합니다.
 `code`는 도메인 문자열 코드이며, HTTP 상태 코드는 별도로 사용합니다. (예: SUCCESS, EMAIL_ALREADY_EXISTS)
 성공 code 값: SUCCESS(즉시 성공), ACCEPTED(비동기 작업 접수).
-예시: 가독성을 위해 일부 응답 예시는 `timestamp`/`path`/`message`를 생략할 수 있습니다.
+예시: 가독성을 위해 일부 응답 예시는 `message`를 생략할 수 있습니다.
 
 #### 공통 응답 필드 정의
-```
-필드 타입 필수 여부 설명
-timestamp String 필수 응답 생성 시각 (ISO 8601)
-path String 필수 요청 경로
-code String 필수 도메인 코드 (SUCCESS, EMAIL_ALREADY_EXISTS 등)
-message String 선택 사용자/로그용 메시지
-data Object|Array 선택 성공 시 응답 데이터
-details Object 선택 실패 시 상세 정보
-```
+| 필드 | 타입 | 필수 여부 | 설명 |
+| --- | --- | --- | --- |
+| code | String | 필수 | 도메인 코드 (SUCCESS, EMAIL_ALREADY_EXISTS 등) |
+| message | String | 선택 | 사용자/로그용 메시지 |
+| data | Object\|Array | 선택 | 성공 시 응답 데이터 |
+| details | Object | 선택 | 실패 시 상세 정보 |
+
+※ `details`는 실패 시에만 사용하며, 필요 없으면 생략합니다.
 
 #### 성공 시 (기본)
 ```json
 {
-  "timestamp": "2026-01-15T14:00:00+09:00",
-  "path": "/api/...",
   "code": "SUCCESS",
   "message": "요청이 성공적으로 처리되었습니다.",
   "data": { ... }
@@ -48,8 +104,6 @@ details Object 선택 실패 시 상세 정보
 #### 실패 시 (에러)
 ```json
 {
-  "timestamp": "2026-01-14T13:00:00+09:00",
-  "path": "/api/projects/123",
   "code": "FORBIDDEN",
   "message": "You do not have permission to edit this project.",
   "details": {
@@ -59,20 +113,19 @@ details Object 선택 실패 시 상세 정보
 ```
 
 #### 도메인 에러 코드 (예시)
-```
-코드 설명
-UNAUTHORIZED 인증 필요
-FORBIDDEN 권한 없음
-USER_NOT_FOUND 사용자 없음
-EMAIL_ALREADY_EXISTS 이미 가입된 이메일
-PROJECT_NOT_FOUND 프로젝트 없음
-SCENE_NOT_FOUND 씬 없음
-SCENE_LIMIT_EXCEEDED 씬 개수 제한 초과
-NODE_NOT_FOUND 노드 없음
-JOB_NOT_FOUND 작업 없음
-INVALID_REQUEST 요청 파라미터 오류
-MERGE_FAILED 씬 병합 실패
-```
+| 코드 | 설명 |
+| --- | --- |
+| UNAUTHORIZED | 인증 필요 |
+| FORBIDDEN | 권한 없음 |
+| USER_NOT_FOUND | 사용자 없음 |
+| EMAIL_ALREADY_EXISTS | 이미 가입된 이메일 |
+| PROJECT_NOT_FOUND | 프로젝트 없음 |
+| SCENE_NOT_FOUND | 씬 없음 |
+| SCENE_LIMIT_EXCEEDED | 씬 개수 제한 초과 |
+| NODE_NOT_FOUND | 노드 없음 |
+| JOB_NOT_FOUND | 작업 없음 |
+| INVALID_REQUEST | 요청 파라미터 오류 |
+| MERGE_FAILED | 씬 병합 실패 |
 
 ### 1.3 비동기 AI 작업 응답 규칙
 AI 생성 작업(이미지/영상)은 비동기로 처리됩니다.
@@ -130,20 +183,17 @@ API 경로 : /api/auth/signup
 ```
 
 #### 요청 필드 설명
-```
-필드 타입 필수 여부 설명
-email String 필수 사용자 이메일 (로그인 ID)
-password String 필수 사용자 비밀번호
-name String 필수 사용자 이름
-```
+| 필드 | 타입 | 필수 여부 | 설명 |
+| --- | --- | --- | --- |
+| email | String | 필수 | 사용자 이메일 (로그인 ID) |
+| password | String | 필수 | 사용자 비밀번호 |
+| name | String | 필수 | 사용자 이름 |
 
 #### 3. Response
 
 #### 성공 시
 ```json
 {
-  "timestamp": "...",
-  "path": "/api/auth/signup",
   "code": "SUCCESS",
   "message": "User registered successfully",
   "data": {
@@ -157,8 +207,6 @@ name String 필수 사용자 이름
 #### 실패 시
 ```json
 {
-  "timestamp": "...",
-  "path": "/api/auth/signup",
   "code": "EMAIL_ALREADY_EXISTS",
   "message": "이미 가입된 이메일입니다."
 }
@@ -197,11 +245,10 @@ API 경로 : /api/auth/login
 ```
 
 #### 요청 필드 설명
-```
-필드 타입 필수 여부 설명
-email String 필수 사용자 이메일
-password String 필수 사용자 비밀번호
-```
+| 필드 | 타입 | 필수 여부 | 설명 |
+| --- | --- | --- | --- |
+| email | String | 필수 | 사용자 이메일 |
+| password | String | 필수 | 사용자 비밀번호 |
 
 #### 3. Response
 
@@ -293,11 +340,10 @@ API /api/auth/me
 ```
 
 #### 요청 필드 설명
-```
-필드 타입 필수 여부 설명
-name String 선택 변경할 사용자 이름
-profileImage String 선택 변경할 프로필 이미지 URL
-```
+| 필드 | 타입 | 필수 여부 | 설명 |
+| --- | --- | --- | --- |
+| name | String | 선택 | 변경할 사용자 이름 |
+| profileImage | String | 선택 | 변경할 프로필 이미지 URL |
 
 ---
 
@@ -318,10 +364,9 @@ API /api/auth/password/reset/request
 ```
 
 #### 요청 필드 설명
-```
-필드 타입 필수 여부 설명
-email String 필수 가입된 사용자 이메일
-```
+| 필드 | 타입 | 필수 여부 | 설명 |
+| --- | --- | --- | --- |
+| email | String | 필수 | 가입된 사용자 이메일 |
 
 ---
 
@@ -343,11 +388,10 @@ API /api/auth/password/reset/confirm
 ```
 
 #### 요청 필드 설명
-```
-필드 타입 필수 여부 설명
-token String 필수 이메일로 발송된 재설정 토큰/코드
-newPassword String 필수 설정할 새로운 비밀번호
-```
+| 필드 | 타입 | 필수 여부 | 설명 |
+| --- | --- | --- | --- |
+| token | String | 필수 | 이메일로 발송된 재설정 토큰/코드 |
+| newPassword | String | 필수 | 설정할 새로운 비밀번호 |
 
 ---
 
@@ -390,12 +434,11 @@ API 경로 : /api/projects
 ```
 
 #### 요청 필드 설명
-```
-필드 타입 필수 여부 설명
-title String 필수 프로젝트 제목
-description String 선택 프로젝트 설명
-genre String 선택 프로젝트 장르 (예: SF, COMEDY)
-```
+| 필드 | 타입 | 필수 여부 | 설명 |
+| --- | --- | --- | --- |
+| title | String | 필수 | 프로젝트 제목 |
+| description | String | 선택 | 프로젝트 설명 |
+| genre | String | 선택 | 프로젝트 장르 (예: SF, COMEDY) |
 
 #### 3. Response
 ```json
@@ -559,11 +602,10 @@ API /api/projects/{id}/members
 ```
 
 #### 요청 필드 설명
-```
-필드 타입 필수 여부 설명
-email String 필수 초대할 사용자 이메일
-role String 필수 멤버 권한 (EDITOR | VIEWER)
-```
+| 필드 | 타입 | 필수 여부 | 설명 |
+| --- | --- | --- | --- |
+| email | String | 필수 | 초대할 사용자 이메일 |
+| role | String | 필수 | 멤버 권한 (EDITOR \\| VIEWER) |
 
 ---
 
@@ -584,10 +626,9 @@ API /api/projects/{id}/members/{memberId}
 ```
 
 #### 요청 필드 설명
-```
-필드 타입 필수 여부 설명
-role String 필수 변경할 권한 (EDITOR | VIEWER)
-```
+| 필드 | 타입 | 필수 여부 | 설명 |
+| --- | --- | --- | --- |
+| role | String | 필수 | 변경할 권한 (EDITOR \\| VIEWER) |
 
 ---
 
@@ -633,13 +674,12 @@ API /api/projects/{id}/objects
 ```
 
 #### 요청 필드 설명
-```
-필드 타입 필수 여부 설명
-name String 필수 오브젝트 이름
-type String 필수 오브젝트 유형 (CHARACTER, PROP 등)
-description String 필수 외형 설명
-style String 선택 아트 스타일
-```
+| 필드 | 타입 | 필수 여부 | 설명 |
+| --- | --- | --- | --- |
+| name | String | 필수 | 오브젝트 이름 |
+| type | String | 필수 | 오브젝트 유형 (CHARACTER, PROP 등) |
+| description | String | 필수 | 외형 설명 |
+| style | String | 선택 | 아트 스타일 |
 
 #### 3. Response (Job Accepted)
 ```json
@@ -693,11 +733,10 @@ API /api/objects/{id}
 ```
 
 #### 요청 필드 설명
-```
-필드 타입 필수 여부 설명
-name String 선택 변경할 오브젝트 이름
-description String 선택 변경할 설명
-```
+| 필드 | 타입 | 필수 여부 | 설명 |
+| --- | --- | --- | --- |
+| name | String | 선택 | 변경할 오브젝트 이름 |
+| description | String | 선택 | 변경할 설명 |
 
 ---
 
@@ -731,11 +770,10 @@ API /api/projects/{id}/scenes
 ```
 
 #### 요청 필드 설명
-```
-필드 타입 필수 여부 설명
-title String 필수 씬 제목
-description String 선택 씬 설명
-```
+| 필드 | 타입 | 필수 여부 | 설명 |
+| --- | --- | --- | --- |
+| title | String | 필수 | 씬 제목 |
+| description | String | 선택 | 씬 설명 |
 
 ---
 
@@ -800,12 +838,11 @@ API /api/scenes/{id}
 ```
 
 #### 요청 필드 설명
-```
-필드 타입 필수 여부 설명
-title String 선택 변경할 씬 제목
-description String 선택 변경할 씬 설명
-objectIds List<Long> 선택 등장 오브젝트 ID 목록
-```
+| 필드 | 타입 | 필수 여부 | 설명 |
+| --- | --- | --- | --- |
+| title | String | 선택 | 변경할 씬 제목 |
+| description | String | 선택 | 변경할 씬 설명 |
+| objectIds | List<Long> | 선택 | 등장 오브젝트 ID 목록 |
 
 ---
 
@@ -837,10 +874,9 @@ API /api/projects/{id}/scenes/order
 ```
 
 #### 요청 필드 설명
-```
-필드 타입 필수 여부 설명
-orderedSceneIds List<Long> 필수 정렬된 씬 ID 목록
-```
+| 필드 | 타입 | 필수 여부 | 설명 |
+| --- | --- | --- | --- |
+| orderedSceneIds | List<Long> | 필수 | 정렬된 씬 ID 목록 |
 
 ---
 
@@ -896,19 +932,18 @@ API /api/scenes/{sceneId}/nodes
 }
 ```
 #### 요청 필드 설명
-```
-필드 타입 필수 여부 설명
-type String 필수 노드 타입 (MASTER, GRID, SHOT, VIDEO) - SCENE_HEADER는 서버 자동 생성
-parentNodeId Long 선택 부모 노드 ID (루트 노드인 경우 null)
-prompt String 선택 초기 프롬프트
-settings Object 선택 노드 설정 (스타일, 비율 등)
-settings.startShotNodeId Long 필수(VIDEO) VIDEO 시작 샷 노드 ID
-settings.endShotNodeId Long 선택(VIDEO, P1) VIDEO 종료 샷 노드 ID
-settings.cameraMotion String 필수(VIDEO) 카메라 모션 (ZOOM_IN, ZOOM_OUT, PAN, TILT, STATIC)
-settings.duration Integer 필수(VIDEO) 영상 길이(초)
-settings.motionDescription String 선택(VIDEO) 모션 상세 설명
-settings.provider String 선택(P1) 영상 모델 선택 (기본: VEO_3_1)
-```
+| 필드 | 타입 | 필수 여부 | 설명 |
+| --- | --- | --- | --- |
+| type | String | 필수 | 노드 타입 (MASTER, GRID, SHOT, VIDEO) - SCENE_HEADER는 서버 자동 생성 |
+| parentNodeId | Long | 선택 | 부모 노드 ID (루트 노드인 경우 null) |
+| prompt | String | 선택 | 초기 프롬프트 |
+| settings | Object | 선택 | 노드 설정 (스타일, 비율 등) |
+| settings.startShotNodeId | Long | 필수(VIDEO) | VIDEO 시작 샷 노드 ID |
+| settings.endShotNodeId | Long | 선택(VIDEO, | P1) VIDEO 종료 샷 노드 ID |
+| settings.cameraMotion | String | 필수(VIDEO) | 카메라 모션 (ZOOM_IN, ZOOM_OUT, PAN, TILT, STATIC) |
+| settings.duration | Integer | 필수(VIDEO) | 영상 길이(초) |
+| settings.motionDescription | String | 선택(VIDEO) | 모션 상세 설명 |
+| settings.provider | String | 선택(P1) | 영상 모델 선택 (기본: VEO_3_1) |
 ※ VIDEO 노드는 `parentNodeId`가 `settings.startShotNodeId`와 반드시 동일해야 합니다.
 
 #### 3. Response
@@ -1019,11 +1054,10 @@ API /api/nodes/{id}
 ```
 
 #### 요청 필드 설명
-```
-필드 타입 필수 여부 설명
-prompt String 선택 수정할 프롬프트
-settings Object 선택 수정할 노드 설정
-```
+| 필드 | 타입 | 필수 여부 | 설명 |
+| --- | --- | --- | --- |
+| prompt | String | 선택 | 수정할 프롬프트 |
+| settings | Object | 선택 | 수정할 노드 설정 |
 
 ---
 
@@ -1048,13 +1082,12 @@ API /api/scenes/{sceneId}/nodes/positions
 ```
 
 #### 요청 필드 설명
-```
-필드 타입 필수 여부 설명
-positions List<Object> 필수 노드 위치 정보 목록
-positions[].nodeId Long 필수 노드 ID
-positions[].x Number 필수 X 좌표
-positions[].y Number 필수 Y 좌표
-```
+| 필드 | 타입 | 필수 여부 | 설명 |
+| --- | --- | --- | --- |
+| positions | List<Object> | 필수 | 노드 위치 정보 목록 |
+| positions[].nodeId | Long | 필수 | 노드 ID |
+| positions[].x | Number | 필수 | X 좌표 |
+| positions[].y | Number | 필수 | Y 좌표 |
 
 ---
 
@@ -1089,11 +1122,10 @@ API /api/nodes/{id}/regenerate
 ```
 
 #### 요청 필드 설명
-```
-필드 타입 필수 여부 설명
-prompt String 선택 수정된 프롬프트 (새 버전용)
-settings Object 선택 노드 설정
-```
+| 필드 | 타입 | 필수 여부 | 설명 |
+| --- | --- | --- | --- |
+| prompt | String | 선택 | 수정된 프롬프트 (새 버전용) |
+| settings | Object | 선택 | 노드 설정 |
 
 #### 3. Response (Job Accepted)
 ```json
@@ -1400,10 +1432,9 @@ API /api/projects/{id}/scenario/scenes/order
 ```
 
 #### 요청 필드 설명
-```
-필드 타입 필수 여부 설명
-orderedScenarioSceneIds List<Long> 필수 정렬된 시나리오 씬 ID 목록
-```
+| 필드 | 타입 | 필수 여부 | 설명 |
+| --- | --- | --- | --- |
+| orderedScenarioSceneIds | List<Long> | 필수 | 정렬된 시나리오 씬 ID 목록 |
 
 #### 3. Response
 ```json
@@ -1462,17 +1493,16 @@ API /api/ai/scenario
 ```
 
 #### 요청 필드 설명
-```
-필드 타입 필수 여부 설명
-genre String 필수 장르
-mood String 필수 분위기/톤
-keywords List<String> 선택 키워드 목록
-sceneCount Integer 필수 생성할 씬 개수 (3~7개)
-plot String 선택 초기 전체 줄거리 (입력 시 반영)
-characterHints String 선택 메인 캐릭터 힌트
-backgroundHints String 선택 배경 힌트
-referenceStyle String 선택 참고할 작품/스타일
-```
+| 필드 | 타입 | 필수 여부 | 설명 |
+| --- | --- | --- | --- |
+| genre | String | 필수 | 장르 |
+| mood | String | 필수 | 분위기/톤 |
+| keywords | List<String> | 선택 | 키워드 목록 |
+| sceneCount | Integer | 필수 | 생성할 씬 개수 (3~7개) |
+| plot | String | 선택 | 초기 전체 줄거리 (입력 시 반영) |
+| characterHints | String | 선택 | 메인 캐릭터 힌트 |
+| backgroundHints | String | 선택 | 배경 힌트 |
+| referenceStyle | String | 선택 | 참고할 작품/스타일 |
 
 #### 3. Response
 ```json
@@ -1512,15 +1542,14 @@ API /api/ai/prompts/generate
 ```
 
 #### 요청 필드 설명
-```
-필드 타입 필수 여부 설명
-nodeType String 필수 노드 타입 (MASTER, GRID, SHOT, VIDEO)
-sceneOneLine String 필수 씬 한줄 설명
-style String 필수 아트 스타일 (CINEMATIC, ANIME, PIXAR 등)
-timeOfDay String 필수 시간대 (MORNING, DAY, EVENING, NIGHT)
-mood String 필수 분위기 (PEACEFUL, LONELY, TENSE 등)
-objectIds List<Long> 선택 등장 오브젝트 ID 목록 (레퍼런스 연결)
-```
+| 필드 | 타입 | 필수 여부 | 설명 |
+| --- | --- | --- | --- |
+| nodeType | String | 필수 | 노드 타입 (MASTER, GRID, SHOT, VIDEO) |
+| sceneOneLine | String | 필수 | 씬 한줄 설명 |
+| style | String | 필수 | 아트 스타일 (CINEMATIC, ANIME, PIXAR 등) |
+| timeOfDay | String | 필수 | 시간대 (MORNING, DAY, EVENING, NIGHT) |
+| mood | String | 필수 | 분위기 (PEACEFUL, LONELY, TENSE 등) |
+| objectIds | List<Long> | 선택 | 등장 오브젝트 ID 목록 (레퍼런스 연결) |
 
 #### 3. Response
 ```json
@@ -1556,13 +1585,12 @@ API /api/ai/prompts/improve
 ```
 
 #### 요청 필드 설명
-```
-필드 타입 필수 여부 설명
-nodeType String 필수 노드 타입
-prompt String 필수 기존 프롬프트
-instruction String 선택 개선 요청 사항 (미입력 시 기본 지침 적용)
-context String 선택 컨텍스트/배경 정보
-```
+| 필드 | 타입 | 필수 여부 | 설명 |
+| --- | --- | --- | --- |
+| nodeType | String | 필수 | 노드 타입 |
+| prompt | String | 필수 | 기존 프롬프트 |
+| instruction | String | 선택 | 개선 요청 사항 (미입력 시 기본 지침 적용) |
+| context | String | 선택 | 컨텍스트/배경 정보 |
 
 ---
 
@@ -1635,10 +1663,9 @@ API /api/scenes/{id}/timeline
 ```
 
 #### 요청 필드 설명
-```
-필드 타입 필수 여부 설명
-orderedVideoNodeIds List<Long> 필수 정렬된 영상 노드 ID 목록
-```
+| 필드 | 타입 | 필수 여부 | 설명 |
+| --- | --- | --- | --- |
+| orderedVideoNodeIds | List<Long> | 필수 | 정렬된 영상 노드 ID 목록 |
 
 ---
 
@@ -1722,10 +1749,9 @@ API /api/projects/{id}/timeline
 ```
 
 #### 요청 필드 설명
-```
-필드 타입 필수 여부 설명
-orderedSceneVideoIds List<Long> 필수 정렬된 씬 영상 ID 목록
-```
+| 필드 | 타입 | 필수 여부 | 설명 |
+| --- | --- | --- | --- |
+| orderedSceneVideoIds | List<Long> | 필수 | 정렬된 씬 영상 ID 목록 |
 
 ---
 
@@ -1747,10 +1773,9 @@ API /api/projects/{id}/merge
 ```
 
 #### 요청 필드 설명
-```
-필드 타입 필수 여부 설명
-includeMusic Boolean 선택 배경음악 포함 여부 (기본: false, P1 기능)
-```
+| 필드 | 타입 | 필수 여부 | 설명 |
+| --- | --- | --- | --- |
+| includeMusic | Boolean | 선택 | 배경음악 포함 여부 (기본: false, P1 기능) |
 
 #### 3. Response
 ```json
@@ -1810,11 +1835,10 @@ API /api/files/presign
 ```
 
 #### 요청 필드 설명
-```
-필드 타입 필수 여부 설명
-filename String 필수 파일명 (확장자 포함)
-contentType String 필수 MIME 타입
-```
+| 필드 | 타입 | 필수 여부 | 설명 |
+| --- | --- | --- | --- |
+| filename | String | 필수 | 파일명 (확장자 포함) |
+| contentType | String | 필수 | MIME 타입 |
 
 #### 3. Response
 ```json
@@ -1865,11 +1889,10 @@ API /api/music/upload
 - `projectId`: (Long)
 
 #### 요청 필드 설명
-```
-필드 타입 필수 여부 설명
-file File 필수 업로드할 음악 파일
-projectId Long 필수 프로젝트 ID
-```
+| 필드 | 타입 | 필수 여부 | 설명 |
+| --- | --- | --- | --- |
+| file | File | 필수 | 업로드할 음악 파일 |
+| projectId | Long | 필수 | 프로젝트 ID |
 
 #### 3. Response
 ```json
@@ -1904,12 +1927,11 @@ API /api/files/complete
 ```
 
 #### 요청 필드 설명
-```
-필드 타입 필수 여부 설명
-fileKey String 필수 S3 업로드 키 (경로)
-fileSize Long 필수 파일 크기 (Byte)
-mimeType String 필수 파일 MIME 타입
-```
+| 필드 | 타입 | 필수 여부 | 설명 |
+| --- | --- | --- | --- |
+| fileKey | String | 필수 | S3 업로드 키 (경로) |
+| fileSize | Long | 필수 | 파일 크기 (Byte) |
+| mimeType | String | 필수 | 파일 MIME 타입 |
 
 ---
 
