@@ -67,11 +67,11 @@ const emit = defineEmits<{
       <!-- Actions -->
       <div class="node-actions">
         <Button variant="secondary" size="sm" @click.stop="emit('regenerate')">
-          <RefreshCw class="btn-icon" />
+          <RefreshCw class="icon-sm" />
           Regen
         </Button>
         <Button variant="primary" size="sm" @click.stop="emit('add-video')">
-          <Play class="btn-icon" />
+          <Play class="icon-sm" />
           Video
         </Button>
       </div>
@@ -180,10 +180,7 @@ const emit = defineEmits<{
   gap: 0.5rem;
 }
 
-.btn-icon {
-  width: 14px;
-  height: 14px;
-}
+/* Uses global .icon-sm from base.css */
 
 /* ==========================================================================
    Node Handle

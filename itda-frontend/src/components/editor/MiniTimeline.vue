@@ -15,6 +15,7 @@ interface Props {
   totalDuration: number;
   maxDuration?: number;
   projectId: number;
+  sceneId?: number;
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -72,11 +73,15 @@ const progressPercent = Math.min(
 
     <!-- Timeline Link -->
     <RouterLink
-      :to="{ name: 'timeline', params: { id: projectId } }"
+      :to="{
+        name: 'timeline',
+        params: { id: projectId },
+        query: sceneId ? { sceneId } : undefined,
+      }"
       class="timeline-link"
     >
       <ArrowRight class="link-icon" />
-      Timeline
+      Scene Timeline
     </RouterLink>
   </div>
 </template>

@@ -16,6 +16,7 @@ interface Props {
   sceneTitle: string;
   zoomLevel: string;
   projectId: number;
+  sceneId?: number;
 }
 
 defineProps<Props>();
@@ -53,11 +54,15 @@ defineProps<Props>();
       <span class="zoom-indicator">{{ zoomLevel }}</span>
 
       <RouterLink
-        :to="{ name: 'timeline', params: { id: projectId } }"
+        :to="{
+          name: 'timeline',
+          params: { id: projectId },
+          query: sceneId ? { sceneId } : undefined,
+        }"
         class="btn btn-secondary btn-sm"
       >
-        <Layers class="btn-icon" />
-        Timeline
+        <Layers class="icon-sm" />
+        Scene Timeline
       </RouterLink>
 
       <Button variant="primary">Export Scene</Button>
@@ -159,37 +164,5 @@ defineProps<Props>();
   height: 20px;
 }
 
-.btn-icon {
-  width: 16px;
-  height: 16px;
-}
-
-/* ==========================================================================
-   Link Button Style
-   ========================================================================== */
-
-.btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-weight: 500;
-  border-radius: 8px;
-  text-decoration: none;
-  transition: all 0.2s ease;
-}
-
-.btn-sm {
-  padding: 0.375rem 0.75rem;
-  font-size: 0.75rem;
-}
-
-.btn-secondary {
-  background: var(--rose-50);
-  color: var(--rose-500);
-  border: 1px solid var(--rose-200);
-}
-
-.btn-secondary:hover {
-  background: var(--rose-100);
-}
+/* Uses global .icon-sm and button styles from base.css */
 </style>
