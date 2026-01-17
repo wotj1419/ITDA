@@ -3,12 +3,13 @@
  * SceneEditPage - 노드 기반 씬 에디터 페이지
  * Master → Grid → Shot → Video 흐름의 노드 편집
  */
-import { computed, onMounted, watch } from 'vue';
+import { computed, onMounted, onUnmounted, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import { useProjectStore } from '../stores/project';
 import { useSceneStore } from '../stores/scene';
 import { useNodeStore } from '../stores/node';
 import { useUIStore } from '../stores/ui';
+import { useCollabStore } from '../stores/collab';
 import { useZoom } from '../composables/useZoom';
 
 import EditorLayout from '../layouts/EditorLayout.vue';
@@ -27,6 +28,7 @@ const projectStore = useProjectStore();
 const sceneStore = useSceneStore();
 const nodeStore = useNodeStore();
 const uiStore = useUIStore();
+const collabStore = useCollabStore();
 
 const {
   zoomPercentage,
@@ -70,7 +72,16 @@ onMounted(async () => {
       sceneStore.loadScenes(projectId.value),
       nodeStore.loadNodes(projectId.value, sceneId.value),
     ]);
+    
+    // 협업 방 입장
+    collabStore.joinRoom(projectId.value);
+    collabStore.updateLocation(sceneTitle.value);
   }
+});
+
+onUnmounted(() => {
+  // 페이지 이탈 시 협업 방 퇴장
+  collabStore.leaveRoom();
 });
 
 // Route 변경 시 노드 다시 로드
@@ -139,6 +150,7 @@ function handleDeleteNode(): void {
         :scene-title="sceneTitle"
         :zoom-level="zoomPercentage"
         :project-id="projectId"
+        :scene-id="sceneId"
       />
     </template>
 
@@ -168,6 +180,7 @@ function handleDeleteNode(): void {
         :clips="nodeStore.timelineClips"
         :total-duration="nodeStore.totalDuration"
         :project-id="projectId"
+        :scene-id="sceneId"
       />
     </template>
   </EditorLayout>
