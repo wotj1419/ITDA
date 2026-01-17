@@ -1,0 +1,378 @@
+<script setup lang="ts">
+import { computed } from 'vue'
+import { RouterLink, useRoute } from 'vue-router'
+import { useUIStore } from '../stores/ui'
+import {
+  ArrowLeft,
+  Layers,
+  ChevronLeft,
+  ChevronRight,
+  Film,
+  Clock,
+} from 'lucide-vue-next'
+
+interface Props {
+  projectTitle: string
+  clipCount: number
+  totalDuration: number
+}
+
+const props = withDefaults(defineProps<Props>(), {
+  projectTitle: 'Project',
+  clipCount: 0,
+  totalDuration: 0,
+})
+
+const route = useRoute()
+const uiStore = useUIStore()
+
+const projectId = computed(() => Number(route.params.id))
+
+const sidebarClasses = computed(() => [
+  'sidebar',
+  { 'sidebar-collapsed': !uiStore.sidebarExpanded },
+])
+
+function formatDuration(seconds: number): string {
+  const m = Math.floor(seconds / 60)
+  const s = Math.round(seconds % 60)
+  return `${m}:${s.toString().padStart(2, '0')}`
+}
+</script>
+
+<template>
+  <div class="app-container">
+    <!-- Sidebar -->
+    <aside :class="sidebarClasses">
+      <!-- Back Link -->
+      <div class="sidebar-section border-bottom">
+        <RouterLink
+          :to="{ name: 'project-detail', params: { id: projectId } }"
+          class="nav-item"
+          data-tooltip="Back to Project"
+        >
+          <ArrowLeft class="nav-icon" />
+          <span class="nav-label">Back to Project</span>
+        </RouterLink>
+      </div>
+
+      <!-- Timeline Info -->
+      <div class="sidebar-section border-bottom sidebar-text">
+        <h2 class="project-title">{{ projectTitle }}</h2>
+        <div class="timeline-badge">
+          <Layers class="badge-icon" />
+          <span>Timeline Editor</span>
+        </div>
+      </div>
+
+      <!-- Stats -->
+      <div class="sidebar-section sidebar-text">
+        <div class="stat-item">
+          <Film class="stat-icon" />
+          <div class="stat-content">
+            <span class="stat-value">{{ clipCount }}</span>
+            <span class="stat-label nav-label">클립</span>
+          </div>
+        </div>
+        <div class="stat-item">
+          <Clock class="stat-icon" />
+          <div class="stat-content">
+            <span class="stat-value">{{ formatDuration(totalDuration) }}</span>
+            <span class="stat-label nav-label">총 길이</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Toggle -->
+      <div class="sidebar-section border-top sidebar-footer">
+        <button class="sidebar-toggle" @click="uiStore.toggleSidebar">
+          <ChevronLeft v-if="uiStore.sidebarExpanded" class="toggle-icon" />
+          <ChevronRight v-else class="toggle-icon" />
+        </button>
+      </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-wrapper">
+      <!-- Header -->
+      <header class="header">
+        <div class="breadcrumb">
+          <RouterLink to="/dashboard">AI Movie Studio</RouterLink>
+          <span class="separator">/</span>
+          <RouterLink :to="{ name: 'project-detail', params: { id: projectId } }">
+            {{ projectTitle }}
+          </RouterLink>
+          <span class="separator">/</span>
+          <span class="current">Timeline</span>
+        </div>
+
+        <div class="header-actions">
+          <div class="duration-badge">
+            <Clock class="badge-icon" />
+            <span>{{ formatDuration(totalDuration) }} / 1:00</span>
+          </div>
+        </div>
+      </header>
+
+      <!-- Content -->
+      <div class="main-content">
+        <slot />
+      </div>
+    </main>
+  </div>
+</template>
+
+<style scoped>
+.app-container {
+  display: flex;
+  min-height: 100vh;
+  background: var(--rose-canvas);
+}
+
+/* Sidebar */
+.sidebar {
+  width: 260px;
+  height: 100vh;
+  background: white;
+  border-right: 1px solid var(--rose-100);
+  display: flex;
+  flex-direction: column;
+  transition: width 0.3s ease;
+  flex-shrink: 0;
+}
+
+.sidebar-collapsed {
+  width: 72px;
+}
+
+.sidebar-collapsed .sidebar-text,
+.sidebar-collapsed .nav-label {
+  display: none;
+}
+
+.sidebar-section {
+  padding: 1rem;
+  position: relative;
+}
+
+.border-bottom {
+  border-bottom: 1px solid var(--rose-100);
+}
+
+.border-top {
+  border-top: 1px solid var(--rose-100);
+  margin-top: auto;
+}
+
+.project-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--gray-900);
+  margin: 0 0 0.5rem;
+}
+
+.timeline-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.25rem 0.5rem;
+  background: var(--rose-100);
+  color: var(--rose-600);
+  font-size: 0.75rem;
+  font-weight: 500;
+  border-radius: 4px;
+}
+
+.badge-icon {
+  width: 14px;
+  height: 14px;
+}
+
+/* Navigation */
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  border-radius: 8px;
+  color: var(--gray-600);
+  text-decoration: none;
+  background: transparent;
+  border: none;
+  width: 100%;
+  cursor: pointer;
+  font-size: 0.875rem;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+.nav-item:hover {
+  background: var(--rose-50);
+  color: var(--gray-900);
+}
+
+.nav-icon {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+}
+
+.nav-label {
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+/* Stats */
+.stat-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 0;
+}
+
+.stat-icon {
+  width: 20px;
+  height: 20px;
+  color: var(--rose-400);
+  flex-shrink: 0;
+}
+
+.stat-content {
+  display: flex;
+  align-items: baseline;
+  gap: 0.375rem;
+}
+
+.stat-value {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--gray-900);
+}
+
+.stat-label {
+  font-size: 0.75rem;
+  color: var(--gray-500);
+}
+
+/* Sidebar Toggle */
+.sidebar-footer {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.sidebar-toggle {
+  width: 32px;
+  height: 32px;
+  background: var(--rose-50);
+  border: 1px solid var(--rose-200);
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--gray-500);
+  transition: all 0.2s ease;
+}
+
+.sidebar-toggle:hover {
+  background: var(--rose-100);
+  color: var(--rose-500);
+}
+
+.toggle-icon {
+  width: 16px;
+  height: 16px;
+}
+
+/* Collapsed tooltips */
+.sidebar-collapsed .nav-item::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  left: 100%;
+  margin-left: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--gray-900);
+  color: white;
+  font-size: 0.75rem;
+  border-radius: 6px;
+  white-space: nowrap;
+  opacity: 0;
+  visibility: hidden;
+  transition: all 0.2s ease;
+  z-index: 100;
+}
+
+.sidebar-collapsed .nav-item:hover::after {
+  opacity: 1;
+  visibility: visible;
+}
+
+/* Main */
+.main-wrapper {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Header */
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 2rem;
+  background: white;
+  border-bottom: 1px solid var(--rose-100);
+}
+
+.breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+}
+
+.breadcrumb a {
+  color: var(--gray-500);
+  text-decoration: none;
+}
+
+.breadcrumb a:hover {
+  color: var(--rose-500);
+}
+
+.separator {
+  color: var(--gray-300);
+}
+
+.current {
+  color: var(--gray-900);
+  font-weight: 500;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.duration-badge {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--rose-50);
+  color: var(--rose-600);
+  font-size: 0.875rem;
+  font-weight: 600;
+  border-radius: 8px;
+}
+
+/* Content */
+.main-content {
+  flex: 1;
+  padding: 2rem;
+  overflow-y: auto;
+}
+</style>

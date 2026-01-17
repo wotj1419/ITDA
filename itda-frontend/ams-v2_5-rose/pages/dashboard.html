@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Projects - AI Movie Studio</title>
+    <link rel="stylesheet" href="../assets/css/styles.css">
+    <link rel="stylesheet" href="../assets/css/components/modal.css">
+    <link rel="stylesheet" href="../assets/css/components/form.css">
+    <link rel="stylesheet" href="../assets/css/components/toast.css">
+    <link rel="stylesheet" href="../assets/css/components/loading.css">
+    <link rel="stylesheet" href="../assets/css/components/collab.css">
+    <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+
+<body>
+    <div class="app-container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="p-4" style="border-bottom: 1px solid var(--rose-100);">
+                <a href="../index.html"
+                    style="display: flex; align-items: center; gap: 0.75rem; text-decoration: none; color: var(--gray-900);">
+                    <div
+                        style="width: 32px; height: 32px; background: linear-gradient(135deg, var(--rose-400), var(--rose-500)); border-radius: 8px; flex-shrink: 0;">
+                    </div>
+                    <span class="sidebar-text" style="font-weight: 700;">AI Movie Studio</span>
+                </a>
+            </div>
+
+            <nav class="p-4" style="flex: 1;">
+                <a href="#" class="nav-item active" data-tooltip="All Projects">
+                    <i data-lucide="folder" class="w-5 h-5"></i>
+                    <span class="nav-label">All Projects</span>
+                </a>
+                <a href="#" class="nav-item" data-tooltip="Favorites">
+                    <i data-lucide="star" class="w-5 h-5"></i>
+                    <span class="nav-label">Favorites</span>
+                </a>
+                <a href="#" class="nav-item" data-tooltip="Shared with Me">
+                    <i data-lucide="users" class="w-5 h-5"></i>
+                    <span class="nav-label">Shared with Me</span>
+                </a>
+                <a href="#" class="nav-item" data-tooltip="Trash">
+                    <i data-lucide="trash-2" class="w-5 h-5"></i>
+                    <span class="nav-label">Trash</span>
+                </a>
+            </nav>
+
+            <div class="p-4 credit-info" style="border-top: 1px solid var(--rose-100);">
+                <div
+                    style="background: linear-gradient(135deg, var(--rose-50), var(--rose-100)); border-radius: 12px; padding: 1rem;">
+                    <div class="text-xs" style="font-weight: 600; color: var(--rose-500); margin-bottom: 0.25rem;">PRO
+                        PLAN</div>
+                    <div class="text-xs text-muted" style="margin-bottom: 0.5rem;">Credits: 850 / 1000</div>
+                    <div class="progress-bar" style="height: 4px;">
+                        <div class="progress-bar-fill" style="width: 85%;"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="p-4 flex items-center gap-3" style="border-top: 1px solid var(--rose-100); position: relative;">
+                <div class="avatar"
+                    style="background-image: url('https://i.pravatar.cc/150?u=user123'); flex-shrink: 0;"></div>
+                <div class="user-info-text" style="flex: 1; min-width: 0;">
+                    <div class="text-sm truncate" style="font-weight: 500;">Minjun Kim</div>
+                    <div class="text-xs text-muted truncate">minjun@example.com</div>
+                </div>
+                <button class="btn btn-ghost btn-icon user-info-text">
+                    <i data-lucide="settings" class="w-5 h-5"></i>
+                </button>
+                <!-- Sidebar Toggle Button -->
+                <button class="sidebar-toggle">
+                    <i data-lucide="chevron-right" class="w-4 h-4"></i>
+                </button>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main style="flex: 1; display: flex; flex-direction: column; overflow: hidden;">
+            <!-- Header -->
+            <header class="header">
+                <div class="header-left">
+                    <!-- Collaborator Avatars -->
+                    <div class="avatar-stack">
+                        <div class="avatar" style="background: var(--rose-200);"></div>
+                        <div class="avatar" style="background: var(--gray-200);"></div>
+                        <div class="avatar" style="background: var(--gray-100);"></div>
+                        <div class="avatar avatar-more">+5</div>
+                    </div>
+
+                    <div style="width: 1px; height: 24px; background: var(--rose-200);"></div>
+
+                    <button class="btn btn-ghost">
+                        <i data-lucide="share-2" class="w-4 h-4"></i>
+                        프로젝트 공유
+                    </button>
+                </div>
+
+                <div class="header-center">
+                    <div style="position: relative;">
+                        <i data-lucide="search" class="w-4 h-4"
+                            style="position: absolute; left: 1rem; top: 50%; transform: translateY(-50%); color: var(--gray-400);"></i>
+                        <input type="text" class="header-search" placeholder="씬, 프롬프트, 에셋 검색...">
+                    </div>
+                </div>
+
+                <div class="header-right">
+                    <button class="btn btn-primary" data-collab-open>
+                        <i data-lucide="users" class="w-4 h-4"></i>
+                        실시간 협업 시작
+                    </button>
+                </div>
+            </header>
+
+            <!-- Content Area -->
+            <div class="main-content">
+                <!-- Welcome Message -->
+                <div style="margin-bottom: 2.5rem;">
+                    <h2 style="font-size: 1.875rem; font-weight: 700; color: var(--gray-900);">
+                        반가워요, 크리에이터님 ✨
+                    </h2>
+                    <p style="color: var(--gray-500); margin-top: 0.5rem;">
+                        오늘도 당신의 놀라운 아이디어를 영화로 만들어보세요.
+                    </p>
+                </div>
+
+                <!-- Toolbar -->
+                <div class="flex items-center justify-between mb-6">
+                    <div>
+                        <h1 class="h2" style="margin-bottom: 0.25rem;">My Projects</h1>
+                        <p class="text-muted text-sm">3 projects</p>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <!-- New Project Button -->
+                        <button class="btn btn-primary" data-modal-open="new-project-modal">
+                            <i data-lucide="plus" class="w-4 h-4"></i>
+                            New Project
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Quick Access -->
+                <section class="mb-6">
+                    <h3 class="text-xs"
+                        style="font-weight: 600; color: var(--gray-500); text-transform: uppercase; margin-bottom: 0.75rem;">
+                        Quick Access</h3>
+                    <div class="flex gap-4">
+                        <a href="project-detail.html" class="card card-clickable"
+                            style="display: flex; align-items: center; gap: 1rem; padding: 1rem; width: auto; flex: 0 0 auto;">
+                            <div
+                                style="width: 48px; height: 48px; border-radius: 12px; background: url('https://images.unsplash.com/photo-1626814026160-2237a95fc5a0?w=200&auto=format') center/cover;">
+                            </div>
+                            <div>
+                                <div class="text-sm" style="font-weight: 600;">The Martian Red</div>
+                                <div class="text-xs text-muted">Edited 2h ago</div>
+                            </div>
+                            <i data-lucide="star" class="w-5 h-5" style="color: var(--rose-400);"></i>
+                        </a>
+                        <a href="project-detail.html" class="card card-clickable"
+                            style="display: flex; align-items: center; gap: 1rem; padding: 1rem; width: auto; flex: 0 0 auto;">
+                            <div
+                                style="width: 48px; height: 48px; border-radius: 12px; background: url('https://images.unsplash.com/photo-1518770660439-4636190af475?w=200&auto=format') center/cover;">
+                            </div>
+                            <div>
+                                <div class="text-sm" style="font-weight: 600;">Neon Dreams</div>
+                                <div class="text-xs text-muted">Edited yesterday</div>
+                            </div>
+                            <i data-lucide="star" class="w-5 h-5" style="color: var(--rose-400);"></i>
+                        </a>
+                    </div>
+                </section>
+
+                <!-- All Projects Grid -->
+                <section>
+                    <h3 class="text-xs"
+                        style="font-weight: 600; color: var(--gray-500); text-transform: uppercase; margin-bottom: 0.75rem;">
+                        All Projects</h3>
+                    <div
+                        style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1.5rem;">
+
+                        <!-- Project Card 1 -->
+                        <a href="project-detail.html" class="card card-clickable"
+                            style="padding: 0; overflow: hidden; text-decoration: none; color: inherit;">
+                            <div class="card-thumbnail"
+                                style="aspect-ratio: 16/9; background: url('https://images.unsplash.com/photo-1626814026160-2237a95fc5a0?w=600&auto=format') center/cover; position: relative;">
+                                <div
+                                    style="position: absolute; bottom: 0.5rem; right: 0.5rem; background: rgba(0,0,0,0.6); padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.625rem; color: white;">
+                                    00:45</div>
+                            </div>
+                            <div class="p-4">
+                                <div class="flex items-center justify-between mb-2">
+                                    <h3 style="font-weight: 600;">The Martian Red</h3>
+                                    <span class="badge badge-rose">Sci-Fi</span>
+                                </div>
+                                <p class="text-sm text-muted truncate mb-3">A survival story on Mars. The protagonist
+                                    finds an ancient ruin.</p>
+                                <!-- Progress -->
+                                <div class="flex items-center gap-2 mb-3">
+                                    <div class="progress-bar" style="flex: 1; height: 4px;">
+                                        <div class="progress-bar-fill" style="width: 60%;"></div>
+                                    </div>
+                                    <span class="text-xs" style="color: var(--rose-500); font-weight: 600;">3/5</span>
+                                </div>
+                                <div class="flex items-center justify-between">
+                                    <div class="avatar-group">
+                                        <div class="avatar avatar-sm"
+                                            style="background-image: url('https://i.pravatar.cc/150?u=a');"></div>
+                                        <div class="avatar avatar-sm"
+                                            style="background-image: url('https://i.pravatar.cc/150?u=b');"></div>
+                                    </div>
+                                    <span class="text-xs text-muted">Edited 2h ago</span>
+                                </div>
+                            </div>
+                        </a>
+
+                        <!-- Project Card 2 -->
+                        <a href="project-detail.html" class="card card-clickable"
+                            style="padding: 0; overflow: hidden; text-decoration: none; color: inherit;">
+                            <div class="card-thumbnail"
+                                style="aspect-ratio: 16/9; background: url('https://images.unsplash.com/photo-1518770660439-4636190af475?w=600&auto=format') center/cover; position: relative;">
+                            </div>
+                            <div class="p-4">
+                                <div class="flex items-center justify-between mb-2">
+                                    <h3 style="font-weight: 600;">Neon Dreams</h3>
+                                    <span class="badge badge-default">Draft</span>
+                                </div>
+                                <p class="text-sm text-muted truncate mb-3">Cyberpunk thriller set in neo-Tokyo.</p>
+                                <!-- Progress -->
+                                <div class="flex items-center gap-2 mb-3">
+                                    <div class="progress-bar" style="flex: 1; height: 4px;">
+                                        <div class="progress-bar-fill" style="width: 20%;"></div>
+                                    </div>
+                                    <span class="text-xs" style="color: var(--gray-500); font-weight: 600;">1/5</span>
+                                </div>
+                                <div class="flex items-center justify-between">
+                                    <div class="avatar-group">
+                                        <div class="avatar avatar-sm"
+                                            style="background-image: url('https://i.pravatar.cc/150?u=c');"></div>
+                                    </div>
+                                    <span class="text-xs text-muted">Edited yesterday</span>
+                                </div>
+                            </div>
+                        </a>
+
+                        <!-- Add New Project Card -->
+                        <button class="card"
+                            style="padding: 0; overflow: hidden; border-style: dashed; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 280px; cursor: pointer;"
+                            data-modal-open="new-project-modal">
+                            <div
+                                style="width: 64px; height: 64px; background: var(--rose-50); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-bottom: 1rem;">
+                                <i data-lucide="plus" class="w-8 h-8" style="color: var(--rose-400);"></i>
+                            </div>
+                            <span style="font-weight: 500; color: var(--gray-600);">Create New Project</span>
+                        </button>
+
+                    </div>
+                </section>
+            </div>
+        </main>
+    </div>
+
+    <!-- New Project Modal -->
+    <div class="modal-overlay" id="new-project-modal">
+        <div class="modal modal-lg">
+            <div class="modal-header">
+                <h2 class="modal-title">새 프로젝트 만들기</h2>
+                <button class="modal-close" data-modal-close>
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <form id="new-project-form">
+                    <!-- Title -->
+                    <div class="form-group">
+                        <label class="form-label required">프로젝트 제목</label>
+                        <input type="text" class="form-input" placeholder="예: 용사의 모험" required>
+                    </div>
+
+                    <!-- Description -->
+                    <div class="form-group">
+                        <label class="form-label">설명</label>
+                        <textarea class="form-input form-textarea" placeholder="프로젝트에 대한 간단한 설명을 입력하세요"></textarea>
+                    </div>
+
+                    <!-- Genre & Mood -->
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">장르</label>
+                            <select class="form-input form-select">
+                                <option value="">선택하세요</option>
+                                <option value="fantasy">판타지</option>
+                                <option value="sf">SF</option>
+                                <option value="romance">로맨스</option>
+                                <option value="action">액션</option>
+                                <option value="thriller">스릴러</option>
+                                <option value="comedy">코미디</option>
+                                <option value="documentary">다큐멘터리</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">분위기</label>
+                            <select class="form-input form-select">
+                                <option value="">선택하세요</option>
+                                <option value="epic">서사적</option>
+                                <option value="bright">밝은</option>
+                                <option value="dark">어두운</option>
+                                <option value="hopeful">희망적</option>
+                                <option value="tense">긴장감</option>
+                                <option value="comic">코믹</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- AI Scenario Generation -->
+                    <div class="form-section">
+                        <div class="form-section-header">
+                            <span class="form-section-title">
+                                <i data-lucide="sparkles" class="w-4 h-4"
+                                    style="color: var(--rose-400); vertical-align: middle; margin-right: 0.25rem;"></i>
+                                AI 시나리오 생성 (선택)
+                            </span>
+                            <i data-lucide="chevron-down" class="w-4 h-4 form-section-toggle"></i>
+                        </div>
+                        <div class="form-section-content">
+                            <div class="form-group">
+                                <label class="form-label">씬 개수</label>
+                                <div class="chip-group" data-multiple="false">
+                                    <span class="chip">3개</span>
+                                    <span class="chip selected">4개</span>
+                                    <span class="chip">5개</span>
+                                    <span class="chip">6개</span>
+                                    <span class="chip">7개</span>
+                                </div>
+                                <div class="form-helper">총 길이 60초 기준, 씬당 약 10~15초 권장</div>
+                            </div>
+
+                            <div class="form-group">
+                                <label class="form-label">줄거리</label>
+                                <textarea class="form-input form-textarea"
+                                    placeholder="예: 젊은 용사가 마을을 구하기 위해 모험을 떠나는 이야기. 숲속에서 현자를 만나고, 최종 보스와 대결한다."></textarea>
+                            </div>
+
+                            <button type="button" class="btn btn-secondary w-full" id="generate-scenario-btn">
+                                <i data-lucide="sparkles" class="w-4 h-4"></i>
+                                AI로 씬 생성하기
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" data-modal-close>취소</button>
+                <button class="btn btn-primary" id="create-project-btn">
+                    프로젝트 생성
+                    <i data-lucide="arrow-right" class="w-4 h-4"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Collab Container (Bottom Right Floating) -->
+    <div class="collab-container" data-collab>
+        <!-- Expanded Panel -->
+        <div class="collab-panel hidden" data-collab-panel>
+            <div class="collab-panel-header">
+                <div>
+                    <div class="collab-panel-title">
+                        <span class="live-dot"></span>
+                        브레인스토밍 허들
+                    </div>
+                </div>
+                <button class="btn btn-ghost btn-icon" data-collab-close>
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <!-- Participants -->
+            <div class="collab-participants">
+                <div class="collab-participant">
+                    <div class="collab-participant-avatar me">나</div>
+                    <span class="collab-participant-name">ME</span>
+                </div>
+                <div class="collab-participant">
+                    <div class="collab-participant-avatar">SJ</div>
+                    <span class="collab-participant-name">SJ</span>
+                </div>
+                <div class="collab-participant">
+                    <div class="collab-participant-avatar" style="border-style: dashed; background: transparent;">
+                        <i data-lucide="plus" class="w-5 h-5" style="color: var(--gray-300);"></i>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Chat -->
+            <div class="collab-chat-area">
+                <div class="collab-chat-label">실시간 대화</div>
+                <div class="collab-messages" data-collab-messages></div>
+            </div>
+
+            <!-- Input -->
+            <div class="collab-input-area">
+                <form class="collab-input-row" data-collab-form>
+                    <input type="text" class="collab-input" placeholder="메시지 입력..." data-collab-input>
+                    <button class="btn btn-primary" type="submit">
+                        <i data-lucide="send" class="w-4 h-4"></i>
+                    </button>
+                </form>
+                <div class="collab-controls">
+                    <div class="collab-media-controls">
+                        <button class="collab-media-btn" data-collab-mic>
+                            <i data-lucide="mic" class="w-4 h-4"></i>
+                        </button>
+                        <button class="collab-media-btn" data-collab-cam>
+                            <i data-lucide="video" class="w-4 h-4"></i>
+                        </button>
+                        <button class="collab-media-btn active" data-collab-share>
+                            <i data-lucide="monitor" class="w-4 h-4"></i>
+                        </button>
+                    </div>
+                    <button class="collab-leave-btn">나가기</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Collapsed Pill -->
+        <div class="collab-pill" data-collab-toggle>
+            <div class="collab-indicator">
+                <span class="dot"></span>
+                Live
+            </div>
+            <div style="width: 1px; height: 24px; background: var(--rose-200);"></div>
+            <button class="btn btn-ghost btn-icon" style="padding: 0.25rem;">
+                <i data-lucide="mic-off" class="w-4 h-4"></i>
+            </button>
+            <button class="btn btn-ghost btn-icon" style="padding: 0.25rem;">
+                <i data-lucide="video-off" class="w-4 h-4"></i>
+            </button>
+            <button class="btn btn-ghost btn-icon" style="padding: 0.25rem;">
+                <i data-lucide="monitor" class="w-4 h-4"></i>
+            </button>
+            <button class="btn btn-ghost btn-icon" style="padding: 0.25rem;">
+                <i data-lucide="message-circle" class="w-4 h-4"></i>
+            </button>
+        </div>
+    </div>
+
+    <script src="../assets/js/ui.js"></script>
+    <script>
+        // Initialize Lucide icons
+        lucide.createIcons();
+
+        // Create Project
+        document.getElementById('create-project-btn').addEventListener('click', () => {
+            Toast.success('프로젝트 생성 완료', 'The Martian Red 프로젝트가 생성되었습니다.');
+            Modal.close('new-project-modal');
+            setTimeout(() => {
+                window.location.href = 'project-detail.html';
+            }, 1000);
+        });
+
+        // AI Scenario Generation (Demo)
+        document.getElementById('generate-scenario-btn').addEventListener('click', function () {
+            const btn = this;
+            Loading.showButton(btn);
+
+            setTimeout(() => {
+                Loading.hideButton(btn);
+                btn.innerHTML = `
+                    <i data-lucide="check" class="w-4 h-4" style="color: var(--success);"></i>
+                    4개 씬 생성 완료!
+                `;
+                lucide.createIcons();
+                Toast.success('AI 시나리오 생성 완료', '4개의 씬이 자동 생성되었습니다.');
+            }, 2000);
+        });
+
+    </script>
+</body>
+
+</html>

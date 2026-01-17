@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Martian Red - AI Movie Studio</title>
+    <link rel="stylesheet" href="../assets/css/styles.css">
+    <link rel="stylesheet" href="../assets/css/components/modal.css">
+    <link rel="stylesheet" href="../assets/css/components/form.css">
+    <link rel="stylesheet" href="../assets/css/components/toast.css">
+    <link rel="stylesheet" href="../assets/css/components/loading.css">
+    <link rel="stylesheet" href="../assets/css/components/collab.css">
+    <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+
+<body>
+    <div class="app-container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="p-4" style="border-bottom: 1px solid var(--rose-100);">
+                <a href="dashboard.html" class="nav-item" data-tooltip="Back to Projects" style="margin: 0;">
+                    <i data-lucide="arrow-left" class="icon w-5 h-5"></i>
+                    <span class="nav-label">Back to Projects</span>
+                </a>
+            </div>
+
+            <div class="p-4 sidebar-text" style="border-bottom: 1px solid var(--rose-100);">
+                <h2 class="h3" style="margin-bottom: 0.25rem;">The Martian Red</h2>
+                <span class="badge badge-rose">Sci-Fi / Thriller</span>
+            </div>
+
+            <nav class="p-4" style="flex: 1;">
+                <a href="#" class="nav-item active" data-tab-nav="story" data-tooltip="Story">
+                    <i data-lucide="book-open" class="icon w-5 h-5"></i>
+                    <span class="nav-label">Story</span>
+                </a>
+                <a href="#" class="nav-item" data-tab-nav="scenes" data-tooltip="Scenes">
+                    <i data-lucide="clapperboard" class="icon w-5 h-5"></i>
+                    <span class="nav-label">Scenes</span>
+                    <span class="badge badge-rose nav-label" style="margin-left: auto; font-size: 0.625rem;">3</span>
+                </a>
+                <a href="#" class="nav-item" data-tab-nav="characters" data-tooltip="Characters">
+                    <i data-lucide="user" class="icon w-5 h-5"></i>
+                    <span class="nav-label">Characters</span>
+                </a>
+                <a href="timeline.html" class="nav-item" data-tooltip="Timeline">
+                    <i data-lucide="layers" class="icon w-5 h-5"></i>
+                    <span class="nav-label">Timeline</span>
+                </a>
+                <a href="#" class="nav-item" data-tooltip="Settings">
+                    <i data-lucide="settings" class="icon w-5 h-5"></i>
+                    <span class="nav-label">Settings</span>
+                </a>
+            </nav>
+
+            <div class="p-4" style="border-top: 1px solid var(--rose-100); position: relative;">
+                <div class="sidebar-text">
+                    <div class="text-xs"
+                        style="font-weight: 600; color: var(--gray-500); margin-bottom: 0.75rem;">ONLINE
+                        NOW</div>
+                    <div class="flex items-center gap-2 mb-3">
+                        <div class="avatar-group">
+                            <div class="avatar" style="background-image: url('https://i.pravatar.cc/150?u=a');"></div>
+                            <div class="avatar" style="background-image: url('https://i.pravatar.cc/150?u=b');"></div>
+                            <div class="avatar">+1</div>
+                        </div>
+                    </div>
+                    <button class="btn btn-secondary w-full" style="font-size: 0.75rem;" data-collab-open>
+                        <i data-lucide="phone" class="w-5 h-5"></i>
+                        Start Call
+                    </button>
+                </div>
+                <button class="sidebar-toggle">
+                    <i data-lucide="chevron-right" class="w-4 h-4"></i>
+                </button>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main style="flex: 1; display: flex; flex-direction: column; overflow: hidden;">
+            <!-- Header -->
+            <header class="header">
+                <div class="breadcrumb">
+                    <a href="dashboard.html">AI Movie Studio</a>
+                    <span>/</span>
+                    <span class="breadcrumb-current">The Martian Red</span>
+                </div>
+                <div class="flex items-center gap-3">
+                    <div class="flex items-center gap-2">
+                        <span class="text-xs text-muted">Progress</span>
+                        <div class="progress-bar" style="width: 120px;">
+                            <div class="progress-bar-fill" style="width: 60%;"></div>
+                        </div>
+                        <span class="text-xs" style="font-weight: 600; color: var(--rose-500);">3/5</span>
+                    </div>
+                    <button class="btn btn-secondary" data-collab-open>
+                        <i data-lucide="users" class="w-5 h-5"></i>
+                        협업 시작
+                    </button>
+                    <button class="btn btn-primary">
+                        <i data-lucide="play" class="w-5 h-5"></i>
+                        Preview
+                    </button>
+                </div>
+            </header>
+
+            <!-- Content -->
+            <div class="main-content">
+                <div style="max-width: 900px; margin: 0 auto;">
+
+                    <!-- Tabs -->
+                    <div class="tabs">
+                        <button class="tab active" data-tab="story">Story</button>
+                        <button class="tab" data-tab="scenes">Scenes</button>
+                        <button class="tab" data-tab="characters">Characters</button>
+                    </div>
+
+                    <!-- Tab Content: Story -->
+                    <div id="story" class="tab-content">
+                        <!-- Story Prompt Section -->
+                        <div class="card mb-6">
+                            <div class="flex items-center gap-2 mb-4">
+                                <i data-lucide="sparkles" class="w-5 h-5"></i>
+                                <h3 class="h3">스토리 구성 프롬프트</h3>
+                            </div>
+
+                            <div class="form-row mb-4">
+                                <div class="form-group" style="margin-bottom: 0;">
+                                    <label class="form-label">장르</label>
+                                    <select class="form-input form-select">
+                                        <option value="sf" selected>SF</option>
+                                        <option value="fantasy">판타지</option>
+                                        <option value="romance">로맨스</option>
+                                        <option value="action">액션</option>
+                                    </select>
+                                </div>
+                                <div class="form-group" style="margin-bottom: 0;">
+                                    <label class="form-label">분위기</label>
+                                    <select class="form-input form-select">
+                                        <option value="tense" selected>긴장감</option>
+                                        <option value="epic">서사적</option>
+                                        <option value="hopeful">희망적</option>
+                                        <option value="docu">다큐</option>
+                                    </select>
+                                </div>
+                                <div class="form-group" style="margin-bottom: 0;">
+                                    <label class="form-label">씬 개수</label>
+                                    <select class="form-input form-select">
+                                        <option value="3">3개</option>
+                                        <option value="4">4개</option>
+                                        <option value="5" selected>5개</option>
+                                        <option value="6">6개</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="form-group">
+                                <label class="form-label">전체 줄거리</label>
+                                <textarea class="form-input form-textarea" style="min-height: 80px;">화성 기지에서 하루를 보내는 우주인의 브이로그. 탐사 중 고대 구조물을 발견하고 인류의 단서를 찾아 나서는 이야기.</textarea>
+                            </div>
+
+                            <button class="btn btn-primary" id="generate-scenes-btn">
+                                <i data-lucide="sparkles" class="w-5 h-5"></i>
+                                AI로 씬 생성
+                            </button>
+                        </div>
+
+                        <!-- Scene List -->
+                        <div class="flex items-center justify-between mb-4">
+                            <h3 class="h3">씬별 스토리</h3>
+                            <button class="btn btn-secondary btn-sm">
+                                <i data-lucide="plus" class="w-5 h-5"></i>
+                                씬 추가
+                            </button>
+                        </div>
+
+                        <div class="flex flex-col gap-3" id="scene-list">
+                            <!-- Scene 1 -->
+                            <div class="card" style="padding: 1rem; cursor: grab;" draggable="true">
+                                <div class="flex items-center gap-4">
+                                    <i data-lucide="grip-vertical" class="w-4 h-4"
+                                        style="color: var(--gray-300); cursor: grab;"></i>
+                                    <div
+                                        style="width: 80px; height: 60px; border-radius: 8px; background: url('https://images.unsplash.com/photo-1614728853975-69c960f723ad?w=200&auto=format') center/cover; flex-shrink: 0;">
+                                    </div>
+                                    <div style="flex: 1; min-width: 0;">
+                                        <div class="flex items-center gap-2 mb-1">
+                                            <span class="badge badge-default" style="font-size: 0.625rem;">SCENE
+                                                1</span>
+                                            <h4 style="font-weight: 600;">The Discovery</h4>
+                                            <span class="badge badge-success" style="margin-left: 0.5rem;">
+                                                <i data-lucide="check" class="w-3 h-3"></i>
+                                                완료
+                                            </span>
+                                        </div>
+                                        <p class="text-sm text-muted truncate">Mark walks through the red desert and
+                                            spots a metallic glint in the distance.</p>
+                                    </div>
+                                    <div class="flex items-center gap-2">
+                                        <a href="scene-edit.html" class="btn btn-primary btn-sm">
+                                            <i data-lucide="pencil" class="w-5 h-5"></i>
+                                            Edit
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Scene 2 -->
+                            <div class="card" style="padding: 1rem; cursor: grab;" draggable="true">
+                                <div class="flex items-center gap-4">
+                                    <i data-lucide="grip-vertical" class="w-4 h-4"
+                                        style="color: var(--gray-300); cursor: grab;"></i>
+                                    <div
+                                        style="width: 80px; height: 60px; border-radius: 8px; background: var(--rose-50); display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                                        <i data-lucide="image" class="w-5 h-5"></i>
+                                    </div>
+                                    <div style="flex: 1; min-width: 0;">
+                                        <div class="flex items-center gap-2 mb-1">
+                                            <span class="badge badge-default" style="font-size: 0.625rem;">SCENE
+                                                2</span>
+                                            <h4 style="font-weight: 600;">Entering the Structure</h4>
+                                            <span class="badge badge-info" style="margin-left: 0.5rem;">
+                                                <i data-lucide="loader-2" class="w-3 h-3 animate-spin"></i>
+                                                진행 중
+                                            </span>
+                                        </div>
+                                        <p class="text-sm text-muted truncate">Inside the dark corridor, bioluminescent
+                                            plants light up the path.</p>
+                                    </div>
+                                    <div class="flex items-center gap-2">
+                                        <a href="scene-edit.html" class="btn btn-secondary btn-sm">
+                                            <i data-lucide="pencil" class="w-5 h-5"></i>
+                                            Edit
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Scene 3 -->
+                            <div class="card" style="padding: 1rem; cursor: grab;" draggable="true">
+                                <div class="flex items-center gap-4">
+                                    <i data-lucide="grip-vertical" class="w-4 h-4"
+                                        style="color: var(--gray-300); cursor: grab;"></i>
+                                    <div
+                                        style="width: 80px; height: 60px; border-radius: 8px; background: var(--rose-50); display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                                        <i data-lucide="image" class="w-5 h-5"></i>
+                                    </div>
+                                    <div style="flex: 1; min-width: 0;">
+                                        <div class="flex items-center gap-2 mb-1">
+                                            <span class="badge badge-default" style="font-size: 0.625rem;">SCENE
+                                                3</span>
+                                            <h4 style="font-weight: 600;">The Revelation</h4>
+                                            <span class="badge badge-default" style="margin-left: 0.5rem;">초안</span>
+                                        </div>
+                                        <p class="text-sm text-muted truncate">Mark discovers ancient alien technology
+                                            that could save Earth.</p>
+                                    </div>
+                                    <div class="flex items-center gap-2">
+                                        <a href="scene-edit.html" class="btn btn-secondary btn-sm">
+                                            <i data-lucide="pencil" class="w-5 h-5"></i>
+                                            Edit
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Add Scene Button -->
+                            <button class="card"
+                                style="padding: 1rem; border-style: dashed; display: flex; align-items: center; justify-content: center; gap: 0.5rem; color: var(--gray-500); cursor: pointer;">
+                                <i data-lucide="plus-circle" class="w-5 h-5" style="color: var(--rose-400);"></i>
+                                Add New Scene
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Tab Content: Scenes -->
+                    <div id="scenes" class="tab-content" style="display: none;">
+                        <div class="flex items-center justify-between mb-4">
+                            <h2 class="h3" style="margin: 0;">Scene Breakdown</h2>
+                            <button class="btn btn-secondary">
+                                <i data-lucide="sparkles" class="w-5 h-5"></i>
+                                Generate with AI
+                            </button>
+                        </div>
+                        <p class="text-muted">씬 관리는 Story 탭에서 진행됩니다.</p>
+                    </div>
+
+                    <!-- Tab Content: Characters -->
+                    <div id="characters" class="tab-content" style="display: none;">
+                        <div class="flex items-center justify-between mb-4">
+                            <h2 class="h3" style="margin: 0;">캐릭터</h2>
+                            <button class="btn btn-primary" data-modal-open="character-modal">
+                                <i data-lucide="plus" class="w-5 h-5"></i>
+                                캐릭터 추가
+                            </button>
+                        </div>
+
+                        <div
+                            style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 1rem;">
+                            <div class="card" style="text-align: center; padding: 1.5rem;">
+                                <div class="avatar avatar-xl"
+                                    style="margin: 0 auto 1rem; background-image: url('https://i.pravatar.cc/150?u=mark');">
+                                </div>
+                                <h4 style="font-weight: 600;">Mark Watney</h4>
+                                <p class="text-sm text-muted mb-3">Astronaut, 30s</p>
+                                <div class="flex gap-2 justify-center">
+                                    <button class="btn btn-secondary btn-sm">Edit</button>
+                                    <button class="btn btn-ghost btn-sm" style="color: var(--error);">Delete</button>
+                                </div>
+                            </div>
+                            <div class="card" style="text-align: center; padding: 1.5rem; border-style: dashed;"
+                                data-modal-open="character-modal">
+                                <div
+                                    style="width: 80px; height: 80px; margin: 0 auto 1rem; border-radius: 50%; background: var(--rose-50); display: flex; align-items: center; justify-content: center;">
+                                    <i data-lucide="plus" class="w-6 h-6" style="color: var(--rose-400);"></i>
+                                </div>
+                                <span style="color: var(--gray-500); font-size: 0.875rem;">Add Character</span>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Collab Container (Bottom Right Floating) -->
+    <div class="collab-container" data-collab>
+        <!-- Expanded Panel -->
+        <div class="collab-panel hidden" data-collab-panel>
+            <div class="collab-panel-header">
+                <div>
+                    <div class="collab-panel-title">
+                        <span class="live-dot"></span>
+                        브레인스토밍 허들
+                    </div>
+                </div>
+                <button class="btn btn-ghost btn-icon" data-collab-close>
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <!-- Participants -->
+            <div class="collab-participants">
+                <div class="collab-participant">
+                    <div class="collab-participant-avatar me">나</div>
+                    <span class="collab-participant-name">ME</span>
+                </div>
+                <div class="collab-participant">
+                    <div class="collab-participant-avatar">SJ</div>
+                    <span class="collab-participant-name">SJ</span>
+                </div>
+                <div class="collab-participant">
+                    <div class="collab-participant-avatar" style="border-style: dashed; background: transparent;">
+                        <i data-lucide="plus" class="w-5 h-5" style="color: var(--gray-300);"></i>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Chat -->
+            <div class="collab-chat-area">
+                <div class="collab-chat-label">실시간 대화</div>
+                <div class="collab-messages" data-collab-messages></div>
+            </div>
+
+            <!-- Input -->
+            <div class="collab-input-area">
+                <form class="collab-input-row" data-collab-form>
+                    <input type="text" class="collab-input" placeholder="메시지 입력..." data-collab-input>
+                    <button class="btn btn-primary" type="submit">
+                        <i data-lucide="send" class="w-4 h-4"></i>
+                    </button>
+                </form>
+                <div class="collab-controls">
+                    <div class="collab-media-controls">
+                        <button class="collab-media-btn" data-collab-mic>
+                            <i data-lucide="mic" class="w-4 h-4"></i>
+                        </button>
+                        <button class="collab-media-btn" data-collab-cam>
+                            <i data-lucide="video" class="w-4 h-4"></i>
+                        </button>
+                        <button class="collab-media-btn" data-collab-share>
+                            <i data-lucide="monitor" class="w-4 h-4"></i>
+                        </button>
+                    </div>
+                    <button class="collab-leave-btn">나가기</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Collapsed Pill -->
+        <div class="collab-pill" data-collab-toggle>
+            <div class="collab-indicator">
+                <span class="dot"></span>
+                Live
+            </div>
+            <div style="width: 1px; height: 24px; background: var(--rose-200);"></div>
+            <button class="btn btn-ghost btn-icon" style="padding: 0.25rem;">
+                <i data-lucide="mic-off" class="w-4 h-4"></i>
+            </button>
+            <button class="btn btn-ghost btn-icon" style="padding: 0.25rem;">
+                <i data-lucide="video-off" class="w-4 h-4"></i>
+            </button>
+            <button class="btn btn-ghost btn-icon" style="padding: 0.25rem;">
+                <i data-lucide="monitor" class="w-4 h-4"></i>
+            </button>
+            <button class="btn btn-ghost btn-icon" style="padding: 0.25rem;">
+                <i data-lucide="message-circle" class="w-4 h-4"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- Character Modal -->
+    <div class="modal-overlay" id="character-modal">
+        <div class="modal">
+            <div class="modal-header">
+                <h2 class="modal-title">캐릭터 추가</h2>
+                <button class="modal-close" data-modal-close>
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label class="form-label required">캐릭터 이름</label>
+                    <input type="text" class="form-input" placeholder="예: 민준">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">캐릭터 설명</label>
+                    <textarea class="form-input form-textarea" placeholder="성격, 외형, 의상, 배경 등을 입력하세요"></textarea>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">아트 스타일</label>
+                    <div class="chip-group">
+                        <span class="chip selected">실사</span>
+                        <span class="chip">만화</span>
+                        <span class="chip">애니메이션</span>
+                        <span class="chip">사이버펑크</span>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" data-modal-close>취소</button>
+                <button class="btn btn-primary">
+                    <i data-lucide="sparkles" class="w-5 h-5"></i>
+                    캐릭터 생성
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script src="../assets/js/ui.js"></script>
+    <script>
+        lucide.createIcons();
+
+        // AI Scene Generation (Demo)
+        document.getElementById('generate-scenes-btn')?.addEventListener('click', function () {
+            const btn = this;
+            Loading.showButton(btn);
+
+            setTimeout(() => {
+                Loading.hideButton(btn);
+                Toast.success('씬 생성 완료', '5개의 씬이 AI로 생성되었습니다.');
+            }, 2500);
+        });
+
+        // Scene reorder (Drag & Drop) - PRD: 드래그로 순서 변경
+        (function initSceneReorder() {
+            const list = document.getElementById('scene-list');
+            if (!list) return;
+
+            let dragged = null;
+
+            const updateNumbers = () => {
+                const cards = Array.from(list.querySelectorAll('.card[draggable="true"]'));
+                cards.forEach((card, idx) => {
+                    const badge = card.querySelector('.badge.badge-default');
+                    if (badge && badge.textContent.includes('SCENE')) {
+                        badge.innerHTML = `SCENE ${idx + 1}`;
+                    }
+                });
+            };
+
+            list.querySelectorAll('.card[draggable="true"]').forEach(card => {
+                card.addEventListener('dragstart', () => {
+                    dragged = card;
+                    card.style.opacity = '0.6';
+                });
+                card.addEventListener('dragend', () => {
+                    card.style.opacity = '1';
+                    dragged = null;
+                    updateNumbers();
+                    Toast.success('순서 변경', '씬 순서가 변경되었습니다.');
+                });
+            });
+
+            list.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                if (!dragged) return;
+
+                const siblings = Array.from(list.querySelectorAll('.card[draggable="true"]')).filter(el => el !== dragged);
+                const next = siblings.find(el => {
+                    const rect = el.getBoundingClientRect();
+                    return e.clientY < rect.top + rect.height / 2;
+                });
+
+                if (next) {
+                    list.insertBefore(dragged, next);
+                } else {
+                    list.appendChild(dragged);
+                }
+            });
+        })();
+    </script>
+</body>
+
+</html>
