@@ -186,6 +186,8 @@
 - 로그인/로그아웃
 - 프로필 관리 (이름, 프로필 이미지)
 - 비밀번호 재설정 (이메일 링크/코드 기반)
+- Access Token(1일) + Refresh Token(7일) 기반 인증
+- Refresh Token은 Redis 저장 + Rotation 적용
 - [P1] OAuth 소셜 로그인 (Google 등)
 ```
 
@@ -1515,13 +1517,24 @@ CREATE TABLE node_edges (
 ### 8.0 공통 규칙
 
 - **인증**: `Authorization: Bearer <JWT>`
+- **토큰 정책**: Access Token 1일, Refresh Token 7일 (Redis 저장 + Rotation)
 - **페이지네이션(목록 API)**: `?page=0&size=20` (기본 0/20)
-- **공통 에러 포맷(예시)**:
+- **삭제 정책(MVP)**: **하드 delete** (soft delete 미사용)
+- **공통 응답 포맷**: 모든 JSON REST API는 공통 래퍼를 사용합니다.
+  - `code`는 도메인 문자열 코드이며 HTTP 상태 코드는 헤더로만 전달합니다.  
+  - 성공 code 값: `SUCCESS`(즉시 성공), `ACCEPTED`(비동기 작업 접수)
+  - 실패 시 상세 정보는 `details`에 담습니다.
 
 ```json
 {
-  "timestamp": "2026-01-14T13:00:00+09:00",
-  "path": "/api/projects/123",
+  "code": "SUCCESS",
+  "message": "요청이 성공적으로 처리되었습니다.",
+  "data": { ... }
+}
+```
+
+```json
+{
   "code": "FORBIDDEN",
   "message": "You do not have permission to edit this project.",
   "details": {
@@ -1538,13 +1551,16 @@ CREATE TABLE node_edges (
 
 ```json
 {
-  "jobId": "job_01H...",
-  "type": "VIDEO_GENERATION",
-  "status": "running",
-  "progress": null,
-  "target": { "type": "node", "id": 987 },
-  "resultUrl": null,
-  "error": null
+  "code": "SUCCESS",
+  "data": {
+    "jobId": "job_01H...",
+    "type": "VIDEO_GENERATION",
+    "status": "running",
+    "progress": null,
+    "target": { "type": "NODE", "id": 987 },
+    "resultUrl": null,
+    "error": null
+  }
 }
 ```
 
@@ -1554,9 +1570,14 @@ CREATE TABLE node_edges (
 ```
 POST /api/auth/signup       - 회원가입
 POST /api/auth/login        - 로그인
+POST /api/auth/refresh      - 토큰 재발급 (Rotation)
 POST /api/auth/logout       - 로그아웃
 GET  /api/auth/me           - 내 정보 조회
 PUT  /api/auth/me           - 내 프로필 수정 (이름/프로필 이미지 등)
+
+💡 토큰 응답 규칙(MVP):
+  - login/refresh 응답: { code: "SUCCESS", data: { accessToken, refreshToken, expiresIn } }
+  - logout: Refresh Token 무효화 (Redis 삭제)
 
 [P0] 비밀번호 재설정 (이메일)
 POST /api/auth/password/reset/request - 재설정 요청 (이메일로 링크/코드 발송)
