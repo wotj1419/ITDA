@@ -3,9 +3,10 @@
  * EditorLayout - 에디터 전용 3컬럼 레이아웃
  * 왼쪽 사이드바 / 캔버스 영역 / 오른쪽 속성 패널 구조
  */
-import { computed } from 'vue';
+import { computed, ref, onUnmounted } from 'vue';
 import { RouterLink, useRoute } from 'vue-router';
 import { useUIStore } from '../stores/ui';
+import { useSidebarShortcut } from '../composables/useSidebarShortcut';
 import Badge from '../components/common/Badge.vue';
 import {
   ArrowLeft,
@@ -39,6 +40,42 @@ const props = withDefaults(defineProps<Props>(), {
 const route = useRoute();
 const uiStore = useUIStore();
 
+// Keyboard shortcut (Ctrl+B)
+useSidebarShortcut();
+
+// Hover edge trigger state
+const isEdgeHovered = ref(false);
+
+// Auto-expand timer (300ms delay)
+let hoverTimer: ReturnType<typeof setTimeout> | null = null;
+
+const handleSidebarEnter = () => {
+  // Only auto-expand if sidebar is collapsed and not pinned
+  if (!uiStore.sidebarExpanded && !uiStore.sidebarPinned) {
+    hoverTimer = setTimeout(() => {
+      uiStore.peekSidebar();
+    }, 300);
+  }
+};
+
+const handleSidebarLeave = () => {
+  // Clear timer if leaving before delay
+  if (hoverTimer) {
+    clearTimeout(hoverTimer);
+    hoverTimer = null;
+  }
+  // Auto-collapse if not pinned
+  uiStore.unpeekSidebar();
+  isEdgeHovered.value = false;
+};
+
+// Cleanup timer on unmount
+onUnmounted(() => {
+  if (hoverTimer) {
+    clearTimeout(hoverTimer);
+  }
+});
+
 // =============================================================================
 // Computed
 // =============================================================================
@@ -63,7 +100,7 @@ const navItems = computed(() => [
   {
     key: 'timeline',
     icon: Layers,
-    label: 'Timeline',
+    label: 'Full Timeline',
     to: { name: 'timeline', params: { id: projectId.value } },
     active: false,
   },
@@ -78,7 +115,11 @@ const sidebarClasses = computed(() => [
 <template>
   <div class="app-container editor-app">
     <!-- Sidebar -->
-    <aside :class="sidebarClasses">
+    <aside
+      :class="sidebarClasses"
+      @mouseenter="handleSidebarEnter"
+      @mouseleave="handleSidebarLeave"
+    >
       <!-- Back Button -->
       <div class="sidebar-section border-bottom">
         <RouterLink
@@ -123,7 +164,19 @@ const sidebarClasses = computed(() => [
       <!-- Footer with Toggle -->
       <div class="sidebar-section border-top">
         <div class="sidebar-text text-xs text-muted">{{ sceneTitle }}</div>
-        <button class="sidebar-toggle" @click="uiStore.toggleSidebar">
+      </div>
+
+      <!-- Hover Edge Zone for Toggle -->
+      <div
+        class="sidebar-edge-zone"
+        @mouseenter="isEdgeHovered = true"
+        @mouseleave="isEdgeHovered = false"
+      >
+        <button
+          :class="['sidebar-toggle', { visible: isEdgeHovered }]"
+          :title="uiStore.sidebarExpanded ? 'Collapse (Ctrl+B)' : 'Expand (Ctrl+B)'"
+          @click="uiStore.toggleSidebar"
+        >
           <ChevronLeft v-if="uiStore.sidebarExpanded" class="toggle-icon" />
           <ChevronRight v-else class="toggle-icon" />
         </button>
@@ -176,17 +229,29 @@ const sidebarClasses = computed(() => [
   border-right: 1px solid var(--rose-100);
   display: flex;
   flex-direction: column;
-  transition: width 0.3s ease;
+  transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
   flex-shrink: 0;
+  position: relative;
 }
 
 .sidebar-collapsed {
   width: 72px;
 }
 
+/* Text elements - smooth fade transition */
+.sidebar-text,
+.nav-label {
+  opacity: 1;
+  transition: opacity 0.15s ease 0.2s; /* Fade in after sidebar expands */
+  white-space: nowrap;
+  overflow: hidden;
+}
+
 .sidebar-collapsed .sidebar-text,
 .sidebar-collapsed .nav-label {
-  display: none;
+  opacity: 0;
+  transition: opacity 0.1s ease; /* Fade out quickly when collapsing */
+  pointer-events: none;
 }
 
 .sidebar-section {
@@ -258,13 +323,25 @@ const sidebarClasses = computed(() => [
    Sidebar Toggle
    ========================================================================== */
 
+/* Sidebar Edge Zone - Hover Trigger */
+.sidebar-edge-zone {
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 30px;
+  z-index: 10;
+  cursor: pointer;
+}
+
+/* Sidebar Toggle */
 .sidebar-toggle {
   position: absolute;
-  right: -12px;
+  right: -16px;
   top: 50%;
   transform: translateY(-50%);
-  width: 24px;
-  height: 24px;
+  width: 32px;
+  height: 32px;
   background: white;
   border: 1px solid var(--rose-200);
   border-radius: 50%;
@@ -273,7 +350,21 @@ const sidebarClasses = computed(() => [
   align-items: center;
   justify-content: center;
   color: var(--gray-500);
-  z-index: 10;
+  opacity: 0;
+  visibility: hidden;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.sidebar-toggle.visible {
+  opacity: 1;
+  visibility: visible;
+}
+
+.sidebar-toggle:hover {
+  background: var(--rose-50);
+  color: var(--rose-500);
+  transform: translateY(-50%) scale(1.1);
 }
 
 .toggle-icon {
