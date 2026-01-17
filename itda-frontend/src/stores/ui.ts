@@ -5,6 +5,7 @@ import type { Toast } from '../types'
 export const useUIStore = defineStore('ui', () => {
   // State
   const sidebarExpanded = ref(true)
+  const sidebarPinned = ref(false) // Disabled - always allow auto-collapse
   const toasts = ref<Toast[]>([])
   const activeModal = ref<string | null>(null)
   const modalData = ref<unknown>(null)
@@ -16,6 +17,20 @@ export const useUIStore = defineStore('ui', () => {
 
   function setSidebarExpanded(expanded: boolean): void {
     sidebarExpanded.value = expanded
+  }
+
+  // For peek mode: temporarily expand without pinning
+  function peekSidebar(): void {
+    if (!sidebarPinned.value) {
+      sidebarExpanded.value = true
+    }
+  }
+
+  // For peek mode: collapse if not pinned
+  function unpeekSidebar(): void {
+    if (!sidebarPinned.value) {
+      sidebarExpanded.value = false
+    }
   }
 
   function showToast(toast: Omit<Toast, 'id'>): void {
@@ -53,11 +68,14 @@ export const useUIStore = defineStore('ui', () => {
 
   return {
     sidebarExpanded,
+    sidebarPinned,
     toasts,
     activeModal,
     modalData,
     toggleSidebar,
     setSidebarExpanded,
+    peekSidebar,
+    unpeekSidebar,
     showToast,
     removeToast,
     openModal,
