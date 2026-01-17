@@ -111,7 +111,7 @@ defineExpose({
         :disabled="isGenerating || !name.trim()"
         @click="handleSubmit"
       >
-        <Sparkles class="btn-icon" />
+        <Sparkles class="icon-sm" />
         캐릭터 생성
       </Button>
     </template>
@@ -192,8 +192,5 @@ defineExpose({
   color: white;
 }
 
-.btn-icon {
-  width: 18px;
-  height: 18px;
-}
+/* Uses global .icon-sm from base.css */
 </style>
