@@ -18,3 +18,12 @@ logging:
   level:
     com.itda: DEBUG
     org.springframework.security: DEBUG
+
+storage:
+  s3:
+    endpoint: ${S3_ENDPOINT:}
+    region: ${S3_REGION:ap-northeast-2}
+    access-key: ${S3_ACCESS_KEY:}
+    secret-key: ${S3_SECRET_KEY:}
+    bucket: ${S3_BUCKET:itda-local}
+    path-style: ${S3_PATH_STYLE:true}

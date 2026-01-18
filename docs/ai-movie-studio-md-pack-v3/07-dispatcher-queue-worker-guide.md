@@ -1,4 +1,4 @@
-# 🧱 Dispatcher / Queue / Worker 가이드 (Redis Streams)
+# 07. Dispatcher / Queue / Worker 가이드 (Redis Streams)
 
 > 목표: 팀원이 **각자 Worker를 만들 때 동일한 규칙으로** 구현하도록 “계약(contracts)”을 고정합니다.
 
@@ -9,7 +9,7 @@
 ### ✅ 고정 계약 3종
 1) **Job DB 스키마(핵심 필드)**
 2) **Streams 메시지 payload 스키마**
-3) **상태 전이 규칙(queued→running→succeeded/failed)**
+3) **상태 전이 규칙(pending→running→succeeded/failed)**
 
 이 3개만 통일하면, Worker 구현은 서로 독립적으로 병렬 가능합니다.
 
@@ -18,10 +18,10 @@
 ## 1) Job 모델 (DB) — MVP 최소 필드
 
 ### 1.1 상태(enum)
-- `QUEUED`: 큐에 들어감 (아직 실행 안 함)
-- `RUNNING`: Worker가 가져가 실행 중
-- `SUCCEEDED`: 성공
-- `FAILED`: 실패
+- `pending`: 큐에 들어감 (아직 실행 안 함)
+- `running`: Worker가 가져가 실행 중
+- `succeeded`: 성공
+- `failed`: 실패
 
 ### 1.2 Job 테이블(예시)
 
@@ -29,7 +29,7 @@
 |---|---|---|
 | id | BIGINT/UUID | job 식별자 |
 | project_id | BIGINT | 라우팅/권한/WS 룸에 사용 |
-| type | VARCHAR | `IMAGE_GEN`, `VIDEO_GEN`, `MERGE` |
+| type | VARCHAR | `IMAGE_GENERATION`, `VIDEO_GENERATION`, `SCENE_MERGE`, `PROJECT_MERGE` |
 | status | VARCHAR | 위 enum |
 | input_json | JSON | 요청 파라미터(프롬프트, nodeId...) |
 | output_json | JSON | 결과(파일 URL, 메타데이터...) |
@@ -59,7 +59,7 @@
 |---|---|---|
 | `jobId` | `12345` | Job 식별자(필수) |
 | `projectId` | `77` | WS 룸 라우팅용 |
-| `type` | `IMAGE_GEN` | 디버깅/분기용 |
+| `type` | `IMAGE_GENERATION` | 디버깅/분기용 |
 | `createdAt` | `2026-01-19T10:11:12+09:00` | 디버깅 |
 
 > Streams 메시지는 JSON이 아니라 key-value map 형태로 들어갑니다. (Spring에서는 Map으로 다룸)
@@ -107,9 +107,9 @@ public class RedisStreamsJobDispatcher implements JobDispatcher {
     @Override
     public void enqueue(Job job) {
         String streamKey = switch (job.getType()) {
-            case IMAGE_GEN -> "ai:image";
-            case VIDEO_GEN -> "ai:video";
-            case MERGE -> "media:merge";
+            case IMAGE_GENERATION -> "ai:image";
+            case VIDEO_GENERATION -> "ai:video";
+            case SCENE_MERGE, PROJECT_MERGE -> "media:merge";
             default -> throw new IllegalArgumentException("unknown job type");
         };
 
@@ -168,10 +168,10 @@ public class LocalJobExecutor {
 ### 5.1 Worker는 “메시지 수신 → 상태 전이 → 처리 → 결과 저장 → ACK” 순서를 지켜야 함
 
 1) 메시지 수신 (`XREADGROUP`)
-2) DB 업데이트: status=RUNNING
+2) DB 업데이트: status=running
 3) 외부 API/FFmpeg 호출
 4) 결과 저장(파일 업로드 + DB output 업데이트)
-5) DB 업데이트: SUCCEEDED / FAILED
+5) DB 업데이트: succeeded / failed
 6) `XACK` (메시지 처리 완료)
 
 ### 5.2 재시도/중복 실행(중요)
@@ -179,8 +179,8 @@ public class LocalJobExecutor {
 - 따라서 Worker는 “중복 실행”을 대비해야 합니다.
 
 권장 방어선:
-- Job이 이미 `SUCCEEDED`면 **처리하지 말고 ACK**
-- Job이 `RUNNING`인데 오래된 경우(timeout)만 재처리
+- Job이 이미 `succeeded`면 **처리하지 말고 ACK**
+- Job이 `running`인데 오래된 경우(timeout)만 재처리
 - retry_count 제한(예: 3회)
 
 ---

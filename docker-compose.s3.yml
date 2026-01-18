@@ -1,0 +1,96 @@
+version: "3.8"
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: itda-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-ssafy}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-itda_local}
+      TZ: Asia/Seoul
+    ports:
+      # 로컬 3306 점유 케이스가 많아서 기본 3307
+      - "${MYSQL_PORT:-3307}:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      # $$는 compose가 아니라 컨테이너 내부에서 환경변수로 해석되게 하는 escape
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -p$$MYSQL_ROOT_PASSWORD --silent"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: redis:7.2
+    container_name: itda-redis
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  localstack:
+    # 운영 중 갑자기 깨지는 걸 피하려면 "latest" 대신 버전 고정 권장
+    # 우선은 env로 태그를 바꿀 수 있게 해둠
+    image: "localstack/localstack:${LOCALSTACK_TAG:-latest}"
+    container_name: itda-localstack
+    environment:
+      SERVICES: s3
+      AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-ap-northeast-2}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-test}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-test}
+      # 필요하면 localstack 로그 레벨
+      # DEBUG: "1"
+    ports:
+      - "${LOCALSTACK_PORT:-4566}:4566"
+    volumes:
+      - localstack_data:/var/lib/localstack
+    healthcheck:
+      # localstack 헬스가 뜨기 전까지 init이 돌면 레이스가 날 수 있어서 체크 추가
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:4566/_localstack/health').read(); print('ok')\" 1>/dev/null 2>&1 || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  localstack-init:
+    image: amazon/aws-cli:latest
+    container_name: itda-localstack-init
+    depends_on:
+      localstack:
+        condition: service_healthy
+    environment:
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-test}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-test}
+      AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-ap-northeast-2}
+      S3_BUCKET: ${S3_BUCKET:-itda-local}
+    entrypoint: >
+      /bin/sh -c "
+      echo '[localstack-init] waiting for localstack s3...';
+      until aws --endpoint-url=http://localstack:4566 s3api list-buckets >/dev/null 2>&1; do
+        sleep 1;
+      done;
+
+      echo '[localstack-init] ensure bucket exists:' $$S3_BUCKET;
+      if aws --endpoint-url=http://localstack:4566 s3api head-bucket --bucket \"$$S3_BUCKET\" >/dev/null 2>&1; then
+        echo '[localstack-init] bucket already exists.';
+      else
+        aws --endpoint-url=http://localstack:4566 s3api create-bucket \
+          --bucket \"$$S3_BUCKET\" \
+          --region \"$$AWS_DEFAULT_REGION\" \
+          --create-bucket-configuration LocationConstraint=\"$$AWS_DEFAULT_REGION\";
+        echo '[localstack-init] bucket created.';
+      fi;
+
+      exit 0;
+      "
+    restart: "no"
+
+volumes:
+  mysql_data:
+  redis_data:
+  localstack_data:

@@ -1,4 +1,4 @@
-# ✅ 통합/배포/데모 체크리스트 (W6)
+# 14. 통합/배포/데모 체크리스트 (W6)
 
 > 목적: 6주차에 “통합 테스트 → 배포 → 데모 리허설”을 체크리스트로 실행한다.
 
@@ -32,10 +32,10 @@
 
 ## 3) 통합 테스트 체크리스트 (BE)
 
-- [ ] `/api/ai/jobs/{id}`가 모든 job type에서 동일한 형태로 응답한다
-- [ ] Job 상태 전이가 규칙대로 진행된다(QUEUED→RUNNING→SUCCEEDED/FAILED)
+- [ ] `/api/ai/jobs/{id}`가 모든 job type(IMAGE_GENERATION, VIDEO_GENERATION, SCENE_MERGE, PROJECT_MERGE)에서 동일한 형태로 응답한다
+- [ ] Job 상태 전이가 규칙대로 진행된다(pending→running→succeeded/failed)
 - [ ] Retry 시 idempotency가 깨지지 않는다(중복 저장/중복 이벤트 방지)
-- [ ] MinIO presigned URL 생성/만료가 동작한다
+- [ ] S3 presigned URL 생성/만료가 동작한다
 - [ ] FFmpeg merge 결과 파일의 포맷이 고정(H.264/720p/무오디오)
 
 ---
@@ -55,7 +55,7 @@
 - [ ] `.env` / secrets 분리(키 누출 방지)
 - [ ] Docker image tag가 릴리즈 버전과一致한다
 - [ ] DB migration이 적용된다
-- [ ] Redis/MinIO 연결 정보가 운영 환경에서 유효하다
+- [ ] Redis/S3 연결 정보가 운영 환경에서 유효하다
 - [ ] WebSocket endpoint가 운영 도메인에서 열려 있다
 - [ ] Worker 프로세스가 별도 컨테이너/프로세스로 떠 있다
 
@@ -67,4 +67,3 @@
 - [ ] 실패 발생 시 대응 분기(재시도/Mock 전환) 준비
 - [ ] 발표자 1명(흐름 설명) + 조작자 1명(클릭) 역할 분리
 - [ ] 데모용 샘플 프롬프트/샘플 영상 준비
-
