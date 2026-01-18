@@ -413,7 +413,7 @@ const handleClose = () => {
 }
 
 .checkmark {
-  color: #22c55e;
+  color: var(--success);
 }
 
 @keyframes spin {

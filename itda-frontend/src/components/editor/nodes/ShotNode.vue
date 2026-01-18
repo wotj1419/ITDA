@@ -102,11 +102,7 @@ const emit = defineEmits<{
 }
 
 .node.selected {
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.3);
-}
-
-.node-shot {
-  --node-shot: #3b82f6;
+  box-shadow: var(--node-shot-glow);
 }
 
 /* ==========================================================================
@@ -118,7 +114,7 @@ const emit = defineEmits<{
   align-items: center;
   justify-content: space-between;
   padding: 0.75rem 1rem;
-  background: linear-gradient(135deg, var(--node-shot), #60a5fa);
+  background: linear-gradient(135deg, var(--node-shot), var(--node-shot-light));
 }
 
 .node-header-title {

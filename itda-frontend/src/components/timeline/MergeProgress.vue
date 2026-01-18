@@ -156,7 +156,7 @@ const emit = defineEmits<{
 .complete-icon {
   width: 48px;
   height: 48px;
-  background: var(--success-bg, #dcfce7);
+  background: var(--success-soft);
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -166,7 +166,7 @@ const emit = defineEmits<{
 .check-icon {
   width: 24px;
   height: 24px;
-  color: var(--success, #22c55e);
+  color: var(--success);
 }
 
 .complete-title {
@@ -191,10 +191,10 @@ const emit = defineEmits<{
 
 /* Error */
 .merge-error {
-  background: #fef2f2;
+  background: var(--error-bg);
   padding: 1rem;
   border-radius: 8px;
-  border: 1px solid #fecaca;
+  border: 1px solid var(--error-border);
 }
 
 .error-content {
@@ -202,7 +202,7 @@ const emit = defineEmits<{
   align-items: center;
   gap: 0.5rem;
   font-size: 0.875rem;
-  color: #dc2626;
+  color: var(--error-600);
 }
 
 .error-icon {

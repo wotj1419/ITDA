@@ -56,7 +56,7 @@ function togglePlay() {
   aspect-ratio: 16 / 9;
   max-width: 700px;
   margin: 0 auto;
-  background: #111 center/cover no-repeat;
+  background: var(--gray-950) center/cover no-repeat;
   border-radius: 16px;
   position: relative;
   overflow: hidden;

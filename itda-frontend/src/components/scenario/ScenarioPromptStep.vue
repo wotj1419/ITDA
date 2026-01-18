@@ -266,8 +266,8 @@ const handleRegenerate = () => {
 }
 
 .status-badge.approved {
-  background: var(--green-100, #dcfce7);
-  color: var(--green-700, #15803d);
+  background: var(--success-soft);
+  color: var(--success-700);
 }
 
 .step-actions {

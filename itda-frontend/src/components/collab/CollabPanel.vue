@@ -185,7 +185,7 @@ function formatTime(timestamp: number): string {
 .live-dot {
   width: 8px;
   height: 8px;
-  background: #22c55e;
+  background: var(--success);
   border-radius: 50%;
   animation: pulse 2s infinite;
 }
@@ -366,8 +366,8 @@ function formatTime(timestamp: number): string {
 
 .leave-btn {
   padding: 0.375rem 0.75rem;
-  background: #fef2f2;
-  color: #ef4444;
+  background: var(--error-bg);
+  color: var(--error);
   border: none;
   border-radius: 6px;
   font-size: 0.75rem;
@@ -377,6 +377,6 @@ function formatTime(timestamp: number): string {
 }
 
 .leave-btn:hover {
-  background: #fee2e2;
+  background: var(--error-soft);
 }
 </style>
