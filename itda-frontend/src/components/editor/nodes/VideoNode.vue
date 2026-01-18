@@ -3,6 +3,7 @@
  * VideoNode - 비디오 노드 컴포넌트
  * 생성된 비디오를 표시하고 타임라인 확정 기능 제공
  */
+import { computed } from 'vue';
 import type { Node } from '../../../types';
 import Button from '../../common/Button.vue';
 import { Video, RefreshCw, Star, CheckCircle, Clock } from 'lucide-vue-next';
@@ -28,8 +29,8 @@ const emit = defineEmits<{
 // Computed
 // =============================================================================
 
-const duration = props.node.settings?.duration || 4;
-const cameraMotion = props.node.settings?.cameraMotion || 'STATIC';
+const duration = computed(() => props.node.settings?.duration || 4);
+const cameraMotion = computed(() => props.node.settings?.cameraMotion || 'STATIC');
 </script>
 
 <template>
@@ -137,15 +138,11 @@ const cameraMotion = props.node.settings?.cameraMotion || 'STATIC';
 }
 
 .node.selected {
-  box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.3);
+  box-shadow: var(--node-video-glow);
 }
 
 .node.confirmed {
-  border-color: #22c55e;
-}
-
-.node-video {
-  --node-video: #22c55e;
+  border-color: var(--success);
 }
 
 /* ==========================================================================
@@ -157,7 +154,7 @@ const cameraMotion = props.node.settings?.cameraMotion || 'STATIC';
   align-items: center;
   justify-content: space-between;
   padding: 0.75rem 1rem;
-  background: linear-gradient(135deg, var(--node-video), #4ade80);
+  background: linear-gradient(135deg, var(--node-video), var(--node-video-light));
 }
 
 .node-header-title {

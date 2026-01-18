@@ -56,22 +56,22 @@ const classes = computed(() => [
 }
 
 .badge-success {
-  background: rgba(34, 197, 94, 0.1);
-  color: #16a34a;
+  background: var(--success-muted);
+  color: var(--success-600);
 }
 
 .badge-warning {
-  background: rgba(234, 179, 8, 0.1);
-  color: #ca8a04;
+  background: var(--warning-muted);
+  color: var(--warning-600);
 }
 
 .badge-error {
-  background: rgba(239, 68, 68, 0.1);
-  color: #dc2626;
+  background: var(--error-muted);
+  color: var(--error-600);
 }
 
 .badge-info {
-  background: rgba(59, 130, 246, 0.1);
-  color: #2563eb;
+  background: var(--info-muted);
+  color: var(--info-600);
 }
 </style>

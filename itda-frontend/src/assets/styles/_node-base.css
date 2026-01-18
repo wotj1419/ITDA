@@ -1,0 +1,524 @@
+/**
+ * Node Base Styles - Vue Flow 노드 공통 스타일
+ * 
+ * 디자인 컨셉: Soft Glass Rose
+ * - 글래스모피즘: 반투명 배경 + backdrop blur
+ * - 미니멀: 얇은 보더, 섬세한 다층 그림자
+ * - Rose 테마: 부드러운 핑크 악센트
+ * 
+ * 사용법: 각 노드 컴포넌트에서 import하여 사용
+ * @see docs/vue-flow-node-workflow-design.md
+ */
+
+/* =============================================================================
+   CSS Variables - 노드 전용
+   ============================================================================= */
+:root {
+    /* Glass Effect */
+    --node-glass-bg: rgba(255, 255, 255, 0.85);
+    --node-glass-bg-hover: rgba(255, 255, 255, 0.95);
+    --node-glass-blur: 12px;
+    --node-glass-border: rgba(255, 179, 198, 0.8);
+    /* 더 진한 Rose 테두리 */
+
+    /* Shadows - Multi-layer for depth */
+    --node-shadow:
+        0 2px 4px rgba(0, 0, 0, 0.04),
+        0 4px 8px rgba(0, 0, 0, 0.06),
+        0 8px 16px rgba(255, 133, 161, 0.08);
+    --node-shadow-hover:
+        0 4px 8px rgba(0, 0, 0, 0.06),
+        0 12px 24px rgba(0, 0, 0, 0.08),
+        0 16px 32px rgba(255, 133, 161, 0.12);
+    --node-shadow-selected:
+        0 0 0 3px rgba(255, 133, 161, 0.4),
+        0 8px 24px rgba(255, 133, 161, 0.2);
+
+    /* Type-specific accent colors - 더 진하게 */
+    --node-accent-header: var(--rose-500, #FF85A1);
+    --node-accent-master: var(--rose-600, #FF6B8A);
+    --node-accent-grid: var(--rose-500, #FF85A1);
+    --node-accent-shot: var(--rose-400, #FFB3C6);
+    --node-accent-video: var(--rose-300, #FFD9E8);
+
+    /* Status border colors - 더 진하게 */
+    --node-status-idle: rgba(156, 163, 175, 0.8);
+    --node-status-pending: rgba(245, 158, 11, 0.9);
+    --node-status-running: rgba(59, 130, 246, 0.9);
+    --node-status-succeeded: rgba(34, 197, 94, 0.9);
+    --node-status-failed: rgba(239, 68, 68, 0.9);
+}
+
+/* =============================================================================
+   Base Node Container
+   ============================================================================= */
+.node-glass {
+    position: relative;
+    width: 200px;
+    min-height: 140px;
+    background: var(--node-glass-bg);
+    backdrop-filter: blur(var(--node-glass-blur));
+    -webkit-backdrop-filter: blur(var(--node-glass-blur));
+    border: 2px solid var(--node-glass-border);
+    /* 2px로 더 두껍게 */
+    border-radius: var(--radius-lg, 1rem);
+    box-shadow: var(--node-shadow);
+    overflow: visible;
+    transition:
+        transform 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+        box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+        border-color 0.2s ease,
+        background 0.2s ease;
+}
+
+.node-glass:hover {
+    background: var(--node-glass-bg-hover);
+    box-shadow: var(--node-shadow-hover);
+}
+
+/* Scene Header - wider */
+.node-glass--header {
+    width: 280px;
+    min-height: 100px;
+}
+
+/* =============================================================================
+   Selection State
+   ============================================================================= */
+.node-glass--selected {
+    box-shadow: var(--node-shadow-selected);
+    transform: scale(1.02);
+    border-color: var(--rose-500, #FF85A1);
+    z-index: 10;
+}
+
+/* =============================================================================
+   Type-specific Top Accent Bar
+   - 테두리만 사용 (악센트 바 제거로 이중선 방지)
+   ============================================================================= */
+.node-glass::before {
+    display: none;
+    /* 악센트 바 전체 비활성화 - 테두리만 사용 */
+}
+
+/* =============================================================================
+   Status Border States
+   ============================================================================= */
+.node-glass--idle {
+    border-color: var(--node-status-idle);
+}
+
+.node-glass--pending {
+    border-color: var(--node-status-pending);
+}
+
+.node-glass--running {
+    border-color: var(--node-status-running);
+    animation: node-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.node-glass--succeeded {
+    border-color: var(--rose-400, #FFB3C6);
+    /* 성공 시에도 Rose 테두리 유지 */
+}
+
+.node-glass--failed {
+    border-color: var(--node-status-failed);
+    background: rgba(254, 242, 242, 0.8);
+}
+
+/* Confirmed state - unique green accent */
+.node-glass--confirmed {
+    border-color: var(--success, #22C55E);
+    border-width: 2px;
+    background: rgba(240, 253, 244, 0.85);
+}
+
+.node-glass--confirmed::before {
+    background: linear-gradient(90deg, var(--success, #22C55E), var(--success, #22C55E) 40%, transparent);
+}
+
+@keyframes node-pulse {
+
+    0%,
+    100% {
+        opacity: 1;
+        box-shadow: var(--node-shadow);
+    }
+
+    50% {
+        opacity: 0.85;
+        box-shadow: var(--node-shadow), 0 0 0 4px rgba(59, 130, 246, 0.15);
+    }
+}
+
+/* =============================================================================
+   Active Master Indicator
+   ============================================================================= */
+.node-glass--active {
+    background: rgba(255, 240, 245, 0.9);
+    border-color: var(--rose-500, #FF85A1);
+}
+
+.node-glass--active::before {
+    height: 4px;
+    background: var(--node-accent-master);
+    opacity: 1;
+}
+
+/* =============================================================================
+   Node Header
+   ============================================================================= */
+.node-glass__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.75rem 0.875rem 0.5rem;
+}
+
+.node-glass__header-left {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-width: 0;
+    /* For text overflow */
+}
+
+.node-glass__icon {
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+    color: var(--gray-600, #4B5563);
+}
+
+/* Type-specific icon colors */
+.node-glass--header .node-glass__icon {
+    color: var(--rose-500, #FF85A1);
+}
+
+.node-glass--master .node-glass__icon {
+    color: var(--rose-600, #FF6B8A);
+}
+
+.node-glass--grid .node-glass__icon {
+    color: var(--rose-500, #FF85A1);
+}
+
+.node-glass--shot .node-glass__icon {
+    color: var(--rose-400, #FFB3C6);
+}
+
+.node-glass--video .node-glass__icon {
+    color: var(--rose-400, #FFB3C6);
+}
+
+.node-glass__title-group {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.node-glass__title {
+    font-weight: 600;
+    font-size: 0.8125rem;
+    color: var(--gray-800, #1F2937);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+}
+
+.node-glass__subtitle {
+    font-size: 0.6875rem;
+    color: var(--gray-500, #6B7280);
+    margin-top: 0.125rem;
+}
+
+/* =============================================================================
+   Status Indicator
+   ============================================================================= */
+.node-glass__status {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.25rem 0.5rem;
+    border-radius: var(--radius-full, 9999px);
+    background: rgba(0, 0, 0, 0.04);
+    font-size: 0.625rem;
+    color: var(--gray-600, #4B5563);
+}
+
+.node-glass__status-icon {
+    width: 12px;
+    height: 12px;
+}
+
+.node-glass--running .node-glass__status-icon {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* =============================================================================
+   Node Body
+   ============================================================================= */
+.node-glass__body {
+    padding: 0 0.875rem 0.75rem;
+}
+
+/* =============================================================================
+   Thumbnail
+   ============================================================================= */
+.node-glass__thumbnail {
+    position: relative;
+    background: var(--gray-50, #F9FAFB);
+    border-radius: 0.5rem;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.06);
+}
+
+.node-glass__thumbnail--wide {
+    width: 100%;
+    height: 80px;
+}
+
+.node-glass__thumbnail--square {
+    width: 100%;
+    aspect-ratio: 1;
+}
+
+.node-glass__thumbnail--video {
+    width: 100%;
+    height: 70px;
+}
+
+.node-glass__thumbnail-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.node-glass__thumbnail-placeholder {
+    font-size: 0.6875rem;
+    color: var(--gray-400, #9CA3AF);
+    font-weight: 500;
+}
+
+/* =============================================================================
+   Info / Footer
+   ============================================================================= */
+.node-glass__info {
+    margin-top: 0.5rem;
+    text-align: center;
+    font-size: 0.6875rem;
+    color: var(--gray-500, #6B7280);
+}
+
+.node-glass__footer {
+    margin-top: 0.5rem;
+    padding-top: 0.5rem;
+    border-top: 1px solid rgba(0, 0, 0, 0.04);
+}
+
+/* =============================================================================
+   Badges
+   ============================================================================= */
+.node-glass__badge {
+    position: absolute;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.25rem 0.5rem;
+    font-size: 0.625rem;
+    font-weight: 600;
+    border-radius: var(--radius-full, 9999px);
+    z-index: 5;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.node-glass__badge--active {
+    top: -8px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: linear-gradient(135deg, var(--rose-500, #FF85A1), var(--rose-400, #FFB3C6));
+    color: white;
+}
+
+.node-glass__badge--confirmed {
+    top: -8px;
+    right: 8px;
+    background: linear-gradient(135deg, var(--success, #22C55E), var(--success-light, #4ade80));
+    color: white;
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    justify-content: center;
+}
+
+.node-glass__badge-icon {
+    width: 10px;
+    height: 10px;
+}
+
+/* =============================================================================
+   Tags
+   ============================================================================= */
+.node-glass__tag {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.125rem 0.375rem;
+    font-size: 0.5625rem;
+    font-weight: 500;
+    background: rgba(0, 0, 0, 0.06);
+    color: var(--gray-600, #4B5563);
+    border-radius: 0.25rem;
+}
+
+/* =============================================================================
+   Handles (Vue Flow)
+   ============================================================================= */
+.node-glass__handle {
+    width: 10px;
+    height: 10px;
+    background: var(--rose-400, #FFB3C6);
+    border: 2px solid white;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.node-glass--confirmed .node-glass__handle {
+    background: var(--success, #22C55E);
+}
+
+.node-glass__handle--left {
+    background: var(--rose-300, #FFD9E8);
+}
+
+/* =============================================================================
+   Add Button
+   ============================================================================= */
+.node-glass__add-btn {
+    position: absolute;
+    bottom: -12px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--rose-500, #FF85A1), var(--rose-400, #FFB3C6));
+    color: white;
+    border: 2px solid white;
+    box-shadow: 0 2px 8px rgba(255, 133, 161, 0.3);
+    font-size: 0.875rem;
+    font-weight: 600;
+    cursor: pointer;
+    opacity: 0;
+    transition: all 0.15s ease;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.node-glass:hover .node-glass__add-btn,
+.node-glass--selected .node-glass__add-btn {
+    opacity: 1;
+}
+
+.node-glass__add-btn:hover {
+    transform: translateX(-50%) scale(1.15);
+    box-shadow: 0 4px 12px rgba(255, 133, 161, 0.4);
+}
+
+.node-glass__add-btn:active {
+    transform: translateX(-50%) scale(1.05);
+}
+
+/* =============================================================================
+   Confirm Button
+   ============================================================================= */
+.node-glass__confirm-btn {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.375rem;
+    padding: 0.375rem 0.5rem;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    color: var(--gray-600, #4B5563);
+    background: rgba(0, 0, 0, 0.03);
+    border: 1px solid rgba(0, 0, 0, 0.06);
+    border-radius: 0.375rem;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.node-glass__confirm-btn:hover {
+    background: rgba(34, 197, 94, 0.08);
+    border-color: rgba(34, 197, 94, 0.3);
+    color: var(--success, #22C55E);
+}
+
+.node-glass__confirm-btn-icon {
+    width: 12px;
+    height: 12px;
+}
+
+/* =============================================================================
+   Confirmed Bottom Bar
+   ============================================================================= */
+.node-glass__confirm-bar {
+    height: 3px;
+    background: linear-gradient(90deg, var(--success, #22C55E), var(--success-light, #4ade80));
+    border-radius: 0 0 var(--radius-lg, 1rem) var(--radius-lg, 1rem);
+    margin-top: 0.5rem;
+}
+
+/* =============================================================================
+   Play Overlay (for Video)
+   ============================================================================= */
+.node-glass__play-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.25);
+    border-radius: 0.5rem;
+    opacity: 0;
+    transition: opacity 0.15s ease;
+}
+
+.node-glass__thumbnail:hover .node-glass__play-overlay {
+    opacity: 1;
+}
+
+.node-glass__play-icon {
+    width: 24px;
+    height: 24px;
+    color: white;
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
+}
+
+/* =============================================================================
+   Description (for Scene Header)
+   ============================================================================= */
+.node-glass__description {
+    margin: 0;
+    font-size: 0.75rem;
+    color: var(--gray-600, #4B5563);
+    line-height: 1.5;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}

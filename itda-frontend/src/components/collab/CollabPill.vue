@@ -90,7 +90,7 @@ const collabStore = useCollabStore();
 .dot {
   width: 8px;
   height: 8px;
-  background: #22c55e;
+  background: var(--success);
   border-radius: 50%;
   animation: pulse 2s infinite;
 }
