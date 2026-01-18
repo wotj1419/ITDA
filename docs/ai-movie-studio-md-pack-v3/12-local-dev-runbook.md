@@ -1,4 +1,4 @@
-# 🧪 Local Dev Runbook (Docker Compose + 실행 순서)
+# 12. Local Dev Runbook (Docker Compose + 실행 순서)
 
 > 목표: 팀원이 로컬에서 **API + Redis + Worker + WS**를 10분 안에 띄우고, 샘플 Job을 1회 성공시킨다.
 
@@ -16,7 +16,7 @@
 ### 2.1 compose에 들어갈 것
 - MySQL
 - Redis (Streams 사용)
-- MinIO (S3 호환) — 개발용 자산 저장
+- S3 (로컬은 LocalStack) — 개발용 자산 저장
 
 > Jenkins/배포는 W3에서 표준화 단계로 분리
 
@@ -39,20 +39,18 @@ services:
     ports:
       - "6379:6379"
 
-  minio:
-    image: minio/minio:RELEASE.2025-01-20T00-00-00Z
-    command: server /data --console-address ":9001"
+  localstack:
+    image: localstack/localstack:latest
     environment:
-      MINIO_ROOT_USER: minio
-      MINIO_ROOT_PASSWORD: minio123
+      SERVICES: s3
+      AWS_DEFAULT_REGION: ap-northeast-2
     ports:
-      - "9000:9000"
-      - "9001:9001"
+      - "4566:4566"
     volumes:
-      - minio_data:/data
+      - localstack_data:/var/lib/localstack
 
 volumes:
-  minio_data:
+  localstack_data:
 ```
 
 ### 2.3 실행
@@ -66,7 +64,7 @@ docker compose up -d
 ## 3) 애플리케이션 구성(권장)
 
 ### 3.1 Spring profiles
-- `local`: DB/Redis/MinIO 로컬 접속
+- `local`: DB/Redis/S3(LocalStack) 로컬 접속
 - `dev`: 공유 개발서버 접속
 
 ### 3.2 구성 모듈(예시)
@@ -120,15 +118,15 @@ curl -X POST "http://localhost:8080/api/projects" \
 
 ### 5.2 이미지 생성 Job enqueue
 ```bash
-curl -X POST "http://localhost:8080/api/scenes/<SCENE_ID>/nodes/<NODE_ID>/generate-image" \
+curl -X POST "http://localhost:8080/api/nodes/<NODE_ID>/generate" \
   -H "Authorization: Bearer <TOKEN>" \
   -H "Content-Type: application/json" \
   -d '{"prompt":"a cinematic master shot"}'
 ```
 
 ### 5.3 확인 포인트
-- DB `jobs.status` : QUEUED → RUNNING → SUCCEEDED
-- MinIO에 결과 파일 업로드
+- DB `jobs.status` : pending → running → succeeded
+- S3에 결과 파일 업로드
 - FE에서 WebSocket 이벤트로 노드 배지 변경
 
 ---
@@ -145,8 +143,8 @@ curl -X POST "http://localhost:8080/api/scenes/<SCENE_ID>/nodes/<NODE_ID>/genera
 - 인증 토큰 전달 방식(쿼리/헤더) 확인
 - 서버에서 publish 호출이 실제로 되는지 로그 확인
 
-### 6.3 MinIO 업로드가 실패한다
-- endpoint/port(9000) 확인
+### 6.3 S3 업로드가 실패한다
+- endpoint/port(4566) 확인(LocalStack)
 - bucket 생성 여부
 - presigned URL 생성 시 region/credentials 확인
 
@@ -156,4 +154,3 @@ curl -X POST "http://localhost:8080/api/scenes/<SCENE_ID>/nodes/<NODE_ID>/genera
 - **Job enqueue는 무조건 Dispatcher를 통해서만** 한다.
 - Worker는 Job 상태 전이를 반드시 지킨다(03 문서 참고).
 - WS 이벤트 스키마는 04 문서 고정.
-
