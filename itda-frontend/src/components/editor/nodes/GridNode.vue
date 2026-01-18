@@ -3,6 +3,7 @@
  * GridNode - 그리드 노드 컴포넌트
  * 2x2, 2x3, 3x3 레이아웃의 스토리보드 그리드
  */
+import { computed } from 'vue';
 import type { Node } from '../../../types';
 import { Grid3X3, CheckCircle, Plus } from 'lucide-vue-next';
 
@@ -26,10 +27,9 @@ const emit = defineEmits<{
 // Computed
 // =============================================================================
 
-const gridLayout = props.node.settings?.gridLayout || '2x3';
-const gridCells = props.node.settings?.gridCells || [];
-
-const gridClass = `grid-${gridLayout.replace('x', '-')}`;
+const gridLayout = computed(() => props.node.settings?.gridLayout || '2x3');
+const gridCells = computed(() => props.node.settings?.gridCells || []);
+const gridClass = computed(() => `grid-${gridLayout.value.replace('x', '-')}`);
 </script>
 
 <template>
@@ -111,11 +111,7 @@ const gridClass = `grid-${gridLayout.replace('x', '-')}`;
 }
 
 .node.selected {
-  box-shadow: 0 0 0 3px rgba(168, 85, 247, 0.3);
-}
-
-.node-grid {
-  --node-grid: #a855f7;
+  box-shadow: var(--node-grid-glow);
 }
 
 /* ==========================================================================
@@ -127,7 +123,7 @@ const gridClass = `grid-${gridLayout.replace('x', '-')}`;
   align-items: center;
   justify-content: space-between;
   padding: 0.75rem 1rem;
-  background: linear-gradient(135deg, var(--node-grid), #c084fc);
+  background: linear-gradient(135deg, var(--node-grid), var(--node-grid-light));
 }
 
 .node-header-title {

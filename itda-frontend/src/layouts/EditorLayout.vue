@@ -393,7 +393,7 @@ const sidebarClasses = computed(() => [
   flex: 1;
   position: relative;
   overflow: hidden;
-  background: linear-gradient(135deg, var(--rose-50) 0%, #fdf2f8 100%);
+  background: linear-gradient(135deg, var(--rose-50) 0%, var(--rose-75) 100%);
 }
 
 .editor-properties {

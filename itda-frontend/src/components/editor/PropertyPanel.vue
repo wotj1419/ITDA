@@ -353,15 +353,15 @@ function handleDurationChange(duration: number): void {
 }
 
 .status-succeeded {
-  color: #22c55e;
+  color: var(--success);
 }
 
 .status-running {
-  color: #f59e0b;
+  color: var(--warning);
 }
 
 .status-failed {
-  color: #ef4444;
+  color: var(--error);
 }
 
 /* ==========================================================================
@@ -376,7 +376,7 @@ function handleDurationChange(duration: number): void {
 .delete-btn {
   width: 100%;
   justify-content: center;
-  color: #ef4444;
+  color: var(--error-600);
 }
 
 /* Uses global .icon-sm from base.css */
