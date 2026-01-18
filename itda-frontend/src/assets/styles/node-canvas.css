@@ -1,0 +1,103 @@
+/**
+ * Scene Editor - Vue Flow 캔버스 통합 스타일
+ * Rose 테마 기반 노드/엣지/캔버스 스타일
+ * 
+ * 설계 문서: docs/vue-flow-node-workflow-design.md Section 8.2
+ */
+
+/* ==========================================================================
+   Vue Flow 기본 오버라이드
+   ========================================================================== */
+
+.vue-flow__node {
+    border-radius: var(--radius-lg, 1rem);
+    transition: all var(--transition-normal, 0.2s ease);
+}
+
+.vue-flow__node.selected {
+    box-shadow: 0 0 0 3px rgba(255, 133, 161, 0.4);
+    transform: scale(1.02);
+}
+
+.vue-flow__edge-path {
+    stroke: var(--rose-300, #FFD9E8);
+    stroke-width: 2;
+}
+
+.vue-flow__edge.selected .vue-flow__edge-path {
+    stroke: var(--rose-500, #FF85A1);
+    stroke-width: 3;
+}
+
+/* 확정 엣지 (녹색) */
+.vue-flow__edge.confirmed .vue-flow__edge-path {
+    stroke: var(--success, #22C55E);
+    stroke-width: 3;
+}
+
+/* 트랜지션 엣지 (점선) */
+.vue-flow__edge.transition .vue-flow__edge-path {
+    stroke: var(--rose-400, #FFB3C6);
+    stroke-dasharray: 6 4;
+}
+
+.vue-flow__handle {
+    width: 10px;
+    height: 10px;
+    background: var(--rose-500, #FF85A1);
+    border: 2px solid white;
+}
+
+.vue-flow__controls {
+    border: 1px solid var(--rose-200, #FFE8F2);
+    border-radius: var(--radius-md, 0.75rem);
+    box-shadow: var(--shadow-md);
+}
+
+.vue-flow__controls button {
+    background: white;
+    border-color: var(--gray-100, #F5F5F5);
+}
+
+.vue-flow__controls button:hover {
+    background: var(--rose-50, #FFFAFC);
+}
+
+.vue-flow__background {
+    background: var(--rose-canvas, #FBFBFC);
+}
+
+/* ==========================================================================
+   Pulse Animation (Running State)
+   ========================================================================== */
+
+@keyframes node-pulse {
+
+    0%,
+    100% {
+        opacity: 1;
+        box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.4);
+    }
+
+    50% {
+        opacity: 0.9;
+        box-shadow: 0 0 0 8px rgba(59, 130, 246, 0);
+    }
+}
+
+.scene-node--running {
+    animation: node-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* ==========================================================================
+   Selection Mode Highlighting
+   ========================================================================== */
+
+.selection-mode-active .scene-node--shot {
+    cursor: pointer;
+}
+
+.selection-mode-active .scene-node--shot:hover {
+    border-color: var(--rose-500, #FF85A1);
+    box-shadow: 0 0 0 3px rgba(255, 133, 161, 0.3);
+}
