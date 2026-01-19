@@ -1,0 +1,27 @@
+spring:
+  profiles:
+    active: local
+  application:
+    name: itda-backend
+
+mybatis:
+  mapper-locations: classpath:mapper/**/*.xml
+  type-aliases-package: com.itda.backend
+  configuration:
+    map-underscore-to-camel-case: true
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    tags-sorter: alpha
+    operations-sorter: alpha
+
+jwt:
+  secret: ${JWT_SECRET:default-secret-key-for-development-only-change-in-production}
+  access-expiration: 86400000      # 1 day (24h)
+  refresh-expiration: 604800000    # 7 days
+
+file:
+  upload-dir: ./uploads
