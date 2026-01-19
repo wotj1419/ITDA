@@ -11,7 +11,8 @@
 
 .vue-flow__node {
     border-radius: var(--radius-lg, 1rem);
-    transition: all var(--transition-normal, 0.2s ease);
+    /* transform 제외: 드래그 시 즉시 이동하도록 */
+    transition: box-shadow 0.2s ease, border-color 0.2s ease, opacity 0.2s ease;
 }
 
 .vue-flow__node.selected {

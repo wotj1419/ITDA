@@ -1,10 +1,18 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { useCollabStore } from '../../stores/collab';
+import { useDraggable } from '../../composables/useDraggable';
 import CollabPanel from './CollabPanel.vue';
 import CollabPill from './CollabPill.vue';
 
 const collabStore = useCollabStore();
+
+// 드래그 기능 적용
+const { position, isDragging, onMouseDown } = useDraggable({
+  initialRight: 24,
+  initialBottom: 24,
+  storageKey: 'collab-container-position',
+});
 
 /**
  * 협업 UI 표시 여부
@@ -15,7 +23,13 @@ const showCollab = computed(() => collabStore.isConnected);
 
 <template>
   <Transition name="fade">
-    <div v-if="showCollab" class="collab-container">
+    <div 
+      v-if="showCollab" 
+      class="collab-container"
+      :class="{ 'is-dragging': isDragging }"
+      :style="{ right: position.right + 'px', bottom: position.bottom + 'px' }"
+      @mousedown="onMouseDown"
+    >
       <!-- Expanded Panel -->
       <Transition name="scale" mode="out-in">
         <CollabPanel v-if="collabStore.isPanelOpen" key="panel" />
@@ -29,9 +43,13 @@ const showCollab = computed(() => collabStore.isConnected);
 <style scoped>
 .collab-container {
   position: fixed;
-  bottom: 1.5rem;
-  right: 1.5rem;
   z-index: 1000;
+  cursor: grab;
+  user-select: none;
+}
+
+.collab-container.is-dragging {
+  cursor: grabbing;
 }
 
 /* Fade transition for container */

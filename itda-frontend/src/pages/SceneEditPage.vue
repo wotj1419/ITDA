@@ -10,6 +10,7 @@ import { useSceneStore } from '../stores/scene';
 import { useSceneNodeStore } from '../stores/sceneNode';
 import { useUIStore } from '../stores/ui';
 import { useCollabStore } from '../stores/collab';
+import { useDraggable } from '../composables/useDraggable';
 
 import EditorLayout from '../layouts/EditorLayout.vue';
 import EditorHeader from '../components/editor/EditorHeader.vue';
@@ -29,6 +30,18 @@ const uiStore = useUIStore();
 const collabStore = useCollabStore();
 
 const nodeCanvasRef = ref<InstanceType<typeof NodeCanvas> | null>(null);
+
+// 자동 정렬 버튼 드래그 기능
+const { 
+  position: layoutBtnPosition, 
+  isDragging: isLayoutBtnDragging, 
+  onMouseDown: onLayoutBtnMouseDown,
+  shouldPreventClick: shouldPreventLayoutClick,
+} = useDraggable({
+  initialRight: 24,
+  initialBottom: 100,
+  storageKey: 'auto-layout-btn-position',
+});
 
 // =============================================================================
 // Route Parameters
@@ -125,6 +138,8 @@ function handleNodeSelect(nodeId: string | null): void {
  * 자동 레이아웃 적용
  */
 function handleAutoLayout(): void {
+  // 드래그 후에는 클릭 이벤트 무시
+  if (shouldPreventLayoutClick()) return;
   nodeCanvasRef.value?.applyLayout();
 }
 </script>
@@ -171,11 +186,14 @@ function handleAutoLayout(): void {
     </template>
   </EditorLayout>
 
-  <!-- Auto Layout Button (Fixed Position) -->
+  <!-- Auto Layout Button (Draggable) -->
   <button
     class="auto-layout-btn"
+    :class="{ 'is-dragging': isLayoutBtnDragging }"
+    :style="{ right: layoutBtnPosition.right + 'px', bottom: layoutBtnPosition.bottom + 'px' }"
+    @mousedown="onLayoutBtnMouseDown"
     @click="handleAutoLayout"
-    title="자동 정렬"
+    title="자동 정렬 (드래그하여 이동 가능)"
   >
     🔄 정렬
   </button>
@@ -184,8 +202,6 @@ function handleAutoLayout(): void {
 <style scoped>
 .auto-layout-btn {
   position: fixed;
-  bottom: 100px;
-  right: 24px;
   padding: 0.75rem 1rem;
   font-size: 0.875rem;
   font-weight: 600;
@@ -194,14 +210,20 @@ function handleAutoLayout(): void {
   border: 1px solid var(--rose-200);
   border-radius: var(--radius-full, 9999px);
   box-shadow: var(--shadow-md);
-  cursor: pointer;
+  cursor: grab;
   z-index: 100;
-  transition: all 0.2s ease;
+  transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+  user-select: none;
 }
 
 .auto-layout-btn:hover {
   background: var(--rose-50);
   border-color: var(--rose-500);
   color: var(--rose-600);
+}
+
+.auto-layout-btn.is-dragging {
+  cursor: grabbing;
+  box-shadow: var(--shadow-lg);
 }
 </style>

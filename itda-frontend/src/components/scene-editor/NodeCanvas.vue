@@ -151,8 +151,8 @@ defineExpose({
     :class="{ 'selection-mode-active': nodeStore.selectionMode === 'selectEndShot' }"
   >
     <VueFlow
-      :nodes="nodeStore.nodes"
-      :edges="nodeStore.edges"
+      v-model:nodes="nodeStore.nodes"
+      v-model:edges="nodeStore.edges"
       :node-types="nodeTypes"
       :default-viewport="{ x: 0, y: 0, zoom: 1 }"
       :min-zoom="0.25"
