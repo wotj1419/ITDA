@@ -42,6 +42,26 @@ export function useAutoLayout() {
         return NODE_HEIGHTS[type as NodeType] || 150;
     }
 
+    function resolveNodeWidth<T>(node: Node<T>): number {
+        if (typeof node.width === 'number') return node.width;
+        if (typeof node.width === 'string') {
+            const parsed = Number.parseFloat(node.width);
+            if (!Number.isNaN(parsed)) return parsed;
+        }
+        const nodeType = (node.data as { type?: string })?.type || node.type || '';
+        return getNodeWidth(nodeType);
+    }
+
+    function resolveNodeHeight<T>(node: Node<T>): number {
+        if (typeof node.height === 'number') return node.height;
+        if (typeof node.height === 'string') {
+            const parsed = Number.parseFloat(node.height);
+            if (!Number.isNaN(parsed)) return parsed;
+        }
+        const nodeType = (node.data as { type?: string })?.type || node.type || '';
+        return getNodeHeight(nodeType);
+    }
+
     /**
      * Dagre를 사용하여 노드와 엣지에 레이아웃 적용
      */
@@ -64,10 +84,9 @@ export function useAutoLayout() {
 
         // 노드 추가
         nodes.forEach((node) => {
-            const nodeType = (node.data as { type?: string })?.type || node.type || '';
             dagreGraph.setNode(node.id, {
-                width: getNodeWidth(nodeType),
-                height: getNodeHeight(nodeType),
+                width: resolveNodeWidth(node),
+                height: resolveNodeHeight(node),
             });
         });
 
@@ -82,15 +101,62 @@ export function useAutoLayout() {
         // 계산된 위치 적용
         const layoutedNodes = nodes.map((node) => {
             const nodeWithPosition = dagreGraph.node(node.id);
-            const nodeType = (node.data as { type?: string })?.type || node.type || '';
+            const nodeWidth = resolveNodeWidth(node);
+            const nodeHeight = resolveNodeHeight(node);
 
             return {
                 ...node,
                 position: {
-                    x: nodeWithPosition.x - getNodeWidth(nodeType) / 2,
-                    y: nodeWithPosition.y - getNodeHeight(nodeType) / 2,
+                    x: nodeWithPosition.x - nodeWidth / 2,
+                    y: nodeWithPosition.y - nodeHeight / 2,
                 },
             };
+        });
+
+        // [커스텀 정렬 로직] 부모 기준 중앙 정렬 + 동일 간격 분배
+        // - Dagre 결과의 y는 유지하고, 같은 부모를 가진 자식들의 x만 재분배한다.
+        // - 이렇게 하면 연결 라인의 기준점(부모 하단/자식 상단)이 중앙에 맞춰진다.
+        const nodeMap = new Map(layoutedNodes.map((node) => [node.id, node]));
+        const childrenByParent = new Map<string, Node<T>[]>();
+
+        layoutedNodes.forEach((node) => {
+            const parentId = (node.data as { parentNodeId?: string | null })?.parentNodeId;
+            if (!parentId) return;
+            const group = childrenByParent.get(parentId);
+            if (group) {
+                group.push(node);
+            } else {
+                childrenByParent.set(parentId, [node]);
+            }
+        });
+
+        const siblingGap = opts.nodeSep;
+
+        childrenByParent.forEach((children, parentId) => {
+            const parentNode = nodeMap.get(parentId);
+            if (!parentNode) return;
+
+            const parentWidth = resolveNodeWidth(parentNode);
+            const parentCenterX = parentNode.position.x + parentWidth / 2;
+
+            const sortedChildren = [...children].sort(
+                (a, b) => a.position.x - b.position.x
+            );
+
+            const totalWidth =
+                sortedChildren.reduce((sum, child) => sum + resolveNodeWidth(child), 0) +
+                siblingGap * Math.max(sortedChildren.length - 1, 0);
+
+            let cursorX = parentCenterX - totalWidth / 2;
+
+            sortedChildren.forEach((child) => {
+                const childWidth = resolveNodeWidth(child);
+                child.position = {
+                    ...child.position,
+                    x: cursorX,
+                };
+                cursorX += childWidth + siblingGap;
+            });
         });
 
         return { nodes: layoutedNodes, edges };

@@ -49,6 +49,29 @@
     border: 2px solid white;
 }
 
+.vue-flow__resize-control.line {
+    display: none;
+    z-index: 2;
+}
+
+.vue-flow__resize-control.handle {
+    width: 16px;
+    height: 16px;
+    border-radius: 4px;
+    background: transparent;
+    border: 0;
+    box-shadow: none;
+    opacity: 0;
+    z-index: 3;
+}
+
+.vue-flow__resize-control.handle.top:not(.left):not(.right),
+.vue-flow__resize-control.handle.bottom:not(.left):not(.right),
+.vue-flow__resize-control.handle.left:not(.top):not(.bottom),
+.vue-flow__resize-control.handle.right:not(.top):not(.bottom) {
+    display: none;
+}
+
 .vue-flow__controls {
     border: 1px solid var(--rose-200, #FFE8F2);
     border-radius: var(--radius-md, 0.75rem);

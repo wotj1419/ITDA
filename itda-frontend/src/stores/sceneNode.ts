@@ -12,6 +12,8 @@ import {
     JobStatus,
     PromptStatus,
     VALID_CONNECTIONS,
+    NODE_HEIGHTS,
+    NODE_WIDTHS,
     type BaseNodeData,
     type AnyNodeData,
     type SceneHeaderNodeData,
@@ -49,6 +51,13 @@ function createBaseNodeData(
         parentNodeId,
         isCollapsed: false,
         childCount: 0,
+    };
+}
+
+function getDefaultNodeDimensions(type: NodeType): { width: number; height: number } {
+    return {
+        width: NODE_WIDTHS[type] ?? 200,
+        height: NODE_HEIGHTS[type] ?? 150,
     };
 }
 
@@ -154,6 +163,7 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
             (n) => n.data?.type === NodeType.SCENE_HEADER
         );
         if (!hasHeader && sceneId.value) {
+            const { width, height } = getDefaultNodeDimensions(NodeType.SCENE_HEADER);
             const headerData: SceneHeaderNodeData = {
                 ...createBaseNodeData(generateId(), NodeType.SCENE_HEADER),
                 type: NodeType.SCENE_HEADER,
@@ -167,6 +177,8 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
                 id: headerData.id,
                 type: 'sceneHeader',
                 position: { x: 0, y: 0 },
+                width,
+                height,
                 data: headerData,
             };
             nodes.value.push(newNode);
@@ -220,6 +232,7 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
             id,
             type: 'masterImage',
             position: { x: 0, y: 0 },
+            ...getDefaultNodeDimensions(NodeType.MASTER_IMAGE),
             data,
         };
 
@@ -247,6 +260,7 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
             id,
             type: 'storyboardGrid',
             position: { x: 0, y: 0 },
+            ...getDefaultNodeDimensions(NodeType.STORYBOARD_GRID),
             data,
         };
 
@@ -283,6 +297,7 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
             id,
             type: 'shot',
             position: { x: 0, y: 0 },
+            ...getDefaultNodeDimensions(NodeType.SHOT),
             data,
         };
 
@@ -313,6 +328,7 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
             id,
             type: 'video',
             position: { x: 0, y: 0 },
+            ...getDefaultNodeDimensions(NodeType.VIDEO),
             data,
         };
 
