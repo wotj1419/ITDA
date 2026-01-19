@@ -80,6 +80,25 @@ git push origin --delete feat/feature-name
 
 ## 커밋 컨벤션
 
+### 커밋 원칙
+
+> **하나의 커밋 = 하나의 기능/변경**
+> 
+> 여러 기능을 한 커밋에 묶지 말고, 기능 단위로 커밋을 나눠주세요.
+> 이렇게 하면 코드 리뷰가 쉬워지고, 문제 발생 시 롤백도 간편합니다.
+
+**❌ Bad:**
+```bash
+git commit -m "Feat : 로그인, 회원가입, 비밀번호 찾기 기능 추가"
+```
+
+**✅ Good:**
+```bash
+git commit -m "Feat : Add login feature"
+git commit -m "Feat : Add signup feature"
+git commit -m "Feat : Add password reset feature"
+```
+
 ### 커밋 메시지 형식
 
 ```
