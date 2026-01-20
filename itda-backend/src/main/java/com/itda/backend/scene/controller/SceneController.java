@@ -8,6 +8,7 @@ import com.itda.backend.scene.controller.dto.response.SceneDetailResponse;
 import com.itda.backend.scene.controller.dto.response.SceneSummaryResponse;
 import com.itda.backend.scene.service.SceneService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -30,6 +31,12 @@ public class SceneController {
     private final SceneService sceneService;
 
     @Operation(summary = "Create scene")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", ref = "#/components/responses/SceneCreateSuccess"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", ref = "#/components/responses/ValidationError"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", ref = "#/components/responses/Unauthorized"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", ref = "#/components/responses/Forbidden")
+    })
     @PostMapping("/projects/{projectId}/scenes")
     public ResponseEntity<ApiResponse<SceneCreateResponse>> createScene(
             @AuthenticationPrincipal CustomUserDetails userDetails,
@@ -40,6 +47,11 @@ public class SceneController {
     }
 
     @Operation(summary = "List scenes")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", ref = "#/components/responses/SceneListSuccess"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", ref = "#/components/responses/Unauthorized"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", ref = "#/components/responses/Forbidden")
+    })
     @GetMapping("/projects/{projectId}/scenes")
     public ResponseEntity<ApiResponse<List<SceneSummaryResponse>>> listScenes(
             @AuthenticationPrincipal CustomUserDetails userDetails,
@@ -49,6 +61,12 @@ public class SceneController {
     }
 
     @Operation(summary = "Get scene detail")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", ref = "#/components/responses/SceneDetailSuccess"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", ref = "#/components/responses/Unauthorized"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", ref = "#/components/responses/Forbidden"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", ref = "#/components/responses/SceneNotFound")
+    })
     @GetMapping("/scenes/{sceneId}")
     public ResponseEntity<ApiResponse<SceneDetailResponse>> getSceneDetail(
             @AuthenticationPrincipal CustomUserDetails userDetails,

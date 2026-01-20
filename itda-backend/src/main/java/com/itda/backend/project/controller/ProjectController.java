@@ -8,6 +8,7 @@ import com.itda.backend.project.controller.dto.response.ProjectDetailResponse;
 import com.itda.backend.project.controller.dto.response.ProjectListResponse;
 import com.itda.backend.project.service.ProjectService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -29,6 +30,11 @@ public class ProjectController {
     private final ProjectService projectService;
 
     @Operation(summary = "Create project")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", ref = "#/components/responses/ProjectCreateSuccess"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", ref = "#/components/responses/ValidationError"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", ref = "#/components/responses/Unauthorized")
+    })
     @PostMapping
     public ResponseEntity<ApiResponse<ProjectCreateResponse>> createProject(
             @AuthenticationPrincipal CustomUserDetails userDetails,
@@ -38,6 +44,11 @@ public class ProjectController {
     }
 
     @Operation(summary = "List projects")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", ref = "#/components/responses/ProjectListSuccess"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", ref = "#/components/responses/InvalidRequest"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", ref = "#/components/responses/Unauthorized")
+    })
     @GetMapping
     public ResponseEntity<ApiResponse<ProjectListResponse>> listProjects(
             @AuthenticationPrincipal CustomUserDetails userDetails,
@@ -48,6 +59,12 @@ public class ProjectController {
     }
 
     @Operation(summary = "Get project detail")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", ref = "#/components/responses/ProjectDetailSuccess"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", ref = "#/components/responses/Unauthorized"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", ref = "#/components/responses/Forbidden"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", ref = "#/components/responses/ProjectNotFound")
+    })
     @GetMapping("/{projectId}")
     public ResponseEntity<ApiResponse<ProjectDetailResponse>> getProjectDetail(
             @AuthenticationPrincipal CustomUserDetails userDetails,
