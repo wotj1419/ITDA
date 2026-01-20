@@ -192,6 +192,21 @@ export async function createProject(data: { title: string; description?: string;
     createdAt: new Date().toISOString(),
   }
   mockProjects.unshift(newProject)
+
+  // Also add to mockProjectDetails so loadProject works
+  mockProjectDetails[newProject.projectId] = {
+    ...newProject,
+    myRole: 'OWNER',
+    ownerId: 1, // Mock user ID
+    members: [{
+      userId: 1,
+      email: 'minjun@example.com',
+      name: 'Minjun Kim',
+      role: 'OWNER',
+      profileImage: 'https://i.pravatar.cc/150?u=user123',
+    }],
+  }
+
   return newProject
 }
 

@@ -22,8 +22,7 @@ export const useAuthStore = defineStore('auth', () => {
 
   async function signup(data: SignupRequest): Promise<void> {
     await authService.signup(data);
-    // Auto-login after signup
-    await login({ email: data.email, password: data.password });
+    // Auto-login removed: User must login manually
   }
 
   async function fetchMe(): Promise<void> {

@@ -101,7 +101,7 @@ const createProject = async () => {
     aiGenerated.value = false
 
     // Navigate to project detail
-    router.push(`/project/${newProject.projectId}`)
+    router.push({ name: 'project-detail', params: { id: newProject.projectId } })
   }
 }
 
