@@ -11,10 +11,10 @@ import VideoPreview from '../components/timeline/VideoPreview.vue'
 import VideoTrack from '../components/timeline/VideoTrack.vue'
 import TimeRuler from '../components/timeline/TimeRuler.vue'
 import MergeProgress from '../components/timeline/MergeProgress.vue'
-import Button from '../components/common/Button.vue'
-import Card from '../components/common/Card.vue'
-import { GitMerge, Download, RefreshCw } from 'lucide-vue-next'
+import { GitMerge, Download, RefreshCw, ArrowLeft } from 'lucide-vue-next'
+import { useRouter } from 'vue-router'
 
+const router = useRouter()
 const route = useRoute()
 const projectStore = useProjectStore()
 const timelineStore = useTimelineStore()

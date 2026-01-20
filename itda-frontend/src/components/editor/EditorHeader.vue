@@ -79,7 +79,8 @@ defineProps<Props>();
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0.75rem 1.5rem;
+  padding: 0 1.5rem;
+  height: 64px; /* Align with sidebar header */
   background: white;
   border-bottom: 1px solid var(--rose-100);
 }

@@ -25,6 +25,10 @@ const isFavorite = (projectId: number) => {
   return projectStore.favoriteProjects.some((p) => p.projectId === projectId)
 }
 
+const handleToggleFavorite = (projectId: number) => {
+  projectStore.toggleFavorite(projectId)
+}
+
 const openNewProjectModal = () => {
   uiStore.openModal('new-project')
 }
@@ -98,6 +102,7 @@ const openNewProjectModal = () => {
             :key="project.projectId"
             :project="project"
             :is-favorite="isFavorite(project.projectId)"
+            @toggle-favorite="handleToggleFavorite"
           />
 
           <!-- Add New Project Card -->
