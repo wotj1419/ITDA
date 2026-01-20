@@ -14,7 +14,7 @@
 
 ## 1) Job Status (enum)
 
-- `pending` → `running` → `succeeded | failed`
+- `PENDING` → `RUNNING` → `SUCCEEDED | FAILED`
 
 ---
 
@@ -61,5 +61,5 @@
 - Idempotency-Key 헤더가 들어오면 **그 값을 Job에 저장**하고 재요청 시 동일 jobId 반환.
 - 헤더가 없으면 **target 기반**으로 idempotencyKey 생성  
   예) `projectId + type + targetId(nodeId/sceneId)` 해시
-- Worker는 **중복 실행 대비**: 이미 `succeeded`면 처리하지 않고 ACK.
+- Worker는 **중복 실행 대비**: 이미 `SUCCEEDED`면 처리하지 않고 ACK.
 

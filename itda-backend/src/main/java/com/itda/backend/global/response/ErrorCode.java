@@ -32,10 +32,12 @@ public enum ErrorCode {
     JOB_NOT_FOUND(404, "작업을 찾을 수 없습니다"),
 
     // ===== 409 Conflict =====
+    JOB_ALREADY_RUNNING(409, "이미 실행 중인 작업입니다"),
     EMAIL_ALREADY_EXISTS(409, "이미 가입된 이메일입니다"),
     SCENE_LIMIT_EXCEEDED(409, "씬 개수 제한을 초과했습니다"),
 
     // ===== 500 Internal Server Error =====
+    JOB_EXECUTION_FAILED(500, "작업 실행 중 오류가 발생했습니다"),
     MERGE_FAILED(500, "씬 병합에 실패했습니다"),
     INTERNAL_ERROR(500, "서버 내부 오류가 발생했습니다");
 

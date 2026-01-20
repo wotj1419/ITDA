@@ -19,7 +19,7 @@
   - `POST /api/nodes/{id}/generate` → `{jobId}` (노드 타입에 따라 이미지/영상 생성)
   - `POST /api/scenes/{id}/merge` → `{jobId}`
   - `POST /api/projects/{id}/merge` → `{jobId}`
-  - `GET  /api/ai/jobs/{jobId}` → `pending|running|succeeded|failed` + output
+  - `GET  /api/ai/jobs/{jobId}` → `PENDING|RUNNING|SUCCEEDED|FAILED` + output
 
 ---
 
@@ -27,7 +27,7 @@
 - "Dispatcher"는 별도의 서버가 아니라, **API 서버 안의 서비스/유스케이스 레이어**를 말한다.
 - 핵심 책임
   1. 입력/권한 검증 (예: 프로젝트 소유/권한)
-  2. Job 생성(DB) — 초기 상태 `pending`
+  2. Job 생성(DB) — 초기 상태 `PENDING`
   3. Redis Streams에 메시지 발행(=dispatch)
   4. 호출자에게 `jobId` 반환
 
@@ -58,10 +58,10 @@
 
 - 공통 책임
   1. Streams에서 메시지 읽기 (`XREADGROUP`)
-  2. Job 상태를 `running`으로 변경(시작 시간 기록)
+  2. Job 상태를 `RUNNING`으로 변경(시작 시간 기록)
   3. 실제 처리 수행 (AI 호출/FFmpeg)
   4. 결과 파일 Storage 저장 + DB 기록
-  5. Job 상태를 `succeeded` 또는 `failed`로 업데이트
+  5. Job 상태를 `SUCCEEDED` 또는 `FAILED`로 업데이트
   6. 메시지 `ACK`
 
 - 담당 분리(현재 일정표 기준)

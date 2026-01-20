@@ -54,6 +54,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/auth/signup", "/api/auth/login", "/api/auth/refresh").permitAll()
                         .requestMatchers("/", "/error", "/health").permitAll()
                         .requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**").permitAll()
+                        .requestMatchers("/ws/**", "/ws").permitAll()
 
                         .requestMatchers("/test/**").permitAll()
                         // 그 외는 인증 필요

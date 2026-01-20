@@ -30,15 +30,14 @@
 {
   "type": "job.done",
   "data": {
-    "jobId": "job_123",
-    "target": { "type": "NODE | SCENE_VIDEO | PROJECT_VIDEO", "id": 301 },
-    "sceneId": 201,
+    "jobId": 123,
+    "target": { "type": "NODE | SCENE | PROJECT", "id": 301 },
     "resultUrl": "https://..."
   }
 }
 ```
 
-- `sceneId`는 **씬 병합**일 때만 포함
+- `sceneId`는 **씬 병합**일 때만 포함 (필요 시 추가)
 
 ---
 
@@ -48,9 +47,8 @@
 {
   "type": "job.failed",
   "data": {
-    "jobId": "job_123",
-    "target": { "type": "NODE | SCENE_VIDEO | PROJECT_VIDEO", "id": 301 },
-    "sceneId": 201,
+    "jobId": 123,
+    "target": { "type": "NODE | SCENE | PROJECT", "id": 301 },
     "error": { "code": "ERROR_CODE", "message": "String" }
   }
 }
