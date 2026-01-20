@@ -42,24 +42,43 @@ export function useAutoLayout() {
         return NODE_HEIGHTS[type as NodeType] || 150;
     }
 
-    function resolveNodeWidth<T>(node: Node<T>): number {
-        if (typeof node.width === 'number') return node.width;
-        if (typeof node.width === 'string') {
-            const parsed = Number.parseFloat(node.width);
+    function parseNumericSize(value: unknown): number | null {
+        if (typeof value === 'number' && Number.isFinite(value)) return value;
+        if (typeof value === 'string') {
+            const parsed = Number.parseFloat(value);
             if (!Number.isNaN(parsed)) return parsed;
         }
+        return null;
+    }
+
+    function resolveNodeDimension<T>(
+        node: Node<T>,
+        dimension: 'width' | 'height'
+    ): number {
+        const measured = (node as { dimensions?: { width?: number; height?: number } })
+            .dimensions?.[dimension];
+        if (typeof measured === 'number' && measured > 0) return measured;
+
+        const direct = parseNumericSize(
+            (node as { width?: unknown; height?: unknown })[dimension]
+        );
+        if (typeof direct === 'number' && direct > 0) return direct;
+
+        const styled = parseNumericSize(
+            (node as { style?: Record<string, unknown> }).style?.[dimension]
+        );
+        if (typeof styled === 'number' && styled > 0) return styled;
+
         const nodeType = (node.data as { type?: string })?.type || node.type || '';
-        return getNodeWidth(nodeType);
+        return dimension === 'width' ? getNodeWidth(nodeType) : getNodeHeight(nodeType);
+    }
+
+    function resolveNodeWidth<T>(node: Node<T>): number {
+        return resolveNodeDimension(node, 'width');
     }
 
     function resolveNodeHeight<T>(node: Node<T>): number {
-        if (typeof node.height === 'number') return node.height;
-        if (typeof node.height === 'string') {
-            const parsed = Number.parseFloat(node.height);
-            if (!Number.isNaN(parsed)) return parsed;
-        }
-        const nodeType = (node.data as { type?: string })?.type || node.type || '';
-        return getNodeHeight(nodeType);
+        return resolveNodeDimension(node, 'height');
     }
 
     /**

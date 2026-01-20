@@ -7,7 +7,6 @@ import { useSceneStore } from '../stores/scene'
 import { useCharacterStore } from '../stores/character'
 import { useUIStore } from '../stores/ui'
 import { useCollabStore } from '../stores/collab'
-import { useScenarioStore } from '../stores/scenario'
 import type { ObjectSheet, Scene, SceneStatus } from '../types'
 import { fetchNodesBySceneId } from '../services/mock/nodes'
 
@@ -16,7 +15,6 @@ import Card from '../components/common/Card.vue'
 import Button from '../components/common/Button.vue'
 import Badge from '../components/common/Badge.vue'
 import SceneCard from '../components/project/SceneCard.vue'
-import ScenarioDrawer from '../components/scenario/ScenarioDrawer.vue'
 import CharacterCard from '../components/project/CharacterCard.vue'
 import AddCharacterModal from '../components/project/AddCharacterModal.vue'
 
@@ -26,7 +24,6 @@ const sceneStore = useSceneStore()
 const characterStore = useCharacterStore()
 const uiStore = useUIStore()
 const collabStore = useCollabStore()
-const scenarioStore = useScenarioStore()
 
 // State
 type ProjectTab = 'story' | 'scenes' | 'characters' | 'timeline' | 'settings'
@@ -49,6 +46,7 @@ const scenePreviewMap = ref<Record<number, ScenePreview>>({})
 const previewLoadingMap = ref<Record<number, boolean>>({})
 const activePreview = ref<{ sceneId: number; clipIndex: number } | null>(null)
 const previewTracks = ref<Record<number, HTMLDivElement | null>>({})
+const storyboardOpenMap = ref<Record<number, boolean>>({})
 
 const previewVisibleLimit = 6
 
@@ -57,6 +55,38 @@ const tabItems: { key: ProjectTab; label: string }[] = [
   { key: 'scenes', label: 'Scenes' },
   { key: 'characters', label: 'Characters' },
 ]
+
+const genreOptions = [
+  { value: 'sf', label: 'SF' },
+  { value: 'fantasy', label: 'Fantasy' },
+  { value: 'romance', label: 'Romance' },
+  { value: 'action', label: 'Action' },
+]
+
+const moodOptions = [
+  { value: 'tense', label: 'Tense' },
+  { value: 'epic', label: 'Epic' },
+  { value: 'hopeful', label: 'Hopeful' },
+  { value: 'docu', label: 'Documentary' },
+]
+
+const sceneCountOptions = [3, 4, 5, 6]
+
+const storyForm = ref({
+  genre: 'sf',
+  mood: 'tense',
+  sceneCount: 5,
+  synopsis: '',
+})
+
+const canGenerateScenes = computed(() =>
+  Boolean(
+    storyForm.value.genre &&
+    storyForm.value.mood &&
+    storyForm.value.sceneCount > 0 &&
+    storyForm.value.synopsis.trim()
+  )
+)
 
 // Computed
 const projectId = computed(() => Number(route.params.id))
@@ -84,6 +114,7 @@ onMounted(async () => {
     collabStore.joinRoom(projectId.value)
     collabStore.updateLocation('프로젝트 상세 페이지')
   }
+
 })
 
 onUnmounted(() => {
@@ -216,6 +247,34 @@ const getOverflowCount = (sceneId: number): number => {
   return count > previewVisibleLimit ? count - previewVisibleLimit : 0
 }
 
+const ensureScenePreview = async (sceneId: number) => {
+  if (scenePreviewMap.value[sceneId]) return
+  previewLoadingMap.value[sceneId] = true
+  const preview = await buildScenePreview(sceneId)
+  scenePreviewMap.value = {
+    ...scenePreviewMap.value,
+    [sceneId]: preview,
+  }
+  previewLoadingMap.value[sceneId] = false
+}
+
+const toggleStoryboard = async (sceneId: number) => {
+  const next = !storyboardOpenMap.value[sceneId]
+  storyboardOpenMap.value = {
+    ...storyboardOpenMap.value,
+    [sceneId]: next,
+  }
+  if (next) {
+    await ensureScenePreview(sceneId)
+  }
+}
+
+const handleStoryboardWheel = (event: WheelEvent) => {
+  const container = event.currentTarget as HTMLElement | null
+  if (!container) return
+  container.scrollLeft += event.deltaY + event.deltaX
+}
+
 // Scene drag & drop handlers
 const handleDragStart = (scene: Scene) => {
   draggedScene.value = scene
@@ -248,6 +307,31 @@ const handleDragOver = (event: DragEvent, targetScene: Scene) => {
     // Update order in store temporarily (will be persisted on dragEnd)
     newScenes.forEach((s, idx) => {
       s.order = idx + 1
+    })
+  }
+}
+
+const handleGenerateScenes = async () => {
+  if (!canGenerateScenes.value || !projectId.value) return
+
+  const generated = await sceneStore.generateScenes({
+    genre: storyForm.value.genre,
+    mood: storyForm.value.mood,
+    sceneCount: storyForm.value.sceneCount,
+    synopsis: storyForm.value.synopsis.trim(),
+  })
+
+  if (generated.length > 0) {
+    uiStore.showToast({
+      type: 'success',
+      title: 'Scenes generated',
+      message: `${generated.length} scenes added.`,
+    })
+  } else {
+    uiStore.showToast({
+      type: 'error',
+      title: 'No scenes generated',
+      message: 'Please try again.',
     })
   }
 }
@@ -332,24 +416,78 @@ const handleDeleteCharacter = async (character: ObjectSheet) => {
 
       <!-- Story Tab -->
       <div v-if="activeTab === 'story'" class="tab-content">
-        <!-- AI Scenario Generation Button -->
-        <div class="scenario-trigger mb-6">
-          <Button variant="primary" @click="scenarioStore.openDrawer()">
+        <Card class="mb-6">
+          <div class="flex items-center gap-2 mb-4">
             <Sparkles class="icon-sm" />
-            AI 시나리오 생성
-          </Button>
-          <p class="scenario-hint">AI가 장르, 분위기를 바탕으로 씬별 스토리를 자동 생성합니다.</p>
-        </div>
+            <h3 class="h3">Story Prompt</h3>
+          </div>
 
-        <!-- Scenario Drawer (responsive sidebar/modal) -->
-        <ScenarioDrawer />
+          <div class="form-row mb-4">
+            <div class="form-group">
+              <label class="form-label">Genre</label>
+              <select v-model="storyForm.genre" class="form-input form-select">
+                <option
+                  v-for="option in genreOptions"
+                  :key="option.value"
+                  :value="option.value"
+                >
+                  {{ option.label }}
+                </option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Mood</label>
+              <select v-model="storyForm.mood" class="form-input form-select">
+                <option
+                  v-for="option in moodOptions"
+                  :key="option.value"
+                  :value="option.value"
+                >
+                  {{ option.label }}
+                </option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Scene Count</label>
+              <select
+                v-model.number="storyForm.sceneCount"
+                class="form-input form-select"
+              >
+                <option v-for="count in sceneCountOptions" :key="count" :value="count">
+                  {{ count }}
+                </option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Synopsis</label>
+            <textarea
+              v-model="storyForm.synopsis"
+              class="form-input form-textarea"
+              rows="4"
+              placeholder="Write a short story outline to guide scene generation."
+            ></textarea>
+          </div>
+
+          <Button
+            variant="primary"
+            class="w-full"
+            :loading="sceneStore.isGenerating"
+            :disabled="!canGenerateScenes || sceneStore.isGenerating"
+            @click="handleGenerateScenes"
+          >
+            <Sparkles class="icon-sm" />
+            Generate Scenes with AI
+          </Button>
+        </Card>
 
         <!-- Scene List -->
         <div class="section-header">
-          <h3 class="section-title">씬별 스토리</h3>
+          <h3 class="section-title">Scenes</h3>
           <Button variant="secondary" size="sm" @click="handleAddScene">
             <Plus class="icon-sm" />
-            씬 추가
+            Add Scene
           </Button>
         </div>
 
@@ -366,7 +504,48 @@ const handleDeleteCharacter = async (character: ObjectSheet) => {
               :project-id="projectId"
               :draggable="true"
               :show-thumbnail="false"
-            />
+            >
+              <template #actions-left>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  :disabled="isPreviewLoading(scene.sceneId)"
+                  @click="toggleStoryboard(scene.sceneId)"
+                >
+                  <Play class="icon-sm" />
+                  미리보기
+                </Button>
+              </template>
+
+              <template #extra-content>
+                <div
+                  v-show="storyboardOpenMap[scene.sceneId]"
+                  class="storyboard-wrap"
+                >
+                  <div class="storyboard-strip" @wheel.prevent="handleStoryboardWheel">
+                    <template v-if="isPreviewLoading(scene.sceneId)">
+                      <div class="storyboard-empty">영상 불러오는 중...</div>
+                    </template>
+                    <template v-else-if="getScenePreview(scene.sceneId).clips.length === 0">
+                      <div class="storyboard-empty">생성된 영상이 없습니다.</div>
+                    </template>
+                    <button
+                      v-for="(clip, index) in getScenePreview(scene.sceneId).clips"
+                      :key="`${scene.sceneId}-storyboard-${index}`"
+                      type="button"
+                      class="storyboard-item"
+                    >
+                      <img
+                        class="storyboard-thumb"
+                        :src="clip.thumbnailUrl || scene.thumbnailUrl"
+                        :alt="clip.label || scene.title"
+                      />
+                      <span class="storyboard-label">{{ clip.label || scene.title }}</span>
+                    </button>
+                  </div>
+                </div>
+              </template>
+            </SceneCard>
           </div>
 
           <!-- Add Scene Button -->
@@ -657,6 +836,56 @@ const handleDeleteCharacter = async (character: ObjectSheet) => {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
+}
+
+.storyboard-wrap {
+  margin-top: 0.75rem;
+}
+
+.storyboard-strip {
+  display: flex;
+  gap: 0.75rem;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-bottom: 0.25rem;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+}
+
+.storyboard-item {
+  flex: 0 0 auto;
+  width: 120px;
+  border: 1px solid var(--rose-100);
+  border-radius: 10px;
+  overflow: hidden;
+  background: white;
+  padding: 0;
+  cursor: pointer;
+  scroll-snap-align: start;
+}
+
+.storyboard-thumb {
+  width: 100%;
+  height: 72px;
+  object-fit: cover;
+  display: block;
+}
+
+.storyboard-label {
+  display: block;
+  padding: 0.375rem 0.5rem;
+  font-size: 0.6875rem;
+  color: var(--gray-600);
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.storyboard-empty {
+  font-size: 0.75rem;
+  color: var(--gray-500);
+  padding: 0.5rem 0;
 }
 
 .add-scene-card {
@@ -1022,23 +1251,6 @@ const handleDeleteCharacter = async (character: ObjectSheet) => {
 .add-character-text {
   color: var(--gray-500);
   font-size: 0.875rem;
-}
-
-/* Scenario Trigger */
-.scenario-trigger {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  padding: 1.25rem;
-  background: linear-gradient(135deg, var(--rose-50) 0%, white 100%);
-  border: 1px solid var(--rose-100);
-  border-radius: 12px;
-}
-
-.scenario-hint {
-  font-size: 0.8125rem;
-  color: var(--gray-500);
-  margin: 0;
 }
 
 /* Utilities */
