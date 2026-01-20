@@ -25,3 +25,7 @@ jwt:
 
 file:
   upload-dir: ./uploads
+
+job:
+  execution:
+    max-retry-count: 3

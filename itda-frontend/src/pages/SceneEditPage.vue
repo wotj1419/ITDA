@@ -16,6 +16,7 @@ import EditorHeader from '../components/editor/EditorHeader.vue';
 import NodeCanvas from '../components/scene-editor/NodeCanvas.vue';
 import NodePanelContainer from '../components/scene-editor/panels/NodePanelContainer.vue';
 import MiniTimeline from '../components/editor/MiniTimeline.vue';
+import autolayoutIcon from '../assets/autolayout.svg';
 
 // =============================================================================
 // Composables & Stores
@@ -29,6 +30,7 @@ const uiStore = useUIStore();
 const collabStore = useCollabStore();
 
 const nodeCanvasRef = ref<InstanceType<typeof NodeCanvas> | null>(null);
+
 
 // =============================================================================
 // Route Parameters
@@ -171,37 +173,86 @@ function handleAutoLayout(): void {
     </template>
   </EditorLayout>
 
-  <!-- Auto Layout Button (Fixed Position) -->
-  <button
-    class="auto-layout-btn"
-    @click="handleAutoLayout"
-    title="자동 정렬"
-  >
-    🔄 정렬
+
+  <button class="auto-layout-btn" @click="handleAutoLayout">
+    <span class="icon-wrap">
+      <img
+        class="svgIcon icon-default"
+        :src="autolayoutIcon"
+        alt="Auto layout"
+      />
+      <img
+        class="svgIcon icon-refresh"
+        :src="autolayoutIcon"
+        alt=""
+        aria-hidden="true"
+      />
+    </span>
+    레이아웃 정렬
   </button>
 </template>
 
 <style scoped>
 .auto-layout-btn {
+  --btn-size: 50px;
+  --btn-half: 35px;
+  --icon-size: 40px;
+  --center-x: calc(100% - 450px - var(--btn-half));
+  --bottom: 80px;
+
+  width: var(--btn-size);
+  height: var(--btn-size);
+  border-radius: 9999px;
+  background: var(--rose-300, #FFD9E8);
+  border: 2px solid var(--node-glass-border, rgba(255, 179, 198, 0.8));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
   position: fixed;
-  bottom: 100px;
-  right: 24px;
-  padding: 0.75rem 1rem;
-  font-size: 0.875rem;
+  left: var(--center-x);
+  bottom: var(--bottom);
+  transform: translateX(-50%);
+  overflow: hidden;
+  color: #fff;
+  font-size: 0;
   font-weight: 600;
-  background: white;
-  color: var(--gray-700);
-  border: 1px solid var(--rose-200);
-  border-radius: var(--radius-full, 9999px);
-  box-shadow: var(--shadow-md);
+  white-space: nowrap;
   cursor: pointer;
-  z-index: 100;
-  transition: all 0.2s ease;
+  transition: width 0.3s, border-radius 0.3s, background-color 0.3s;
+}
+
+.icon-wrap {
+  position: relative;
+  width: var(--icon-size);
+  height: var(--icon-size);
+  transition: opacity 0.1s ease, width 0.1s ease, height 0.2s ease;
+}
+
+.svgIcon {
+  width: var(--icon-size);
+  height: var(--icon-size);
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-40%, -50%);
+  transition: opacity 0.2s ease;
+  display: block;
+  object-fit: contain;
 }
 
 .auto-layout-btn:hover {
-  background: var(--rose-50);
-  border-color: var(--rose-500);
-  color: var(--rose-600);
+  width: 140px;
+  border-radius: 50px;
+  background: var(--rose-300, #FFD9E8);
+  font-size: 13px;
+  gap: 0;
+}
+
+.auto-layout-btn:hover .icon-wrap {
+  opacity: 0;
+  width: 0;
+  height: 0;
 }
 </style>
+

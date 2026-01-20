@@ -12,6 +12,7 @@ build/
 .classpath
 .settings/
 .vscode/
+bin/
 *.swp
 *.swo
 *~

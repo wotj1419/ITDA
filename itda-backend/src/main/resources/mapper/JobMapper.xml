@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.itda.backend.job.repository.JobMapper">
+
+    <!-- ResultMap 정의 -->
+    <resultMap id="JobResultMap" type="com.itda.backend.job.domain.Job">
+        <id property="id" column="id"/>
+        <result property="projectId" column="project_id"/>
+        <result property="sceneId" column="scene_id"/>
+        <result property="nodeId" column="node_id"/>
+        <result property="type" column="job_type"
+                javaType="com.itda.backend.job.domain.JobType"/>
+        <result property="idempotencyKey" column="idempotency_key"/>
+        <result property="status" column="status"
+                javaType="com.itda.backend.job.domain.JobStatus"/>
+        <result property="requestJson" column="request_json"/>
+        <result property="resultAssetId" column="result_asset_id"/>
+        <result property="errorMessage" column="error_message"/>
+        <result property="retryCount" column="retry_count"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="startedAt" column="started_at"/>
+        <result property="finishedAt" column="finished_at"/>
+    </resultMap>
+
+    <!-- 공통 컬럼 -->
+    <sql id="jobColumns">
+        id, project_id, scene_id, node_id, job_type, idempotency_key,
+        status, request_json, result_asset_id, error_message, retry_count,
+        created_at, started_at, finished_at
+    </sql>
+
+    <!-- INSERT -->
+    <insert id="insert" parameterType="com.itda.backend.job.domain.Job"
+            useGeneratedKeys="true" keyProperty="id" keyColumn="id">
+        INSERT INTO generation_jobs (
+            project_id, scene_id, node_id, job_type, idempotency_key,
+            status, request_json, retry_count
+        ) VALUES (
+            #{projectId}, #{sceneId}, #{nodeId}, #{type}, #{idempotencyKey},
+            #{status}, #{requestJson}, #{retryCount}
+        )
+    </insert>
+
+    <!-- SELECT by ID -->
+    <select id="findById" resultMap="JobResultMap">
+        SELECT <include refid="jobColumns"/>
+        FROM generation_jobs
+        WHERE id = #{id}
+    </select>
+
+    <!-- SELECT by Idempotency Key -->
+    <select id="findByIdempotencyKey" resultMap="JobResultMap">
+        SELECT <include refid="jobColumns"/>
+        FROM generation_jobs
+        WHERE idempotency_key = #{idempotencyKey}
+    </select>
+
+    <!-- SELECT by Project ID (최신순) -->
+    <select id="findByProjectId" resultMap="JobResultMap">
+        SELECT <include refid="jobColumns"/>
+        FROM generation_jobs
+        WHERE project_id = #{projectId}
+        ORDER BY created_at DESC
+    </select>
+
+    <!-- SELECT by Status (오래된순 - FIFO) -->
+    <select id="findByStatus" resultMap="JobResultMap">
+        SELECT <include refid="jobColumns"/>
+        FROM generation_jobs
+        WHERE status = #{status}
+        ORDER BY created_at ASC
+    </select>
+
+    <!-- UPDATE Status (조건부 - 낙관적 락) -->
+    <update id="updateStatusIfExpected">
+        UPDATE generation_jobs
+        SET status = #{newStatus},
+            error_message = #{errorMessage},
+            started_at = CASE
+                WHEN #{newStatus} = 'RUNNING' THEN NOW()
+                ELSE started_at
+            END,
+            finished_at = CASE
+                WHEN #{newStatus} IN ('SUCCEEDED', 'FAILED') THEN NOW()
+                ELSE finished_at
+            END
+        WHERE id = #{id}
+          AND status IN
+            <foreach collection="expectedStatuses" item="s" open="(" separator="," close=")">
+                #{s}
+            </foreach>
+    </update>
+
+    <!-- UPDATE Result (성공 처리 - RUNNING 상태에서만) -->
+    <update id="updateResultIfRunning">
+        UPDATE generation_jobs
+        SET result_asset_id = #{resultAssetId},
+            status = 'SUCCEEDED',
+            finished_at = NOW()
+        WHERE id = #{id}
+          AND status = 'RUNNING'
+    </update>
+
+    <!-- UPDATE Failure (실패 처리 - RUNNING 상태에서만) -->
+    <update id="updateFailureIfRunning">
+        UPDATE generation_jobs
+        SET status = 'FAILED',
+            error_message = #{errorMessage},
+            retry_count = retry_count + 1,
+            finished_at = NOW()
+        WHERE id = #{id}
+          AND status = 'RUNNING'
+    </update>
+
+</mapper>

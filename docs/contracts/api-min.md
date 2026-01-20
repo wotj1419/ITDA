@@ -218,7 +218,7 @@ Response
 
 Response (202)
 ```json
-{ "code": "ACCEPTED", "data": { "jobId": "job_123", "status": "pending" } }
+{ "code": "ACCEPTED", "data": { "jobId": 123, "status": "PENDING" } }
 ```
 
 ---
@@ -233,9 +233,9 @@ Response (최소)
 {
   "code": "SUCCESS",
   "data": {
-    "jobId": "job_123",
+    "jobId": 123,
     "type": "IMAGE_GENERATION | VIDEO_GENERATION | SCENE_MERGE | PROJECT_MERGE",
-    "status": "pending | running | succeeded | failed",
+    "status": "PENDING | RUNNING | SUCCEEDED | FAILED",
     "resultUrl": "https://...",
     "error": { "code": "ERROR_CODE", "message": "String" }
   }
@@ -254,7 +254,7 @@ Response (최소)
 
 Response (202)
 ```json
-{ "code": "ACCEPTED", "data": { "jobId": "job_scene_merge_123", "status": "pending" } }
+{ "code": "ACCEPTED", "data": { "jobId": 1001, "status": "PENDING" } }
 ```
 
 ### 프로젝트 병합 요청
@@ -262,7 +262,7 @@ Response (202)
 
 Response (202)
 ```json
-{ "code": "ACCEPTED", "data": { "jobId": "job_project_merge_456", "status": "pending" } }
+{ "code": "ACCEPTED", "data": { "jobId": 2001, "status": "PENDING" } }
 ```
 
 ### 최종 영상 URL

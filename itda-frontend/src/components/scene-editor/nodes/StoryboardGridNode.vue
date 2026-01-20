@@ -7,8 +7,9 @@
  */
 import { computed } from 'vue';
 import { Handle, Position } from '@vue-flow/core';
+import { NodeResizer } from '@vue-flow/node-resizer';
+import { JobStatus, NODE_HEIGHTS, NODE_WIDTHS } from '../../../types/node';
 import type { StoryboardGridNodeData } from '../../../types/node';
-import { JobStatus } from '../../../types/node';
 import { 
   LayoutGrid, 
   Loader2, 
@@ -29,6 +30,11 @@ interface Props {
 }
 
 const props = defineProps<Props>();
+
+const nodeStyle = { '--node-resizer-color': 'var(--rose-500, #FF85A1)' } as Record<string, string>;
+
+const minWidth = NODE_WIDTHS[props.data.type] ?? 200;
+const minHeight = NODE_HEIGHTS[props.data.type] ?? 140;
 
 const emit = defineEmits<{
   (e: 'add-child'): void;
@@ -85,7 +91,13 @@ function handleAddChild(event: Event): void {
 </script>
 
 <template>
-  <div :class="nodeClasses">
+  <div :class="nodeClasses" :style="nodeStyle">
+    <NodeResizer
+      :min-width="minWidth"
+      :min-height="minHeight"
+      :is-visible="props.selected"
+    />
+    <div v-if="props.selected" class="node-resizer-outline" />
     <!-- Target Handle (top) -->
     <Handle 
       type="target" 

@@ -169,7 +169,7 @@
 | **P1** | AI 영상 생성 (오픈소스) | Stable Video Diffusion 등 오픈소스 모델 선택 옵션 | ⬜ |
 | **P0** | 영상 병합 | 씬별 영상을 하나로 조합 (확정된 영상 기준) | ✅ |
 | **P0** | 순차 재생 | 씬 내 클립 / 프로젝트 전체 영상 순차 자동 재생 | ✅ |
-| **P0** | 진행률 표시 | AI 생성 **상태(대기/진행중/완료/실패)** + 완료/실패 알림 표시 (job status: pending/running/succeeded/failed, 실제 %는 미보장) | ✅ |
+| **P0** | 진행률 표시 | AI 생성 **상태(대기/진행중/완료/실패)** + 완료/실패 알림 표시 (job status: PENDING/RUNNING/SUCCEEDED/FAILED, 실제 %는 미보장) | ✅ |
 | **P1** | 외부 파일 업로드 | 이미지/영상/음악 직접 업로드 | ⬜ |
 | **P1** | 퀵 프리뷰 | 프로젝트 상세에서 씬 연결 미리보기 | ⬜ |
 | **P1** | 실시간 알림 | 협업 중 팀원 편집 알림 | ⬜ |
@@ -1355,10 +1355,10 @@ API 서버(WebSocket 브릿지) → 프로젝트 이벤트 WebSocket으로 완�
 **AI Job 상태:**
 | status (API) | 의미 |
 |---|---|
-| pending | 대기열에서 대기 중 |
-| running | AI 처리 중 |
-| succeeded | 완료 |
-| failed | 실패 |
+| PENDING | 대기열에서 대기 중 |
+| RUNNING | AI 처리 중 |
+| SUCCEEDED | 완료 |
+| FAILED | 실패 |
 
 > 참고: AI Provider가 % 진행률을 제공하지 않는 경우, UI는 status 기반(`⏳/🔄/✅/❌`)으로 표시하고 완료/실패는 WebSocket 이벤트로 즉시 반영합니다.
 
@@ -1560,9 +1560,9 @@ CREATE TABLE node_edges (
 {
   "code": "SUCCESS",
   "data": {
-    "jobId": "job_01H...",
+    "jobId": 12345,
     "type": "VIDEO_GENERATION",
-    "status": "running",
+    "status": "RUNNING",
     "progress": null,
     "target": { "type": "NODE", "id": 987 },
     "resultUrl": null,
@@ -1758,8 +1758,8 @@ GET /api/projects/{id}/export
   - authorize : projectId 기준, **프로젝트 멤버만** 구독 가능
 
 이벤트(예시):
-  - job.done   : { jobId, target: { type: "node", id }, resultUrl }
-  - job.failed : { jobId, target: { type: "node", id }, error }
+  - job.done   : { jobId, target: { type: "NODE", id }, resultUrl }
+  - job.failed : { jobId, target: { type: "NODE", id }, error }
 
 💡 MVP 범위: AI Job 완료/실패 알림만 제공(진행률 푸시는 미제공)
 ```
@@ -1972,5 +1972,5 @@ Week 6: 마무리 & 발표
   - 씬별 미리보기 + 전체 미리보기 기능 명시
   - 음악 기능 범위 정리: **P1 업로드/보관**, **P2 믹싱/병합 반영**
   - CI/CD: Jenkins로 통일
-  - 상태값 정리: Job status(pending/running/succeeded/failed), Node status(PENDING/RUNNING/SUCCEEDED/FAILED)
+  - 상태값 정리: Job status(PENDING/RUNNING/SUCCEEDED/FAILED), Node status(PENDING/RUNNING/SUCCEEDED/FAILED)
   - 탭명: Characters → Objects

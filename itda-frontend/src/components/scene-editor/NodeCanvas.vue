@@ -73,7 +73,8 @@ function applyLayout(): void {
   const { nodes: layoutedNodes } = getLayoutedElements(
     nodeStore.nodes,
     nodeStore.edges,
-    { direction: 'TB' }
+    // 커스텀 자동 정렬용 간격 설정 (형제 노드 균등 간격 분배)
+    { direction: 'TB', nodeSep: 80, rankSep: 100 }
   );
 
   layoutedNodes.forEach((layoutedNode) => {
@@ -151,8 +152,8 @@ defineExpose({
     :class="{ 'selection-mode-active': nodeStore.selectionMode === 'selectEndShot' }"
   >
     <VueFlow
-      :nodes="nodeStore.nodes"
-      :edges="nodeStore.edges"
+      v-model:nodes="nodeStore.nodes"
+      v-model:edges="nodeStore.edges"
       :node-types="nodeTypes"
       :default-viewport="{ x: 0, y: 0, zoom: 1 }"
       :min-zoom="0.25"

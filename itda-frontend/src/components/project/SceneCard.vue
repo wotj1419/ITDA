@@ -78,6 +78,7 @@ const editLink = computed(() => ({
 
       <!-- Actions -->
       <div class="scene-actions">
+        <slot name="actions-left" />
         <RouterLink :to="editLink" custom v-slot="{ navigate }">
           <Button
             :variant="scene.status === 'COMPLETED' ? 'primary' : 'secondary'"
@@ -91,6 +92,8 @@ const editLink = computed(() => ({
       </div>
     </div>
   </div>
+
+  <slot name="extra-content" />
 </template>
 
 <style scoped>

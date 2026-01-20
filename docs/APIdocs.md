@@ -138,9 +138,9 @@ AI 생성 작업(이미지/영상)은 비동기로 처리됩니다.
 {
   "code": "SUCCESS",
   "data": {
-    "jobId": "job_01H...",
+    "jobId": 12345,
     "type": "VIDEO_GENERATION",
-    "status": "running",
+    "status": "RUNNING",
     "progress": null,
     "target": { "type": "NODE", "id": 987 },
     "resultUrl": null,
@@ -686,8 +686,8 @@ API /api/projects/{id}/objects
 {
   "code": "ACCEPTED",
   "data": {
-    "jobId": "job_object_123",
-    "status": "pending"
+    "jobId": 123,
+    "status": "PENDING"
   }
 }
 ```
@@ -972,9 +972,9 @@ API /api/nodes/{id}/generate
 {
   "code": "ACCEPTED",
   "data": {
-    "jobId": "job_node_gen_1",
+    "jobId": 456,
     "nodeId": 301,
-    "status": "pending"
+    "status": "PENDING"
   }
 }
 ```
@@ -1132,9 +1132,9 @@ API /api/nodes/{id}/regenerate
 {
   "code": "ACCEPTED",
   "data": {
-    "jobId": "job_node_regen_123",
+    "jobId": 789,
     "newNodeId": 789,
-    "status": "pending"
+    "status": "PENDING"
   }
 }
 ```
@@ -1603,6 +1603,43 @@ API /api/ai/jobs/{jobId}
 설명 비동기 AI 작업의 현재 상태를 조회합니다. (Fallback용)
 ```
 
+#### 3. Response
+```json
+{
+  "code": "SUCCESS",
+  "data": {
+    "jobId": 12345,
+    "type": "IMAGE_GENERATION",
+    "status": "RUNNING",
+    "progress": null,
+    "target": { "type": "NODE", "id": 301 },
+    "resultUrl": null,
+    "error": null,
+    "createdAt": "2026-01-19T10:11:12",
+    "finishedAt": null
+  }
+}
+```
+
+#### 응답 필드 설명
+| 필드 | 타입 | 필수 여부 | 설명 |
+| --- | --- | --- | --- |
+| jobId | Long | 필수 | Job ID |
+| type | String | 필수 | `IMAGE_GENERATION` \| `VIDEO_GENERATION` \| `SCENE_MERGE` \| `PROJECT_MERGE` |
+| status | String | 필수 | `PENDING` \| `RUNNING` \| `SUCCEEDED` \| `FAILED` |
+| progress | Integer | 선택 | 진행률(%). MVP는 null |
+| target | Object | 필수 | 요청 대상 (입력 기준) |
+| target.type | String | 필수 | `NODE` \| `SCENE` \| `PROJECT` |
+| target.id | Long | 필수 | 대상 ID |
+| resultUrl | String | 선택 | 성공 시 결과 파일 URL |
+| error | Object | 선택 | 실패 시 오류 |
+| error.code | String | 선택 | 도메인 에러 코드 |
+| error.message | String | 선택 | 오류 메시지 |
+| createdAt | String | 선택 | 생성 시각 |
+| finishedAt | String | 선택 | 완료 시각 |
+
+> `target`은 요청 기준 대상입니다. (예: 노드 생성은 NODE, 씬 병합은 SCENE)
+
 ---
 
 ### 2.7 타임라인 & 편집 API (Timeline)
@@ -1724,8 +1761,8 @@ API /api/scenes/{id}/merge
 {
   "code": "ACCEPTED",
   "data": {
-    "jobId": "job_scene_merge_123",
-    "status": "pending"
+    "jobId": 1001,
+    "status": "PENDING"
   }
 }
 ```
@@ -1782,8 +1819,8 @@ API /api/projects/{id}/merge
 {
   "code": "ACCEPTED",
   "data": {
-    "jobId": "job_project_merge_456",
-    "status": "pending"
+    "jobId": 2001,
+    "status": "PENDING"
   }
 }
 ```
@@ -1972,7 +2009,7 @@ WS /ws/projects/{projectId}?token=<JWT>
 {
   "type": "job.done",
   "data": {
-    "jobId": "job_123",
+    "jobId": 123,
     "target": { "type": "NODE", "id": 301 },
     "resultUrl": "https://..."
   }
@@ -1983,9 +2020,8 @@ WS /ws/projects/{projectId}?token=<JWT>
 {
   "type": "job.done",
   "data": {
-    "jobId": "job_scene_merge_123",
-    "target": { "type": "SCENE_VIDEO", "id": 401 },
-    "sceneId": 201,
+    "jobId": 1001,
+    "target": { "type": "SCENE", "id": 201 },
     "resultUrl": "https://..."
   }
 }
@@ -1995,9 +2031,8 @@ WS /ws/projects/{projectId}?token=<JWT>
 {
   "type": "job.failed",
   "data": {
-    "jobId": "job_scene_merge_123",
-    "target": { "type": "SCENE_VIDEO", "id": 401 },
-    "sceneId": 201,
+    "jobId": 1001,
+    "target": { "type": "SCENE", "id": 201 },
     "error": {
       "code": "MERGE_FAILED",
       "message": "Scene merge failed."
