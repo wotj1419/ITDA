@@ -1,7 +1,8 @@
-# Temporary files
+﻿# Temporary files
 *.tmp
 *.bak
 *~
+infraSetting.md
 
 # Generated files
 *.pdf
