@@ -19,6 +19,12 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: true },
   },
   {
+    path: '/favorites',
+    name: 'favorites',
+    component: () => import('../pages/FavoritesPage.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
     path: '/projects/:id',
     name: 'project-detail',
     component: () => import('../pages/ProjectDetailPage.vue'),
@@ -40,6 +46,18 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/:pathMatch(.*)*',
     redirect: '/',
+  },
+  {
+    path: '/profile',
+    name: 'profile',
+    component: () => import('../pages/ProfilePage.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
+    path: '/profile/edit',
+    name: 'profile-edit',
+    component: () => import('../pages/ProfileEditPage.vue'),
+    meta: { requiresAuth: true },
   },
 ]
 

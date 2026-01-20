@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import type { User, LoginRequest, SignupRequest } from '../types'
+import { authService } from '../services'
 
 export const useAuthStore = defineStore('auth', () => {
   // State
@@ -12,43 +13,28 @@ export const useAuthStore = defineStore('auth', () => {
 
   // Actions
   async function login(credentials: LoginRequest): Promise<void> {
-    // Mock login - replace with actual API call
-    await new Promise((resolve) => setTimeout(resolve, 500))
+    const { user: userData, token } = await authService.login(credentials);
 
-    // Mock response
-    const mockUser: User = {
-      userId: 1,
-      email: credentials.email,
-      name: 'Minjun Kim',
-      profileImage: 'https://i.pravatar.cc/150?u=user123',
-    }
-
-    const mockToken = 'mock_access_token_' + Date.now()
-
-    user.value = mockUser
-    accessToken.value = mockToken
-    localStorage.setItem('accessToken', mockToken)
+    user.value = userData;
+    accessToken.value = token;
+    localStorage.setItem('accessToken', token);
   }
 
   async function signup(data: SignupRequest): Promise<void> {
-    // Mock signup - replace with actual API call
-    await new Promise((resolve) => setTimeout(resolve, 500))
-
+    await authService.signup(data);
     // Auto-login after signup
-    await login({ email: data.email, password: data.password })
+    await login({ email: data.email, password: data.password });
   }
 
   async function fetchMe(): Promise<void> {
-    if (!accessToken.value) return
+    if (!accessToken.value) return;
 
-    // Mock fetch - replace with actual API call
-    await new Promise((resolve) => setTimeout(resolve, 300))
-
-    user.value = {
-      userId: 1,
-      email: 'minjun@example.com',
-      name: 'Minjun Kim',
-      profileImage: 'https://i.pravatar.cc/150?u=user123',
+    try {
+      const userData = await authService.fetchMe();
+      user.value = userData;
+    } catch (error) {
+      console.error('Failed to fetch user', error);
+      logout();
     }
   }
 

@@ -48,6 +48,10 @@ const memberAvatars = computed(() => {
   }
   return avatars
 })
+
+defineEmits<{
+  (e: 'toggle-favorite', projectId: number): void
+}>()
 </script>
 
 <template>
@@ -103,9 +107,11 @@ const memberAvatars = computed(() => {
 
     <!-- Favorite Icon -->
     <Star
-      v-if="isFavorite"
+      v-if="project"
       class="favorite-icon"
       :fill="isFavorite ? 'currentColor' : 'none'"
+      :class="{ active: isFavorite }"
+      @click.prevent.stop="$emit('toggle-favorite', project.projectId)"
     />
   </RouterLink>
 </template>
@@ -223,6 +229,7 @@ const memberAvatars = computed(() => {
 }
 
 /* Favorite */
+/* Favorite */
 .favorite-icon {
   position: absolute;
   top: 0.75rem;
@@ -231,5 +238,11 @@ const memberAvatars = computed(() => {
   height: 20px;
   color: var(--rose-400);
   filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.2));
+  cursor: pointer;
+  z-index: 10;
+}
+
+.favorite-icon:hover {
+  transform: scale(1.1);
 }
 </style>

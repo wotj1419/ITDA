@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, onUnmounted } from 'vue'
+import { computed } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import { useUIStore } from '../../stores/ui'
 import { useAuthStore } from '../../stores/auth'
@@ -10,8 +10,7 @@ import {
   Users,
   Trash2,
   Settings,
-  ChevronRight,
-  ChevronLeft,
+  Menu,
 } from 'lucide-vue-next'
 
 const route = useRoute()
@@ -20,39 +19,6 @@ const authStore = useAuthStore()
 
 // Keyboard shortcut (Ctrl+B)
 useSidebarShortcut()
-
-// Hover edge trigger state
-const isEdgeHovered = ref(false)
-
-// Auto-expand timer (300ms delay)
-let hoverTimer: ReturnType<typeof setTimeout> | null = null
-
-const handleSidebarEnter = () => {
-  // Only auto-expand if sidebar is collapsed and not pinned
-  if (!uiStore.sidebarExpanded && !uiStore.sidebarPinned) {
-    hoverTimer = setTimeout(() => {
-      uiStore.peekSidebar()
-    }, 300)
-  }
-}
-
-const handleSidebarLeave = () => {
-  // Clear timer if leaving before delay
-  if (hoverTimer) {
-    clearTimeout(hoverTimer)
-    hoverTimer = null
-  }
-  // Auto-collapse if not pinned
-  uiStore.unpeekSidebar()
-  isEdgeHovered.value = false
-}
-
-// Cleanup timer on unmount
-onUnmounted(() => {
-  if (hoverTimer) {
-    clearTimeout(hoverTimer)
-  }
-})
 
 const navItems = [
   { to: '/dashboard', icon: Folder, label: 'All Projects', tooltip: 'All Projects' },
@@ -75,13 +41,17 @@ const sidebarClasses = computed(() => [
 </script>
 
 <template>
-  <aside
-    :class="sidebarClasses"
-    @mouseenter="handleSidebarEnter"
-    @mouseleave="handleSidebarLeave"
-  >
-    <!-- Logo -->
+  <aside :class="sidebarClasses">
+    <!-- Header with Toggle & Logo -->
     <div class="sidebar-header">
+      <button
+        class="menu-btn"
+        @click="uiStore.toggleSidebar"
+        :title="uiStore.sidebarExpanded ? 'Collapse' : 'Expand'"
+      >
+        <Menu class="icon-md" />
+      </button>
+
       <RouterLink to="/" class="sidebar-logo">
         <div class="logo-icon"></div>
         <span class="sidebar-text logo-text">AI Movie Studio</span>
@@ -115,35 +85,27 @@ const sidebarClasses = computed(() => [
 
     <!-- User Info -->
     <div class="sidebar-user">
-      <div
-        class="user-avatar"
-        :style="{ backgroundImage: authStore.user?.profileImage ? `url(${authStore.user.profileImage})` : undefined }"
-      >
-        <span v-if="!authStore.user?.profileImage">{{ authStore.user?.name?.[0] || 'U' }}</span>
-      </div>
-      <div class="user-info-text">
-        <div class="user-name truncate">{{ authStore.user?.name || 'Guest' }}</div>
-        <div class="user-email truncate">{{ authStore.user?.email || '' }}</div>
-      </div>
-      <button class="btn-icon user-info-text">
+      <RouterLink to="/profile" class="user-link">
+        <div
+          class="user-avatar"
+          :style="{
+            backgroundImage: authStore.user?.profileImage
+              ? `url(${authStore.user.profileImage})`
+              : undefined,
+          }"
+        >
+          <span v-if="!authStore.user?.profileImage">{{
+            authStore.user?.name?.[0] || 'U'
+          }}</span>
+        </div>
+        <div class="user-info-text">
+          <div class="user-name">{{ authStore.user?.name || 'Guest' }}</div>
+          <div class="user-email">{{ authStore.user?.email || '' }}</div>
+        </div>
+      </RouterLink>
+      <RouterLink to="/profile/edit" class="btn-icon user-info-text settings-btn">
         <Settings class="icon-sm" />
-      </button>
-    </div>
-
-    <!-- Hover Edge Zone for Toggle -->
-    <div
-      class="sidebar-edge-zone"
-      @mouseenter="isEdgeHovered = true"
-      @mouseleave="isEdgeHovered = false"
-    >
-      <button
-        :class="['sidebar-toggle', { visible: isEdgeHovered }]"
-        :title="uiStore.sidebarExpanded ? 'Collapse (Ctrl+B)' : 'Expand (Ctrl+B)'"
-        @click="uiStore.toggleSidebar"
-      >
-        <ChevronLeft v-if="uiStore.sidebarExpanded" class="icon-xs" />
-        <ChevronRight v-else class="icon-xs" />
-      </button>
+      </RouterLink>
     </div>
   </aside>
 </template>
@@ -189,6 +151,30 @@ const sidebarClasses = computed(() => [
 .sidebar-header {
   padding: 1rem;
   border-bottom: 1px solid var(--rose-100);
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  height: 64px; /* Fixed height for consistency */
+}
+
+.menu-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px; /* Aligns with nav-item icon center */
+  height: 40px;
+  border: none;
+  background: transparent;
+  color: var(--gray-500);
+  border-radius: 50%;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.menu-btn:hover {
+  background: var(--rose-50);
+  color: var(--rose-600);
 }
 
 .sidebar-logo {
@@ -197,18 +183,35 @@ const sidebarClasses = computed(() => [
   gap: 0.75rem;
   text-decoration: none;
   color: var(--gray-900);
+  flex: 1;
+  overflow: hidden; /* Hide logo when collapsed */
 }
 
 .logo-icon {
-  width: 32px;
-  height: 32px;
+  width: 24px;
+  height: 24px;
   background: linear-gradient(135deg, var(--rose-400), var(--rose-500));
-  border-radius: 8px;
+  border-radius: 6px;
   flex-shrink: 0;
 }
 
 .logo-text {
   font-weight: 700;
+  font-size: 1rem;
+  white-space: nowrap;
+}
+
+/* Hide logo text/icon in collapsed mode if needed, or adjust alignment */
+.sidebar-collapsed .logo-text,
+.sidebar-collapsed .logo-icon {
+  opacity: 0;
+  pointer-events: none;
+  width: 0;
+  margin: 0;
+}
+
+.sidebar-collapsed .menu-btn {
+  margin: 0;
 }
 
 /* Navigation */
@@ -230,6 +233,7 @@ const sidebarClasses = computed(() => [
   text-decoration: none;
   transition: all 0.2s ease;
   position: relative;
+  height: 44px; /* Fixed height */
 }
 
 .nav-item:hover {
@@ -246,6 +250,7 @@ const sidebarClasses = computed(() => [
   width: 20px;
   height: 20px;
   flex-shrink: 0;
+  /* Center icon in collapsed mode handled by flex & padding */
 }
 
 .nav-label {
@@ -322,6 +327,7 @@ const sidebarClasses = computed(() => [
   align-items: center;
   gap: 0.75rem;
   position: relative;
+  height: 72px;
 }
 
 .user-avatar {
@@ -337,6 +343,29 @@ const sidebarClasses = computed(() => [
   font-weight: 600;
   color: var(--rose-600);
   flex-shrink: 0;
+}
+
+.user-link {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0; /* Allow shrinking */
+  text-decoration: none;
+  color: inherit;
+  cursor: pointer;
+  z-index: 10;
+  margin-right: 0.5rem;
+  /* flex: 1 removed to prevent pushing settings button to the end */
+}
+
+/* Settings button takes only necessary space */
+.settings-btn {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  cursor: pointer;
+  z-index: 20; /* Higher than user link */
 }
 
 .user-info-text {
@@ -376,50 +405,6 @@ const sidebarClasses = computed(() => [
   background: var(--gray-100);
 }
 
-/* Sidebar Edge Zone - Hover Trigger */
-.sidebar-edge-zone {
-  position: absolute;
-  right: 0;
-  top: 0;
-  bottom: 0;
-  width: 30px;
-  z-index: 10;
-  cursor: pointer;
-}
-
-/* Sidebar Toggle */
-.sidebar-toggle {
-  position: absolute;
-  right: -16px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 32px;
-  height: 32px;
-  background: white;
-  border: 1px solid var(--rose-200);
-  border-radius: 50%;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--gray-500);
-  opacity: 0;
-  visibility: hidden;
-  transition: all 0.2s ease;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-}
-
-.sidebar-toggle.visible {
-  opacity: 1;
-  visibility: visible;
-}
-
-.sidebar-toggle:hover {
-  background: var(--rose-50);
-  color: var(--rose-500);
-  transform: translateY(-50%) scale(1.1);
-}
-
 .icon-xs {
   width: 16px;
   height: 16px;
@@ -428,5 +413,10 @@ const sidebarClasses = computed(() => [
 .icon-sm {
   width: 20px;
   height: 20px;
+}
+
+.icon-md {
+  width: 24px;
+  height: 24px;
 }
 </style>
