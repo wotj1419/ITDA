@@ -71,6 +71,32 @@ type EdgeMeta = {
 // =============================================================================
 
 type SceneNode = Node<AnyNodeData>;
+type NodePositionSnapshot = Array<{ id: string; position: { x: number; y: number } }>;
+
+const MAX_POSITION_HISTORY = 20;
+
+function buildPositionSnapshot(nodes: SceneNode[]): NodePositionSnapshot {
+    return nodes.map((node) => ({
+        id: node.id,
+        position: { x: node.position.x, y: node.position.y },
+    }));
+}
+
+function snapshotsEqual(
+    a: NodePositionSnapshot,
+    b: NodePositionSnapshot
+): boolean {
+    if (a.length !== b.length) return false;
+    const positions = new Map(a.map((item) => [item.id, item.position]));
+    return b.every((item) => {
+        const existing = positions.get(item.id);
+        return (
+            existing !== undefined &&
+            existing.x === item.position.x &&
+            existing.y === item.position.y
+        );
+    });
+}
 
 // =============================================================================
 // Store
@@ -84,6 +110,7 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
     const nodes = ref<SceneNode[]>([]);
     const edges = ref<Edge[]>([]);
     const selectedNodeId = ref<string | null>(null);
+    const positionHistory = ref<NodePositionSnapshot[]>([]);
 
     // end shot 선택 모드 (트랜지션 영상용)
     const selectionMode = ref<'none' | 'selectEndShot'>('none');
@@ -147,6 +174,7 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
             edges.value = [];
 
             // 씬 헤더 노드 자동 생성
+            positionHistory.value = [];
             ensureSceneHeaderNode();
             // 마스터 노드 자동 생성
             ensureActiveMasterNode();
@@ -354,6 +382,14 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
     }
 
     function deleteNode(nodeId: string): void {
+        const targetNode = nodes.value.find((n) => n.id === nodeId);
+        if (
+            !targetNode ||
+            targetNode.data?.type === NodeType.SCENE_HEADER ||
+            targetNode.data?.type === NodeType.MASTER_IMAGE
+        )
+            return;
+
         // 하위 노드 재귀 삭제
         const descendants = getDescendantIds(nodeId);
         const toDelete = [nodeId, ...descendants];
@@ -378,6 +414,35 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
             childId,
             ...getDescendantIds(childId),
         ]);
+    }
+
+    // ==========================================================================
+    // Actions - Position History
+    // ==========================================================================
+
+    function pushPositionSnapshot(): void {
+        if (!nodes.value.length) return;
+        const snapshot = buildPositionSnapshot(nodes.value);
+        const lastSnapshot =
+            positionHistory.value[positionHistory.value.length - 1];
+        if (lastSnapshot && snapshotsEqual(lastSnapshot, snapshot)) return;
+
+        positionHistory.value.push(snapshot);
+        if (positionHistory.value.length > MAX_POSITION_HISTORY) {
+            positionHistory.value.shift();
+        }
+    }
+
+    function undoLastMove(): void {
+        const snapshot = positionHistory.value.pop();
+        if (!snapshot) return;
+
+        snapshot.forEach((item) => {
+            const node = nodes.value.find((n) => n.id === item.id);
+            if (node) {
+                node.position = { ...item.position };
+            }
+        });
     }
 
     // ==========================================================================
@@ -637,6 +702,7 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
                 : generateMockSceneNodes(sceneIdParam);
             nodes.value = mockData.nodes;
             edges.value = mockData.edges;
+            positionHistory.value = [];
         } finally {
             isLoading.value = false;
         }
@@ -649,6 +715,7 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
     function clearNodes(): void {
         nodes.value = [];
         edges.value = [];
+        positionHistory.value = [];
         selectedNodeId.value = null;
         sceneId.value = null;
     }
@@ -688,6 +755,8 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
         // Actions - Update/Delete
         updateNode,
         deleteNode,
+        pushPositionSnapshot,
+        undoLastMove,
 
         // Actions - Edges
         addEdge,

@@ -200,8 +200,8 @@ export const NODE_WIDTHS: Record<NodeType, number> = {
 export const NODE_HEIGHTS: Record<NodeType, number> = {
     [NodeType.SCENE_HEADER]: 120,
     [NodeType.MASTER_IMAGE]: 200,
-    [NodeType.STORYBOARD_GRID]: 180,
-    [NodeType.SHOT]: 180,
+    [NodeType.STORYBOARD_GRID]: 250,
+    [NodeType.SHOT]: 250,
     [NodeType.VIDEO]: 180,
 };
 

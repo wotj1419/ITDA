@@ -76,6 +76,7 @@ const totalDuration = computed(() => {
 // =============================================================================
 
 onMounted(async () => {
+  window.addEventListener('keydown', handleEditorKeydown);
   if (projectId.value && sceneId.value) {
     await Promise.all([
       projectStore.loadProject(projectId.value),
@@ -92,6 +93,7 @@ onMounted(async () => {
 });
 
 onUnmounted(() => {
+  window.removeEventListener('keydown', handleEditorKeydown);
   // 페이지 이탈 시 협업 방 퇴장
   collabStore.leaveRoom();
   nodeStore.clearNodes();
@@ -111,6 +113,32 @@ watch([projectId, sceneId], async ([, newSceneId]) => {
 /**
  * 노드 선택
  */
+function isEditableTarget(target: EventTarget | null): boolean {
+  const element = target as HTMLElement | null;
+  if (!element) return false;
+  const tagName = element.tagName;
+  return tagName === 'INPUT' || tagName === 'TEXTAREA' || element.isContentEditable;
+}
+
+function handleEditorKeydown(event: KeyboardEvent): void {
+  if (isEditableTarget(event.target)) return;
+
+  const key = event.key.toLowerCase();
+  if (key === 'delete' || key === 'backspace') {
+    const selectedId = nodeStore.selectedNodeId;
+    if (selectedId) {
+      event.preventDefault();
+      nodeStore.deleteNode(selectedId);
+    }
+    return;
+  }
+
+  if ((event.ctrlKey || event.metaKey) && key === 'z') {
+    event.preventDefault();
+    nodeStore.undoLastMove();
+  }
+}
+
 function handleNodeSelect(nodeId: string | null): void {
   nodeStore.selectNode(nodeId);
   if (nodeId) {

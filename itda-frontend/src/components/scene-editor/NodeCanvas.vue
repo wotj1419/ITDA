@@ -39,7 +39,7 @@ const emit = defineEmits<{
 
 const nodeStore = useSceneNodeStore();
 const { getLayoutedElements } = useAutoLayout();
-const { fitView, onNodeClick } = useVueFlow();
+const { fitView, onNodeClick, onNodeDragStart, onSelectionDragStart } = useVueFlow();
 
 // =============================================================================
 // Lifecycle
@@ -108,6 +108,13 @@ onNodeClick(({ node }) => {
   nodeStore.selectNode(node.id);
   emit('node-select', node.id);
 });
+
+const handleNodeDragStart = () => {
+  nodeStore.pushPositionSnapshot();
+};
+
+onNodeDragStart(handleNodeDragStart);
+onSelectionDragStart(handleNodeDragStart);
 
 function handlePaneClick(): void {
   // 캔버스 빈 영역 클릭 시 선택 해제
