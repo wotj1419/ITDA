@@ -7,6 +7,7 @@ import { useSceneStore } from '../stores/scene'
 import { useCharacterStore } from '../stores/character'
 import { useUIStore } from '../stores/ui'
 import { useCollabStore } from '../stores/collab'
+import { useScenarioStore } from '../stores/scenario'
 import type { ObjectSheet, Scene, SceneStatus } from '../types'
 import { fetchNodesBySceneId } from '../services/mock/nodes'
 
@@ -15,6 +16,7 @@ import Card from '../components/common/Card.vue'
 import Button from '../components/common/Button.vue'
 import Badge from '../components/common/Badge.vue'
 import SceneCard from '../components/project/SceneCard.vue'
+import ScenarioDrawer from '../components/scenario/ScenarioDrawer.vue'
 import CharacterCard from '../components/project/CharacterCard.vue'
 import AddCharacterModal from '../components/project/AddCharacterModal.vue'
 
@@ -24,6 +26,7 @@ const sceneStore = useSceneStore()
 const characterStore = useCharacterStore()
 const uiStore = useUIStore()
 const collabStore = useCollabStore()
+const scenarioStore = useScenarioStore()
 
 // State
 type ProjectTab = 'story' | 'scenes' | 'characters' | 'timeline' | 'settings'
@@ -55,38 +58,6 @@ const tabItems: { key: ProjectTab; label: string }[] = [
   { key: 'scenes', label: 'Scenes' },
   { key: 'characters', label: 'Characters' },
 ]
-
-const genreOptions = [
-  { value: 'sf', label: 'SF' },
-  { value: 'fantasy', label: 'Fantasy' },
-  { value: 'romance', label: 'Romance' },
-  { value: 'action', label: 'Action' },
-]
-
-const moodOptions = [
-  { value: 'tense', label: 'Tense' },
-  { value: 'epic', label: 'Epic' },
-  { value: 'hopeful', label: 'Hopeful' },
-  { value: 'docu', label: 'Documentary' },
-]
-
-const sceneCountOptions = [3, 4, 5, 6]
-
-const storyForm = ref({
-  genre: 'sf',
-  mood: 'tense',
-  sceneCount: 5,
-  synopsis: '',
-})
-
-const canGenerateScenes = computed(() =>
-  Boolean(
-    storyForm.value.genre &&
-    storyForm.value.mood &&
-    storyForm.value.sceneCount > 0 &&
-    storyForm.value.synopsis.trim()
-  )
-)
 
 // Computed
 const projectId = computed(() => Number(route.params.id))
@@ -311,31 +282,6 @@ const handleDragOver = (event: DragEvent, targetScene: Scene) => {
   }
 }
 
-const handleGenerateScenes = async () => {
-  if (!canGenerateScenes.value || !projectId.value) return
-
-  const generated = await sceneStore.generateScenes({
-    genre: storyForm.value.genre,
-    mood: storyForm.value.mood,
-    sceneCount: storyForm.value.sceneCount,
-    synopsis: storyForm.value.synopsis.trim(),
-  })
-
-  if (generated.length > 0) {
-    uiStore.showToast({
-      type: 'success',
-      title: 'Scenes generated',
-      message: `${generated.length} scenes added.`,
-    })
-  } else {
-    uiStore.showToast({
-      type: 'error',
-      title: 'No scenes generated',
-      message: 'Please try again.',
-    })
-  }
-}
-
 // Add new scene
 const handleAddScene = async () => {
   const newScene = await sceneStore.addScene({
@@ -416,71 +362,17 @@ const handleDeleteCharacter = async (character: ObjectSheet) => {
 
       <!-- Story Tab -->
       <div v-if="activeTab === 'story'" class="tab-content">
-        <Card class="mb-6">
-          <div class="flex items-center gap-2 mb-4">
+        <!-- AI Scenario Generation Button -->
+        <div class="scenario-trigger mb-6">
+          <Button variant="primary" @click="scenarioStore.openDrawer()">
             <Sparkles class="icon-sm" />
-            <h3 class="h3">Story Prompt</h3>
-          </div>
-
-          <div class="form-row mb-4">
-            <div class="form-group">
-              <label class="form-label">Genre</label>
-              <select v-model="storyForm.genre" class="form-input form-select">
-                <option
-                  v-for="option in genreOptions"
-                  :key="option.value"
-                  :value="option.value"
-                >
-                  {{ option.label }}
-                </option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label class="form-label">Mood</label>
-              <select v-model="storyForm.mood" class="form-input form-select">
-                <option
-                  v-for="option in moodOptions"
-                  :key="option.value"
-                  :value="option.value"
-                >
-                  {{ option.label }}
-                </option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label class="form-label">Scene Count</label>
-              <select
-                v-model.number="storyForm.sceneCount"
-                class="form-input form-select"
-              >
-                <option v-for="count in sceneCountOptions" :key="count" :value="count">
-                  {{ count }}
-                </option>
-              </select>
-            </div>
-          </div>
-
-          <div class="form-group">
-            <label class="form-label">Synopsis</label>
-            <textarea
-              v-model="storyForm.synopsis"
-              class="form-input form-textarea"
-              rows="4"
-              placeholder="Write a short story outline to guide scene generation."
-            ></textarea>
-          </div>
-
-          <Button
-            variant="primary"
-            class="w-full"
-            :loading="sceneStore.isGenerating"
-            :disabled="!canGenerateScenes || sceneStore.isGenerating"
-            @click="handleGenerateScenes"
-          >
-            <Sparkles class="icon-sm" />
-            Generate Scenes with AI
+            AI 시나리오 생성
           </Button>
-        </Card>
+          <p class="scenario-hint">AI가 장르, 분위기를 바탕으로 씬별 스토리를 자동 생성합니다.</p>
+        </div>
+
+        <!-- Scenario Drawer (responsive sidebar/modal) -->
+        <ScenarioDrawer />
 
         <!-- Scene List -->
         <div class="section-header">
@@ -1251,6 +1143,23 @@ const handleDeleteCharacter = async (character: ObjectSheet) => {
 .add-character-text {
   color: var(--gray-500);
   font-size: 0.875rem;
+}
+
+/* Scenario Trigger */
+.scenario-trigger {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 1.25rem;
+  background: linear-gradient(135deg, var(--rose-50) 0%, white 100%);
+  border: 1px solid var(--rose-100);
+  border-radius: 12px;
+}
+
+.scenario-hint {
+  font-size: 0.8125rem;
+  color: var(--gray-500);
+  margin: 0;
 }
 
 /* Utilities */
