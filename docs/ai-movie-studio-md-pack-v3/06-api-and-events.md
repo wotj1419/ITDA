@@ -110,7 +110,7 @@
 {
   "type": "job.done",
   "data": {
-    "jobId": "job_123",
+    "jobId": 123,
     "target": { "type": "NODE", "id": 301 },
     "resultUrl": "https://..."
   }
@@ -123,7 +123,7 @@
 {
   "type": "job.failed",
   "data": {
-    "jobId": "job_123",
+    "jobId": 123,
     "target": { "type": "NODE", "id": 301 },
     "error": { "code": "GENERATION_FAILED", "message": "Generation failed." }
   }

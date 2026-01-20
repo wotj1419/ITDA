@@ -1,10 +1,6 @@
 CREATE DATABASE IF NOT EXISTS itda_local;
 USE itda_local;
 
--- AI Movie Studio (itda) 데이터베이스 스키마
--- MySQL 8.0+
--- 기준: schema-reference.sql + 현재 코드베이스 반영
-
 -- ============================================
 -- Drop order (FK-safe)
 -- ============================================
@@ -124,7 +120,7 @@ CREATE TABLE nodes (
     order_index INT NOT NULL DEFAULT 0,
     position_x INT,
     position_y INT,
-    data_json JSON,  -- 프롬프트, 설정 등$
+    data_json JSON,  -- 프롬프트, 설정 등
     created_by BIGINT,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -170,6 +166,7 @@ CREATE TABLE generation_jobs (
     scene_id BIGINT,
     node_id BIGINT,  -- 추가: 어떤 노드의 작업인지
     job_type VARCHAR(20) NOT NULL,  -- IMAGE_GENERATION, VIDEO_GENERATION, SCENE_MERGE, PROJECT_MERGE
+    idempotency_key VARCHAR(128),
     status VARCHAR(20) NOT NULL DEFAULT 'PENDING',  -- PENDING, RUNNING, SUCCEEDED, FAILED
     request_json JSON,  -- 입력 파라미터
     result_asset_id BIGINT,
@@ -182,6 +179,7 @@ CREATE TABLE generation_jobs (
     KEY idx_jobs_scene (scene_id),
     KEY idx_jobs_status (status),
     KEY idx_jobs_node (node_id),
+    UNIQUE KEY uk_jobs_idempotency (idempotency_key),
     CONSTRAINT fk_jobs_project FOREIGN KEY (project_id) REFERENCES projects(id),
     CONSTRAINT fk_jobs_scene FOREIGN KEY (scene_id) REFERENCES scenes(id),
     CONSTRAINT fk_jobs_node FOREIGN KEY (node_id) REFERENCES nodes(id),
@@ -196,7 +194,7 @@ CREATE TABLE generation_jobs (
 CREATE TABLE timeline_items (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,
     project_id BIGINT NOT NULL,
-    scene_id BIGINT,  -- 추가: 씬 레벨 타임라인 지원$
+    scene_id BIGINT,  -- 추가: 씬 레벨 타임라인 지원
     video_clip_id BIGINT NOT NULL,
     order_index INT NOT NULL DEFAULT 0,
     created_by BIGINT,
