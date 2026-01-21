@@ -15,6 +15,8 @@ public interface SceneMapper {
 
     Optional<Scene> findById(@Param("id") Long id);
 
+    Optional<Scene> findByIdForUpdate(@Param("id") Long id);
+
     List<SceneSummary> findAllByProjectId(@Param("projectId") Long projectId);
 
     int updateScene(@Param("id") Long id,

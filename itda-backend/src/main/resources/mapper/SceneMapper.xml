@@ -34,6 +34,13 @@
         WHERE id = #{id}
     </select>
 
+    <select id="findByIdForUpdate" resultMap="SceneResultMap">
+        SELECT id, project_id, title, description, order_index, active_master_node_id, created_at, updated_at
+        FROM scenes
+        WHERE id = #{id}
+        FOR UPDATE
+    </select>
+
     <select id="findAllByProjectId" resultMap="SceneSummaryMap">
         SELECT id AS scene_id, title, order_index
         FROM scenes

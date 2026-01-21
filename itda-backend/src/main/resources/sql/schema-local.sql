@@ -141,21 +141,32 @@ CREATE TABLE assets (
 CREATE TABLE nodes (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,
     scene_id BIGINT NOT NULL,
-    node_type VARCHAR(10) NOT NULL,  -- MASTER, GRID, SHOT, VIDEO
+    node_type VARCHAR(20) NOT NULL,  -- MASTER, GRID, SHOT, VIDEO (SCENE_HEADER는 가상 노드)
     parent_node_id BIGINT,
     order_index INT NOT NULL DEFAULT 0,
-    position_x INT,
-    position_y INT,
-    data_json JSON,  -- 프롬프트, 설정 등
+    position_x FLOAT,                -- 캔버스 X 좌표
+    position_y FLOAT,                -- 캔버스 Y 좌표
+    prompt TEXT,                     -- AI 프롬프트
+    data_json JSON,                  -- settings JSON (스타일, 비율 등)
+    status VARCHAR(20) NOT NULL DEFAULT 'PENDING',  -- PENDING, RUNNING, SUCCEEDED, FAILED
+    is_active TINYINT(1) NOT NULL DEFAULT 0,        -- MASTER용 활성 플래그
+    is_confirmed TINYINT(1) NOT NULL DEFAULT 0,     -- VIDEO용 확정 플래그
+    content_url VARCHAR(500),        -- 생성 결과 URL
+    start_shot_node_id BIGINT,       -- VIDEO 시작 샷 노드 ID
+    end_shot_node_id BIGINT,         -- VIDEO 종료 샷 노드 ID
     created_by BIGINT,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     KEY idx_nodes_scene (scene_id),
     KEY idx_nodes_parent (parent_node_id),
     KEY idx_nodes_scene_order (scene_id, order_index),
+    KEY idx_nodes_status (status),
+    KEY idx_nodes_start_shot (start_shot_node_id),
     CONSTRAINT fk_nodes_scene FOREIGN KEY (scene_id) REFERENCES scenes(id) ON DELETE CASCADE,
     CONSTRAINT fk_nodes_parent FOREIGN KEY (parent_node_id) REFERENCES nodes(id) ON DELETE CASCADE,
-    CONSTRAINT fk_nodes_user FOREIGN KEY (created_by) REFERENCES users(id)
+    CONSTRAINT fk_nodes_user FOREIGN KEY (created_by) REFERENCES users(id),
+    CONSTRAINT fk_nodes_start_shot FOREIGN KEY (start_shot_node_id) REFERENCES nodes(id) ON DELETE SET NULL,
+    CONSTRAINT fk_nodes_end_shot FOREIGN KEY (end_shot_node_id) REFERENCES nodes(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- scenes.active_master_node_id FK 추가

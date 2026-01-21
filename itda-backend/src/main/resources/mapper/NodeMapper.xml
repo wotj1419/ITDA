@@ -1,0 +1,132 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.itda.backend.node.repository.NodeMapper">
+
+    <!-- ResultMap 정의 -->
+    <resultMap id="NodeResultMap" type="com.itda.backend.node.domain.Node">
+        <id property="id" column="id"/>
+        <result property="sceneId" column="scene_id"/>
+        <result property="nodeType" column="node_type"
+                javaType="com.itda.backend.node.domain.NodeType"/>
+        <result property="parentNodeId" column="parent_node_id"/>
+        <result property="orderIndex" column="order_index"/>
+        <result property="positionX" column="position_x"/>
+        <result property="positionY" column="position_y"/>
+        <result property="prompt" column="prompt"/>
+        <result property="dataJson" column="data_json"/>
+        <result property="status" column="status"
+                javaType="com.itda.backend.node.domain.NodeStatus"/>
+        <result property="isActive" column="is_active"/>
+        <result property="isConfirmed" column="is_confirmed"/>
+        <result property="contentUrl" column="content_url"/>
+        <result property="startShotNodeId" column="start_shot_node_id"/>
+        <result property="endShotNodeId" column="end_shot_node_id"/>
+        <result property="createdBy" column="created_by"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="updatedAt" column="updated_at"/>
+    </resultMap>
+
+    <!-- 공통 컬럼 -->
+    <sql id="nodeColumns">
+        id, scene_id, node_type, parent_node_id, order_index,
+        position_x, position_y, prompt, data_json, status,
+        is_active, is_confirmed, content_url,
+        start_shot_node_id, end_shot_node_id,
+        created_by, created_at, updated_at
+    </sql>
+
+    <!-- INSERT -->
+    <insert id="insertNode" parameterType="com.itda.backend.node.domain.Node"
+            useGeneratedKeys="true" keyProperty="id" keyColumn="id">
+        INSERT INTO nodes (
+            scene_id, node_type, parent_node_id, order_index,
+            position_x, position_y, prompt, data_json, status,
+            is_active, is_confirmed, content_url,
+            start_shot_node_id, end_shot_node_id,
+            created_by
+        ) VALUES (
+            #{sceneId}, #{nodeType}, #{parentNodeId}, #{orderIndex},
+            #{positionX}, #{positionY}, #{prompt}, #{dataJson}, #{status},
+            #{isActive}, #{isConfirmed}, #{contentUrl},
+            #{startShotNodeId}, #{endShotNodeId},
+            #{createdBy}
+        )
+    </insert>
+
+    <!-- SELECT by ID -->
+    <select id="findById" resultMap="NodeResultMap">
+        SELECT <include refid="nodeColumns"/>
+        FROM nodes
+        WHERE id = #{id}
+    </select>
+
+    <!-- SELECT by Scene ID -->
+    <select id="findAllBySceneId" resultMap="NodeResultMap">
+        SELECT <include refid="nodeColumns"/>
+        FROM nodes
+        WHERE scene_id = #{sceneId}
+        ORDER BY order_index ASC, id ASC
+    </select>
+
+    <!-- UPDATE -->
+    <update id="updateNode" parameterType="com.itda.backend.node.domain.Node">
+        UPDATE nodes
+        SET prompt = #{prompt},
+            data_json = #{dataJson},
+            status = #{status},
+            is_active = #{isActive},
+            is_confirmed = #{isConfirmed},
+            content_url = #{contentUrl},
+            start_shot_node_id = #{startShotNodeId},
+            end_shot_node_id = #{endShotNodeId}
+        WHERE id = #{id}
+    </update>
+
+    <!-- DELETE -->
+    <delete id="deleteById">
+        DELETE FROM nodes
+        WHERE id = #{id}
+    </delete>
+
+    <!-- COUNT MASTER nodes by Scene ID -->
+    <select id="countMasterNodesBySceneId" resultType="int">
+        SELECT COUNT(*)
+        FROM nodes
+        WHERE scene_id = #{sceneId}
+          AND node_type = 'MASTER'
+    </select>
+
+    <!-- UPDATE positions (bulk) -->
+    <update id="updatePositions">
+        UPDATE nodes
+        SET
+            position_x = CASE id
+                <foreach collection="positions" item="pos">
+                    WHEN #{pos.nodeId} THEN #{pos.x}
+                </foreach>
+                ELSE position_x
+            END,
+            position_y = CASE id
+                <foreach collection="positions" item="pos">
+                    WHEN #{pos.nodeId} THEN #{pos.y}
+                </foreach>
+                ELSE position_y
+            END
+        WHERE scene_id = #{sceneId}
+          AND id IN
+            <foreach collection="positions" item="pos" open="(" separator="," close=")">
+                #{pos.nodeId}
+            </foreach>
+    </update>
+
+    <!-- MAX order_index by Scene ID -->
+    <select id="findMaxOrderIndex" resultType="int">
+        SELECT COALESCE(MAX(order_index), 0)
+        FROM nodes
+        WHERE scene_id = #{sceneId}
+    </select>
+
+</mapper>
