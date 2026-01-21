@@ -19,11 +19,14 @@ public class SwaggerConfig {
 
     @Bean
     public OpenAPI openAPI() {
+        Components components = new Components()
+                .addSecuritySchemes(SECURITY_SCHEME_NAME, securityScheme());
+        SwaggerExamples.registerResponses(components);
+
         return new OpenAPI()
                 .info(apiInfo())
                 .addSecurityItem(new SecurityRequirement().addList(SECURITY_SCHEME_NAME))
-                .components(new Components()
-                        .addSecuritySchemes(SECURITY_SCHEME_NAME, securityScheme()));
+                .components(components);
     }
 
     private Info apiInfo() {
@@ -44,4 +47,5 @@ public class SwaggerConfig {
                 .bearerFormat("JWT")
                 .description("JWT 토큰을 입력하세요 (Bearer 접두사 없이)");
     }
+
 }

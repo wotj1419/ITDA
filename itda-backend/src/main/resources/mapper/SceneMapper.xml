@@ -41,8 +41,8 @@
         ORDER BY order_index ASC, id ASC
     </select>
 
-    <select id="findMaxOrderIndex" resultType="int">
-        SELECT COALESCE(MAX(order_index), 0)
+    <select id="findNextOrderIndex" resultType="int">
+        SELECT COALESCE(MAX(order_index), 0) + 1
         FROM scenes
         WHERE project_id = #{projectId}
     </select>
