@@ -15,5 +15,16 @@ public interface ProjectMapper {
 
     Optional<Project> findById(@Param("id") Long id);
 
-    List<ProjectSummary> findAllByUserId(@Param("userId") Long userId);
+    int countByUserId(@Param("userId") Long userId);
+
+    List<ProjectSummary> findAllByUserId(@Param("userId") Long userId,
+                                         @Param("limit") int limit,
+                                         @Param("offset") int offset);
+
+    int updateProject(@Param("id") Long id,
+                      @Param("title") String title,
+                      @Param("description") String description,
+                      @Param("genre") String genre);
+
+    int deleteProject(@Param("id") Long id);
 }
