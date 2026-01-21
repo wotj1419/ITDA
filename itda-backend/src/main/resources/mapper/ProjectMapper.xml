@@ -36,7 +36,13 @@
         SELECT id, owner_id, title, description, genre, status, created_at, updated_at, deleted_at
         FROM projects
         WHERE id = #{id}
-          AND deleted_at IS NULL
+    </select>
+
+    <select id="countByUserId" resultType="int">
+        SELECT COUNT(*)
+        FROM projects p
+        JOIN project_members pm ON pm.project_id = p.id
+        WHERE pm.user_id = #{userId}
     </select>
 
     <select id="findAllByUserId" resultMap="ProjectSummaryMap">
@@ -50,8 +56,32 @@
         FROM projects p
         JOIN project_members pm ON pm.project_id = p.id
         WHERE pm.user_id = #{userId}
-          AND p.deleted_at IS NULL
         ORDER BY p.updated_at DESC
+        LIMIT #{limit} OFFSET #{offset}
     </select>
+
+    <!-- updateProject: 동적 업데이트 (null이 아닌 필드만 업데이트) -->
+    <update id="updateProject">
+        UPDATE projects
+        <set>
+            <if test="title != null">
+                title = #{title},
+            </if>
+            <if test="description != null">
+                description = #{description},
+            </if>
+            <if test="genre != null">
+                genre = #{genre},
+            </if>
+            updated_at = CURRENT_TIMESTAMP
+        </set>
+        WHERE id = #{id}
+    </update>
+
+    <!-- deleteProject: Hard Delete -->
+    <delete id="deleteProject">
+        DELETE FROM projects
+        WHERE id = #{id}
+    </delete>
 
 </mapper>

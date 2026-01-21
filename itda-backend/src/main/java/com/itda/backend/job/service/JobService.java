@@ -12,6 +12,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.util.List;
 
@@ -26,9 +29,12 @@ import java.util.List;
 @RequiredArgsConstructor
 public class JobService {
 
+    private static final int MAX_IDEMPOTENCY_KEY_LENGTH = 128;
+
     private final JobMapper jobMapper;
     private final JobCreatedEventPublisher jobCreatedEventPublisher;
     private final JobExecutionProperties jobExecutionProperties;
+    private final PlatformTransactionManager transactionManager;
 
     /**
      * 새 Job 생성 및 큐 전달 (Idempotency 적용)
@@ -51,13 +57,16 @@ public class JobService {
                                 Long nodeId,
                                 String requestJson,
                                 String idempotencyKey) {
-        return createAndEnqueue(type, projectId, sceneId, nodeId, requestJson, idempotencyKey, false);
+        return createAndEnqueue(
+                new JobCreateRequest(type, projectId, sceneId, nodeId, requestJson, idempotencyKey),
+                false
+        );
     }
 
     /**
      * 새 Job 생성 및 큐 전달 (Idempotency 적용 + 선택적 재큐잉)
      *
-     * @param requeueIfExisting 기존 Job이 PENDING/재시도 가능 상태면 재큐잉 여부
+     * @param requeueIfExisting 기존 Job이 PENDING/FAILED 상태면 재큐잉 여부
      */
     @Transactional
     public Job createAndEnqueue(JobType type,
@@ -67,25 +76,50 @@ public class JobService {
                                 String requestJson,
                                 String idempotencyKey,
                                 boolean requeueIfExisting) {
+        return createAndEnqueue(
+                new JobCreateRequest(type, projectId, sceneId, nodeId, requestJson, idempotencyKey),
+                requeueIfExisting
+        );
+    }
 
-        String finalKey = idempotencyKey != null
-                ? idempotencyKey
-                : JobIdempotencyKey.of(projectId, type, nodeId, sceneId, requestJson);
+    /**
+     * 새 Job 생성 및 큐 전달 (요청 객체 기반)
+     */
+    @Transactional
+    public Job createAndEnqueue(JobCreateRequest request, boolean requeueIfExisting) {
+        String finalKey = resolveIdempotencyKey(request);
 
         Job existing = jobMapper.findByIdempotencyKey(finalKey).orElse(null);
         if (existing != null) {
-            maybeRequeue(existing, requeueIfExisting);
-            return existing;
+            boolean refreshed = maybeRequeue(existing, requeueIfExisting);
+            return refreshed ? jobMapper.findById(existing.getId()).orElse(existing) : existing;
         }
 
         try {
-            return createAndDispatch(type, projectId, sceneId, nodeId, requestJson, finalKey);
+            return createAndDispatch(
+                    request.type(),
+                    request.projectId(),
+                    request.sceneId(),
+                    request.nodeId(),
+                    request.requestJson(),
+                    finalKey
+            );
         } catch (DuplicateKeyException e) {
-            Job raced = jobMapper.findByIdempotencyKey(finalKey)
-                    .orElseThrow(() -> e);
-            maybeRequeue(raced, requeueIfExisting);
-            return raced;
+            Job raced = findByIdempotencyKeyReadCommitted(finalKey);
+            if (raced == null) {
+                throw e;
+            }
+            boolean refreshed = maybeRequeue(raced, requeueIfExisting);
+            return refreshed ? jobMapper.findById(raced.getId()).orElse(raced) : raced;
         }
+    }
+
+    /**
+     * 새 Job 생성 및 큐 전달 (요청 객체 기반)
+     */
+    @Transactional
+    public Job createAndEnqueue(JobCreateRequest request) {
+        return createAndEnqueue(request, false);
     }
 
     /**
@@ -98,8 +132,8 @@ public class JobService {
     public Job requeueIfExecutable(Long jobId) {
         Job job = jobMapper.findById(jobId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.JOB_NOT_FOUND));
-        maybeRequeue(job, true);
-        return job;
+        boolean refreshed = maybeRequeue(job, true);
+        return refreshed ? getJob(jobId) : job;
     }
 
     /**
@@ -132,15 +166,62 @@ public class JobService {
         return job;
     }
 
-    private void maybeRequeue(Job job, boolean requeueIfExisting) {
+    private String resolveIdempotencyKey(JobCreateRequest request) {
+        String normalized = normalizeIdempotencyKey(request.idempotencyKey());
+        String finalKey = normalized != null
+                ? normalized
+                : JobIdempotencyKey.of(
+                        request.projectId(),
+                        request.type(),
+                        request.nodeId(),
+                        request.sceneId(),
+                        request.requestJson()
+                );
+        validateIdempotencyKeyLength(finalKey);
+        return finalKey;
+    }
+
+    private String normalizeIdempotencyKey(String idempotencyKey) {
+        if (idempotencyKey == null) {
+            return null;
+        }
+        String trimmed = idempotencyKey.trim();
+        return trimmed.isBlank() ? null : trimmed;
+    }
+
+    private void validateIdempotencyKeyLength(String idempotencyKey) {
+        if (idempotencyKey != null && idempotencyKey.length() > MAX_IDEMPOTENCY_KEY_LENGTH) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST);
+        }
+    }
+
+    private Job findByIdempotencyKeyReadCommitted(String idempotencyKey) {
+        TransactionTemplate template = new TransactionTemplate(transactionManager);
+        template.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        template.setIsolationLevel(TransactionDefinition.ISOLATION_READ_COMMITTED);
+        return template.execute(status -> jobMapper.findByIdempotencyKey(idempotencyKey).orElse(null));
+    }
+
+    private boolean maybeRequeue(Job job, boolean requeueIfExisting) {
         if (!requeueIfExisting) {
-            return;
+            return false;
         }
         if (job.isExecutable(jobExecutionProperties.getMaxRetryCount())) {
+            boolean requeued = false;
+            if (job.isFailed()) {
+                requeued = jobMapper.resetForRequeueIfFailed(job.getId()) > 0;
+                if (!requeued) {
+                    return false;
+                }
+            } else if (job.isPending()) {
+                requeued = true;
+            }
             log.info("[JobService] Requeue existing job: id={}, status={}", 
                     job.getId(), job.getStatus());
             jobCreatedEventPublisher.publish(job.getId());
+            return requeued;
         }
+        return false;
     }
 
     /**

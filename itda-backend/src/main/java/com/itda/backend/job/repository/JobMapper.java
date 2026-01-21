@@ -67,4 +67,11 @@ public interface JobMapper {
      */
     int updateFailureIfRunning(@Param("id") Long id,
                                @Param("errorMessage") String errorMessage);
+
+    /**
+     * 재큐잉을 위한 상태 초기화 (FAILED 상태에서만)
+     * - 상태를 PENDING으로 되돌리고
+     * - error/started/finished 정보를 초기화
+     */
+    int resetForRequeueIfFailed(@Param("id") Long id);
 }

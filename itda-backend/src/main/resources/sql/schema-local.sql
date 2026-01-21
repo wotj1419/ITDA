@@ -64,7 +64,7 @@ CREATE TABLE project_members (
     joined_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (project_id, user_id),
     KEY idx_pm_user (user_id),
-    CONSTRAINT fk_pm_project FOREIGN KEY (project_id) REFERENCES projects(id),
+    CONSTRAINT fk_pm_project FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
     CONSTRAINT fk_pm_user FOREIGN KEY (user_id) REFERENCES users(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -83,7 +83,7 @@ CREATE TABLE scenes (
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     KEY idx_scenes_project_order (project_id, order_index),
-    CONSTRAINT fk_scenes_project FOREIGN KEY (project_id) REFERENCES projects(id)
+    CONSTRAINT fk_scenes_project FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ============================================
@@ -104,7 +104,7 @@ CREATE TABLE assets (
     deleted_at DATETIME,
     KEY idx_assets_project (project_id),
     CONSTRAINT fk_assets_owner FOREIGN KEY (owner_id) REFERENCES users(id),
-    CONSTRAINT fk_assets_project FOREIGN KEY (project_id) REFERENCES projects(id)
+    CONSTRAINT fk_assets_project FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ============================================
@@ -127,15 +127,15 @@ CREATE TABLE nodes (
     KEY idx_nodes_scene (scene_id),
     KEY idx_nodes_parent (parent_node_id),
     KEY idx_nodes_scene_order (scene_id, order_index),
-    CONSTRAINT fk_nodes_scene FOREIGN KEY (scene_id) REFERENCES scenes(id),
-    CONSTRAINT fk_nodes_parent FOREIGN KEY (parent_node_id) REFERENCES nodes(id),
+    CONSTRAINT fk_nodes_scene FOREIGN KEY (scene_id) REFERENCES scenes(id) ON DELETE CASCADE,
+    CONSTRAINT fk_nodes_parent FOREIGN KEY (parent_node_id) REFERENCES nodes(id) ON DELETE CASCADE,
     CONSTRAINT fk_nodes_user FOREIGN KEY (created_by) REFERENCES users(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- scenes.active_master_node_id FK 추가
 ALTER TABLE scenes
     ADD CONSTRAINT fk_scenes_active_master
-    FOREIGN KEY (active_master_node_id) REFERENCES nodes(id);
+    FOREIGN KEY (active_master_node_id) REFERENCES nodes(id) ON DELETE SET NULL;
 
 -- ============================================
 -- 7. 영상 클립 (Video Clips)
@@ -151,8 +151,8 @@ CREATE TABLE video_clips (
     is_confirmed TINYINT(1) NOT NULL DEFAULT 0,  -- 확정 여부
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    CONSTRAINT fk_video_shot FOREIGN KEY (shot_node_id) REFERENCES nodes(id),
-    CONSTRAINT fk_video_asset FOREIGN KEY (asset_id) REFERENCES assets(id)
+    CONSTRAINT fk_video_shot FOREIGN KEY (shot_node_id) REFERENCES nodes(id) ON DELETE CASCADE,
+    CONSTRAINT fk_video_asset FOREIGN KEY (asset_id) REFERENCES assets(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ============================================
@@ -180,10 +180,10 @@ CREATE TABLE generation_jobs (
     KEY idx_jobs_status (status),
     KEY idx_jobs_node (node_id),
     UNIQUE KEY uk_jobs_idempotency (idempotency_key),
-    CONSTRAINT fk_jobs_project FOREIGN KEY (project_id) REFERENCES projects(id),
-    CONSTRAINT fk_jobs_scene FOREIGN KEY (scene_id) REFERENCES scenes(id),
-    CONSTRAINT fk_jobs_node FOREIGN KEY (node_id) REFERENCES nodes(id),
-    CONSTRAINT fk_jobs_result_asset FOREIGN KEY (result_asset_id) REFERENCES assets(id)
+    CONSTRAINT fk_jobs_project FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+    CONSTRAINT fk_jobs_scene FOREIGN KEY (scene_id) REFERENCES scenes(id) ON DELETE CASCADE,
+    CONSTRAINT fk_jobs_node FOREIGN KEY (node_id) REFERENCES nodes(id) ON DELETE CASCADE,
+    CONSTRAINT fk_jobs_result_asset FOREIGN KEY (result_asset_id) REFERENCES assets(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ============================================
@@ -200,9 +200,9 @@ CREATE TABLE timeline_items (
     created_by BIGINT,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     KEY idx_timeline_project_order (project_id, order_index),
-    CONSTRAINT fk_timeline_project FOREIGN KEY (project_id) REFERENCES projects(id),
-    CONSTRAINT fk_timeline_scene FOREIGN KEY (scene_id) REFERENCES scenes(id),
-    CONSTRAINT fk_timeline_video FOREIGN KEY (video_clip_id) REFERENCES video_clips(id),
+    CONSTRAINT fk_timeline_project FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+    CONSTRAINT fk_timeline_scene FOREIGN KEY (scene_id) REFERENCES scenes(id) ON DELETE CASCADE,
+    CONSTRAINT fk_timeline_video FOREIGN KEY (video_clip_id) REFERENCES video_clips(id) ON DELETE CASCADE,
     CONSTRAINT fk_timeline_user FOREIGN KEY (created_by) REFERENCES users(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -222,6 +222,6 @@ CREATE TABLE upload_requests (
     presigned_key VARCHAR(512),
     expires_at DATETIME NOT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT fk_upload_project FOREIGN KEY (project_id) REFERENCES projects(id),
+    CONSTRAINT fk_upload_project FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
     CONSTRAINT fk_upload_owner FOREIGN KEY (owner_id) REFERENCES users(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

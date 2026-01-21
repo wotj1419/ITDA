@@ -84,6 +84,7 @@
                 ELSE started_at
             END,
             finished_at = CASE
+                WHEN #{newStatus} = 'RUNNING' THEN NULL
                 WHEN #{newStatus} IN ('SUCCEEDED', 'FAILED') THEN NOW()
                 ELSE finished_at
             END
@@ -113,6 +114,17 @@
             finished_at = NOW()
         WHERE id = #{id}
           AND status = 'RUNNING'
+    </update>
+
+    <!-- UPDATE Requeue Reset (FAILED 상태에서만) -->
+    <update id="resetForRequeueIfFailed">
+        UPDATE generation_jobs
+        SET status = 'PENDING',
+            error_message = NULL,
+            started_at = NULL,
+            finished_at = NULL
+        WHERE id = #{id}
+          AND status = 'FAILED'
     </update>
 
 </mapper>

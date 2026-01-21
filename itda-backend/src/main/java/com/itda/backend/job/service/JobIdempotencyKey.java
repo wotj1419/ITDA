@@ -2,6 +2,11 @@ package com.itda.backend.job.service;
 
 import com.itda.backend.job.domain.JobType;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.databind.MapperFeature;
+
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -11,8 +16,13 @@ import java.security.NoSuchAlgorithmException;
  * <p>
  * 클라이언트가 Idempotency-Key 헤더를 제공하지 않은 경우,
  * 시스템에서 자동으로 키를 생성하여 중복 요청을 방지함.
+ * requestJson은 JSON 정규화 후 해시하여 키 안정성을 높임.
  */
 public final class JobIdempotencyKey {
+
+    private static final ObjectMapper CANONICAL_MAPPER = new ObjectMapper()
+            .configure(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS, true)
+            .configure(MapperFeature.SORT_PROPERTIES_ALPHABETICALLY, true);
 
     private JobIdempotencyKey() {
         // 유틸리티 클래스 - 인스턴스화 방지
@@ -34,7 +44,8 @@ public final class JobIdempotencyKey {
      */
     public static String of(Long projectId, JobType type, Long nodeId, Long sceneId, String requestJson) {
         String target = resolveTarget(nodeId, sceneId);
-        String requestHash = sha256Hex(requestJson == null ? "" : requestJson);
+        String normalizedRequest = normalizeRequestJson(requestJson);
+        String requestHash = sha256Hex(normalizedRequest);
         return projectId + ":" + type.name() + ":" + target + ":" + requestHash;
     }
 
@@ -55,6 +66,22 @@ public final class JobIdempotencyKey {
             return toHex(bytes);
         } catch (NoSuchAlgorithmException e) {
             throw new IllegalStateException("SHA-256 algorithm not available", e);
+        }
+    }
+
+    private static String normalizeRequestJson(String requestJson) {
+        if (requestJson == null) {
+            return "";
+        }
+        String trimmed = requestJson.trim();
+        if (trimmed.isEmpty()) {
+            return "";
+        }
+        try {
+            JsonNode node = CANONICAL_MAPPER.readTree(trimmed);
+            return CANONICAL_MAPPER.writeValueAsString(node);
+        } catch (Exception e) {
+            return trimmed;
         }
     }
 

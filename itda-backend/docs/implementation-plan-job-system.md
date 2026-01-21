@@ -45,11 +45,14 @@
 ### 1.1 결정 사항 (2026-01-20)
 - **Idempotency 키 정책**: 클라이언트가 키를 제공하지 않으면  
   `{projectId}:{jobType}:{target}:{requestHash}`로 자동 생성  
-  → 같은 대상이라도 요청(JSON)이 다르면 새 Job 생성 허용
+  → 같은 대상이라도 요청(JSON)이 다르면 새 Job 생성 허용  
+  → requestJson은 JSON 정규화 후 해시하여 키 안정성 확보
 - **중복 요청 처리**: 동일 키 Job이 있으면 기본은 기존 Job 반환  
-  단, `PENDING` 또는 재시도 가능한 `FAILED` 상태면 **옵션으로 재큐잉** 가능
-- **API 노출 방식**: 생성 API에서 `X-Requeue: true` 또는 `requeue=true` 파라미터로 재큐잉 요청 가능
-- **재시도 정책**: **같은 Job 재실행**을 기본으로 하며, `MAX_RETRY_COUNT` 초과 시 실패 고정
+  단, `PENDING` 또는 `FAILED` 상태면 **사용자 요청 시 재큐잉** 가능
+- **API 노출 방식**: 같은 Job 재실행은 `/api/ai/jobs/{jobId}/requeue`  
+  노드 재시도는 `/api/nodes/{id}/regenerate`로 새 버전 생성
+- **재시도 정책**: **자동 재시도 없음**(비용 이슈)  
+  `maxRetryCount`는 옵션(0 이하 = 제한 없음, 추후 정책 확정 시 적용)
 - **상태 전이 안전성**: `RUNNING` 상태에서만 `SUCCEEDED/FAILED`로 전이하도록 조건부 업데이트 적용
 
 ### 1.2 리뷰/리팩터링 반영 사항
@@ -57,6 +60,31 @@
 - **성공/실패 업데이트 조건화**: 상태 덮어쓰기 방지 (RUNNING → SUCCEEDED/FAILED만 허용)
 - **실패 처리 원자화**: 실패 시 `retry_count` 증가와 상태 변경을 단일 SQL로 처리
 - **중복 키 경쟁 상황 처리**: Insert 충돌 시 기존 Job 재조회 후 반환
+
+### 1.2.1 Idempotency 중복 경쟁 + 격리 수준 이슈 (중요)
+
+#### 문제 요약
+동일한 `idempotencyKey`로 동시에 요청이 들어오면 한 요청만 INSERT 성공,
+다른 요청은 `DuplicateKeyException`이 발생한다.  
+현재 구현은 catch에서 다시 조회해 기존 Job을 반환하려고 하지만,
+DB 격리 수준이 `REPEATABLE_READ`인 경우 같은 트랜잭션 내 재조회가
+새로 커밋된 행을 보지 못해 재조회가 실패할 수 있다.
+
+#### 발생 시나리오 (요약)
+1) 요청 A/B가 동시에 `findByIdempotencyKey` 실행 → 둘 다 없음
+2) A insert 성공, B insert 실패 (`DuplicateKeyException`)
+3) B가 같은 트랜잭션에서 재조회 → 스냅샷이라 A의 row가 안 보일 수 있음
+4) 결국 예외 전파 → idempotency 보장이 깨짐
+
+#### 영향
+- 중복 요청에 대해 기존 Job 반환 대신 500 발생 가능
+- 멱등성 보장 실패 (클라이언트 재시도 시도에도 실패 가능)
+
+#### 권장 해결책
+- **권장**: `DuplicateKeyException` catch 블록의 재조회만  
+  `REQUIRES_NEW + READ_COMMITTED`로 분리하여 최신 커밋을 보장
+- 대안: `createAndEnqueue` 전체를 `READ_COMMITTED`로 낮춤
+- 고급 대안: idempotency 전용 테이블/락 또는 DB upsert 전략
 
 ### 1.3 Idempotency Key 개념 및 필요성
 
@@ -101,6 +129,7 @@
 
 - **같은 노드, 같은 설정** → 같은 키 → 중복 방지
 - **같은 노드, 다른 설정** → 다른 키 → 새 Job 생성 허용
+※ requestJson은 JSON 정규화 후 해시하여 키 순서/공백 차이를 흡수
 
 ### 팀원별 의존성
 | 팀원 | 역할 | 이 작업에서 필요한 것 |
@@ -492,7 +521,7 @@ public class AsyncConfig {
 ```yaml
 job:
   execution:
-    max-retry-count: 3
+    max-retry-count: 0  # 0 이하: 제한 없음 (추후 정책 확정 시 설정)
 ```
 
 #### 3.3.5 JobCreatedEvent + DispatchListener (AFTER_COMMIT)
@@ -627,7 +656,7 @@ public class JobExecutor {
 
     private final JobMapper jobMapper;
     private final JobEventPublisher jobEventPublisher;
-    private static final int MAX_RETRY_COUNT = 3;
+    private final JobExecutionProperties jobExecutionProperties;
     // private final ImageGenerationWorker imageWorker;  // 이용호 구현
     // private final VideoGenerationWorker videoWorker;  // 김은서 구현
     // private final MergeWorker mergeWorker;            // 장현준 구현
@@ -643,9 +672,10 @@ public class JobExecutor {
             return;
         }
 
-        // 재시도 한도 초과 시 스킵
-        if (job.getStatus() == JobStatus.FAILED && !job.canRetry(MAX_RETRY_COUNT)) {
-            log.info("[JobExecutor] Job retry limit exceeded, skipping: id={}", jobId);
+        // 실행 가능 상태 확인 (PENDING 또는 재시도 가능한 FAILED)
+        int maxRetryCount = jobExecutionProperties.getMaxRetryCount();
+        if (!job.isExecutable(maxRetryCount)) {
+            log.info("[JobExecutor] Job not executable, skipping: id={}", jobId);
             return;
         }
 
@@ -772,9 +802,9 @@ public class WebSocketJobEventPublisher implements JobEventPublisher {
 ### 3.6 JobService (비즈니스 로직)
 
 > **정책 반영 포인트**
-> - Idempotency Key는 `requestJson` 해시 포함
+> - Idempotency Key는 `requestJson` 해시 포함 (JSON 정규화 후 해시)
 > - 중복 키 경쟁 상황 발생 시 기존 Job 재조회 후 반환
-> - `requeueIfExisting` 옵션으로 PENDING/재시도 가능 Job 재큐잉 가능
+> - `requeueIfExisting` 옵션으로 PENDING/FAILED Job 재큐잉 가능 (재시도 한도는 옵션)
 
 ```java
 package com.itda.backend.job.service;
@@ -817,7 +847,7 @@ public class JobService {
         }
 
         // 헤더가 없으면 target 기반으로 키를 만들어 중복 요청을 방지
-        String derivedKey = JobIdempotencyKey.of(projectId, type, nodeId, sceneId);
+        String derivedKey = JobIdempotencyKey.of(projectId, type, nodeId, sceneId, requestJson);
         return jobMapper.findByIdempotencyKey(derivedKey)
                 .orElseGet(() -> createAndDispatch(type, projectId, sceneId, nodeId, requestJson, derivedKey));
     }
