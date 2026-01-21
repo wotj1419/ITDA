@@ -30,6 +30,11 @@ uploads/
 *.env
 *.env.local
 
+# GCP Service Account Keys
+test-key.json
+*-key.json
+*.json.key
+
 # Maven (if any)
 target/
 
