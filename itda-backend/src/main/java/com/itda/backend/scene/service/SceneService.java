@@ -61,12 +61,34 @@ public class SceneService {
 
     @Transactional
     public SceneDetailResponse updateScene(Long userId, Long sceneId, UpdateSceneRequest request) {
-        throw new UnsupportedOperationException("Scene update not implemented");
+        if (request.title() == null && request.description() == null) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST);
+        }
+
+        Scene scene = sceneMapper.findById(sceneId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.SCENE_NOT_FOUND));
+        ensureMember(scene.getProjectId(), userId);
+
+        int updated = sceneMapper.updateScene(sceneId, request.title(), request.description());
+        if (updated == 0) {
+            throw new BusinessException(ErrorCode.SCENE_NOT_FOUND);
+        }
+
+        Scene updatedScene = sceneMapper.findById(sceneId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.SCENE_NOT_FOUND));
+        return SceneDetailResponse.from(updatedScene);
     }
 
     @Transactional
     public void deleteScene(Long userId, Long sceneId) {
-        throw new UnsupportedOperationException("Scene delete not implemented");
+        Scene scene = sceneMapper.findById(sceneId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.SCENE_NOT_FOUND));
+        ensureMember(scene.getProjectId(), userId);
+
+        int deleted = sceneMapper.deleteScene(sceneId);
+        if (deleted == 0) {
+            throw new BusinessException(ErrorCode.SCENE_NOT_FOUND);
+        }
     }
 
     @Transactional
