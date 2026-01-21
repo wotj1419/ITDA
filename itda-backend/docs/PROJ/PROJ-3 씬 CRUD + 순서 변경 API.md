@@ -12,20 +12,28 @@
   - `PUT /api/scenes/{id}`
   - `DELETE /api/scenes/{id}`
   - `PUT /api/projects/{id}/scenes/order`
-- Service 스텁 메서드 추가 (미구현 표시)
+- Service 스텝 메서드 추가 (미구현 표시)
   - update/delete/reorder는 다음 단계에서 구현
 
-## 3) 현재 상태
-- 요청/응답 구조와 라우팅만 정의 완료
-- 비즈니스 로직/Mapper/SQL은 아직 미적용
+## 3) 2단계 진행 내용 (Mapper/SQL)
+- Mapper 메서드 추가
+  - `SceneMapper.updateScene`
+  - `SceneMapper.deleteScene`
+- SQL 추가
+  - dynamic update (null 필드 무시)
+  - hard delete (scene row)
 
-## 4) 다음 단계
-- 2단계: CRUD Mapper/SQL
+## 4) 현재 상태
+- 요청/응답 구조와 라우팅 정의 완료
+- update/delete SQL 반영 완료
+- 비즈니스 로직(Service)과 reorder는 아직 미구현
+
+## 5) 다음 단계
 - 3단계: CRUD Service 로직
 - 4단계: CRUD Swagger 예시/검증
 - 5단계: reorder API 착수
 
-## 5) 참고 문서
+## 6) 참고 문서
 - APIdocs: `S14P11C205/docs/APIdocs.md`
 - PRD: `S14P11C205/docs/PRD_AI_Movie_Studio_v2.5.md`
 - 일정: `S14P11C205/docs/ai-movie-studio-md-pack-v3/02-schedule-w3-w6.md`
