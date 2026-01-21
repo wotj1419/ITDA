@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, type Component } from 'vue'
-import { RouterLink, useRoute } from 'vue-router'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 import type { RouteLocationRaw } from 'vue-router'
 import { useUIStore } from '../stores/ui'
 import { useSidebarShortcut } from '../composables/useSidebarShortcut'
@@ -17,6 +17,7 @@ import {
   Phone,
   Menu,
   Play,
+  ArrowLeft,
 } from 'lucide-vue-next'
 
 interface Props {
@@ -36,6 +37,7 @@ const emit = defineEmits<{
 }>()
 
 const route = useRoute()
+const router = useRouter() // Re-using existing import but initializing it
 const uiStore = useUIStore()
 
 // Keyboard shortcut (Ctrl+B)
@@ -153,10 +155,16 @@ const progressPercentage = computed(() => {
     <main class="main-wrapper">
       <!-- Header -->
       <header class="header">
-        <div class="breadcrumb">
-          <RouterLink to="/dashboard">AI Movie Studio</RouterLink>
-          <span class="separator">/</span>
-          <span class="current">{{ project?.title || 'Project' }}</span>
+        <div class="header-left">
+          <button class="btn-icon-back" @click="router.push('/dashboard')" title="Go to Dashboard">
+            <ArrowLeft class="icon-md" />
+          </button>
+          
+          <div class="breadcrumb">
+            <RouterLink to="/dashboard">AI Movie Studio</RouterLink>
+            <span class="separator">/</span>
+            <span class="current">{{ project?.title || 'Project' }}</span>
+          </div>
         </div>
 
         <div class="header-actions">
@@ -473,6 +481,32 @@ const progressPercentage = computed(() => {
   height: 64px; /* Align with sidebar header */
   background: white;
   border-bottom: 1px solid var(--rose-100);
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.btn-icon-back {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: transparent;
+  color: var(--gray-500);
+  border-radius: 50%;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.btn-icon-back:hover {
+  background: var(--rose-50);
+  color: var(--rose-600);
 }
 
 .breadcrumb {

@@ -45,13 +45,13 @@ const handleDragEnd = () => {
 }
 
 const handleApplyToProject = async () => {
-  // Generate scenes to SceneStore
-  for (const scene of scenarioStore.scenes) {
-    await sceneStore.addScene({
-      title: scene.title,
-      description: scene.description,
-    })
-  }
+  // Generate scenes to SceneStore (Batch)
+  const scenesToCreate = scenarioStore.scenes.map(scene => ({
+    title: scene.title,
+    description: scene.description,
+  }))
+
+  await sceneStore.addScenes(scenesToCreate)
 
   uiStore.showToast({
     type: 'success',

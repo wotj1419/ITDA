@@ -81,6 +81,9 @@ onMounted(async () => {
       characterStore.loadCharacters(projectId.value),
     ])
     
+    // Simulate 'Recent Activity' by updating timestamp
+    await projectStore.updateProject(projectId.value, { updatedAt: new Date().toISOString() }) 
+    
     // 협업 방 입장
     collabStore.joinRoom(projectId.value)
     collabStore.updateLocation('프로젝트 상세 페이지')

@@ -6,6 +6,7 @@ import {
   fetchProjectById as mockFetchProjectById,
   createProject as mockCreateProject,
   deleteProject as mockDeleteProject,
+  updateProject as mockUpdateProject,
 } from '../services/mock/projects'
 
 export const useProjectStore = defineStore('project', () => {
@@ -110,6 +111,37 @@ export const useProjectStore = defineStore('project', () => {
     }
   }
 
+  async function updateProject(projectId: number, data: Partial<Project>): Promise<Project | null> {
+    isLoading.value = true
+    error.value = null
+
+    try {
+      const updatedProject = await mockUpdateProject(projectId, data)
+      if (updatedProject) {
+        // Update item in projects list
+        const index = projects.value.findIndex((p) => p.projectId === projectId)
+        if (index > -1) {
+          projects.value[index] = updatedProject
+        }
+
+        // Update currentProject if relevant
+        if (currentProject.value?.projectId === projectId) {
+          currentProject.value = {
+            ...currentProject.value,
+            ...updatedProject
+          }
+        }
+      }
+      return updatedProject
+    } catch (e) {
+      error.value = 'Failed to update project'
+      console.error(e)
+      return null
+    } finally {
+      isLoading.value = false
+    }
+  }
+
   function clearCurrentProject(): void {
     currentProject.value = null
   }
@@ -131,6 +163,7 @@ export const useProjectStore = defineStore('project', () => {
     loadProject,
     addProject,
     removeProject,
+    updateProject,
     clearCurrentProject,
   }
 })

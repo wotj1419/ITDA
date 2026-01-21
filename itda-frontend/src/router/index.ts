@@ -59,6 +59,18 @@ const routes: RouteRecordRaw[] = [
     component: () => import('../pages/ProfileEditPage.vue'),
     meta: { requiresAuth: true },
   },
+  {
+    path: '/shared',
+    name: 'shared',
+    component: () => import('../pages/SharedPage.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
+    path: '/trash',
+    name: 'trash',
+    component: () => import('../pages/TrashPage.vue'),
+    meta: { requiresAuth: true },
+  },
 ]
 
 const router = createRouter({

@@ -4,6 +4,7 @@ import type { Scene, CreateSceneRequest } from '../types'
 import {
   fetchScenesByProjectId as mockFetchScenes,
   createScene as mockCreateScene,
+  createScenes as mockCreateScenes,
   updateScene as mockUpdateScene,
   deleteScene as mockDeleteScene,
   reorderScenes as mockReorderScenes,
@@ -71,6 +72,28 @@ export const useSceneStore = defineStore('scene', () => {
       error.value = 'Failed to create scene'
       console.error(e)
       return null
+    } finally {
+      isLoading.value = false
+    }
+  }
+
+  async function addScenes(dataList: CreateSceneRequest[]): Promise<Scene[]> {
+    if (!currentProjectId.value) {
+      error.value = 'No project selected'
+      return []
+    }
+
+    isLoading.value = true
+    error.value = null
+
+    try {
+      const newScenes = await mockCreateScenes(currentProjectId.value, dataList)
+      scenes.value.push(...newScenes)
+      return newScenes
+    } catch (e) {
+      error.value = 'Failed to create scenes'
+      console.error(e)
+      return []
     } finally {
       isLoading.value = false
     }
@@ -187,6 +210,7 @@ export const useSceneStore = defineStore('scene', () => {
     // Actions
     loadScenes,
     addScene,
+    addScenes,
     updateScene,
     removeScene,
     reorderScenes,

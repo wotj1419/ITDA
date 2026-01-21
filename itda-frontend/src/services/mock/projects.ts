@@ -56,7 +56,7 @@ export const mockProjects: Project[] = [
     role: 'OWNER',
     memberCount: 2,
     sceneCount: 5,
-    updatedAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(), // 2 hours ago
+    updatedAt: new Date(Date.now() - 10 * 1000).toISOString(), // 10 seconds ago
     createdAt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(), // 1 week ago
   },
   {
@@ -68,7 +68,7 @@ export const mockProjects: Project[] = [
     role: 'OWNER',
     memberCount: 1,
     sceneCount: 5,
-    updatedAt: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(), // yesterday
+    updatedAt: new Date(Date.now() - 50 * 1000).toISOString(), // 50 seconds ago
     createdAt: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString(), // 2 weeks ago
   },
   {
@@ -80,7 +80,7 @@ export const mockProjects: Project[] = [
     role: 'VIEWER',
     memberCount: 2,
     sceneCount: 8,
-    updatedAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(), // 3 days ago
+    updatedAt: new Date(Date.now() - 90 * 1000).toISOString(), // 90 seconds ago
     createdAt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(), // 1 month ago
   },
 ]
@@ -131,36 +131,15 @@ export const mockProjectDetails: Record<number, ProjectDetail> = {
   },
 }
 
-// Helper functions
-export function formatRelativeTime(dateString: string): string {
-  const date = new Date(dateString)
-  const now = new Date()
-  const diffMs = now.getTime() - date.getTime()
-  const diffMins = Math.floor(diffMs / (1000 * 60))
-  const diffHours = Math.floor(diffMs / (1000 * 60 * 60))
-  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
+import { formatRelativeTime } from '../../utils/date'
+export { formatRelativeTime }
 
-  if (diffMins < 60) {
-    return `${diffMins}m ago`
-  } else if (diffHours < 24) {
-    return `${diffHours}h ago`
-  } else if (diffDays === 1) {
-    return 'yesterday'
-  } else if (diffDays < 7) {
-    return `${diffDays}d ago`
-  } else {
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-  }
-}
+
+import { getSceneProgress } from './scenes'
 
 export function getProjectProgress(projectId: number): { completed: number; total: number } {
-  // Mock progress data
-  const progressMap: Record<number, { completed: number; total: number }> = {
-    1: { completed: 3, total: 5 },
-    2: { completed: 1, total: 5 },
-    3: { completed: 6, total: 8 },
-  }
-  return progressMap[projectId] || { completed: 0, total: 0 }
+  // Get dynamic progress from mock scene data
+  return getSceneProgress(projectId)
 }
 
 // Simulated API delay
@@ -216,4 +195,30 @@ export async function deleteProject(projectId: number): Promise<void> {
   if (index > -1) {
     mockProjects.splice(index, 1)
   }
+}
+
+export async function updateProject(projectId: number, data: Partial<Project>): Promise<Project | null> {
+  await delay(300)
+  const projectIndex = mockProjects.findIndex((p) => p.projectId === projectId)
+
+  if (projectIndex > -1) {
+    // Update main list
+    mockProjects[projectIndex] = {
+      ...mockProjects[projectIndex],
+      ...data,
+      updatedAt: new Date().toISOString()
+    }
+
+    // Update details (simulate backend sync)
+    if (mockProjectDetails[projectId]) {
+      mockProjectDetails[projectId] = {
+        ...mockProjectDetails[projectId],
+        ...data,
+        updatedAt: mockProjects[projectIndex].updatedAt
+      }
+    }
+
+    return mockProjects[projectIndex]
+  }
+  return null
 }

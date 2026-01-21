@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed } from 'vue'
-import { RouterLink, useRoute } from 'vue-router'
+import { computed, ref, onMounted, onUnmounted } from 'vue'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { useUIStore } from '../../stores/ui'
 import { useAuthStore } from '../../stores/auth'
 import { useSidebarShortcut } from '../../composables/useSidebarShortcut'
@@ -9,11 +9,12 @@ import {
   Star,
   Users,
   Trash2,
-  Settings,
   Menu,
+  LogOut,
 } from 'lucide-vue-next'
 
 const route = useRoute()
+const router = useRouter()
 const uiStore = useUIStore()
 const authStore = useAuthStore()
 
@@ -26,6 +27,32 @@ const navItems = [
   { to: '/shared', icon: Users, label: 'Shared with Me', tooltip: 'Shared with Me' },
   { to: '/trash', icon: Trash2, label: 'Trash', tooltip: 'Trash' },
 ]
+
+const showProfileMenu = ref(false)
+const profileMenuRef = ref<HTMLElement | null>(null)
+
+const toggleProfileMenu = () => {
+  showProfileMenu.value = !showProfileMenu.value
+}
+
+const closeProfileMenu = (e: MouseEvent) => {
+  if (profileMenuRef.value && !profileMenuRef.value.contains(e.target as Node)) {
+    showProfileMenu.value = false
+  }
+}
+
+const handleLogout = () => {
+  authStore.logout()
+  router.push('/login')
+}
+
+onMounted(() => {
+  document.addEventListener('click', closeProfileMenu)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('click', closeProfileMenu)
+})
 
 const isActive = (path: string) => {
   if (path === '/dashboard') {
@@ -83,9 +110,9 @@ const sidebarClasses = computed(() => [
       </div>
     </div>
 
-    <!-- User Info -->
-    <div class="sidebar-user">
-      <RouterLink to="/profile" class="user-link">
+    <!-- User Info & Dropdown -->
+    <div class="sidebar-user" ref="profileMenuRef">
+      <div class="user-trigger" @click.stop="toggleProfileMenu">
         <div
           class="user-avatar"
           :style="{
@@ -102,10 +129,41 @@ const sidebarClasses = computed(() => [
           <div class="user-name">{{ authStore.user?.name || 'Guest' }}</div>
           <div class="user-email">{{ authStore.user?.email || '' }}</div>
         </div>
-      </RouterLink>
-      <RouterLink to="/profile/edit" class="btn-icon user-info-text settings-btn">
-        <Settings class="icon-sm" />
-      </RouterLink>
+      </div>
+
+      <!-- Dropdown Menu -->
+      <transition name="fade">
+        <div v-if="showProfileMenu" class="profile-menu">
+           <!-- Profile Header -->
+           <RouterLink to="/profile" class="menu-header" @click="showProfileMenu = false">
+             <div
+                class="user-avatar header-avatar"
+                :style="{
+                  backgroundImage: authStore.user?.profileImage
+                    ? `url(${authStore.user.profileImage})`
+                    : undefined,
+                }"
+              >
+                <span v-if="!authStore.user?.profileImage">{{
+                  authStore.user?.name?.[0] || 'U'
+                }}</span>
+              </div>
+              <div class="user-info-text">
+                <div class="user-name">{{ authStore.user?.name || 'Guest' }}</div>
+                <div class="user-email">{{ authStore.user?.email || '' }}</div>
+              </div>
+           </RouterLink>
+           
+           <div class="menu-divider"></div>
+           
+           <div class="menu-group">
+             <button class="menu-item text-danger" @click="handleLogout">
+               <LogOut class="icon-sm" />
+               <span>로그아웃</span>
+             </button>
+           </div>
+        </div>
+      </transition>
     </div>
   </aside>
 </template>
@@ -121,6 +179,7 @@ const sidebarClasses = computed(() => [
   transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
   flex-shrink: 0;
   position: relative;
+  z-index: 50;
 }
 
 .sidebar-collapsed {
@@ -323,11 +382,25 @@ const sidebarClasses = computed(() => [
 .sidebar-user {
   padding: 1rem;
   border-top: 1px solid var(--rose-100);
+  position: relative;
+  /* Keep original layout context, but removed fixed height so menu can overflow if needed */
+}
+
+/* New: Trigger area styles */
+.user-trigger {
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  position: relative;
-  height: 72px;
+  cursor: pointer;
+  padding: 0.5rem;
+  margin: -0.5rem;
+  border-radius: 8px;
+  transition: background 0.2s;
+  width: 100%; /* Take full width */
+}
+
+.user-trigger:hover {
+  background: var(--gray-50);
 }
 
 .user-avatar {
@@ -345,29 +418,6 @@ const sidebarClasses = computed(() => [
   flex-shrink: 0;
 }
 
-.user-link {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  min-width: 0; /* Allow shrinking */
-  text-decoration: none;
-  color: inherit;
-  cursor: pointer;
-  z-index: 10;
-  margin-right: 0.5rem;
-  /* flex: 1 removed to prevent pushing settings button to the end */
-}
-
-/* Settings button takes only necessary space */
-.settings-btn {
-  flex-shrink: 0;
-  width: 32px;
-  height: 32px;
-  padding: 0;
-  cursor: pointer;
-  z-index: 20; /* Higher than user link */
-}
-
 .user-info-text {
   flex: 1;
   min-width: 0;
@@ -383,33 +433,6 @@ const sidebarClasses = computed(() => [
   color: var(--gray-500);
 }
 
-.truncate {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.btn-icon {
-  padding: 0.5rem;
-  border: none;
-  background: transparent;
-  color: var(--gray-500);
-  border-radius: 8px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.btn-icon:hover {
-  background: var(--gray-100);
-}
-
-.icon-xs {
-  width: 16px;
-  height: 16px;
-}
-
 .icon-sm {
   width: 20px;
   height: 20px;
@@ -418,5 +441,104 @@ const sidebarClasses = computed(() => [
 .icon-md {
   width: 24px;
   height: 24px;
+}
+
+/* Dropdown Menu Styles */
+.profile-menu {
+  position: absolute;
+  bottom: 100%;
+  left: 1rem;
+  right: 1rem;
+  margin-bottom: 0.5rem;
+  background: white;
+  border: 1px solid var(--gray-200);
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  padding: 0.5rem;
+  z-index: 100;
+  min-width: 220px;
+}
+
+.sidebar-collapsed .profile-menu {
+  left: 100%;
+  bottom: 0;
+  margin-left: 0.5rem;
+  margin-bottom: 0;
+}
+
+.menu-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.menu-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  background-color: var(--gray-50);
+  border-radius: 8px;
+  text-decoration: none;
+  color: inherit;
+  margin-bottom: 0.5rem;
+  transition: background-color 0.2s;
+}
+
+.menu-header:hover {
+  background-color: var(--gray-100);
+}
+
+.header-avatar {
+  width: 32px; /* Slightly smaller in menu */
+  height: 32px;
+}
+
+.menu-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  border: none;
+  background: transparent;
+  width: 100%;
+  text-align: left;
+  font-size: 0.875rem;
+  color: var(--gray-700);
+  cursor: pointer;
+  border-radius: 6px;
+  text-decoration: none;
+  transition: all 0.2s;
+}
+
+.menu-item:hover {
+  background-color: var(--gray-100);
+  color: var(--gray-900);
+}
+
+.menu-divider {
+  height: 1px;
+  background-color: var(--gray-100);
+  margin: 0.5rem 0;
+}
+
+.text-danger {
+  color: #ef4444;
+}
+
+.text-danger:hover {
+  background-color: #fef2f2;
+  color: #dc2626;
+}
+
+/* Transitions */
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.2s, transform 0.2s;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+  transform: translateY(10px);
 }
 </style>

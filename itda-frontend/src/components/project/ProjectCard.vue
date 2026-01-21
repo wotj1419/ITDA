@@ -5,7 +5,8 @@ import { Star } from 'lucide-vue-next'
 import type { Project } from '../../types'
 import Badge from '../common/Badge.vue'
 import AvatarGroup from '../common/AvatarGroup.vue'
-import { formatRelativeTime, getProjectProgress } from '../../services/mock/projects'
+import TimeAgo from '../common/TimeAgo.vue'
+import { getProjectProgress } from '../../services/mock/projects'
 
 interface Props {
   project: Project
@@ -23,7 +24,6 @@ const progressPercent = computed(() => {
   return Math.round((progress.value.completed / progress.value.total) * 100)
 })
 
-const relativeTime = computed(() => formatRelativeTime(props.project.updatedAt))
 
 const badgeVariant = computed(() => {
   switch (props.project.genre?.toLowerCase()) {
@@ -101,7 +101,7 @@ defineEmits<{
       <!-- Footer -->
       <div class="card-footer">
         <AvatarGroup :avatars="memberAvatars" :max="2" size="sm" />
-        <span class="card-time">Edited {{ relativeTime }}</span>
+        <span class="card-time">Edited <TimeAgo :date="project.updatedAt" /></span>
       </div>
     </div>
 

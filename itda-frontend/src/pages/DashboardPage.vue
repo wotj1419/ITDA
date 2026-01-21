@@ -7,7 +7,7 @@ import { useUIStore } from '../stores/ui'
 import DefaultLayout from '../layouts/DefaultLayout.vue'
 import ProjectCard from '../components/project/ProjectCard.vue'
 import NewProjectModal from '../components/project/NewProjectModal.vue'
-import { formatRelativeTime } from '../services/mock/projects'
+import TimeAgo from '../components/common/TimeAgo.vue'
 
 const projectStore = useProjectStore()
 const uiStore = useUIStore()
@@ -81,7 +81,7 @@ const openNewProjectModal = () => {
             ></div>
             <div class="quick-access-info">
               <div class="quick-access-title">{{ project.title }}</div>
-              <div class="quick-access-time">Edited {{ formatRelativeTime(project.updatedAt) }}</div>
+              <div class="quick-access-time">Edited <TimeAgo :date="project.updatedAt" /></div>
             </div>
             <Star
               v-if="isFavorite(project.projectId)"
