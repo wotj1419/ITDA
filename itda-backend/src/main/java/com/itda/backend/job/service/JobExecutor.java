@@ -100,23 +100,24 @@ public class JobExecutor {
      * 타입별 Worker 호출
      */
     private Long executeByType(Job job) {
-        return switch (job.getType()) {
+        switch (job.getType()) {
             case IMAGE_GENERATION -> {
                 // TODO: 이용호 구현 후 주석 해제
-                // yield imageWorker.execute(job);
+                // return imageWorker.execute(job);
                 throw new UnsupportedOperationException("IMAGE_GENERATION worker not implemented");
             }
             case VIDEO_GENERATION -> {
                 // TODO: 김은서 구현 후 주석 해제
-                // yield videoWorker.execute(job);
+                // return videoWorker.execute(job);
                 throw new UnsupportedOperationException("VIDEO_GENERATION worker not implemented");
             }
             case SCENE_MERGE, PROJECT_MERGE -> {
                 // TODO: 장현준 구현 후 주석 해제
-                // yield mergeWorker.execute(job);
+                // return mergeWorker.execute(job);
                 throw new UnsupportedOperationException("MERGE worker not implemented");
             }
-        };
+        }
+        throw new IllegalStateException("Unsupported job type: " + job.getType());
     }
 
     /**
