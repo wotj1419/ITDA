@@ -1,0 +1,25 @@
+# Database Configuration
+DB_USERNAME=root
+DB_PASSWORD=ssafy
+
+# Redis Configuration
+REDIS_HOST=localhost
+REDIS_PORT=6379
+
+# JWT Configuration
+JWT_SECRET=your-super-secret-jwt-key-change-this-in-production
+
+# S3 Configuration (LocalStack)
+S3_REGION=ap-northeast-2
+S3_BUCKET=itda-local
+S3_ACCESS_KEY=test
+S3_SECRET_KEY=test
+S3_ENDPOINT=http://localhost:4566
+S3_PATH_STYLE=true
+
+# Vertex AI Configuration
+GCP_PROJECT_ID=project-c9b5454b-ea72-433a-be6
+GCP_LOCATION=us-central1
+VERTEX_TEXT_MODEL=gemini-2.5-flash
+VERTEX_TIMEOUT_MS=60000
+GOOGLE_APPLICATION_CREDENTIALS=C:\Users\SSAFY\Desktop\S14P11C205\itda-backend\test-key.json
