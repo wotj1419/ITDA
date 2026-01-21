@@ -28,4 +28,4 @@ file:
 
 job:
   execution:
-    max-retry-count: 3
+    max-retry-count: 0  # 0 이하: 제한 없음 (수동 재시도 정책)
