@@ -11,10 +11,9 @@ import VideoPreview from '../components/timeline/VideoPreview.vue'
 import VideoTrack from '../components/timeline/VideoTrack.vue'
 import TimeRuler from '../components/timeline/TimeRuler.vue'
 import MergeProgress from '../components/timeline/MergeProgress.vue'
-import { GitMerge, Download, RefreshCw, ArrowLeft } from 'lucide-vue-next'
-import { useRouter } from 'vue-router'
+import Button from '../components/common/Button.vue'
+import { GitMerge, RefreshCw } from 'lucide-vue-next'
 
-const router = useRouter()
 const route = useRoute()
 const projectStore = useProjectStore()
 const timelineStore = useTimelineStore()
@@ -92,6 +91,27 @@ function handleReset() {
     :clip-count="timelineStore.clipCount"
     :total-duration="timelineStore.totalDuration"
   >
+    <template #actions>
+      <div class="header-buttons">
+        <Button
+          v-if="timelineStore.mergeStatus === 'done'"
+          variant="ghost"
+          @click="handleReset"
+        >
+          <RefreshCw class="icon-md" />
+          다시 병합
+        </Button>
+        <Button
+          variant="primary"
+          :disabled="!timelineStore.canMerge"
+          @click="handleMerge"
+        >
+          <GitMerge class="icon-md" />
+          영상 병합하기
+        </Button>
+      </div>
+    </template>
+
     <div class="timeline-content">
       <!-- Loading -->
       <div v-if="timelineStore.isLoading" class="loading-state">
@@ -146,40 +166,18 @@ function handleReset() {
             @download="handleDownload"
           />
         </section>
-
-        <!-- Actions -->
-        <div class="timeline-actions">
-          <Button
-            v-if="timelineStore.mergeStatus === 'done'"
-            variant="ghost"
-            @click="handleReset"
-          >
-            <RefreshCw class="icon-sm" />
-            다시 병합
-          </Button>
-          <Button
-            variant="primary"
-            :disabled="!timelineStore.canMerge"
-            @click="handleMerge"
-          >
-            <GitMerge class="icon-sm" />
-            영상 병합하기
-          </Button>
-          <Button
-            variant="secondary"
-            :disabled="!timelineStore.canDownload"
-            @click="handleDownload"
-          >
-            <Download class="icon-sm" />
-            다운로드 (MP4)
-          </Button>
-        </div>
       </template>
     </div>
   </TimelineLayout>
 </template>
 
 <style scoped>
+.header-buttons {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
 .timeline-content {
   display: flex;
   flex-direction: column;

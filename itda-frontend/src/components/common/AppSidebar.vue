@@ -199,11 +199,24 @@ const sidebarClasses = computed(() => [
 
 .sidebar-collapsed .sidebar-text,
 .sidebar-collapsed .nav-label,
-.sidebar-collapsed .user-info-text,
 .sidebar-collapsed .credit-info {
   opacity: 0;
   transition: opacity 0.1s ease; /* Fade out quickly when collapsing */
   pointer-events: none;
+}
+
+/* Hide user info in the sidebar trigger, BUT keep it visible in the popup menu */
+.sidebar-collapsed .user-trigger .user-info-text {
+  opacity: 0;
+  pointer-events: none;
+  display: none; /* remove from flow to center avatar */
+}
+
+/* Ensure text inside the popup menu remains visible */
+.sidebar-collapsed .profile-menu .user-info-text {
+  opacity: 1;
+  pointer-events: auto;
+  display: block;
 }
 
 /* Header / Logo */
