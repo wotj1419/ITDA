@@ -52,9 +52,6 @@ pipeline {
         }
 
         stage('Deploy') {
-            when {
-                branch 'chore/jenkinsfile'
-            }
             steps {
                 sh '''
                     set -e
