@@ -1,0 +1,13 @@
+﻿global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: "prometheus"
+    static_configs:
+      - targets: ["prometheus:9090"]
+
+  # Enable if /actuator/prometheus is available
+  - job_name: "api"
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ["api:18080"]
