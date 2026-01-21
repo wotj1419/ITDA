@@ -35,6 +35,13 @@ public enum ErrorCode {
     JOB_ALREADY_RUNNING(409, "이미 실행 중인 작업입니다"),
     EMAIL_ALREADY_EXISTS(409, "이미 가입된 이메일입니다"),
     SCENE_LIMIT_EXCEEDED(409, "씬 개수 제한을 초과했습니다"),
+    MASTER_NODE_LIMIT_EXCEEDED(409, "마스터 노드는 씬당 최대 3개까지 생성할 수 있습니다"),
+
+    // ===== 403 Forbidden (Node specific) =====
+    SCENE_HEADER_NOT_MODIFIABLE(403, "씬 헤더 노드는 수정/삭제/이동할 수 없습니다"),
+
+    // ===== 400 Bad Request (Node specific) =====
+    INVALID_NODE_RELATION(400, "노드 연결 규칙이 올바르지 않습니다"),
 
     // ===== 500 Internal Server Error =====
     JOB_EXECUTION_FAILED(500, "작업 실행 중 오류가 발생했습니다"),
