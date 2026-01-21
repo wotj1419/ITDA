@@ -27,13 +27,8 @@ public class SceneService {
     public SceneCreateResponse createScene(Long userId, Long projectId, CreateSceneRequest request) {
         ensureMember(projectId, userId);
 
-        int maxOrderIndex = sceneMapper.findMaxOrderIndex(projectId);
-        Scene scene = Scene.builder()
-                .projectId(projectId)
-                .title(request.title())
-                .description(request.description())
-                .orderIndex(maxOrderIndex + 1)
-                .build();
+        int nextOrderIndex = sceneMapper.findNextOrderIndex(projectId);
+        Scene scene = Scene.create(projectId, request.title(), request.description(), nextOrderIndex);
 
         sceneMapper.insertScene(scene);
 

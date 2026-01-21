@@ -9,6 +9,7 @@ import com.itda.backend.project.controller.dto.response.ProjectDetailResponse;
 import com.itda.backend.project.controller.dto.response.ProjectListResponse;
 import com.itda.backend.project.service.ProjectService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -32,7 +33,12 @@ public class ProjectController {
 
     private final ProjectService projectService;
 
-    @Operation(summary = "Create project", description = "새로운 프로젝트를 생성합니다. 생성자는 자동으로 Owner가 됩니다.")
+    @Operation(summary = "Create project", description = "Create a new project and assign the requester as owner.")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", ref = "#/components/responses/ProjectCreateSuccess"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", ref = "#/components/responses/ValidationError"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", ref = "#/components/responses/Unauthorized")
+    })
     @PostMapping
     public ResponseEntity<ApiResponse<ProjectCreateResponse>> createProject(
             @AuthenticationPrincipal CustomUserDetails userDetails,
@@ -41,7 +47,12 @@ public class ProjectController {
         return ApiResponse.created(response);
     }
 
-    @Operation(summary = "List projects", description = "내가 참여 중인 프로젝트 목록을 조회합니다.")
+    @Operation(summary = "List projects", description = "List projects the requester participates in.")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", ref = "#/components/responses/ProjectListSuccess"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", ref = "#/components/responses/InvalidRequest"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", ref = "#/components/responses/Unauthorized")
+    })
     @GetMapping
     public ResponseEntity<ApiResponse<ProjectListResponse>> listProjects(
             @AuthenticationPrincipal CustomUserDetails userDetails,
@@ -51,7 +62,13 @@ public class ProjectController {
         return ApiResponse.success(response);
     }
 
-    @Operation(summary = "Get project detail", description = "프로젝트 상세 정보를 조회합니다.")
+    @Operation(summary = "Get project detail", description = "Get project details and metadata.")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", ref = "#/components/responses/ProjectDetailSuccess"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", ref = "#/components/responses/Unauthorized"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", ref = "#/components/responses/Forbidden"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", ref = "#/components/responses/ProjectNotFound")
+    })
     @GetMapping("/{projectId}")
     public ResponseEntity<ApiResponse<ProjectDetailResponse>> getProjectDetail(
             @AuthenticationPrincipal CustomUserDetails userDetails,
@@ -60,7 +77,7 @@ public class ProjectController {
         return ApiResponse.success(response);
     }
 
-    @Operation(summary = "Update project", description = "프로젝트 메타데이터를 수정합니다. Owner만 가능합니다.")
+    @Operation(summary = "Update project", description = "Update project metadata (owner only).")
     @PutMapping("/{projectId}")
     public ResponseEntity<ApiResponse<ProjectDetailResponse>> updateProject(
             @AuthenticationPrincipal CustomUserDetails userDetails,
@@ -71,7 +88,7 @@ public class ProjectController {
         return ApiResponse.success(response);
     }
 
-    @Operation(summary = "Delete project", description = "프로젝트를 삭제합니다. Owner만 가능합니다.")
+    @Operation(summary = "Delete project", description = "Delete a project (owner only).")
     @DeleteMapping("/{projectId}")
     public ResponseEntity<ApiResponse<Void>> deleteProject(
             @AuthenticationPrincipal CustomUserDetails userDetails,

@@ -19,5 +19,5 @@ public interface SceneMapper {
 
     List<SceneSummary> findAllByProjectId(@Param("projectId") Long projectId);
 
-    int findMaxOrderIndex(@Param("projectId") Long projectId);
+    int findNextOrderIndex(@Param("projectId") Long projectId);
 }

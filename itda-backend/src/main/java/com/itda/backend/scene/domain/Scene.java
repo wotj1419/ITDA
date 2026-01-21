@@ -21,4 +21,23 @@ public class Scene {
     private Long activeMasterNodeId;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+
+    public static Scene create(Long projectId, String title, String description, int orderIndex) {
+        if (projectId == null) {
+            throw new IllegalArgumentException("projectId must not be null");
+        }
+        if (title == null || title.isBlank()) {
+            throw new IllegalArgumentException("title must not be blank");
+        }
+        if (orderIndex < 1) {
+            throw new IllegalArgumentException("orderIndex must be positive");
+        }
+
+        return Scene.builder()
+                .projectId(projectId)
+                .title(title)
+                .description(description)
+                .orderIndex(orderIndex)
+                .build();
+    }
 }

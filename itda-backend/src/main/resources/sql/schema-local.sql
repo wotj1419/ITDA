@@ -10,6 +10,7 @@ DROP TABLE IF EXISTS generation_jobs;
 DROP TABLE IF EXISTS video_clips;
 DROP TABLE IF EXISTS nodes;
 DROP TABLE IF EXISTS scenes;
+DROP TABLE IF EXISTS project_scenarios;
 DROP TABLE IF EXISTS project_members;
 DROP TABLE IF EXISTS upload_requests;
 DROP TABLE IF EXISTS assets;
@@ -84,6 +85,31 @@ CREATE TABLE scenes (
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     KEY idx_scenes_project_order (project_id, order_index),
     CONSTRAINT fk_scenes_project FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ============================================
+-- 4-1. 시나리오 (Project Scenarios)
+-- ============================================
+
+
+CREATE TABLE project_scenarios (
+    project_id BIGINT PRIMARY KEY,
+    input_genre VARCHAR(50) NOT NULL,
+    input_mood VARCHAR(50) NOT NULL,
+    input_scene_count INT NOT NULL,
+    input_keywords VARCHAR(255),
+    input_character_hints TEXT,
+    input_background_hints TEXT,
+    input_reference_style VARCHAR(100),
+    prompt_text TEXT,
+    prompt_status VARCHAR(10) NOT NULL DEFAULT 'DRAFT',
+    plot_text TEXT,
+    plot_status VARCHAR(10) NOT NULL DEFAULT 'DRAFT',
+    current_step VARCHAR(10) NOT NULL DEFAULT 'INPUT',
+    version INT NOT NULL DEFAULT 1,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT fk_scenario_project FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ============================================
