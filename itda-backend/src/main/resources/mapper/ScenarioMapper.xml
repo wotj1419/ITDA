@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.itda.backend.scenario.repository.ScenarioMapper">
+
+    <resultMap id="ScenarioRecordMap" type="com.itda.backend.scenario.repository.dto.ScenarioRecord">
+        <id property="projectId" column="project_id"/>
+        <result property="inputGenre" column="input_genre"/>
+        <result property="inputMood" column="input_mood"/>
+        <result property="inputSceneCount" column="input_scene_count"/>
+        <result property="inputKeywords" column="input_keywords"/>
+        <result property="inputCharacterHints" column="input_character_hints"/>
+        <result property="inputBackgroundHints" column="input_background_hints"/>
+        <result property="inputReferenceStyle" column="input_reference_style"/>
+        <result property="promptText" column="prompt_text"/>
+        <result property="promptStatus" column="prompt_status"/>
+        <result property="plotText" column="plot_text"/>
+        <result property="plotStatus" column="plot_status"/>
+        <result property="currentStep" column="current_step"/>
+        <result property="version" column="version"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="updatedAt" column="updated_at"/>
+    </resultMap>
+
+    <select id="findByProjectId" resultMap="ScenarioRecordMap">
+        SELECT project_id,
+               input_genre,
+               input_mood,
+               input_scene_count,
+               input_keywords,
+               input_character_hints,
+               input_background_hints,
+               input_reference_style,
+               prompt_text,
+               prompt_status,
+               plot_text,
+               plot_status,
+               current_step,
+               version,
+               created_at,
+               updated_at
+        FROM project_scenarios
+        WHERE project_id = #{projectId}
+    </select>
+
+    <insert id="insertScenario" parameterType="com.itda.backend.scenario.repository.dto.ScenarioRecord">
+        INSERT INTO project_scenarios (
+            project_id,
+            input_genre,
+            input_mood,
+            input_scene_count,
+            input_keywords,
+            input_character_hints,
+            input_background_hints,
+            input_reference_style,
+            prompt_text,
+            prompt_status,
+            plot_text,
+            plot_status,
+            current_step,
+            version
+        )
+        VALUES (
+            #{projectId},
+            #{inputGenre},
+            #{inputMood},
+            #{inputSceneCount},
+            #{inputKeywords},
+            #{inputCharacterHints},
+            #{inputBackgroundHints},
+            #{inputReferenceStyle},
+            #{promptText},
+            #{promptStatus},
+            #{plotText},
+            #{plotStatus},
+            #{currentStep},
+            #{version}
+        )
+    </insert>
+
+    <update id="updateInputAndPrompt" parameterType="com.itda.backend.scenario.repository.dto.ScenarioRecord">
+        UPDATE project_scenarios
+        SET input_genre = #{inputGenre},
+            input_mood = #{inputMood},
+            input_scene_count = #{inputSceneCount},
+            input_keywords = #{inputKeywords},
+            input_character_hints = #{inputCharacterHints},
+            input_background_hints = #{inputBackgroundHints},
+            input_reference_style = #{inputReferenceStyle},
+            prompt_text = #{promptText},
+            prompt_status = #{promptStatus},
+            plot_text = #{plotText},
+            plot_status = #{plotStatus},
+            current_step = #{currentStep},
+            version = version + 1
+        WHERE project_id = #{projectId}
+          AND version = #{version}
+    </update>
+
+    <update id="updatePrompt">
+        UPDATE project_scenarios
+        SET prompt_text = #{promptText},
+            prompt_status = #{promptStatus},
+            plot_text = #{plotText},
+            plot_status = #{plotStatus},
+            current_step = #{currentStep},
+            version = version + 1
+        WHERE project_id = #{projectId}
+          AND version = #{version}
+    </update>
+
+    <update id="updatePlot">
+        UPDATE project_scenarios
+        SET plot_text = #{plotText},
+            plot_status = #{plotStatus},
+            current_step = #{currentStep},
+            version = version + 1
+        WHERE project_id = #{projectId}
+          AND version = #{version}
+    </update>
+
+</mapper>
