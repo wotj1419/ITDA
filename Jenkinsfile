@@ -62,7 +62,11 @@ pipeline {
                     cp deploy/prometheus/prometheus.yml "$DEPLOY_DIR/prometheus/" || true
                     cp -r itda-frontend/dist/. "$DEPLOY_DIR/nginx/html/"
                     if [ ! -f "$DEPLOY_DIR/.env" ]; then
-                      cp deploy/.env "$DEPLOY_DIR/.env"
+                      if [ -f deploy/.env ]; then
+                        cp deploy/.env "$DEPLOY_DIR/.env"
+                      else
+                        cp deploy/.env.example "$DEPLOY_DIR/.env"
+                      fi
                     fi
                     sed -i "s|^API_IMAGE=.*|API_IMAGE=$DOCKER_IMAGE|" "$DEPLOY_DIR/.env"
                     docker compose -f "$DEPLOY_DIR/docker-compose.yml" up -d nginx api mysql redis
