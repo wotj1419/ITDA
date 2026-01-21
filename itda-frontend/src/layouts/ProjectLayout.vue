@@ -1,6 +1,7 @@
+```
 <script setup lang="ts">
 import { computed, type Component } from 'vue'
-import { RouterLink, useRoute } from 'vue-router'
+import { RouterLink, useRouter, useRoute } from 'vue-router'
 import type { RouteLocationRaw } from 'vue-router'
 import { useUIStore } from '../stores/ui'
 import { useSidebarShortcut } from '../composables/useSidebarShortcut'
@@ -18,10 +19,11 @@ import {
   Menu,
   Play,
 } from 'lucide-vue-next'
+import { useCollabStore } from '../stores/collab'
 
 interface Props {
   project: ProjectDetail | null
-  activeTab: 'story' | 'scenes' | 'characters' | 'timeline' | 'settings'
+  activeTab: 'story' | 'scenes' | 'objects' | 'timeline' | 'settings'
   sceneCount?: number
   progress?: { completed: number; total: number }
 }
@@ -35,7 +37,9 @@ const emit = defineEmits<{
   (e: 'tab-change', tab: string): void
 }>()
 
+const router = useRouter()
 const route = useRoute()
+const collabStore = useCollabStore()
 const uiStore = useUIStore()
 
 // Keyboard shortcut (Ctrl+B)
@@ -54,7 +58,7 @@ interface NavItem {
 const navItems = computed<NavItem[]>(() => [
   { key: 'story', icon: BookOpen, label: 'Story', to: null },
   { key: 'scenes', icon: Clapperboard, label: 'Scenes', badge: props.sceneCount, to: null },
-  { key: 'characters', icon: User, label: 'Characters', to: null },
+  { key: 'objects', icon: User, label: 'Objects', to: null },
   { key: 'timeline', icon: Layers, label: 'Full Timeline', to: { name: 'timeline', params: { id: projectId.value } } },
   { key: 'settings', icon: Settings, label: 'Settings', to: null },
 ])
@@ -168,7 +172,7 @@ const progressPercentage = computed(() => {
             <span class="progress-text">{{ progress.completed }}/{{ progress.total }}</span>
           </div>
 
-          <Button variant="secondary">
+          <Button variant="secondary" @click="collabStore.joinRoom('default-room')">
             <Users class="icon-sm" />
             협업 시작
           </Button>

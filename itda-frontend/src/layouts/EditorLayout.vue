@@ -142,9 +142,7 @@ const sidebarClasses = computed(() => [
         </div>
 
         <!-- Right Sidebar (Properties) -->
-        <aside class="editor-properties">
-          <slot name="properties" />
-        </aside>
+        <slot name="properties" />
       </div>
 
       <!-- Bottom Bar (Mini Timeline) -->
@@ -340,14 +338,7 @@ const sidebarClasses = computed(() => [
   background: linear-gradient(135deg, var(--rose-50) 0%, var(--rose-75) 100%);
 }
 
-.editor-properties {
-  width: 400px;
-  background: white;
-  border-left: 1px solid var(--rose-200);
-  display: flex;
-  flex-direction: column;
-  overflow-y: auto;
-}
+
 
 /* ==========================================================================
    Utility Classes

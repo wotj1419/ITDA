@@ -1,0 +1,64 @@
+{
+    "tech_stack": [
+        "TypeScript",
+        "Vue.js",
+        "Vite",
+        "Pinia",
+        "Vue Router",
+        "Vue Flow",
+        "Axios",
+        "Lucide Vue Next"
+    ],
+    "features": [
+        {
+            "name": "Authentication",
+            "description": "User login and registration functionality",
+            "files": [
+                "src/pages/AuthPage.vue",
+                "src/stores/auth.ts",
+                "src/services/auth.interface.ts"
+            ]
+        },
+        {
+            "name": "Dashboard",
+            "description": "Main dashboard for users",
+            "files": [
+                "src/pages/DashboardPage.vue"
+            ]
+        },
+        {
+            "name": "Project Detail",
+            "description": "Detailed view and management of a project",
+            "files": [
+                "src/pages/ProjectDetailPage.vue",
+                "src/stores/project.ts"
+            ]
+        },
+        {
+            "name": "Scene Editor",
+            "description": "Node-based scene editor with collaboration support",
+            "files": [
+                "src/pages/SceneEditPage.vue",
+                "src/stores/scene.ts",
+                "src/stores/sceneNode.ts",
+                "src/stores/collab.ts"
+            ]
+        },
+        {
+            "name": "Timeline",
+            "description": "Timeline view for scene/video clips",
+            "files": [
+                "src/pages/TimelinePage.vue",
+                "src/stores/timeline.ts"
+            ]
+        },
+        {
+            "name": "User Profile",
+            "description": "User profile viewing and editing",
+            "files": [
+                "src/pages/ProfilePage.vue",
+                "src/pages/ProfileEditPage.vue"
+            ]
+        }
+    ]
+}

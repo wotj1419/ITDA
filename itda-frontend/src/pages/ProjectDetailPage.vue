@@ -29,7 +29,7 @@ const collabStore = useCollabStore()
 const scenarioStore = useScenarioStore()
 
 // State
-type ProjectTab = 'story' | 'scenes' | 'characters' | 'timeline' | 'settings'
+type ProjectTab = 'story' | 'scenes' | 'objects' | 'timeline' | 'settings'
 
 interface ScenePreviewClip {
   thumbnailUrl: string
@@ -56,7 +56,7 @@ const previewVisibleLimit = 6
 const tabItems: { key: ProjectTab; label: string }[] = [
   { key: 'story', label: 'Story' },
   { key: 'scenes', label: 'Scenes' },
-  { key: 'characters', label: 'Characters' },
+  { key: 'objects', label: 'Objects' }, // PRD v2.5: 캐릭터 -> 오브젝트로 명칭 변경
 ]
 
 // Computed
@@ -587,13 +587,13 @@ const handleDeleteCharacter = async (character: ObjectSheet) => {
         </div>
       </div>
 
-      <!-- Characters Tab -->
-      <div v-if="activeTab === 'characters'" class="tab-content">
+      <!-- Objects Tab -->
+      <div v-if="activeTab === 'objects'" class="tab-content">
         <div class="section-header">
-          <h2 class="section-title">캐릭터</h2>
+          <h2 class="section-title">오브젝트</h2>
           <Button variant="primary" @click="openAddCharacterModal">
             <Plus class="icon-sm" />
-            캐릭터 추가
+            오브젝트 추가
           </Button>
         </div>
 
