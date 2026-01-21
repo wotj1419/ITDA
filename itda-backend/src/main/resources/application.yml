@@ -4,6 +4,9 @@ spring:
   application:
     name: itda-backend
 
+server:
+  forward-headers-strategy: framework
+
 mybatis:
   mapper-locations: classpath:mapper/**/*.xml
   type-aliases-package: com.itda.backend
