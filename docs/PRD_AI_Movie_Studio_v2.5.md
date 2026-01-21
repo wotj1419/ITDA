@@ -1664,6 +1664,7 @@ DELETE /api/nodes/{id}/confirm         - 확정 취소
   - 기존 노드를 덮어쓰지 않고, 동일 부모 아래 **새 버전 노드**를 생성합니다(히스토리 보존).
   - 응답 예: `{ jobId, newNodeId }`
   - 새 버전은 UI에서 기본 선택/포커스(최신 버전 자동 선택)됩니다.
+  - 실패 재시도 버튼은 `regenerate` 호출을 기본으로 합니다. (같은 jobId 재실행은 운영/관리 목적)
 💡 삭제 정책(MVP):
   - 노드 삭제 시 하위 노드가 함께 삭제됩니다.
   - 삭제된 노드에 대해 뒤늦게 도착한 Job 결과는 서버가 무시(무효화)합니다.
@@ -1704,6 +1705,9 @@ POST /api/music/upload [P1]
 GET /api/ai/jobs/{jobId}
   - response: { status, progress?, target, resultUrl?, error? }
   - 💡 완료/실패는 프로젝트 이벤트 WebSocket(8.10)으로도 전달됩니다.
+
+POST /api/ai/jobs/{jobId}/requeue
+  - description: 같은 jobId를 재실행 요청 (운영/특수 케이스용)
 ```
 
 ### 8.7 파일 API [P1]

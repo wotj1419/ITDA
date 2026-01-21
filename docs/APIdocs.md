@@ -43,10 +43,11 @@
 - 프롬프트 생성: `POST /api/projects/{id}/scenario/prompt/generate`
 - 씬 스토리 생성: `POST /api/projects/{id}/scenario/scenes/generate`
 
-### AI/프롬프트/작업 (4)
+### AI/프롬프트/작업 (5)
 - 프롬프트 생성: `POST /api/ai/prompts/generate`
 - 프롬프트 개선: `POST /api/ai/prompts/improve`
 - 작업 상태 조회: `GET /api/ai/jobs/{jobId}`
+- 작업 재큐잉: `POST /api/ai/jobs/{jobId}/requeue`
 
 ### 타임라인/병합 (7)
 - 씬 타임라인 조회: `GET /api/scenes/{id}/timeline`
@@ -126,6 +127,8 @@
 | JOB_NOT_FOUND | 작업 없음 |
 | INVALID_REQUEST | 요청 파라미터 오류 |
 | MERGE_FAILED | 씬 병합 실패 |
+| IMAGE_GENERATION_FAILED | 이미지 생성 실패 |
+| VIDEO_GENERATION_FAILED | 영상 생성 실패 |
 
 ### 1.3 비동기 AI 작업 응답 규칙
 AI 생성 작업(이미지/영상)은 비동기로 처리됩니다.
@@ -1139,6 +1142,8 @@ API /api/nodes/{id}/regenerate
 }
 ```
 
+> 재생성은 새 버전 노드를 생성하므로, 동일 설정이라도 새로운 jobId가 발급됩니다.
+
 ---
 
 # Active Master 변경
@@ -1633,12 +1638,44 @@ API /api/ai/jobs/{jobId}
 | target.id | Long | 필수 | 대상 ID |
 | resultUrl | String | 선택 | 성공 시 결과 파일 URL |
 | error | Object | 선택 | 실패 시 오류 |
-| error.code | String | 선택 | 도메인 에러 코드 |
+| error.code | String | 선택 | 도메인 에러 코드 (예: MERGE_FAILED, IMAGE_GENERATION_FAILED, VIDEO_GENERATION_FAILED) |
 | error.message | String | 선택 | 오류 메시지 |
 | createdAt | String | 선택 | 생성 시각 |
 | finishedAt | String | 선택 | 완료 시각 |
 
 > `target`은 요청 기준 대상입니다. (예: 노드 생성은 NODE, 씬 병합은 SCENE)
+
+---
+
+# AI 작업 재큐잉
+```
+API /api/ai/jobs/{jobId}/requeue
+메서드 POST
+보안 Bearer Token
+상태 완료
+설명 실패 또는 대기 상태의 Job을 같은 jobId로 다시 실행 요청합니다.
+```
+
+#### 3. Response
+```json
+{
+  "code": "SUCCESS",
+  "data": {
+    "jobId": 12345,
+    "type": "IMAGE_GENERATION",
+    "status": "PENDING",
+    "progress": null,
+    "target": { "type": "NODE", "id": 301 },
+    "resultUrl": null,
+    "error": null,
+    "createdAt": "2026-01-19T10:11:12",
+    "finishedAt": null
+  }
+}
+```
+
+> 노드 생성 실패 재시도는 일반적으로 `/api/nodes/{id}/regenerate`를 사용합니다.  
+> `requeue`는 동일 jobId 재실행이 필요한 경우에 사용합니다.
 
 ---
 
