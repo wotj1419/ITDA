@@ -38,27 +38,47 @@ function handleClose(): void {
 </script>
 
 <template>
-  <aside v-if="selectedNode" class="node-panel">
-    <div class="node-panel__header">
-      <button class="node-panel__close" @click="handleClose" title="닫기">
-        <X class="node-panel__close-icon" />
-      </button>
-    </div>
-    
-    <component
-      v-if="panelComponent"
-      :is="panelComponent"
-      :node="selectedNode"
-      @close="handleClose"
-    />
-    
-    <div v-else class="node-panel__empty">
-      <p>패널을 찾을 수 없습니다.</p>
-    </div>
-  </aside>
+  <Transition name="slide">
+    <aside v-if="selectedNode" class="node-panel">
+      <div class="node-panel__header">
+        <button class="node-panel__close" @click="handleClose" title="닫기">
+          <X class="node-panel__close-icon" />
+        </button>
+      </div>
+      
+      <component
+        v-if="panelComponent"
+        :is="panelComponent"
+        :node="selectedNode"
+        @close="handleClose"
+      />
+      
+      <div v-else class="node-panel__empty">
+        <p>패널을 찾을 수 없습니다.</p>
+      </div>
+    </aside>
+  </Transition>
 </template>
 
 <style scoped>
+/* ==========================================================================
+   Animations
+   ========================================================================== */
+
+.slide-enter-active,
+.slide-leave-active {
+  transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.4s ease;
+}
+
+.slide-enter-from,
+.slide-leave-to {
+  transform: translateX(100%);
+  opacity: 0;
+}
+
+/* ==========================================================================
+   Panel Styles
+   ========================================================================== */
 .node-panel {
   width: 380px;
   height: 100%;

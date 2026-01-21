@@ -8,6 +8,7 @@
 import { computed } from 'vue';
 import { Handle, Position } from '@vue-flow/core';
 import { NodeResizer } from '@vue-flow/node-resizer';
+import { useSceneNodeStore } from '../../../stores/sceneNode';
 import { NODE_HEIGHTS, NODE_WIDTHS } from '../../../types/node';
 import type { SceneHeaderNodeData } from '../../../types/node';
 import { BookOpen } from 'lucide-vue-next';
@@ -23,6 +24,7 @@ interface Props {
 }
 
 const props = defineProps<Props>();
+const store = useSceneNodeStore();
 
 const nodeStyle = { '--node-resizer-color': 'var(--rose-500, #FF85A1)' } as Record<string, string>;
 
@@ -51,6 +53,7 @@ const truncatedDescription = computed(() => {
       :min-width="minWidth"
       :min-height="minHeight"
       :is-visible="props.selected"
+      @resize-start="store.pushPositionSnapshot()"
     />
     <div v-if="props.selected" class="node-resizer-outline" />
     <!-- Header -->

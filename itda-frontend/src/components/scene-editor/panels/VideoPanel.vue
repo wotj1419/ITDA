@@ -9,7 +9,7 @@ import type { VideoNodeData, CameraMotion } from '../../../types/node';
 import { PromptStatus, JobStatus } from '../../../types/node';
 import BasePanel from './BasePanel.vue';
 import { useSceneNodeStore } from '../../../stores/sceneNode';
-import { Video, Repeat, Move, Timer, Text, FileText, Sparkles, Check, RefreshCw, Star, Target } from 'lucide-vue-next';
+import { Video, Repeat, Move, Timer, Text, FileText, Sparkles, Check, RefreshCw, Star, Target, ZoomIn, ZoomOut, ArrowLeft, ArrowRight, ArrowUp, ArrowDown, Circle } from 'lucide-vue-next';
 
 interface Props {
   node: Node<VideoNodeData>;
@@ -26,14 +26,14 @@ const form = ref({
   prompt: '',
 });
 
-const cameraOptions: { value: CameraMotion; label: string }[] = [
-  { value: 'static', label: '정지' },
-  { value: 'zoomIn', label: '줌인' },
-  { value: 'zoomOut', label: '줌아웃' },
-  { value: 'panLeft', label: '팬 좌' },
-  { value: 'panRight', label: '팬 우' },
-  { value: 'tiltUp', label: '틸트 업' },
-  { value: 'tiltDown', label: '틸트 다운' },
+const cameraOptions: { value: CameraMotion; label: string; icon: any }[] = [
+  { value: 'static', label: '정지', icon: Circle },
+  { value: 'zoomIn', label: '줌인', icon: ZoomIn },
+  { value: 'zoomOut', label: '줌아웃', icon: ZoomOut },
+  { value: 'panLeft', label: '팬 좌', icon: ArrowLeft },
+  { value: 'panRight', label: '팬 우', icon: ArrowRight },
+  { value: 'tiltUp', label: '틸트 업', icon: ArrowUp },
+  { value: 'tiltDown', label: '틸트 다운', icon: ArrowDown },
 ];
 
 const durationOptions = [3, 5, 8, 10];
@@ -140,7 +140,8 @@ function toggleConfirm(): void {
             :class="['panel-camera-option', { active: form.cameraMotion === opt.value }]"
             @click="form.cameraMotion = opt.value"
           >
-            {{ opt.label }}
+            <component :is="opt.icon" class="panel-camera-icon" />
+            <span>{{ opt.label }}</span>
           </button>
         </div>
       </div>

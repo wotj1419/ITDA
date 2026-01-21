@@ -223,7 +223,7 @@ const handleApplyToProject = async () => {
 
 .scene-item:hover {
   border-color: var(--rose-200);
-  box-shadow: 0 2px 8px rgba(244, 63, 94, 0.08);
+  box-shadow: 0 2px 8px rgba(255, 133, 161, 0.08);
 }
 
 .scene-item.dragging {

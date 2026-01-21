@@ -1,6 +1,8 @@
 <script setup lang="ts">
 /**
  * MasterImagePanel - 마스터 이미지 생성/편집 패널
+ * 
+ * 설계 문서: docs/vue-flow-node-workflow-design.md Section 6.2
  */
 import { ref, computed, watch } from 'vue';
 import type { Node } from '@vue-flow/core';
@@ -8,7 +10,7 @@ import type { MasterImageNodeData } from '../../../types/node';
 import { PromptStatus } from '../../../types/node';
 import BasePanel from './BasePanel.vue';
 import { useSceneNodeStore } from '../../../stores/sceneNode';
-import { Film, Palette, Sun, Smile, Sparkles, FileText, Image, Check, RefreshCw, Star } from 'lucide-vue-next';
+import { Film, Palette, Sun, Smile, Sparkles, FileText, Image, Check, RefreshCw, Star, Users } from 'lucide-vue-next';
 
 interface Props {
   node: Node<MasterImageNodeData>;
@@ -17,10 +19,12 @@ interface Props {
 const props = defineProps<Props>();
 const nodeStore = useSceneNodeStore();
 
+// 폼 상태 - objectIds는 배열로 관리 (다중 선택)
 const form = ref({
   style: '',
   timeOfDay: '',
   mood: '',
+  objectIds: [] as string[],  // 등장 오브젝트 IDs (캐릭터 포함)
   prompt: '',
 });
 
@@ -28,26 +32,64 @@ const styleOptions = ['실사', '애니메이션', '픽사', '수채화', '유�
 const timeOptions = ['아침', '낮', '저녁', '밤'];
 const moodOptions = ['편안', '고독', '긴장', '행복', '우울'];
 
+// TODO: 실제로는 Store/API에서 캐릭터/오브젝트 목록을 가져와야 함
+const objectOptions = [
+  { id: 'char-nahido', name: '나희도', type: 'character' },
+  { id: 'char-baekijin', name: '백이진', type: 'character' },
+  { id: 'char-goyurim', name: '고유림', type: 'character' },
+  { id: 'obj-robot-bell', name: '로봇 벨', type: 'object' },
+  { id: 'obj-spaceship', name: '우주선', type: 'object' },
+];
+
 const data = computed(() => props.node.data as MasterImageNodeData | undefined);
 const isPromptGenerated = computed(() => data.value?.promptStatus !== PromptStatus.DRAFT);
 const isPromptApproved = computed(() => data.value?.promptStatus === PromptStatus.APPROVED);
 const canGenerate = computed(() => isPromptApproved.value);
 
+// 노드 변경 시 폼 동기화
 watch(() => props.node.id, () => {
   if (!data.value) return;
   form.value = {
     style: data.value.style || '',
     timeOfDay: data.value.timeOfDay || '',
     mood: data.value.mood || '',
+    objectIds: data.value.objectIds || [],
     prompt: data.value.prompt || '',
   };
 }, { immediate: true });
 
+// 오브젝트 선택 토글
+function toggleObject(objectId: string): void {
+  const idx = form.value.objectIds.indexOf(objectId);
+  if (idx >= 0) {
+    form.value.objectIds.splice(idx, 1);
+  } else {
+    form.value.objectIds.push(objectId);
+  }
+}
+
+// 선택된 오브젝트 이름 목록 반환
+function getSelectedObjectNames(): string {
+  return form.value.objectIds
+    .map(id => objectOptions.find(opt => opt.id === id)?.name)
+    .filter(Boolean)
+    .join(', ');
+}
+
 function generatePrompt(): void {
-  const promptText = `Wide establishing shot of a scene, style: ${form.value.style}, time: ${form.value.timeOfDay}, mood: ${form.value.mood}`;
+  // objectIds에서 선택된 오브젝트 이름들을 프롬프트에 포함
+  const objectNames = getSelectedObjectNames();
+  const objectPart = objectNames ? `, featuring: ${objectNames}` : '';
+  
+  const promptText = `Wide establishing shot of a scene, style: ${form.value.style}, time: ${form.value.timeOfDay}, mood: ${form.value.mood}${objectPart}`;
   form.value.prompt = promptText;
+  
   nodeStore.updateNode(props.node.id, {
-    ...form.value,
+    style: form.value.style,
+    timeOfDay: form.value.timeOfDay,
+    mood: form.value.mood,
+    objectIds: form.value.objectIds,
+    prompt: form.value.prompt,
     promptStatus: PromptStatus.GENERATED,
   });
 }
@@ -61,6 +103,7 @@ function approvePrompt(): void {
 
 function generateImage(): void {
   console.log('Generate image with:', form.value);
+  // TODO: API 연동 시 여기에 실제 호출 추가
 }
 
 function setActive(): void {
@@ -103,6 +146,27 @@ function setActive(): void {
           <label v-for="opt in timeOptions" :key="opt" class="panel-radio">
             <input type="radio" v-model="form.timeOfDay" :value="opt" />
             <span class="panel-radio-label">{{ opt }}</span>
+          </label>
+        </div>
+      </div>
+
+      <!-- 등장 오브젝트 (다중 선택 체크박스) -->
+      <div class="panel-section">
+        <label class="panel-label">
+          <Users class="panel-label-icon" />
+          등장 오브젝트
+        </label>
+        <div class="panel-checkbox-group">
+          <label v-for="obj in objectOptions" :key="obj.id" class="panel-checkbox">
+            <input 
+              type="checkbox" 
+              :checked="form.objectIds.includes(obj.id)"
+              @change="toggleObject(obj.id)"
+            />
+            <span class="panel-checkbox-label">
+              {{ obj.name }}
+              <span class="panel-checkbox-tag">{{ obj.type === 'character' ? '캐릭터' : '오브젝트' }}</span>
+            </span>
           </label>
         </div>
       </div>
@@ -161,3 +225,15 @@ function setActive(): void {
     </template>
   </BasePanel>
 </template>
+
+<style scoped>
+/* 체크박스 태그 스타일 */
+.panel-checkbox-tag {
+  font-size: 0.65rem;
+  padding: 0.125rem 0.375rem;
+  background: var(--rose-100, #FFF0F5);
+  color: var(--rose-600, #DB2777);
+  border-radius: 0.25rem;
+  margin-left: 0.5rem;
+}
+</style>

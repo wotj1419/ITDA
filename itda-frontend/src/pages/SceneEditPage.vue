@@ -31,6 +31,10 @@ const collabStore = useCollabStore();
 
 const nodeCanvasRef = ref<InstanceType<typeof NodeCanvas> | null>(null);
 
+/**
+ * 오른쪽 속성 패널 표시 여부
+ */
+const isPanelOpen = computed(() => !!nodeStore.selectedNodeId);
 
 // =============================================================================
 // Route Parameters
@@ -202,7 +206,11 @@ function handleAutoLayout(): void {
   </EditorLayout>
 
 
-  <button class="auto-layout-btn" @click="handleAutoLayout">
+  <button 
+    class="auto-layout-btn" 
+    :class="{ 'panel-open': isPanelOpen }" 
+    @click="handleAutoLayout"
+  >
     <span class="icon-wrap">
       <img
         class="svgIcon icon-default"
@@ -223,9 +231,8 @@ function handleAutoLayout(): void {
 <style scoped>
 .auto-layout-btn {
   --btn-size: 50px;
-  --btn-half: 35px;
+  --btn-half: 25px;
   --icon-size: 40px;
-  --center-x: calc(100% - 450px - var(--btn-half));
   --bottom: 80px;
 
   width: var(--btn-size);
@@ -238,16 +245,25 @@ function handleAutoLayout(): void {
   justify-content: center;
   gap: 8px;
   position: fixed;
-  left: var(--center-x);
+  right: 100px;
   bottom: var(--bottom);
-  transform: translateX(-50%);
+  transform: translateX(50%);
   overflow: hidden;
   color: #fff;
   font-size: 0;
   font-weight: 600;
   white-space: nowrap;
   cursor: pointer;
-  transition: width 0.3s, border-radius 0.3s, background-color 0.3s;
+  z-index: 50;
+  transition: 
+    right 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+    width 0.3s ease, 
+    border-radius 0.3s ease, 
+    background-color 0.3s ease;
+}
+
+.auto-layout-btn.panel-open {
+  right: 480px; /* Panel 380 + Original Right 100 */
 }
 
 .icon-wrap {
@@ -283,4 +299,3 @@ function handleAutoLayout(): void {
   height: 0;
 }
 </style>
-

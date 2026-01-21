@@ -8,7 +8,7 @@ import CollabPill from './CollabPill.vue';
 const collabStore = useCollabStore();
 
 // 드래그 기능 적용
-const { position, isDragging, onMouseDown } = useDraggable({
+const { position, isDragging, onMouseDown, shouldPreventClick } = useDraggable({
   initialRight: 24,
   initialBottom: 24,
   storageKey: 'collab-container-position',
@@ -19,6 +19,16 @@ const { position, isDragging, onMouseDown } = useDraggable({
  * connected 상태일 때만 표시
  */
 const showCollab = computed(() => collabStore.isConnected);
+
+function handleContainerClick() {
+  // 드래그 중이거나 방금 드래그가 끝났다면 클릭 무시
+  if (shouldPreventClick()) return;
+  
+  // 패널이 닫혀있을 때만(즉, Pill 상태일 때만) 토글하여 켬
+  if (!collabStore.isPanelOpen) {
+    collabStore.togglePanel();
+  }
+}
 </script>
 
 <template>
@@ -29,6 +39,7 @@ const showCollab = computed(() => collabStore.isConnected);
       :class="{ 'is-dragging': isDragging }"
       :style="{ right: position.right + 'px', bottom: position.bottom + 'px' }"
       @mousedown="onMouseDown"
+      @click="handleContainerClick"
     >
       <!-- Expanded Panel -->
       <Transition name="scale" mode="out-in">

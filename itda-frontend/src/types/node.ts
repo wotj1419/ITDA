@@ -101,7 +101,7 @@ export interface MasterImageNodeData extends BaseNodeData {
     style: string;
     timeOfDay: string;
     mood: string;
-    objectIds: string[];
+    objectIds: string[];  // 등장 오브젝트 IDs (캐릭터 포함)
 }
 
 /** 스토리보드 그리드 노드 */
