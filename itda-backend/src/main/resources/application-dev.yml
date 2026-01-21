@@ -13,6 +13,11 @@ spring.ai.vertex.ai.gemini:
   project-id: ${GCP_PROJECT_ID:}
   location: ${GCP_LOCATION:us-central1}
 
+ai:
+  scenario:
+    model-text: ${VERTEX_TEXT_MODEL:}
+    timeout-ms: ${VERTEX_TIMEOUT_MS:8000}
+
 logging:
   level:
     com.itda: DEBUG

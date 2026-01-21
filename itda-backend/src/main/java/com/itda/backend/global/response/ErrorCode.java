@@ -28,6 +28,7 @@ public enum ErrorCode {
     USER_NOT_FOUND(404, "사용자를 찾을 수 없습니다"),
     PROJECT_NOT_FOUND(404, "프로젝트를 찾을 수 없습니다"),
     SCENE_NOT_FOUND(404, "씬을 찾을 수 없습니다"),
+    SCENARIO_NOT_FOUND(404, "시나리오를 찾을 수 없습니다"),
     NODE_NOT_FOUND(404, "노드를 찾을 수 없습니다"),
     JOB_NOT_FOUND(404, "작업을 찾을 수 없습니다"),
 
@@ -35,6 +36,18 @@ public enum ErrorCode {
     JOB_ALREADY_RUNNING(409, "이미 실행 중인 작업입니다"),
     EMAIL_ALREADY_EXISTS(409, "이미 가입된 이메일입니다"),
     SCENE_LIMIT_EXCEEDED(409, "씬 개수 제한을 초과했습니다"),
+    SCENARIO_VERSION_CONFLICT(409, "시나리오가 최신 상태가 아닙니다"),
+
+    // ===== 422 Unprocessable Entity =====
+    SCENARIO_INVALID_STATE(422, "시나리오 상태가 올바르지 않습니다"),
+
+    // ===== 429 Too Many Requests =====
+    AI_RATE_LIMITED(429, "AI 요청이 너무 많습니다"),
+
+    // ===== 5xx Server Errors =====
+    AI_AUTH_FAILED(500, "AI 인증 오류가 발생했습니다"),
+    AI_PROVIDER_ERROR(502, "AI 제공자 오류가 발생했습니다"),
+    AI_TIMEOUT(504, "AI 응답 시간이 초과되었습니다"),
 
     // ===== 500 Internal Server Error =====
     JOB_EXECUTION_FAILED(500, "작업 실행 중 오류가 발생했습니다"),
