@@ -127,8 +127,6 @@
 | JOB_NOT_FOUND | 작업 없음 |
 | INVALID_REQUEST | 요청 파라미터 오류 |
 | MERGE_FAILED | 씬 병합 실패 |
-| IMAGE_GENERATION_FAILED | 이미지 생성 실패 |
-| VIDEO_GENERATION_FAILED | 영상 생성 실패 |
 
 ### 1.3 비동기 AI 작업 응답 규칙
 AI 생성 작업(이미지/영상)은 비동기로 처리됩니다.
@@ -1142,8 +1140,6 @@ API /api/nodes/{id}/regenerate
 }
 ```
 
-> 재생성은 새 버전 노드를 생성하므로, 동일 설정이라도 새로운 jobId가 발급됩니다.
-
 ---
 
 # Active Master 변경
@@ -1217,6 +1213,15 @@ API /api/projects/{id}/scenario
     "projectId": 101,
     "version": 3,
     "currentStep": "SCENES",
+    "input": {
+      "genre": "SF",
+      "mood": "HOPEFUL",
+      "sceneCount": 5,
+      "keywords": "화성, 생존, 가족",
+      "characterHints": "외로운 우주인",
+      "backgroundHints": "화성 기지",
+      "referenceStyle": "인터스텔라"
+    },
     "prompt": {
       "text": "화성에 홀로 남겨진 우주인의 이야기...",
       "status": "APPROVED"
@@ -1250,13 +1255,14 @@ API /api/projects/{id}/scenario/prompt/generate
 {
   "genre": "SF",
   "mood": "HOPEFUL",
-  "keywords": ["화성", "생존", "가족"],
+  "keywords": "화성, 생존, 가족",
   "sceneCount": 5,
   "characterHints": "외로운 우주인, 반항하는 로봇",
   "backgroundHints": "화성 기지, 붉은 사막",
   "referenceStyle": "인터스텔라 느낌"
 }
 ```
+※ `keywords`는 **콤마 구분 문자열**로 전달하며, 서버에서 trim/split 처리합니다.
 
 #### 3. Response
 ```json
@@ -1300,6 +1306,8 @@ API /api/projects/{id}/scenario/plot/generate
 상태 완료
 설명 승인된 프롬프트를 바탕으로 전체 줄거리를 생성하고 저장합니다.
 ```
+
+요청 바디 없음 (서버에 저장된 승인 프롬프트 사용)
 
 #### 3. Response
 ```json
@@ -1487,7 +1495,7 @@ API /api/ai/scenario
 {
   "genre": "SF",
   "mood": "HOPEFUL",
-  "keywords": ["화성", "생존", "가족"],
+  "keywords": "화성, 생존, 가족",
   "sceneCount": 5,
   "plot": "optional plot summary",
   // 고급 옵션 (선택)
@@ -1502,7 +1510,7 @@ API /api/ai/scenario
 | --- | --- | --- | --- |
 | genre | String | 필수 | 장르 |
 | mood | String | 필수 | 분위기/톤 |
-| keywords | List<String> | 선택 | 키워드 목록 |
+| keywords | String | 선택 | 키워드 문자열 (콤마 구분) |
 | sceneCount | Integer | 필수 | 생성할 씬 개수 (3~7개) |
 | plot | String | 선택 | 초기 전체 줄거리 (입력 시 반영) |
 | characterHints | String | 선택 | 메인 캐릭터 힌트 |
@@ -1638,7 +1646,7 @@ API /api/ai/jobs/{jobId}
 | target.id | Long | 필수 | 대상 ID |
 | resultUrl | String | 선택 | 성공 시 결과 파일 URL |
 | error | Object | 선택 | 실패 시 오류 |
-| error.code | String | 선택 | 도메인 에러 코드 (예: MERGE_FAILED, IMAGE_GENERATION_FAILED, VIDEO_GENERATION_FAILED) |
+| error.code | String | 선택 | 도메인 에러 코드 |
 | error.message | String | 선택 | 오류 메시지 |
 | createdAt | String | 선택 | 생성 시각 |
 | finishedAt | String | 선택 | 완료 시각 |
