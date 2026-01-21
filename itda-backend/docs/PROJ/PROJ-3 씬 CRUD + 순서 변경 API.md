@@ -31,16 +31,20 @@
   - scene 존재 확인 후 멤버십 체크
   - delete 실행 결과 확인
 
-## 5) 현재 상태
+## 5) 4단계 진행 내용 (Swagger 문서/예시)
+- update/reorder 응답에 InvalidRequest(400) 추가
+- Scene 목록 예시에서 status 값을 null로 표기 (현 구현 기준)
+
+## 6) 현재 상태
 - update/delete 서비스 로직까지 반영 완료
+- CRUD Swagger 응답 예시 정리 완료
 - reorder API는 미구현 상태 (스텁 유지)
 
-## 6) 다음 단계
-- CRUD Swagger 예시/에러 응답 정리
+## 7) 다음 단계
 - CRUD 플로우 테스트 (create/list/detail/update/delete)
 - reorder API 구현 (validation + batch update)
 
-## 7) 참고 문서
+## 8) 참고 문서
 - APIdocs: `S14P11C205/docs/APIdocs.md`
 - PRD: `S14P11C205/docs/PRD_AI_Movie_Studio_v2.5.md`
 - 일정: `S14P11C205/docs/ai-movie-studio-md-pack-v3/02-schedule-w3-w6.md`

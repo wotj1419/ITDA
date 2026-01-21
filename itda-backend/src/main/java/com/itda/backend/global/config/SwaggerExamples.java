@@ -107,12 +107,13 @@ public final class SwaggerExamples {
                               "sceneId": 201,
                               "title": "Scene 1",
                               "order": 1,
-                              "status": "COMPLETED"
+                              "status": null
                             },
                             {
                               "sceneId": 202,
                               "title": "Scene 2",
-                              "order": 2
+                              "order": 2,
+                              "status": null
                             }
                           ],
                           "details": null
