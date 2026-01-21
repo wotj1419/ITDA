@@ -4,6 +4,8 @@ import com.itda.backend.global.exception.BusinessException;
 import com.itda.backend.global.response.ErrorCode;
 import com.itda.backend.project.repository.ProjectMemberMapper;
 import com.itda.backend.scene.controller.dto.request.CreateSceneRequest;
+import com.itda.backend.scene.controller.dto.request.ReorderScenesRequest;
+import com.itda.backend.scene.controller.dto.request.UpdateSceneRequest;
 import com.itda.backend.scene.controller.dto.response.SceneCreateResponse;
 import com.itda.backend.scene.controller.dto.response.SceneDetailResponse;
 import com.itda.backend.scene.controller.dto.response.SceneSummaryResponse;
@@ -55,6 +57,21 @@ public class SceneService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.SCENE_NOT_FOUND));
         ensureMember(scene.getProjectId(), userId);
         return SceneDetailResponse.from(scene);
+    }
+
+    @Transactional
+    public SceneDetailResponse updateScene(Long userId, Long sceneId, UpdateSceneRequest request) {
+        throw new UnsupportedOperationException("Scene update not implemented");
+    }
+
+    @Transactional
+    public void deleteScene(Long userId, Long sceneId) {
+        throw new UnsupportedOperationException("Scene delete not implemented");
+    }
+
+    @Transactional
+    public void reorderScenes(Long userId, Long projectId, ReorderScenesRequest request) {
+        throw new UnsupportedOperationException("Scene reorder not implemented");
     }
 
     private void ensureMember(Long projectId, Long userId) {

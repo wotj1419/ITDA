@@ -12,6 +12,14 @@ public final class SwaggerExamples {
 
     public static void registerResponses(Components components) {
         components
+                .addResponses("Success", exampleResponse("Success", """
+                        {
+                          "code": "SUCCESS",
+                          "message": null,
+                          "data": null,
+                          "details": null
+                        }
+                        """))
                 .addResponses("ProjectCreateSuccess", exampleResponse("Create project success", """
                         {
                           "code": "SUCCESS",
