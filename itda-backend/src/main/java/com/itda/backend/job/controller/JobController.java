@@ -57,7 +57,7 @@ public class JobController {
 
     @Operation(
             summary = "Job 재큐잉",
-            description = "PENDING/재시도 가능한 FAILED 상태의 Job을 재큐잉합니다."
+            description = "PENDING/FAILED 상태의 Job을 재큐잉합니다."
     )
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(

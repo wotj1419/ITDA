@@ -21,6 +21,8 @@ import java.util.List;
 @RequiredArgsConstructor
 public class JobExecutor {
 
+    private static final int MAX_ERROR_MESSAGE_LENGTH = 2000;
+
     private final JobMapper jobMapper;
     private final JobEventPublisher jobEventPublisher;
     private final TransactionTemplate transactionTemplate;
@@ -54,10 +56,11 @@ public class JobExecutor {
             return;
         }
 
-        // 재시도 한도 초과 시 스킵
-        if (job.isFailed() && !job.canRetry(jobExecutionProperties.getMaxRetryCount())) {
-            log.info("[JobExecutor] Job retry limit exceeded, skipping: id={}, retryCount={}", 
-                    jobId, job.getRetryCount());
+        // 실행 가능 상태 확인 (PENDING 또는 재시도 가능한 FAILED)
+        int maxRetryCount = jobExecutionProperties.getMaxRetryCount();
+        if (!job.isExecutable(maxRetryCount)) {
+            log.info("[JobExecutor] Job not executable, skipping: id={}, status={}, retryCount={}",
+                    jobId, job.getStatus(), job.getRetryCount());
             return;
         }
 
@@ -101,20 +104,17 @@ public class JobExecutor {
             case IMAGE_GENERATION -> {
                 // TODO: 이용호 구현 후 주석 해제
                 // yield imageWorker.execute(job);
-                log.warn("[JobExecutor] IMAGE_GENERATION not implemented yet");
-                yield null;
+                throw new UnsupportedOperationException("IMAGE_GENERATION worker not implemented");
             }
             case VIDEO_GENERATION -> {
                 // TODO: 김은서 구현 후 주석 해제
                 // yield videoWorker.execute(job);
-                log.warn("[JobExecutor] VIDEO_GENERATION not implemented yet");
-                yield null;
+                throw new UnsupportedOperationException("VIDEO_GENERATION worker not implemented");
             }
             case SCENE_MERGE, PROJECT_MERGE -> {
                 // TODO: 장현준 구현 후 주석 해제
                 // yield mergeWorker.execute(job);
-                log.warn("[JobExecutor] MERGE not implemented yet");
-                yield null;
+                throw new UnsupportedOperationException("MERGE worker not implemented");
             }
         };
     }
@@ -140,7 +140,9 @@ public class JobExecutor {
      */
     private String truncateErrorMessage(String message) {
         if (message == null) return null;
-        return message.length() > 1000 ? message.substring(0, 1000) : message;
+        return message.length() > MAX_ERROR_MESSAGE_LENGTH
+                ? message.substring(0, MAX_ERROR_MESSAGE_LENGTH)
+                : message;
     }
 
     private boolean markRunning(Long jobId) {

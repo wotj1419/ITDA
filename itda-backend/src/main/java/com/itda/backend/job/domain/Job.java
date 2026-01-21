@@ -116,6 +116,12 @@ public class Job {
      * 실행 가능 상태인지 확인 (PENDING 또는 재시도 가능한 FAILED)
      */
     public boolean isExecutable(int maxRetryCount) {
-        return isPending() || canRetry(maxRetryCount);
+        if (isPending()) {
+            return true;
+        }
+        if (maxRetryCount <= 0) {
+            return isFailed();
+        }
+        return canRetry(maxRetryCount);
     }
 }

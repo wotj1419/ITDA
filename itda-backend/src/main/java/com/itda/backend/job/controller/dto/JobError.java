@@ -14,6 +14,9 @@ public record JobError(
 ) {
 
     private static final String JOB_EXECUTION_FAILED = "JOB_EXECUTION_FAILED";
+    private static final String IMAGE_GENERATION_FAILED = "IMAGE_GENERATION_FAILED";
+    private static final String VIDEO_GENERATION_FAILED = "VIDEO_GENERATION_FAILED";
+    private static final String MERGE_FAILED = "MERGE_FAILED";
 
     /**
      * Job 실패 시 에러 정보 추출
@@ -24,6 +27,14 @@ public record JobError(
         if (job.getErrorMessage() == null) {
             return null;
         }
-        return new JobError(JOB_EXECUTION_FAILED, job.getErrorMessage());
+        return new JobError(resolveErrorCode(job), job.getErrorMessage());
+    }
+
+    private static String resolveErrorCode(Job job) {
+        return switch (job.getType()) {
+            case IMAGE_GENERATION -> IMAGE_GENERATION_FAILED;
+            case VIDEO_GENERATION -> VIDEO_GENERATION_FAILED;
+            case SCENE_MERGE, PROJECT_MERGE -> MERGE_FAILED;
+        };
     }
 }
