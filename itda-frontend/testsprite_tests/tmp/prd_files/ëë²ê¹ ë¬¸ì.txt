@@ -1,0 +1,47 @@
+1. 데이터 로딩 및 초기화 (Data Fetching & Lifecycle)
+가장 먼저 데이터가 정상적으로 불러와지는지 확인해야 합니다. onMounted 시점의 비동기 로직이 핵심입니다.
+
+체크 포인트:
+URL 파라미터 (projectId, sceneId)가 정상적으로 파싱되는지 확인
+Promise.all로 묶인 loadProject, loadScenes API 호출이 순서대로 잘 완료되는지
+nodeStore.loadSceneNodes가 실패했을 때 에러 처리가 되어 있는지
+페이지 진입 시 **로딩 상태(Spinner 등)**가 UI에 잘 반영되는지
+2. 노드 에디터 동작 (Node Editor Interactivity)
+NodeCanvas 컴포넌트와 nodeStore 간의 상호작용이 가장 복잡한 부분입니다.
+
+체크 포인트:
+노드 선택/해제: 
+handleNodeSelect
+ 함수가 클릭 시 정상 호출되고, selectedNodeId 상태가 업데이트되는지
+키보드 단축키:
+Delete / Backspace 키로 노드 삭제가 잘 되는지 (Input 태그 포커스 시에는 작동 안 해야 함 -> 
+isEditableTarget
+ 로직 확인)
+Ctrl+Z (Undo) 기능이 nodeStore의 히스토리 스택과 잘 연동되는지
+자동 레이아웃: 
+handleAutoLayout
+ 호출 시 NodeCanvas 내부의 그래프 정렬 로직이 깨지지 않고 작동하는지
+3. 실시간 협업 기능 (Real-time Collaboration)
+collabStore를 사용하는 부분이 안정성에 큰 영향을 미칠 수 있습니다.
+
+체크 포인트:
+페이지 진입 시 collabStore.joinRoom이 소켓 연결을 잘 맺는지
+페이지 이탈(onUnmounted) 시 leaveRoom이 호출되어 소켓 연결이 잘 끊기는지 (좀비 연결 방지)
+다른 사용자가 들어왔을 때 커서나 상태 업데이트가 실시간으로 반영되는지
+4. 타임라인 및 데이터 계산 (Computed Logic)
+timelineClips와 같은 computed 속성은 데이터 변경에 따라 즉시 반응해야 합니다.
+
+체크 포인트:
+nodeStore.confirmedVideos 데이터가 변경될 때 timelineClips가 즉시 재계산되는지
+totalDuration 합계가 올바르게 계산되는지
+섬네일 URL이나 비디오 버전 정보가 없는 경우(null/undefined)에 대한 예외 처리가 되어 렌더링 에러가 없는지
+5. UI/Layout 반응성 (UI & CSS)
+CSS 및 UI 컴포넌트의 배치 이슈입니다.
+
+체크 포인트:
+auto-layout-btn (레이아웃 정렬 버튼)이 드래그 앤 드롭 구현 후에도 위치가 잘 유지되는지 (이전 작업 내역 관련)
+화면 크기가 줄어들었을 때 캔버스와 패널(NodePanelContainer)이 겹치거나 깨지지 않는지
+디버깅 우선순위 추천
+API 연동 (1번): 데이터가 없으면 아무것도 못하므로 최우선
+노드 편집 (2번): 핵심 기능이므로 그 다음
+협업 (3번): 혼자 개발 중이라면 후순위로 미뤄도 됨

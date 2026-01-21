@@ -1,4 +1,4 @@
-import type { AuthService } from '../auth.interface';
+ import type { AuthService } from '../auth.interface';
 import type { LoginRequest, SignupRequest, User } from '../../types';
 
 export const mockAuthService: AuthService = {
