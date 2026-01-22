@@ -1,5 +1,7 @@
 package com.itda.backend.scenario.service;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.itda.backend.ai.VertexAiGeminiClient;
 import com.itda.backend.ai.dto.request.TextGenerationRequest;
 import com.itda.backend.ai.dto.response.TextGenerationResponse;
@@ -7,12 +9,17 @@ import com.itda.backend.global.exception.BusinessException;
 import com.itda.backend.global.response.ErrorCode;
 import com.itda.backend.project.repository.ProjectMapper;
 import com.itda.backend.project.repository.ProjectMemberMapper;
+import com.itda.backend.scene.domain.Scene;
+import com.itda.backend.scene.service.SceneService;
+import com.itda.backend.scene.service.dto.SceneDraft;
 import com.itda.backend.scenario.controller.dto.request.GeneratePromptRequest;
 import com.itda.backend.scenario.controller.dto.request.UpdatePlotRequest;
 import com.itda.backend.scenario.controller.dto.request.UpdatePromptRequest;
 import com.itda.backend.scenario.controller.dto.response.ScenarioPlotResponse;
 import com.itda.backend.scenario.controller.dto.response.ScenarioPromptResponse;
 import com.itda.backend.scenario.controller.dto.response.ScenarioResponse;
+import com.itda.backend.scenario.controller.dto.response.ScenarioSceneItem;
+import com.itda.backend.scenario.controller.dto.response.ScenarioScenesResponse;
 import com.itda.backend.scenario.domain.ProjectScenario;
 import com.itda.backend.scenario.repository.ScenarioMapper;
 import com.itda.backend.scenario.repository.dto.ScenarioRecord;
@@ -44,6 +51,8 @@ public class ScenarioService {
     private final ProjectMapper projectMapper;
     private final ProjectMemberMapper projectMemberMapper;
     private final VertexAiGeminiClient vertexAiGeminiClient;
+    private final SceneService sceneService;
+    private final ObjectMapper objectMapper;
 
     @Transactional(readOnly = true)
     public ScenarioResponse getScenario(Long userId, Long projectId) {
@@ -104,6 +113,37 @@ public class ScenarioService {
         String status = request.status();
         String currentStep = resolveStep(status, STEP_SCENES, STEP_PLOT);
         updatePlotOrThrow(projectId, request.text().trim(), status, currentStep, resolveVersion(record));
+    }
+
+    @Transactional
+    public ScenarioScenesResponse generateScenes(Long userId, Long projectId) {
+        ensureProjectAccessible(projectId, userId);
+
+        ScenarioRecord record = getScenarioRecord(projectId);
+        ensurePromptApproved(record);
+        ensurePlotApproved(record);
+
+        String aiPrompt = buildPromptForSceneGeneration(record);
+        String aiResponse = generateText(aiPrompt);
+
+        List<AiSceneItem> aiScenes = parseAiScenes(aiResponse);
+        int expectedCount = record.getInputSceneCount();
+        if (aiScenes.size() != expectedCount) {
+            throw new BusinessException(ErrorCode.AI_RESPONSE_INVALID,
+                    "scene count mismatch: expected " + expectedCount + " but got " + aiScenes.size());
+        }
+
+        List<SceneDraft> drafts = aiScenes.stream()
+                .map(item -> new SceneDraft(item.title(), item.description()))
+                .toList();
+
+        List<Scene> created = sceneService.createScenesAppend(userId, projectId, drafts);
+        updateCurrentStepOrThrow(projectId, STEP_SCENES, resolveVersion(record));
+
+        List<ScenarioSceneItem> responseScenes = created.stream()
+                .map(ScenarioSceneItem::from)
+                .toList();
+        return ScenarioScenesResponse.of(responseScenes, STEP_SCENES);
     }
 
     private ScenarioRecord buildScenarioRecord(Long projectId,
@@ -171,11 +211,27 @@ public class ScenarioService {
 
     private String buildPromptForPlotGeneration(ScenarioRecord record) {
         List<String> lines = new ArrayList<>();
-        lines.add("다음 프롬프트를 바탕으로 영화 줄거리를 작성하세요.");
+        lines.add("다음 프롬프트를 바탕으로 영화 줄거리를 작성하세요. 프롬프트에서 설정한 내용을 임의로 변경하지 말고, 특히 genre, mood는 절대 변경하지 마세요.");
         lines.add("- 장면 수: " + record.getInputSceneCount());
         lines.add("요구사항: 한국어로 4~6문장, 기승전결이 드러나도록 작성하세요.");
         lines.add("프롬프트:");
         lines.add(record.getPromptText());
+        return String.join("\n", lines);
+    }
+
+    private String buildPromptForSceneGeneration(ScenarioRecord record) {
+        List<String> lines = new ArrayList<>();
+        lines.add("당신은 영화 시나리오 작가입니다.");
+        lines.add("아래 줄거리를 바탕으로 씬을 작성하세요.");
+        lines.add("- 장면 수: " + record.getInputSceneCount());
+        lines.add("요구사항:");
+        lines.add("1) 한국어로 작성");
+        lines.add("2) 각 씬은 title(간결)과 description(1~2문장)을 포함");
+        lines.add("3) 반드시 JSON 배열만 출력");
+        lines.add("4) 포맷:");
+        lines.add("[{\"order\":1,\"title\":\"...\",\"description\":\"...\"}, ...]");
+        lines.add("줄거리:");
+        lines.add(record.getPlotText());
         return String.join("\n", lines);
     }
 
@@ -258,6 +314,13 @@ public class ScenarioService {
         }
     }
 
+    private void updateCurrentStepOrThrow(Long projectId, String currentStep, Integer version) {
+        int updated = scenarioMapper.updateCurrentStep(projectId, currentStep, version);
+        if (updated == 0) {
+            throw new BusinessException(ErrorCode.SCENARIO_VERSION_CONFLICT);
+        }
+    }
+
     private void ensureProjectAccessible(Long projectId, Long userId) {
         ensureProjectExists(projectId);
         ensureMember(projectId, userId);
@@ -297,6 +360,12 @@ public class ScenarioService {
         }
     }
 
+    private void ensurePlotApproved(ScenarioRecord record) {
+        if (!STATUS_APPROVED.equals(record.getPlotStatus()) || record.getPlotText() == null) {
+            throw new BusinessException(ErrorCode.SCENARIO_INVALID_STATE);
+        }
+    }
+
     private void ensurePlotExists(ScenarioRecord record) {
         if (record.getPlotText() == null) {
             throw new BusinessException(ErrorCode.SCENARIO_INVALID_STATE);
@@ -309,5 +378,48 @@ public class ScenarioService {
 
     private Integer resolveVersion(ScenarioRecord record) {
         return record.getVersion() != null ? record.getVersion() : 1;
+    }
+
+    private List<AiSceneItem> parseAiScenes(String aiResponse) {
+        String json = extractJsonArray(aiResponse);
+        try {
+            List<AiSceneItem> items = objectMapper.readValue(json, new TypeReference<>() {});
+            if (items == null || items.isEmpty()) {
+                throw new BusinessException(ErrorCode.AI_RESPONSE_INVALID, "AI response is empty");
+            }
+            for (AiSceneItem item : items) {
+                if (item == null || item.title() == null || item.title().isBlank()) {
+                    throw new BusinessException(ErrorCode.AI_RESPONSE_INVALID, "AI response contains empty title");
+                }
+                if (item.description() == null || item.description().isBlank()) {
+                    throw new BusinessException(ErrorCode.AI_RESPONSE_INVALID, "AI response contains empty description");
+                }
+            }
+            return items;
+        } catch (BusinessException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new BusinessException(ErrorCode.AI_RESPONSE_INVALID, "Failed to parse AI response");
+        }
+    }
+
+    private String extractJsonArray(String text) {
+        if (text == null) {
+            throw new BusinessException(ErrorCode.AI_RESPONSE_INVALID, "AI response is empty");
+        }
+        String trimmed = text.trim();
+        int start = trimmed.indexOf('[');
+        int end = trimmed.lastIndexOf(']');
+        if (start == -1 || end == -1 || end <= start) {
+            throw new BusinessException(ErrorCode.AI_RESPONSE_INVALID, "AI response is not JSON array");
+        }
+        return trimmed.substring(start, end + 1);
+    }
+
+    private record AiSceneItem(
+            Integer order,
+            String title,
+            String description
+    ) {
     }
 }

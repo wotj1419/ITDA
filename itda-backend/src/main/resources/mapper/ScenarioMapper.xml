@@ -121,4 +121,12 @@
           AND version = #{version}
     </update>
 
+    <update id="updateCurrentStep">
+        UPDATE project_scenarios
+        SET current_step = #{currentStep},
+            version = version + 1
+        WHERE project_id = #{projectId}
+          AND version = #{version}
+    </update>
+
 </mapper>
