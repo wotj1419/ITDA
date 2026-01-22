@@ -99,6 +99,7 @@ function handleRemove(clipId: string) {
 
 <style scoped>
 .video-track {
+  position: relative; /* Establish positioning context for .track-empty */
   min-height: 80px;
   /* background & border handled by parent container */
   padding: 8px 0; /* Vertical padding only */
@@ -117,16 +118,24 @@ function handleRemove(clipId: string) {
 }
 
 .track-empty {
+  position: absolute;
+  left: 0;
+  top: 8px;
+  width: 100%; /* Fill the container width */
+  /* If width is wider than screen, it might look off, but user specialized "30 second mark" */
+  
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
-  min-height: 64px;
+  height: 64px;
   border: 2px dashed var(--rose-200);
   border-radius: 8px;
   font-size: 0.75rem;
   color: var(--gray-400);
+  background-color: var(--white); /* Ensure it covers anything behind if needed */
+  z-index: 10;
 }
 
 .empty-icon {

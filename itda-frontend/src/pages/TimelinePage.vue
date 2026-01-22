@@ -90,6 +90,7 @@ const timelineMaxTime = computed(() => {
 })
 
 function handleWheel(e: WheelEvent) {
+  if (timelineStore.clipCount === 0) return
   const container = e.currentTarget as HTMLElement
   if (e.deltaY !== 0) {
      e.preventDefault()
@@ -153,10 +154,14 @@ function handleWheel(e: WheelEvent) {
           </div>
 
           <Card class="track-card">
-            <div class="timeline-scroll-container" @wheel="handleWheel">
+            <div 
+              class="timeline-scroll-container" 
+              :style="{ overflowX: timelineStore.clipCount === 0 ? 'hidden' : 'auto' }"
+              @wheel="handleWheel"
+            >
               <div 
                 class="timeline-inner-wrapper"
-                :style="{ width: `${timelineMaxTime * 20}px` }"
+                :style="{ width: timelineStore.clipCount === 0 ? '100%' : `${timelineMaxTime * 20}px` }"
               >
                 <TimeRuler :max-time="timelineMaxTime" :px-per-sec="20" />
                 <VideoTrack
