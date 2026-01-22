@@ -100,16 +100,15 @@ function handleRemove(clipId: string) {
 <style scoped>
 .video-track {
   min-height: 80px;
-  background: var(--rose-50);
-  border-radius: 8px;
-  padding: 8px;
-  overflow-x: auto;
+  /* background & border handled by parent container */
+  padding: 8px 0; /* Vertical padding only */
+  /* overflow-x handled by parent */
 }
 
 .track-content {
   display: flex;
-  gap: 4px;
-  min-width: max-content;
+  gap: 0;
+  width: max-content;
 }
 
 .drag-over {

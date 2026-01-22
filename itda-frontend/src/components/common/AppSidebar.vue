@@ -78,11 +78,6 @@ const sidebarClasses = computed(() => [
       >
         <Menu class="icon-md" />
       </button>
-
-      <RouterLink to="/" class="sidebar-logo">
-        <div class="logo-icon"></div>
-        <span class="sidebar-text logo-text">AI Movie Studio</span>
-      </RouterLink>
     </div>
 
     <!-- Navigation -->

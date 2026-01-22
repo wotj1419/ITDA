@@ -123,7 +123,7 @@ const openNewProjectModal = () => {
 
 <style scoped>
 .dashboard-container {
-  max-width: 1200px;
+  max-width: 1600px;
   margin: 0 auto;
 }
 
@@ -246,6 +246,12 @@ const openNewProjectModal = () => {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: 1.5rem;
+}
+
+@media (max-width: 640px) {
+  .projects-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 /* Add Project Card */
