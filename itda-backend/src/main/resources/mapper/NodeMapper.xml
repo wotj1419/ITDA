@@ -129,4 +129,46 @@
         WHERE scene_id = #{sceneId}
     </select>
 
+    <!-- Active master: clear all in scene -->
+    <update id="clearActiveMasterBySceneId">
+        UPDATE nodes
+        SET is_active = false
+        WHERE scene_id = #{sceneId}
+          AND node_type = 'MASTER'
+          AND is_active = true
+    </update>
+
+    <!-- Active master: set target -->
+    <update id="setActiveMaster">
+        UPDATE nodes
+        SET is_active = true
+        WHERE id = #{nodeId}
+          AND node_type = 'MASTER'
+    </update>
+
+    <!-- Confirm video: clear all under shot -->
+    <update id="clearConfirmedByShotId">
+        UPDATE nodes
+        SET is_confirmed = false
+        WHERE parent_node_id = #{shotNodeId}
+          AND node_type = 'VIDEO'
+          AND is_confirmed = true
+    </update>
+
+    <!-- Confirm video: set target -->
+    <update id="setConfirmedVideo">
+        UPDATE nodes
+        SET is_confirmed = true
+        WHERE id = #{nodeId}
+          AND node_type = 'VIDEO'
+    </update>
+
+    <!-- Confirm video: clear target -->
+    <update id="clearConfirmedVideo">
+        UPDATE nodes
+        SET is_confirmed = false
+        WHERE id = #{nodeId}
+          AND node_type = 'VIDEO'
+    </update>
+
 </mapper>

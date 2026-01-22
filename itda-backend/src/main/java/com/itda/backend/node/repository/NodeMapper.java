@@ -30,4 +30,14 @@ public interface NodeMapper {
                          @Param("positions") List<NodePosition> positions);
 
     int findMaxOrderIndex(@Param("sceneId") Long sceneId);
+
+    int clearActiveMasterBySceneId(@Param("sceneId") Long sceneId);
+
+    int setActiveMaster(@Param("nodeId") Long nodeId);
+
+    int clearConfirmedByShotId(@Param("shotNodeId") Long shotNodeId);
+
+    int setConfirmedVideo(@Param("nodeId") Long nodeId);
+
+    int clearConfirmedVideo(@Param("nodeId") Long nodeId);
 }
