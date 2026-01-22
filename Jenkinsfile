@@ -15,7 +15,12 @@ pipeline {
     stages {
         stage('Checkout') {
             steps {
-                checkout scm
+                script {
+                    def scmVars = checkout scm
+                    // Persist branch info for single-pipeline jobs where BRANCH_NAME is empty.
+                    env.DEPLOY_BRANCH = scmVars.GIT_BRANCH
+                    echo "DEPLOY_BRANCH=${env.DEPLOY_BRANCH} GIT_BRANCH=${env.GIT_BRANCH} GIT_LOCAL_BRANCH=${env.GIT_LOCAL_BRANCH} gitlabBranch=${env.gitlabBranch} gitlabSourceBranch=${env.gitlabSourceBranch} gitlabTargetBranch=${env.gitlabTargetBranch}"
+                }
             }
         }
 
@@ -53,7 +58,10 @@ pipeline {
 
         stage('Deploy') {
             when {
-                expression { env.BRANCH_NAME == 'develop' || env.GIT_BRANCH == 'origin/develop' }
+                expression {
+                    def b = env.DEPLOY_BRANCH ?: env.GIT_BRANCH ?: env.GIT_LOCAL_BRANCH ?: env.gitlabBranch ?: env.gitlabSourceBranch ?: ''
+                    return b == 'develop' || b.endsWith('/develop') || b == 'refs/remotes/origin/develop'
+                }
             }
             steps {
                 sh '''
