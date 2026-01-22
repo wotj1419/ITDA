@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, ref, onUnmounted } from 'vue'
-import { RouterLink, useRoute } from 'vue-router'
+import { computed, ref, onMounted, onUnmounted } from 'vue'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { useUIStore } from '../../stores/ui'
 import { useAuthStore } from '../../stores/auth'
 import { useSidebarShortcut } from '../../composables/useSidebarShortcut'
@@ -9,50 +9,17 @@ import {
   Star,
   Users,
   Trash2,
-  Settings,
-  ChevronRight,
-  ChevronLeft,
+  Menu,
+  LogOut,
 } from 'lucide-vue-next'
 
 const route = useRoute()
+const router = useRouter()
 const uiStore = useUIStore()
 const authStore = useAuthStore()
 
 // Keyboard shortcut (Ctrl+B)
 useSidebarShortcut()
-
-// Hover edge trigger state
-const isEdgeHovered = ref(false)
-
-// Auto-expand timer (300ms delay)
-let hoverTimer: ReturnType<typeof setTimeout> | null = null
-
-const handleSidebarEnter = () => {
-  // Only auto-expand if sidebar is collapsed and not pinned
-  if (!uiStore.sidebarExpanded && !uiStore.sidebarPinned) {
-    hoverTimer = setTimeout(() => {
-      uiStore.peekSidebar()
-    }, 300)
-  }
-}
-
-const handleSidebarLeave = () => {
-  // Clear timer if leaving before delay
-  if (hoverTimer) {
-    clearTimeout(hoverTimer)
-    hoverTimer = null
-  }
-  // Auto-collapse if not pinned
-  uiStore.unpeekSidebar()
-  isEdgeHovered.value = false
-}
-
-// Cleanup timer on unmount
-onUnmounted(() => {
-  if (hoverTimer) {
-    clearTimeout(hoverTimer)
-  }
-})
 
 const navItems = [
   { to: '/dashboard', icon: Folder, label: 'All Projects', tooltip: 'All Projects' },
@@ -60,6 +27,32 @@ const navItems = [
   { to: '/shared', icon: Users, label: 'Shared with Me', tooltip: 'Shared with Me' },
   { to: '/trash', icon: Trash2, label: 'Trash', tooltip: 'Trash' },
 ]
+
+const showProfileMenu = ref(false)
+const profileMenuRef = ref<HTMLElement | null>(null)
+
+const toggleProfileMenu = () => {
+  showProfileMenu.value = !showProfileMenu.value
+}
+
+const closeProfileMenu = (e: MouseEvent) => {
+  if (profileMenuRef.value && !profileMenuRef.value.contains(e.target as Node)) {
+    showProfileMenu.value = false
+  }
+}
+
+const handleLogout = () => {
+  authStore.logout()
+  router.push('/login')
+}
+
+onMounted(() => {
+  document.addEventListener('click', closeProfileMenu)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('click', closeProfileMenu)
+})
 
 const isActive = (path: string) => {
   if (path === '/dashboard') {
@@ -75,13 +68,17 @@ const sidebarClasses = computed(() => [
 </script>
 
 <template>
-  <aside
-    :class="sidebarClasses"
-    @mouseenter="handleSidebarEnter"
-    @mouseleave="handleSidebarLeave"
-  >
-    <!-- Logo -->
+  <aside :class="sidebarClasses">
+    <!-- Header with Toggle & Logo -->
     <div class="sidebar-header">
+      <button
+        class="menu-btn"
+        @click="uiStore.toggleSidebar"
+        :title="uiStore.sidebarExpanded ? 'Collapse' : 'Expand'"
+      >
+        <Menu class="icon-md" />
+      </button>
+
       <RouterLink to="/" class="sidebar-logo">
         <div class="logo-icon"></div>
         <span class="sidebar-text logo-text">AI Movie Studio</span>
@@ -113,37 +110,60 @@ const sidebarClasses = computed(() => [
       </div>
     </div>
 
-    <!-- User Info -->
-    <div class="sidebar-user">
-      <div
-        class="user-avatar"
-        :style="{ backgroundImage: authStore.user?.profileImage ? `url(${authStore.user.profileImage})` : undefined }"
-      >
-        <span v-if="!authStore.user?.profileImage">{{ authStore.user?.name?.[0] || 'U' }}</span>
+    <!-- User Info & Dropdown -->
+    <div class="sidebar-user" ref="profileMenuRef">
+      <div class="user-trigger" @click.stop="toggleProfileMenu">
+        <div
+          class="user-avatar"
+          :style="{
+            backgroundImage: authStore.user?.profileImage
+              ? `url(${authStore.user.profileImage})`
+              : undefined,
+          }"
+        >
+          <span v-if="!authStore.user?.profileImage">{{
+            authStore.user?.name?.[0] || 'U'
+          }}</span>
+        </div>
+        <div class="user-info-text">
+          <div class="user-name">{{ authStore.user?.name || 'Guest' }}</div>
+          <div class="user-email">{{ authStore.user?.email || '' }}</div>
+        </div>
       </div>
-      <div class="user-info-text">
-        <div class="user-name truncate">{{ authStore.user?.name || 'Guest' }}</div>
-        <div class="user-email truncate">{{ authStore.user?.email || '' }}</div>
-      </div>
-      <button class="btn-icon user-info-text">
-        <Settings class="icon-sm" />
-      </button>
-    </div>
 
-    <!-- Hover Edge Zone for Toggle -->
-    <div
-      class="sidebar-edge-zone"
-      @mouseenter="isEdgeHovered = true"
-      @mouseleave="isEdgeHovered = false"
-    >
-      <button
-        :class="['sidebar-toggle', { visible: isEdgeHovered }]"
-        :title="uiStore.sidebarExpanded ? 'Collapse (Ctrl+B)' : 'Expand (Ctrl+B)'"
-        @click="uiStore.toggleSidebar"
-      >
-        <ChevronLeft v-if="uiStore.sidebarExpanded" class="icon-xs" />
-        <ChevronRight v-else class="icon-xs" />
-      </button>
+      <!-- Dropdown Menu -->
+      <transition name="fade">
+        <div v-if="showProfileMenu" class="profile-menu">
+           <!-- Profile Header -->
+           <RouterLink to="/profile" class="menu-header" @click="showProfileMenu = false">
+             <div
+                class="user-avatar header-avatar"
+                :style="{
+                  backgroundImage: authStore.user?.profileImage
+                    ? `url(${authStore.user.profileImage})`
+                    : undefined,
+                }"
+              >
+                <span v-if="!authStore.user?.profileImage">{{
+                  authStore.user?.name?.[0] || 'U'
+                }}</span>
+              </div>
+              <div class="user-info-text">
+                <div class="user-name">{{ authStore.user?.name || 'Guest' }}</div>
+                <div class="user-email">{{ authStore.user?.email || '' }}</div>
+              </div>
+           </RouterLink>
+           
+           <div class="menu-divider"></div>
+           
+           <div class="menu-group">
+             <button class="menu-item text-danger" @click="handleLogout">
+               <LogOut class="icon-sm" />
+               <span>로그아웃</span>
+             </button>
+           </div>
+        </div>
+      </transition>
     </div>
   </aside>
 </template>
@@ -159,6 +179,7 @@ const sidebarClasses = computed(() => [
   transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
   flex-shrink: 0;
   position: relative;
+  z-index: 50;
 }
 
 .sidebar-collapsed {
@@ -178,17 +199,54 @@ const sidebarClasses = computed(() => [
 
 .sidebar-collapsed .sidebar-text,
 .sidebar-collapsed .nav-label,
-.sidebar-collapsed .user-info-text,
 .sidebar-collapsed .credit-info {
   opacity: 0;
   transition: opacity 0.1s ease; /* Fade out quickly when collapsing */
   pointer-events: none;
 }
 
+/* Hide user info in the sidebar trigger, BUT keep it visible in the popup menu */
+.sidebar-collapsed .user-trigger .user-info-text {
+  opacity: 0;
+  pointer-events: none;
+  display: none; /* remove from flow to center avatar */
+}
+
+/* Ensure text inside the popup menu remains visible */
+.sidebar-collapsed .profile-menu .user-info-text {
+  opacity: 1;
+  pointer-events: auto;
+  display: block;
+}
+
 /* Header / Logo */
 .sidebar-header {
   padding: 1rem;
   border-bottom: 1px solid var(--rose-100);
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  height: 64px; /* Fixed height for consistency */
+}
+
+.menu-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px; /* Aligns with nav-item icon center */
+  height: 40px;
+  border: none;
+  background: transparent;
+  color: var(--gray-500);
+  border-radius: 50%;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.menu-btn:hover {
+  background: var(--rose-50);
+  color: var(--rose-600);
 }
 
 .sidebar-logo {
@@ -197,18 +255,35 @@ const sidebarClasses = computed(() => [
   gap: 0.75rem;
   text-decoration: none;
   color: var(--gray-900);
+  flex: 1;
+  overflow: hidden; /* Hide logo when collapsed */
 }
 
 .logo-icon {
-  width: 32px;
-  height: 32px;
+  width: 24px;
+  height: 24px;
   background: linear-gradient(135deg, var(--rose-400), var(--rose-500));
-  border-radius: 8px;
+  border-radius: 6px;
   flex-shrink: 0;
 }
 
 .logo-text {
   font-weight: 700;
+  font-size: 1rem;
+  white-space: nowrap;
+}
+
+/* Hide logo text/icon in collapsed mode if needed, or adjust alignment */
+.sidebar-collapsed .logo-text,
+.sidebar-collapsed .logo-icon {
+  opacity: 0;
+  pointer-events: none;
+  width: 0;
+  margin: 0;
+}
+
+.sidebar-collapsed .menu-btn {
+  margin: 0;
 }
 
 /* Navigation */
@@ -230,6 +305,7 @@ const sidebarClasses = computed(() => [
   text-decoration: none;
   transition: all 0.2s ease;
   position: relative;
+  height: 44px; /* Fixed height */
 }
 
 .nav-item:hover {
@@ -246,6 +322,7 @@ const sidebarClasses = computed(() => [
   width: 20px;
   height: 20px;
   flex-shrink: 0;
+  /* Center icon in collapsed mode handled by flex & padding */
 }
 
 .nav-label {
@@ -318,10 +395,25 @@ const sidebarClasses = computed(() => [
 .sidebar-user {
   padding: 1rem;
   border-top: 1px solid var(--rose-100);
+  position: relative;
+  /* Keep original layout context, but removed fixed height so menu can overflow if needed */
+}
+
+/* New: Trigger area styles */
+.user-trigger {
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  position: relative;
+  cursor: pointer;
+  padding: 0.5rem;
+  margin: -0.5rem;
+  border-radius: 8px;
+  transition: background 0.2s;
+  width: 100%; /* Take full width */
+}
+
+.user-trigger:hover {
+  background: var(--gray-50);
 }
 
 .user-avatar {
@@ -354,79 +446,112 @@ const sidebarClasses = computed(() => [
   color: var(--gray-500);
 }
 
-.truncate {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.btn-icon {
-  padding: 0.5rem;
-  border: none;
-  background: transparent;
-  color: var(--gray-500);
-  border-radius: 8px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.btn-icon:hover {
-  background: var(--gray-100);
-}
-
-/* Sidebar Edge Zone - Hover Trigger */
-.sidebar-edge-zone {
-  position: absolute;
-  right: 0;
-  top: 0;
-  bottom: 0;
-  width: 30px;
-  z-index: 10;
-  cursor: pointer;
-}
-
-/* Sidebar Toggle */
-.sidebar-toggle {
-  position: absolute;
-  right: -16px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 32px;
-  height: 32px;
-  background: white;
-  border: 1px solid var(--rose-200);
-  border-radius: 50%;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--gray-500);
-  opacity: 0;
-  visibility: hidden;
-  transition: all 0.2s ease;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-}
-
-.sidebar-toggle.visible {
-  opacity: 1;
-  visibility: visible;
-}
-
-.sidebar-toggle:hover {
-  background: var(--rose-50);
-  color: var(--rose-500);
-  transform: translateY(-50%) scale(1.1);
-}
-
-.icon-xs {
-  width: 16px;
-  height: 16px;
-}
-
 .icon-sm {
   width: 20px;
   height: 20px;
+}
+
+.icon-md {
+  width: 24px;
+  height: 24px;
+}
+
+/* Dropdown Menu Styles */
+.profile-menu {
+  position: absolute;
+  bottom: 100%;
+  left: 1rem;
+  right: 1rem;
+  margin-bottom: 0.5rem;
+  background: white;
+  border: 1px solid var(--gray-200);
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  padding: 0.5rem;
+  z-index: 100;
+  min-width: 220px;
+}
+
+.sidebar-collapsed .profile-menu {
+  left: 100%;
+  bottom: 0;
+  margin-left: 0.5rem;
+  margin-bottom: 0;
+}
+
+.menu-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.menu-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  background-color: var(--gray-50);
+  border-radius: 8px;
+  text-decoration: none;
+  color: inherit;
+  margin-bottom: 0.5rem;
+  transition: background-color 0.2s;
+}
+
+.menu-header:hover {
+  background-color: var(--gray-100);
+}
+
+.header-avatar {
+  width: 32px; /* Slightly smaller in menu */
+  height: 32px;
+}
+
+.menu-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  border: none;
+  background: transparent;
+  width: 100%;
+  text-align: left;
+  font-size: 0.875rem;
+  color: var(--gray-700);
+  cursor: pointer;
+  border-radius: 6px;
+  text-decoration: none;
+  transition: all 0.2s;
+}
+
+.menu-item:hover {
+  background-color: var(--gray-100);
+  color: var(--gray-900);
+}
+
+.menu-divider {
+  height: 1px;
+  background-color: var(--gray-100);
+  margin: 0.5rem 0;
+}
+
+.text-danger {
+  color: #ef4444;
+}
+
+.text-danger:hover {
+  background-color: #fef2f2;
+  color: #dc2626;
+}
+
+/* Transitions */
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.2s, transform 0.2s;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+  transform: translateY(10px);
 }
 </style>

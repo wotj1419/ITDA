@@ -7,7 +7,7 @@ import { useUIStore } from '../stores/ui'
 import DefaultLayout from '../layouts/DefaultLayout.vue'
 import ProjectCard from '../components/project/ProjectCard.vue'
 import NewProjectModal from '../components/project/NewProjectModal.vue'
-import { formatRelativeTime } from '../services/mock/projects'
+import TimeAgo from '../components/common/TimeAgo.vue'
 
 const projectStore = useProjectStore()
 const uiStore = useUIStore()
@@ -23,6 +23,10 @@ const quickAccessProjects = computed(() => projectStore.recentProjects)
 // Check if project is favorite
 const isFavorite = (projectId: number) => {
   return projectStore.favoriteProjects.some((p) => p.projectId === projectId)
+}
+
+const handleToggleFavorite = (projectId: number) => {
+  projectStore.toggleFavorite(projectId)
 }
 
 const openNewProjectModal = () => {
@@ -77,7 +81,7 @@ const openNewProjectModal = () => {
             ></div>
             <div class="quick-access-info">
               <div class="quick-access-title">{{ project.title }}</div>
-              <div class="quick-access-time">Edited {{ formatRelativeTime(project.updatedAt) }}</div>
+              <div class="quick-access-time">Edited <TimeAgo :date="project.updatedAt" /></div>
             </div>
             <Star
               v-if="isFavorite(project.projectId)"
@@ -98,6 +102,7 @@ const openNewProjectModal = () => {
             :key="project.projectId"
             :project="project"
             :is-favorite="isFavorite(project.projectId)"
+            @toggle-favorite="handleToggleFavorite"
           />
 
           <!-- Add New Project Card -->
@@ -202,7 +207,7 @@ const openNewProjectModal = () => {
 
 .quick-access-card:hover {
   border-color: var(--rose-200);
-  box-shadow: 0 4px 12px rgba(244, 63, 94, 0.1);
+  box-shadow: 0 4px 12px rgba(255, 133, 161, 0.1);
 }
 
 .quick-access-thumbnail {

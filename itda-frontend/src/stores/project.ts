@@ -6,6 +6,7 @@ import {
   fetchProjectById as mockFetchProjectById,
   createProject as mockCreateProject,
   deleteProject as mockDeleteProject,
+  updateProject as mockUpdateProject,
 } from '../services/mock/projects'
 
 export const useProjectStore = defineStore('project', () => {
@@ -14,12 +15,13 @@ export const useProjectStore = defineStore('project', () => {
   const currentProject = ref<ProjectDetail | null>(null)
   const isLoading = ref(false)
   const error = ref<string | null>(null)
+  const favoriteIds = ref<Set<number>>(new Set([1, 2])) // Mock default favorites
 
   // Getters
   const projectCount = computed(() => projects.value.length)
 
   const favoriteProjects = computed(() =>
-    projects.value.filter((p) => p.projectId === 1 || p.projectId === 2) // Mock favorites
+    projects.value.filter((p) => favoriteIds.value.has(p.projectId))
   )
 
   const recentProjects = computed(() =>
@@ -29,6 +31,18 @@ export const useProjectStore = defineStore('project', () => {
   )
 
   // Actions
+  function isFavorite(projectId: number): boolean {
+    return favoriteIds.value.has(projectId)
+  }
+
+  function toggleFavorite(projectId: number): void {
+    if (favoriteIds.value.has(projectId)) {
+      favoriteIds.value.delete(projectId)
+    } else {
+      favoriteIds.value.add(projectId)
+    }
+  }
+
   async function loadProjects(): Promise<void> {
     isLoading.value = true
     error.value = null
@@ -97,6 +111,37 @@ export const useProjectStore = defineStore('project', () => {
     }
   }
 
+  async function updateProject(projectId: number, data: Partial<Project>): Promise<Project | null> {
+    isLoading.value = true
+    error.value = null
+
+    try {
+      const updatedProject = await mockUpdateProject(projectId, data)
+      if (updatedProject) {
+        // Update item in projects list
+        const index = projects.value.findIndex((p) => p.projectId === projectId)
+        if (index > -1) {
+          projects.value[index] = updatedProject
+        }
+
+        // Update currentProject if relevant
+        if (currentProject.value?.projectId === projectId) {
+          currentProject.value = {
+            ...currentProject.value,
+            ...updatedProject
+          }
+        }
+      }
+      return updatedProject
+    } catch (e) {
+      error.value = 'Failed to update project'
+      console.error(e)
+      return null
+    } finally {
+      isLoading.value = false
+    }
+  }
+
   function clearCurrentProject(): void {
     currentProject.value = null
   }
@@ -112,10 +157,13 @@ export const useProjectStore = defineStore('project', () => {
     favoriteProjects,
     recentProjects,
     // Actions
+    isFavorite,
+    toggleFavorite,
     loadProjects,
     loadProject,
     addProject,
     removeProject,
+    updateProject,
     clearCurrentProject,
   }
 })

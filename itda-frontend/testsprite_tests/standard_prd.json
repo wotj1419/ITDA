@@ -1,0 +1,118 @@
+{
+  "meta": {
+    "project": "Node-based Scene Editor with Collaboration",
+    "date": "2026-01-15",
+    "prepared_by": "Software Development Manager"
+  },
+  "product_overview": "This product is a sophisticated node-based scene editor integrated within a project management platform. It supports user authentication, project and scene management, interactive node editing with real-time collaboration, timeline editing for scene/video clips, and user profile management.",
+  "core_goals": [
+    "Enable users to authenticate securely and manage their profile.",
+    "Provide an interactive and user-friendly dashboard and project detail views.",
+    "Support detailed node-based scene editing with features like selection, deletion, undo, and auto-layout.",
+    "Ensure real-time multi-user collaboration within the scene editor for synchronous updates.",
+    "Implement timeline views with responsive data calculation and clip management.",
+    "Maintain responsive, stable, and clear UI/UX layouts across all screen sizes."
+  ],
+  "key_features": [
+    "Authentication: User login and registration ensuring secure access.",
+    "Dashboard: Central hub displaying user projects and quick access.",
+    "Project Detail Page: Manage projects extensively including loading and scene overview.",
+    "Node-based Scene Editor: Interactive node selection, deletion, keyboard shortcuts, history undo, and auto-layout features.",
+    "Real-time Collaboration: Socket-based room joining for multi-user editing, cursor and state synchronization, and cleanup on exit.",
+    "Timeline View: Displays video clips with real-time recalculations of durations and thumbnails.",
+    "User Profile Management: Viewing and editing user profile information including updates.",
+    "Robust Data Loading: Asynchronous and sequential loading of project and scene data with error handling and loading state indication.",
+    "Responsive UI: Consistent button placement, non-overlapping panels, and layouts adapting to screen size changes."
+  ],
+  "user_flow_summary": [
+    "User authenticates via login or registration page.",
+    "Upon login, user accesses dashboard displaying available projects.",
+    "User selects a project and navigates to project detail page where project and scenes data load asynchronously with loading indicators.",
+    "User opens scene editor to interact with node canvas, performing node selection, deletion, undo, and auto-layout functions.",
+    "Multiple users join the collaboration room enabling real-time cursor and status updates on nodes.",
+    "User switches to timeline view to see updated clips computed from scene nodes with live duration and thumbnail recalculations.",
+    "User accesses and edits their profile in profile page with save functionality.",
+    "User logs out or leaves the page, triggering socket disconnection and cleanup processes."
+  ],
+  "validation_criteria": [
+    "Verify URL parameters for projectId and sceneId are parsed correctly on page load.",
+    "Ensure Promise.all successfully resolves loadProject and loadScenes API calls in order.",
+    "Validate error handling when nodeStore.loadSceneNodes API fails, with appropriate UI feedback.",
+    "Confirm loading spinner or status indicator is shown during data fetch lifecycle methods.",
+    "Test node selection and deselection events trigger and update states as expected.",
+    "Verify keyboard shortcuts Delete and Backspace delete nodes only when input fields are not focused.",
+    "Validate Ctrl+Z undo integrates properly with nodeStore history stack.",
+    "Check that handleAutoLayout correctly rearranges nodes without corrupting graph layout.",
+    "Confirm collabStore.joinRoom establishes socket connection on scene editor mount.",
+    "Ensure collabStore.leaveRoom disconnects socket cleanly on unmount to prevent zombie connections.",
+    "Validate real-time updates reflect other users' cursors and state changes instantly.",
+    "Check timelineClips recompute immediately upon changes in confirmedVideos data.",
+    "Ensure totalDuration sums clip durations accurately and gracefully handles missing thumbnail or version info without rendering errors.",
+    "Confirm UI elements like auto-layout button maintain position after drag-and-drop operations.",
+    "Test layout responsiveness ensuring no canvas or panel overlap or distortion at smaller screen sizes."
+  ],
+  "code_summary": {
+    "tech_stack": [
+      "TypeScript",
+      "Vue.js",
+      "Vite",
+      "Pinia",
+      "Vue Router",
+      "Vue Flow",
+      "Axios",
+      "Lucide Vue Next"
+    ],
+    "features": [
+      {
+        "name": "Authentication",
+        "description": "User login and registration functionality",
+        "files": [
+          "src/pages/AuthPage.vue",
+          "src/stores/auth.ts",
+          "src/services/auth.interface.ts"
+        ]
+      },
+      {
+        "name": "Dashboard",
+        "description": "Main dashboard for users",
+        "files": [
+          "src/pages/DashboardPage.vue"
+        ]
+      },
+      {
+        "name": "Project Detail",
+        "description": "Detailed view and management of a project",
+        "files": [
+          "src/pages/ProjectDetailPage.vue",
+          "src/stores/project.ts"
+        ]
+      },
+      {
+        "name": "Scene Editor",
+        "description": "Node-based scene editor with collaboration support",
+        "files": [
+          "src/pages/SceneEditPage.vue",
+          "src/stores/scene.ts",
+          "src/stores/sceneNode.ts",
+          "src/stores/collab.ts"
+        ]
+      },
+      {
+        "name": "Timeline",
+        "description": "Timeline view for scene/video clips",
+        "files": [
+          "src/pages/TimelinePage.vue",
+          "src/stores/timeline.ts"
+        ]
+      },
+      {
+        "name": "User Profile",
+        "description": "User profile viewing and editing",
+        "files": [
+          "src/pages/ProfilePage.vue",
+          "src/pages/ProfileEditPage.vue"
+        ]
+      }
+    ]
+  }
+}

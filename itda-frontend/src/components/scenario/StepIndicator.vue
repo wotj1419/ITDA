@@ -76,7 +76,7 @@ const props = withDefaults(defineProps<Props>(), {
   background: var(--rose-500);
   color: white;
   border: 2px solid var(--rose-500);
-  box-shadow: 0 0 0 4px rgba(244, 63, 94, 0.2);
+  box-shadow: 0 0 0 4px rgba(255, 133, 161, 0.2);
 }
 
 .step.completed .step-circle {

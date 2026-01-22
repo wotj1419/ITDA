@@ -1,0 +1,168 @@
+﻿version: "3.8"
+
+services:
+  nginx:
+    image: nginx:1.25
+    container_name: itda-nginx
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/conf.d/app.conf:/etc/nginx/conf.d/app.conf:ro
+      - ./nginx/html:/usr/share/nginx/html:ro
+    depends_on:
+      - api
+    networks:
+      - public
+      - internal
+    restart: unless-stopped
+
+  api:
+    image: ${API_IMAGE}
+    container_name: itda-api
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      SERVER_PORT: 18080
+      DB_URL: jdbc:mysql://mysql:13306/${MYSQL_DATABASE}?useSSL=false&serverTimezone=Asia/Seoul&allowPublicKeyRetrieval=true
+      DB_USERNAME: ${DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD}
+      REDIS_HOST: redis
+      REDIS_PORT: 16379
+      JWT_SECRET: ${JWT_SECRET}
+      GCP_PROJECT_ID: ${GCP_PROJECT_ID}
+      GCP_LOCATION: ${GCP_LOCATION}
+      S3_ENDPOINT: ${S3_ENDPOINT}
+      S3_REGION: ${S3_REGION}
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY}
+      S3_SECRET_KEY: ${S3_SECRET_KEY}
+      S3_BUCKET: ${S3_BUCKET}
+      S3_PATH_STYLE: ${S3_PATH_STYLE}
+      FILE_UPLOAD_DIR: /data/uploads
+    expose:
+      - "18080"
+    volumes:
+      - ../data/uploads:/data/uploads
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - internal
+    restart: unless-stopped
+
+  worker-image:
+    image: ${WORKER_IMAGE}
+    container_name: itda-worker-image
+    environment:
+      REDIS_HOST: redis
+      REDIS_PORT: 16379
+      S3_ENDPOINT: ${S3_ENDPOINT}
+      S3_REGION: ${S3_REGION}
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY}
+      S3_SECRET_KEY: ${S3_SECRET_KEY}
+      S3_BUCKET: ${S3_BUCKET}
+    networks:
+      - internal
+    restart: unless-stopped
+    profiles: ["worker"]
+
+  worker-video:
+    image: ${WORKER_VIDEO_IMAGE}
+    container_name: itda-worker-video
+    environment:
+      REDIS_HOST: redis
+      REDIS_PORT: 16379
+      S3_ENDPOINT: ${S3_ENDPOINT}
+      S3_REGION: ${S3_REGION}
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY}
+      S3_SECRET_KEY: ${S3_SECRET_KEY}
+      S3_BUCKET: ${S3_BUCKET}
+    networks:
+      - internal
+    restart: unless-stopped
+    profiles: ["worker"]
+
+  worker-merge:
+    image: ${WORKER_MERGE_IMAGE}
+    container_name: itda-worker-merge
+    environment:
+      REDIS_HOST: redis
+      REDIS_PORT: 16379
+      S3_ENDPOINT: ${S3_ENDPOINT}
+      S3_REGION: ${S3_REGION}
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY}
+      S3_SECRET_KEY: ${S3_SECRET_KEY}
+      S3_BUCKET: ${S3_BUCKET}
+    networks:
+      - internal
+    restart: unless-stopped
+    profiles: ["worker"]
+
+  mysql:
+    image: mysql:8.0
+    container_name: itda-mysql
+    command: ["--port=13306", "--default-authentication-plugin=mysql_native_password"]
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      TZ: Asia/Seoul
+    volumes:
+      - ../data/mysql:/var/lib/mysql
+    expose:
+      - "13306"
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -P 13306 -p$$MYSQL_ROOT_PASSWORD --silent"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks:
+      - internal
+    restart: unless-stopped
+
+  redis:
+    image: redis:7.2
+    container_name: itda-redis
+    command: ["redis-server", "--port", "16379", "--appendonly", "yes"]
+    volumes:
+      - ../data/redis:/data
+    expose:
+      - "16379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "-p", "16379", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks:
+      - internal
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: itda-prometheus
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    expose:
+      - "19090"
+    networks:
+      - internal
+    restart: unless-stopped
+    profiles: ["observability"]
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: itda-grafana
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD}
+    expose:
+      - "13000"
+    networks:
+      - internal
+    restart: unless-stopped
+    profiles: ["observability"]
+
+networks:
+  public:
+  internal:
+    internal: true

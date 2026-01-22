@@ -4,11 +4,11 @@
  */
 import { ref, computed, watch } from 'vue';
 import type { Node } from '@vue-flow/core';
-import type { ShotNodeData } from '../../../types/node';
-import { PromptStatus } from '../../../types/node';
+import type { ShotNodeData, StoryboardGridNodeData } from '../../../types/node';
+import { NodeType, PromptStatus } from '../../../types/node';
 import BasePanel from './BasePanel.vue';
 import { useSceneNodeStore } from '../../../stores/sceneNode';
-import { Camera, Smile, PenLine, FileText, Sparkles, Check, RefreshCw } from 'lucide-vue-next';
+import { Camera, Smile, PenLine, FileText, Sparkles, Check, RefreshCw, LayoutGrid } from 'lucide-vue-next';
 
 interface Props {
   node: Node<ShotNodeData>;
@@ -32,6 +32,22 @@ const shotLabel = computed(() => String.fromCharCode(65 + (data.value?.gridCellI
 const isPromptGenerated = computed(() => data.value?.promptStatus !== PromptStatus.DRAFT);
 const isPromptApproved = computed(() => data.value?.promptStatus === PromptStatus.APPROVED);
 const canGenerate = computed(() => isPromptApproved.value);
+const parentGridNode = computed(() =>
+  nodeStore.nodes.find(
+    (node) => node.id === data.value?.parentNodeId && node.data?.type === NodeType.STORYBOARD_GRID
+  )
+);
+const parentGridData = computed(() => parentGridNode.value?.data as StoryboardGridNodeData | undefined);
+const gridLayout = computed(() => parentGridData.value?.layout || '2x3');
+const gridCellCount = computed(() => {
+  const match = gridLayout.value.match(/(\d+)x(\d+)/);
+  if (!match) return 6;
+  return Number(match[1]) * Number(match[2]);
+});
+const gridCellOptions = computed(() =>
+  Array.from({ length: gridCellCount.value }, (_, index) => index)
+);
+const selectedGridCell = computed(() => data.value?.gridCellIndex ?? 0);
 
 watch(() => props.node.id, () => {
   if (!data.value) return;
@@ -56,6 +72,10 @@ function approvePrompt(): void {
 function generateShot(): void {
   console.log('Generate shot:', form.value);
 }
+
+function selectGridCell(index: number): void {
+  nodeStore.updateNode(props.node.id, { gridCellIndex: index });
+}
 </script>
 
 <template>
@@ -65,6 +85,26 @@ function generateShot(): void {
       <div class="panel-info">
         <span class="panel-info-label">그리드 셀:</span>
         <span class="panel-info-value">#{{ data.gridCellIndex + 1 }}</span>
+      </div>
+
+      <!-- Grid Cell Selection -->
+      <div class="panel-section">
+        <label class="panel-label">
+          <LayoutGrid class="panel-label-icon" />
+          그리드 셀 선택
+        </label>
+        <div class="panel-button-group">
+          <button
+            v-for="idx in gridCellOptions"
+            :key="idx"
+            type="button"
+            :class="['panel-button-option', { active: idx === selectedGridCell }]"
+            @click="selectGridCell(idx)"
+          >
+            {{ idx + 1 }}
+          </button>
+        </div>
+        <p class="panel-hint">레이아웃: {{ gridLayout }}</p>
       </div>
 
       <!-- Shot Type -->

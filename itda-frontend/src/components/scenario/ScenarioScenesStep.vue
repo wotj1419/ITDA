@@ -45,13 +45,13 @@ const handleDragEnd = () => {
 }
 
 const handleApplyToProject = async () => {
-  // Generate scenes to SceneStore
-  for (const scene of scenarioStore.scenes) {
-    await sceneStore.addScene({
-      title: scene.title,
-      description: scene.description,
-    })
-  }
+  // Generate scenes to SceneStore (Batch)
+  const scenesToCreate = scenarioStore.scenes.map(scene => ({
+    title: scene.title,
+    description: scene.description,
+  }))
+
+  await sceneStore.addScenes(scenesToCreate)
 
   uiStore.showToast({
     type: 'success',
@@ -223,7 +223,7 @@ const handleApplyToProject = async () => {
 
 .scene-item:hover {
   border-color: var(--rose-200);
-  box-shadow: 0 2px 8px rgba(244, 63, 94, 0.08);
+  box-shadow: 0 2px 8px rgba(255, 133, 161, 0.08);
 }
 
 .scene-item.dragging {

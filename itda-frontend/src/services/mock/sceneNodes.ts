@@ -17,6 +17,8 @@ import {
     NodeType,
     JobStatus,
     PromptStatus,
+    NODE_HEIGHTS,
+    NODE_WIDTHS,
     type SceneHeaderNodeData,
     type MasterImageNodeData,
     type StoryboardGridNodeData,
@@ -57,6 +59,13 @@ function createBaseData(
     };
 }
 
+function getDefaultNodeDimensions(type: NodeType): { width: number; height: number } {
+    return {
+        width: NODE_WIDTHS[type] ?? 200,
+        height: NODE_HEIGHTS[type] ?? 150,
+    };
+}
+
 // =============================================================================
 // Node Data Factory Functions
 // =============================================================================
@@ -72,6 +81,7 @@ function createSceneHeader(
         id,
         type: 'sceneHeader',
         position: { x: 0, y: 0 },
+        ...getDefaultNodeDimensions(NodeType.SCENE_HEADER),
         data: {
             ...createBaseData(id, NodeType.SCENE_HEADER),
             type: NodeType.SCENE_HEADER,
@@ -95,6 +105,7 @@ function createMasterImage(
         id,
         type: 'masterImage',
         position: { x: 0, y: 0 },
+        ...getDefaultNodeDimensions(NodeType.MASTER_IMAGE),
         data: {
             ...createBaseData(id, NodeType.MASTER_IMAGE, parentId, jobStatus, version),
             type: NodeType.MASTER_IMAGE,
@@ -122,6 +133,7 @@ function createStoryboardGrid(
         id,
         type: 'storyboardGrid',
         position: { x: 0, y: 0 },
+        ...getDefaultNodeDimensions(NodeType.STORYBOARD_GRID),
         data: {
             ...createBaseData(id, NodeType.STORYBOARD_GRID, parentId, jobStatus, version),
             type: NodeType.STORYBOARD_GRID,
@@ -147,6 +159,7 @@ function createShot(
         id,
         type: 'shot',
         position: { x: 0, y: 0 },
+        ...getDefaultNodeDimensions(NodeType.SHOT),
         data: {
             ...createBaseData(id, NodeType.SHOT, parentId, jobStatus, version),
             type: NodeType.SHOT,
@@ -175,6 +188,7 @@ function createVideo(
         id,
         type: 'video',
         position: { x: 0, y: 0 },
+        ...getDefaultNodeDimensions(NodeType.VIDEO),
         data: {
             ...createBaseData(id, NodeType.VIDEO, parentId, jobStatus, version),
             type: NodeType.VIDEO,

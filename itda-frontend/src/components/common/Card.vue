@@ -44,7 +44,7 @@ const classes = computed(() => [
 
 .card-clickable:hover {
   border-color: var(--rose-200);
-  box-shadow: 0 8px 24px -4px rgba(244, 63, 94, 0.12);
+  box-shadow: 0 8px 24px -4px rgba(255, 133, 161, 0.12);
   transform: translateY(-2px);
 }
 

@@ -29,7 +29,7 @@ const collabStore = useCollabStore()
 const scenarioStore = useScenarioStore()
 
 // State
-type ProjectTab = 'story' | 'scenes' | 'characters' | 'timeline' | 'settings'
+type ProjectTab = 'story' | 'scenes' | 'objects' | 'timeline' | 'settings'
 
 interface ScenePreviewClip {
   thumbnailUrl: string
@@ -49,13 +49,14 @@ const scenePreviewMap = ref<Record<number, ScenePreview>>({})
 const previewLoadingMap = ref<Record<number, boolean>>({})
 const activePreview = ref<{ sceneId: number; clipIndex: number } | null>(null)
 const previewTracks = ref<Record<number, HTMLDivElement | null>>({})
+const storyboardOpenMap = ref<Record<number, boolean>>({})
 
 const previewVisibleLimit = 6
 
 const tabItems: { key: ProjectTab; label: string }[] = [
   { key: 'story', label: 'Story' },
   { key: 'scenes', label: 'Scenes' },
-  { key: 'characters', label: 'Characters' },
+  { key: 'objects', label: 'Objects' }, // PRD v2.5: 캐릭터 -> 오브젝트로 명칭 변경
 ]
 
 // Computed
@@ -80,10 +81,14 @@ onMounted(async () => {
       characterStore.loadCharacters(projectId.value),
     ])
     
+    // Simulate 'Recent Activity' by updating timestamp
+    await projectStore.updateProject(projectId.value, { updatedAt: new Date().toISOString() }) 
+    
     // 협업 방 입장
     collabStore.joinRoom(projectId.value)
     collabStore.updateLocation('프로젝트 상세 페이지')
   }
+
 })
 
 onUnmounted(() => {
@@ -216,6 +221,34 @@ const getOverflowCount = (sceneId: number): number => {
   return count > previewVisibleLimit ? count - previewVisibleLimit : 0
 }
 
+const ensureScenePreview = async (sceneId: number) => {
+  if (scenePreviewMap.value[sceneId]) return
+  previewLoadingMap.value[sceneId] = true
+  const preview = await buildScenePreview(sceneId)
+  scenePreviewMap.value = {
+    ...scenePreviewMap.value,
+    [sceneId]: preview,
+  }
+  previewLoadingMap.value[sceneId] = false
+}
+
+const toggleStoryboard = async (sceneId: number) => {
+  const next = !storyboardOpenMap.value[sceneId]
+  storyboardOpenMap.value = {
+    ...storyboardOpenMap.value,
+    [sceneId]: next,
+  }
+  if (next) {
+    await ensureScenePreview(sceneId)
+  }
+}
+
+const handleStoryboardWheel = (event: WheelEvent) => {
+  const container = event.currentTarget as HTMLElement | null
+  if (!container) return
+  container.scrollLeft += event.deltaY + event.deltaX
+}
+
 // Scene drag & drop handlers
 const handleDragStart = (scene: Scene) => {
   draggedScene.value = scene
@@ -346,10 +379,10 @@ const handleDeleteCharacter = async (character: ObjectSheet) => {
 
         <!-- Scene List -->
         <div class="section-header">
-          <h3 class="section-title">씬별 스토리</h3>
+          <h3 class="section-title">Scenes</h3>
           <Button variant="secondary" size="sm" @click="handleAddScene">
             <Plus class="icon-sm" />
-            씬 추가
+            Add Scene
           </Button>
         </div>
 
@@ -366,7 +399,48 @@ const handleDeleteCharacter = async (character: ObjectSheet) => {
               :project-id="projectId"
               :draggable="true"
               :show-thumbnail="false"
-            />
+            >
+              <template #actions-left>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  :disabled="isPreviewLoading(scene.sceneId)"
+                  @click="toggleStoryboard(scene.sceneId)"
+                >
+                  <Play class="icon-sm" />
+                  미리보기
+                </Button>
+              </template>
+
+              <template #extra-content>
+                <div
+                  v-show="storyboardOpenMap[scene.sceneId]"
+                  class="storyboard-wrap"
+                >
+                  <div class="storyboard-strip" @wheel.prevent="handleStoryboardWheel">
+                    <template v-if="isPreviewLoading(scene.sceneId)">
+                      <div class="storyboard-empty">영상 불러오는 중...</div>
+                    </template>
+                    <template v-else-if="getScenePreview(scene.sceneId).clips.length === 0">
+                      <div class="storyboard-empty">생성된 영상이 없습니다.</div>
+                    </template>
+                    <button
+                      v-for="(clip, index) in getScenePreview(scene.sceneId).clips"
+                      :key="`${scene.sceneId}-storyboard-${index}`"
+                      type="button"
+                      class="storyboard-item"
+                    >
+                      <img
+                        class="storyboard-thumb"
+                        :src="clip.thumbnailUrl || scene.thumbnailUrl"
+                        :alt="clip.label || scene.title"
+                      />
+                      <span class="storyboard-label">{{ clip.label || scene.title }}</span>
+                    </button>
+                  </div>
+                </div>
+              </template>
+            </SceneCard>
           </div>
 
           <!-- Add Scene Button -->
@@ -516,13 +590,13 @@ const handleDeleteCharacter = async (character: ObjectSheet) => {
         </div>
       </div>
 
-      <!-- Characters Tab -->
-      <div v-if="activeTab === 'characters'" class="tab-content">
+      <!-- Objects Tab -->
+      <div v-if="activeTab === 'objects'" class="tab-content">
         <div class="section-header">
-          <h2 class="section-title">캐릭터</h2>
+          <h2 class="section-title">오브젝트</h2>
           <Button variant="primary" @click="openAddCharacterModal">
             <Plus class="icon-sm" />
-            캐릭터 추가
+            오브젝트 추가
           </Button>
         </div>
 
@@ -657,6 +731,56 @@ const handleDeleteCharacter = async (character: ObjectSheet) => {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
+}
+
+.storyboard-wrap {
+  margin-top: 0.75rem;
+}
+
+.storyboard-strip {
+  display: flex;
+  gap: 0.75rem;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-bottom: 0.25rem;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+}
+
+.storyboard-item {
+  flex: 0 0 auto;
+  width: 120px;
+  border: 1px solid var(--rose-100);
+  border-radius: 10px;
+  overflow: hidden;
+  background: white;
+  padding: 0;
+  cursor: pointer;
+  scroll-snap-align: start;
+}
+
+.storyboard-thumb {
+  width: 100%;
+  height: 72px;
+  object-fit: cover;
+  display: block;
+}
+
+.storyboard-label {
+  display: block;
+  padding: 0.375rem 0.5rem;
+  font-size: 0.6875rem;
+  color: var(--gray-600);
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.storyboard-empty {
+  font-size: 0.75rem;
+  color: var(--gray-500);
+  padding: 0.5rem 0;
 }
 
 .add-scene-card {

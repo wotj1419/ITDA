@@ -66,6 +66,14 @@ export function getStatusConfig(status: SceneStatus): { label: string; variant: 
   return configs[status]
 }
 
+// Helper: Get scene progress for a project
+export function getSceneProgress(projectId: number): { completed: number; total: number } {
+  const scenes = mockScenesData[projectId] || []
+  const total = scenes.length
+  const completed = scenes.filter((s) => s.status === 'COMPLETED').length
+  return { completed, total }
+}
+
 // Mock API functions
 export async function fetchScenesByProjectId(projectId: number): Promise<Scene[]> {
   await delay(300)
@@ -92,6 +100,28 @@ export async function createScene(projectId: number, data: CreateSceneRequest): 
   mockScenesData[projectId].push(newScene)
 
   return newScene
+}
+
+export async function createScenes(projectId: number, scenesData: CreateSceneRequest[]): Promise<Scene[]> {
+  await delay(800) // Slightly longer delay for batch
+  const scenes = mockScenesData[projectId] || []
+  let maxOrder = scenes.length > 0 ? Math.max(...scenes.map((s) => s.order)) : 0
+
+  const newScenes: Scene[] = scenesData.map((data, index) => ({
+    sceneId: nextSceneId++,
+    title: data.title,
+    description: data.description,
+    order: maxOrder + index + 1,
+    status: 'DRAFT',
+    thumbnailUrl: undefined,
+  }))
+
+  if (!mockScenesData[projectId]) {
+    mockScenesData[projectId] = []
+  }
+  mockScenesData[projectId].push(...newScenes)
+
+  return newScenes
 }
 
 export async function updateScene(

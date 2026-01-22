@@ -1,6 +1,7 @@
+```
 <script setup lang="ts">
-import { computed, type Component, ref, onUnmounted } from 'vue'
-import { RouterLink, useRoute } from 'vue-router'
+import { computed, type Component } from 'vue'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 import type { RouteLocationRaw } from 'vue-router'
 import { useUIStore } from '../stores/ui'
 import { useSidebarShortcut } from '../composables/useSidebarShortcut'
@@ -9,22 +10,21 @@ import Badge from '../components/common/Badge.vue'
 import AvatarGroup from '../components/common/AvatarGroup.vue'
 import Button from '../components/common/Button.vue'
 import {
-  ArrowLeft,
   BookOpen,
   Clapperboard,
   User,
   Layers,
   Settings,
   Phone,
-  ChevronLeft,
-  ChevronRight,
-  Users,
+  Menu,
   Play,
+  ArrowLeft,
 } from 'lucide-vue-next'
+import { useCollabStore } from '../stores/collab'
 
 interface Props {
   project: ProjectDetail | null
-  activeTab: 'story' | 'scenes' | 'characters' | 'timeline' | 'settings'
+  activeTab: 'story' | 'scenes' | 'objects' | 'timeline' | 'settings'
   sceneCount?: number
   progress?: { completed: number; total: number }
 }
@@ -38,44 +38,13 @@ const emit = defineEmits<{
   (e: 'tab-change', tab: string): void
 }>()
 
+const router = useRouter()
 const route = useRoute()
+const collabStore = useCollabStore()
 const uiStore = useUIStore()
 
 // Keyboard shortcut (Ctrl+B)
 useSidebarShortcut()
-
-// Hover edge trigger state
-const isEdgeHovered = ref(false)
-
-// Auto-expand timer (300ms delay)
-let hoverTimer: ReturnType<typeof setTimeout> | null = null
-
-const handleSidebarEnter = () => {
-  // Only auto-expand if sidebar is collapsed and not pinned
-  if (!uiStore.sidebarExpanded && !uiStore.sidebarPinned) {
-    hoverTimer = setTimeout(() => {
-      uiStore.peekSidebar()
-    }, 300)
-  }
-}
-
-const handleSidebarLeave = () => {
-  // Clear timer if leaving before delay
-  if (hoverTimer) {
-    clearTimeout(hoverTimer)
-    hoverTimer = null
-  }
-  // Auto-collapse if not pinned
-  uiStore.unpeekSidebar()
-  isEdgeHovered.value = false
-}
-
-// Cleanup timer on unmount
-onUnmounted(() => {
-  if (hoverTimer) {
-    clearTimeout(hoverTimer)
-  }
-})
 
 const projectId = computed(() => props.project?.projectId || Number(route.params.id))
 
@@ -90,7 +59,7 @@ interface NavItem {
 const navItems = computed<NavItem[]>(() => [
   { key: 'story', icon: BookOpen, label: 'Story', to: null },
   { key: 'scenes', icon: Clapperboard, label: 'Scenes', badge: props.sceneCount, to: null },
-  { key: 'characters', icon: User, label: 'Characters', to: null },
+  { key: 'objects', icon: User, label: 'Objects', to: null },
   { key: 'timeline', icon: Layers, label: 'Full Timeline', to: { name: 'timeline', params: { id: projectId.value } } },
   { key: 'settings', icon: Settings, label: 'Settings', to: null },
 ])
@@ -124,17 +93,16 @@ const progressPercentage = computed(() => {
 <template>
   <div class="app-container">
     <!-- Project Sidebar -->
-    <aside
-      :class="sidebarClasses"
-      @mouseenter="handleSidebarEnter"
-      @mouseleave="handleSidebarLeave"
-    >
-      <!-- Back Link -->
-      <div class="sidebar-section border-bottom">
-        <RouterLink to="/dashboard" class="nav-item" data-tooltip="Back to Projects">
-          <ArrowLeft class="nav-icon" />
-          <span class="nav-label">Back to Projects</span>
-        </RouterLink>
+    <aside :class="sidebarClasses">
+      <!-- Header with Toggle (Back Link Removed) -->
+      <div class="sidebar-section border-bottom sidebar-header-row">
+        <button
+          class="menu-btn"
+          @click="uiStore.toggleSidebar"
+          :title="uiStore.sidebarExpanded ? 'Collapse' : 'Expand'"
+        >
+          <Menu class="icon-md" />
+        </button>
       </div>
 
       <!-- Project Info -->
@@ -183,31 +151,23 @@ const progressPercentage = computed(() => {
         </div>
       </div>
 
-      <!-- Hover Edge Zone for Toggle -->
-      <div
-        class="sidebar-edge-zone"
-        @mouseenter="isEdgeHovered = true"
-        @mouseleave="isEdgeHovered = false"
-      >
-        <button
-          :class="['sidebar-toggle', { visible: isEdgeHovered }]"
-          :title="uiStore.sidebarExpanded ? 'Collapse (Ctrl+B)' : 'Expand (Ctrl+B)'"
-          @click="uiStore.toggleSidebar"
-        >
-          <ChevronLeft v-if="uiStore.sidebarExpanded" class="toggle-icon" />
-          <ChevronRight v-else class="toggle-icon" />
-        </button>
-      </div>
+
     </aside>
 
     <!-- Main Content -->
     <main class="main-wrapper">
       <!-- Header -->
       <header class="header">
-        <div class="breadcrumb">
-          <RouterLink to="/dashboard">AI Movie Studio</RouterLink>
-          <span class="separator">/</span>
-          <span class="current">{{ project?.title || 'Project' }}</span>
+        <div class="header-left">
+          <button class="btn-icon-back" @click="router.push('/dashboard')" title="Go to Dashboard">
+            <ArrowLeft class="icon-md" />
+          </button>
+          
+          <div class="breadcrumb">
+            <RouterLink to="/dashboard">AI Movie Studio</RouterLink>
+            <span class="separator">/</span>
+            <span class="current">{{ project?.title || 'Project' }}</span>
+          </div>
         </div>
 
         <div class="header-actions">
@@ -219,7 +179,7 @@ const progressPercentage = computed(() => {
             <span class="progress-text">{{ progress.completed }}/{{ progress.total }}</span>
           </div>
 
-          <Button variant="secondary">
+          <Button variant="secondary" @click="collabStore.joinRoom(projectId)">
             <Users class="icon-sm" />
             협업 시작
           </Button>
@@ -281,6 +241,61 @@ const progressPercentage = computed(() => {
   pointer-events: none;
 }
 
+.sidebar-header-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 1rem;
+  height: 64px;
+}
+
+.menu-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border: none;
+  background: transparent;
+  color: var(--gray-500);
+  border-radius: 50%;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+  flex-shrink: 0;
+}
+
+.menu-btn:hover {
+  background: var(--rose-50);
+  color: var(--rose-600);
+}
+
+.icon-md {
+  width: 24px;
+  height: 24px;
+}
+
+.back-link {
+  flex: 1;
+  padding-left: 0.5rem; /* Indent slightly to separate from menu */
+}
+
+.sidebar-collapsed .back-link {
+  display: none; /* Hide back link in collapsed mode to avoid clutter or handle differently */
+}
+
+/* If we want to show back link icon in collapsed mode, we need to adjust */
+/* Since collapsed mode is 72px wide, and menu button is 40px, we can stack them or hide back link */
+/* Gemini usually keeps the menu at top. Let's hide back link text but maybe keep icon? */
+/* Actually, for simplicity and rail design, let's hide the back link entirely in collapsed mode or make it icon only below menu? */
+/* Current designs puts them in same row. In collapsed mode (72px), they won't fit side by side. */
+/* Let's make the back link disappear in collapsed mode for now, or move it below. */
+/* Better approach: In collapsed mode, the menu button is centered. The back link is hidden. Users can expand to go back. */
+
+.sidebar-collapsed .menu-btn {
+  margin: 0;
+}
+
 .sidebar-section {
   padding: 1rem;
   position: relative;
@@ -327,6 +342,7 @@ const progressPercentage = computed(() => {
   font-weight: 500;
   transition: all 0.2s ease;
   position: relative;
+  height: 44px;
 }
 
 .nav-item:hover {
@@ -464,9 +480,36 @@ const progressPercentage = computed(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 1rem 2rem;
+  padding: 0 2rem;
+  height: 64px; /* Align with sidebar header */
   background: white;
   border-bottom: 1px solid var(--rose-100);
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.btn-icon-back {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: transparent;
+  color: var(--gray-500);
+  border-radius: 50%;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.btn-icon-back:hover {
+  background: var(--rose-50);
+  color: var(--rose-600);
 }
 
 .breadcrumb {

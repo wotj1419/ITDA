@@ -1192,6 +1192,85 @@ public class RedisStreamsJobDispatcher implements JobDispatcher {
 }
 ```
 
+### 8.1 Job Queue 스켈레톤 (Streams/스키마/컨슈머그룹 규칙)
+
+#### Streams (토픽)
+
+| Stream key  | 용도 | Job types | Producer | Consumer group |
+|------------|------|-----------|----------|----------------|
+| ai:image   | AI 이미지 생성 (Gemini) | IMAGE_GENERATION | API job dispatcher | cg:ai-image |
+| ai:video   | AI 영상 생성 (Veo) | VIDEO_GENERATION | API job dispatcher | cg:ai-video |
+| media:merge| FFmpeg 병합 (scene/project) | SCENE_MERGE, PROJECT_MERGE | API job dispatcher | cg:media-merge |
+
+메모:
+- stream은 job family 단위로 분리, worker는 jobId로 DB에서 requestJson/파라미터 조회
+- 환경 분리 필요 시 suffix 사용: `ai:image:dev`, `ai:image:prod`
+
+#### Stream entry 스키마
+
+필수 필드:
+- jobId
+- type (IMAGE_GENERATION | VIDEO_GENERATION | SCENE_MERGE | PROJECT_MERGE)
+- projectId
+- createdAt (ISO-8601)
+
+선택 필드:
+- nodeId (image/video)
+- sceneId (scene merge)
+- idempotencyKey
+- retryCount
+- requestHash
+- traceId
+- schemaVersion
+- priority
+
+가이드:
+- payload는 최소화하고, jobId 기반으로 DB가 소스 오브 트루스가 되도록 유지
+
+#### Consumer group 규칙
+
+- Group naming: `cg:{stream}` (환경 분리 시 `cg:{stream}:{env}`)
+- Consumer naming: `{workerType}-{hostname}-{pid}`
+- Read: `XREADGROUP GROUP <group> <consumer> COUNT <n> BLOCK <ms> STREAMS <key> >`
+- Ack: DB 상태가 SUCCEEDED/FAILED로 전환된 후 XACK
+
+Retry / reclaim:
+- worker 장애 시 PEL에 남은 메시지를 `XPENDING` + `XCLAIM`으로 reclaim
+- 재시도 가능 시 DB retryCount 증가 후 동일 stream에 XADD 재투입
+- retryCount >= MAX_RETRY_COUNT이면 DLQ로 이동하고 job은 FAILED로 확정
+
+Idempotency:
+- DB 상태가 SUCCEEDED면 작업 스킵 후 XACK
+- RUNNING 전환은 낙관적 업데이트(조건부 UPDATE)로 중복 처리 방지
+
+#### DLQ (옵션)
+
+Stream key: `dlq:jobs`
+
+필드:
+- jobId, type, projectId, sourceStream
+- reason, failedAt, retryCount
+
+#### 예시 Redis 명령
+
+```text
+XGROUP CREATE ai:image cg:ai-image $ MKSTREAM
+XGROUP CREATE ai:video cg:ai-video $ MKSTREAM
+XGROUP CREATE media:merge cg:media-merge $ MKSTREAM
+
+XADD ai:image * jobId 101 type IMAGE_GENERATION projectId 1 createdAt 2026-01-20T10:00:00Z
+
+XREADGROUP GROUP cg:ai-image image-worker-app01-1234 COUNT 1 BLOCK 5000 STREAMS ai:image >
+XACK ai:image cg:ai-image <message-id>
+```
+
+#### TODO / 결정 필요
+
+- visibilityTimeout (job type별)
+- MAX_RETRY_COUNT
+- schemaVersion, optional field 확정
+- DLQ 처리 및 알림 기준
+
 ---
 
 ## 부록: 코드 컨벤션 (현재 코드베이스 기준)
