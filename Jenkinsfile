@@ -52,6 +52,9 @@ pipeline {
         }
 
         stage('Deploy') {
+            when {
+                branch 'develop'
+            }
             steps {
                 sh '''
                     set -e
