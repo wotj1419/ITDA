@@ -153,6 +153,25 @@ public class NodeService {
         log.debug("Updated {} node positions for sceneId={}", validPositions.size(), sceneId);
     }
 
+    /**
+     * Active master 설정 (씬 단위 1개)
+     */
+    @Transactional
+    public void setActiveMaster(Long userId, Long nodeId) {
+        Node node = getNodeOrThrow(nodeId);
+        Scene scene = getSceneAndEnsureMemberForUpdate(node.getSceneId(), userId);
+
+        assertMasterNode(node.getNodeType());
+
+        nodeMapper.clearActiveMasterBySceneId(scene.getId());
+        int updated = nodeMapper.setActiveMaster(nodeId);
+        if (updated == 0) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST);
+        }
+
+        log.debug("Set active master: nodeId={}, sceneId={}", nodeId, scene.getId());
+    }
+
     // ========== Private Helper Methods ==========
 
     private Scene getSceneOrThrow(Long sceneId) {
@@ -194,6 +213,12 @@ public class NodeService {
     private void assertNotSceneHeader(NodeType nodeType) {
         if (nodeType == NodeType.SCENE_HEADER) {
             throw new BusinessException(ErrorCode.SCENE_HEADER_NOT_MODIFIABLE);
+        }
+    }
+
+    private void assertMasterNode(NodeType nodeType) {
+        if (nodeType != NodeType.MASTER) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST);
         }
     }
 
