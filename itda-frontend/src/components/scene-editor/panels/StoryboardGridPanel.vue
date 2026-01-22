@@ -5,10 +5,11 @@
 import { ref, computed, watch } from 'vue';
 import type { Node } from '@vue-flow/core';
 import type { StoryboardGridNodeData, GridLayout } from '../../../types/node';
-import { PromptStatus } from '../../../types/node';
+import { PromptStatus, JobStatus } from '../../../types/node';
 import BasePanel from './BasePanel.vue';
 import { useSceneNodeStore } from '../../../stores/sceneNode';
-import { LayoutGrid, Camera, Target, FileText, Sparkles, Check, RefreshCw } from 'lucide-vue-next';
+import { aiService } from '../../../services';
+import { LayoutGrid, Camera, Target, FileText, Sparkles, Check, RefreshCw, Loader2 } from 'lucide-vue-next';
 
 interface Props {
   node: Node<StoryboardGridNodeData>;
@@ -16,6 +17,11 @@ interface Props {
 
 const props = defineProps<Props>();
 const nodeStore = useSceneNodeStore();
+
+// 로딩 상태
+const isGeneratingPrompt = ref(false);
+const isGeneratingGrid = ref(false);
+const errorMessage = ref<string | null>(null);
 
 const form = ref({
   layout: '2x3' as GridLayout,
@@ -30,7 +36,7 @@ const shotTypeOptions = ['와이드샷', '미디엄샷', '클로즈업', '익스
 const data = computed(() => props.node.data as StoryboardGridNodeData | undefined);
 const isPromptGenerated = computed(() => data.value?.promptStatus !== PromptStatus.DRAFT);
 const isPromptApproved = computed(() => data.value?.promptStatus === PromptStatus.APPROVED);
-const canGenerate = computed(() => isPromptApproved.value);
+const canGenerate = computed(() => isPromptApproved.value && !isGeneratingGrid.value);
 
 watch(() => props.node.id, () => {
   if (!data.value) return;
@@ -40,6 +46,7 @@ watch(() => props.node.id, () => {
     compositionHint: data.value.compositionHint || '',
     prompt: data.value.prompt || '',
   };
+  errorMessage.value = null;
 }, { immediate: true });
 
 function toggleShotType(type: string): void {
@@ -51,18 +58,64 @@ function toggleShotType(type: string): void {
   }
 }
 
-function generatePrompt(): void {
-  const promptText = `Generate ${form.value.layout} storyboard grid with shot types: ${form.value.shotTypes.join(', ')}. ${form.value.compositionHint}`;
-  form.value.prompt = promptText;
-  nodeStore.updateNode(props.node.id, { ...form.value, promptStatus: PromptStatus.GENERATED });
+async function generatePrompt(): Promise<void> {
+  isGeneratingPrompt.value = true;
+  errorMessage.value = null;
+
+  try {
+    const prompt = await aiService.generatePrompt({
+      nodeType: 'GRID',
+      layout: form.value.layout,
+      shotTypes: form.value.shotTypes,
+      compositionHint: form.value.compositionHint,
+    });
+
+    form.value.prompt = prompt;
+    nodeStore.updateNode(props.node.id, { ...form.value, promptStatus: PromptStatus.GENERATED });
+  } catch (error) {
+    console.error('Failed to generate prompt:', error);
+    errorMessage.value = '프롬프트 생성에 실패했습니다. 다시 시도해주세요.';
+  } finally {
+    isGeneratingPrompt.value = false;
+  }
 }
 
 function approvePrompt(): void {
   nodeStore.updateNode(props.node.id, { prompt: form.value.prompt, promptStatus: PromptStatus.APPROVED });
 }
 
-function generateGrid(): void {
-  console.log('Generate grid:', form.value);
+async function generateGrid(): Promise<void> {
+  if (!form.value.prompt) return;
+
+  isGeneratingGrid.value = true;
+  errorMessage.value = null;
+
+  try {
+    nodeStore.updateNode(props.node.id, { jobStatus: JobStatus.RUNNING });
+
+    const jobId = await aiService.generateNode(props.node.id, form.value.prompt);
+    console.log('Grid generation job started:', jobId);
+
+    const result = await aiService.pollJobUntilComplete(jobId, (status) => {
+      console.log('Job status:', status.status);
+    });
+
+    if (result.status === 'SUCCEEDED') {
+      nodeStore.updateNode(props.node.id, {
+        jobStatus: JobStatus.SUCCEEDED,
+        imageUrl: result.resultUrl,
+        thumbnailUrl: result.thumbnailUrl,
+      });
+    } else {
+      throw new Error(result.error?.message || 'Grid generation failed');
+    }
+  } catch (error) {
+    console.error('Failed to generate grid:', error);
+    errorMessage.value = '그리드 생성에 실패했습니다. 다시 시도해주세요.';
+    nodeStore.updateNode(props.node.id, { jobStatus: JobStatus.FAILED });
+  } finally {
+    isGeneratingGrid.value = false;
+  }
 }
 </script>
 

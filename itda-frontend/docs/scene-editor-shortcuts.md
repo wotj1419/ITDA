@@ -428,3 +428,82 @@ box-shadow: 0 0 0 3px rgba(255, 133, 161, 0.1);
   ```
 
                                                                                                                                                   
+
+-------------------------------------------------------------------------------------
+
+## AI API 연동 준비 (2026-01-22)
+- **수정 내용**: 마스터 이미지, 그리드, 샷, 비디오 패널에 AI 프롬프트 생성 및 이미지/영상 생성 API 연동 준비
+- **이전 문제**: 프롬프트 생성이 단순 문자열 조합이었고, 이미지/영상 생성은 console.log만 출력
+- **해결**: 실제 API 호출 구조로 변경, 로딩 상태 및 에러 처리 추가
+
+### 사용자 흐름
+1. 옵션 선택 → "프롬프트 생성" 클릭 → AI가 영어 프롬프트 생성
+2. 프롬프트 확인 → "승인" 클릭
+3. "이미지/영상 생성" 클릭 → 로딩 표시 → 결과 URL 노드에 반영
+
+### 신규 파일
+- [api.ts](../src/types/api.ts) - AI API 요청/응답 타입 정의
+- [ai.ts](../src/services/api/ai.ts) - AI 서비스 (generatePrompt, generateNode, pollJobUntilComplete)
+
+### 수정된 파일
+- [index.ts](../src/services/index.ts) - `aiService` export 추가
+- [MasterImagePanel.vue](../src/components/scene-editor/panels/MasterImagePanel.vue)
+- [StoryboardGridPanel.vue](../src/components/scene-editor/panels/StoryboardGridPanel.vue)
+- [ShotPanel.vue](../src/components/scene-editor/panels/ShotPanel.vue)
+- [VideoPanel.vue](../src/components/scene-editor/panels/VideoPanel.vue)
+
+### 공통 변경사항
+```typescript
+// 로딩 상태 추가
+const isGeneratingPrompt = ref(false);
+const isGeneratingImage = ref(false);
+const errorMessage = ref<string | null>(null);
+
+// AI API 호출 (비동기)
+async function generatePrompt(): Promise<void> {
+  isGeneratingPrompt.value = true;
+  try {
+    const prompt = await aiService.generatePrompt({
+      nodeType: 'MASTER', // or 'GRID', 'SHOT', 'VIDEO'
+      style: form.value.style,
+      // ... 기타 옵션
+    });
+    form.value.prompt = prompt;
+    nodeStore.updateNode(props.node.id, { prompt, promptStatus: PromptStatus.GENERATED });
+  } catch (error) {
+    errorMessage.value = '프롬프트 생성에 실패했습니다.';
+  } finally {
+    isGeneratingPrompt.value = false;
+  }
+}
+
+// 이미지/영상 생성 (폴링 포함)
+async function generateImage(): Promise<void> {
+  isGeneratingImage.value = true;
+  try {
+    nodeStore.updateNode(props.node.id, { jobStatus: JobStatus.RUNNING });
+    const jobId = await aiService.generateNode(props.node.id, form.value.prompt);
+    const result = await aiService.pollJobUntilComplete(jobId);
+    nodeStore.updateNode(props.node.id, {
+      jobStatus: JobStatus.SUCCEEDED,
+      imageUrl: result.resultUrl,
+    });
+  } catch (error) {
+    nodeStore.updateNode(props.node.id, { jobStatus: JobStatus.FAILED });
+  } finally {
+    isGeneratingImage.value = false;
+  }
+}
+```
+
+### API 스펙 확정 시 수정 가이드
+백엔드 API 스펙이 확정되면 `src/types/api.ts` 파일의 인터페이스만 수정하면 됩니다.
+```typescript
+// 예: 필드명이 변경된 경우
+export interface GeneratePromptRequest {
+  nodeType: 'MASTER' | 'GRID' | 'SHOT' | 'VIDEO';
+  artStyle: string;        // style → artStyle
+  atmosphere: string;      // mood → atmosphere
+  // ...
+}
+```

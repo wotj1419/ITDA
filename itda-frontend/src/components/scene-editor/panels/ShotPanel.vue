@@ -5,10 +5,11 @@
 import { ref, computed, watch } from 'vue';
 import type { Node } from '@vue-flow/core';
 import type { ShotNodeData, StoryboardGridNodeData } from '../../../types/node';
-import { NodeType, PromptStatus } from '../../../types/node';
+import { NodeType, PromptStatus, JobStatus } from '../../../types/node';
 import BasePanel from './BasePanel.vue';
 import { useSceneNodeStore } from '../../../stores/sceneNode';
-import { Camera, Smile, PenLine, FileText, Sparkles, Check, RefreshCw, LayoutGrid } from 'lucide-vue-next';
+import { aiService } from '../../../services';
+import { Camera, Smile, PenLine, FileText, Sparkles, Check, RefreshCw, LayoutGrid, Loader2 } from 'lucide-vue-next';
 
 interface Props {
   node: Node<ShotNodeData>;
@@ -16,6 +17,11 @@ interface Props {
 
 const props = defineProps<Props>();
 const nodeStore = useSceneNodeStore();
+
+// 로딩 상태
+const isGeneratingPrompt = ref(false);
+const isGeneratingShot = ref(false);
+const errorMessage = ref<string | null>(null);
 
 const form = ref({
   shotType: '',
@@ -31,7 +37,7 @@ const data = computed(() => props.node.data as ShotNodeData | undefined);
 const shotLabel = computed(() => String.fromCharCode(65 + (data.value?.gridCellIndex || 0)));
 const isPromptGenerated = computed(() => data.value?.promptStatus !== PromptStatus.DRAFT);
 const isPromptApproved = computed(() => data.value?.promptStatus === PromptStatus.APPROVED);
-const canGenerate = computed(() => isPromptApproved.value);
+const canGenerate = computed(() => isPromptApproved.value && !isGeneratingShot.value);
 const parentGridNode = computed(() =>
   nodeStore.nodes.find(
     (node) => node.id === data.value?.parentNodeId && node.data?.type === NodeType.STORYBOARD_GRID
@@ -57,20 +63,67 @@ watch(() => props.node.id, () => {
     additionalDetail: data.value.additionalDetail || '',
     prompt: data.value.prompt || '',
   };
+  errorMessage.value = null;
 }, { immediate: true });
 
-function generatePrompt(): void {
-  const promptText = `High quality ${form.value.shotType} shot, expression: ${form.value.expression}. ${form.value.additionalDetail}`;
-  form.value.prompt = promptText;
-  nodeStore.updateNode(props.node.id, { ...form.value, promptStatus: PromptStatus.GENERATED });
+async function generatePrompt(): Promise<void> {
+  isGeneratingPrompt.value = true;
+  errorMessage.value = null;
+
+  try {
+    const prompt = await aiService.generatePrompt({
+      nodeType: 'SHOT',
+      shotType: form.value.shotType,
+      expression: form.value.expression,
+      additionalDetail: form.value.additionalDetail,
+    });
+
+    form.value.prompt = prompt;
+    nodeStore.updateNode(props.node.id, { ...form.value, promptStatus: PromptStatus.GENERATED });
+  } catch (error) {
+    console.error('Failed to generate prompt:', error);
+    errorMessage.value = '프롬프트 생성에 실패했습니다. 다시 시도해주세요.';
+  } finally {
+    isGeneratingPrompt.value = false;
+  }
 }
 
 function approvePrompt(): void {
   nodeStore.updateNode(props.node.id, { prompt: form.value.prompt, promptStatus: PromptStatus.APPROVED });
 }
 
-function generateShot(): void {
-  console.log('Generate shot:', form.value);
+async function generateShot(): Promise<void> {
+  if (!form.value.prompt) return;
+
+  isGeneratingShot.value = true;
+  errorMessage.value = null;
+
+  try {
+    nodeStore.updateNode(props.node.id, { jobStatus: JobStatus.RUNNING });
+
+    const jobId = await aiService.generateNode(props.node.id, form.value.prompt);
+    console.log('Shot generation job started:', jobId);
+
+    const result = await aiService.pollJobUntilComplete(jobId, (status) => {
+      console.log('Job status:', status.status);
+    });
+
+    if (result.status === 'SUCCEEDED') {
+      nodeStore.updateNode(props.node.id, {
+        jobStatus: JobStatus.SUCCEEDED,
+        imageUrl: result.resultUrl,
+        thumbnailUrl: result.thumbnailUrl,
+      });
+    } else {
+      throw new Error(result.error?.message || 'Shot generation failed');
+    }
+  } catch (error) {
+    console.error('Failed to generate shot:', error);
+    errorMessage.value = '샷 생성에 실패했습니다. 다시 시도해주세요.';
+    nodeStore.updateNode(props.node.id, { jobStatus: JobStatus.FAILED });
+  } finally {
+    isGeneratingShot.value = false;
+  }
 }
 
 function selectGridCell(index: number): void {
