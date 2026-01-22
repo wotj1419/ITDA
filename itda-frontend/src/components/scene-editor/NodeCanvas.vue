@@ -129,6 +129,8 @@ function handlePaneClick(): void {
 function handleAddChild(nodeId: string, nodeType: NodeType): void {
   switch (nodeType) {
     case NodeType.SCENE_HEADER:
+      nodeStore.addMasterImageNode(nodeId);
+      break;
     case NodeType.MASTER_IMAGE:
       nodeStore.addStoryboardGridNode(nodeId);
       break;
@@ -176,6 +178,14 @@ defineExpose({
       <Controls position="bottom-left" />
 
       <!-- Custom Node Events -->
+      <template #node-sceneHeader="nodeProps">
+        <component
+          :is="nodeTypes.sceneHeader"
+          v-bind="nodeProps"
+          @add-child="handleAddChild(nodeProps.id, NodeType.SCENE_HEADER)"
+        />
+      </template>
+
       <template #node-masterImage="nodeProps">
         <component
           :is="nodeTypes.masterImage"

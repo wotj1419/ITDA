@@ -53,6 +53,7 @@ const nodeClasses = computed(() => [
   {
     'node-glass--selected': props.selected,
     'node-glass--active': props.data.isActive,
+    'node-glass--inactive': !props.data.isActive,
     [`node-glass--${statusKey.value}`]: true,
   },
 ]);
@@ -91,6 +92,11 @@ const isRunning = computed(() => props.data.jobStatus === JobStatus.RUNNING);
 function handleAddChild(event: Event): void {
   event.stopPropagation();
   emit('add-child');
+}
+
+function handleToggleCollapse(event: Event): void {
+  event.stopPropagation();
+  store.toggleCollapse(props.id);
 }
 </script>
 
@@ -163,8 +169,21 @@ function handleAddChild(event: Event): void {
       class="node-glass__handle"
     />
 
-    <!-- Add Button (hover) -->
+    <!-- Add/Collapse Button (hover) -->
     <button
+      v-if="!data.isActive"
+      class="node-glass__collapse-btn"
+      @click="handleToggleCollapse"
+    >
+      <span
+        class="node-glass__collapse-icon"
+        :class="{ 'node-glass__collapse-icon--expanded': !data.isCollapsed }"
+      >
+        ^
+      </span>
+    </button>
+    <button
+      v-else
       class="node-glass__add-btn"
       title="그리드 추가"
       @click="handleAddChild"

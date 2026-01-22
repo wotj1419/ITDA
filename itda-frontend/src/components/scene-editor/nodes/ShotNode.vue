@@ -46,11 +46,14 @@ const emit = defineEmits<{
 // Computed
 // =============================================================================
 
+const isUnderInactiveMaster = computed(() => store.isUnderInactiveMaster(props.id));
+
 const nodeClasses = computed(() => [
   'node-glass',
   'node-glass--shot',
   {
     'node-glass--selected': props.selected,
+    'node-glass--inactive': isUnderInactiveMaster.value,
     [`node-glass--${statusKey.value}`]: true,
   },
 ]);
@@ -95,6 +98,11 @@ const shotLabel = computed(() => {
 function handleAddChild(event: Event): void {
   event.stopPropagation();
   emit('add-child');
+}
+
+function handleToggleCollapse(event: Event): void {
+  event.stopPropagation();
+  store.toggleCollapse(props.id);
 }
 </script>
 
@@ -163,9 +171,22 @@ function handleAddChild(event: Event): void {
       class="node-glass__handle" 
     />
 
-    <!-- Add Button -->
-    <button 
-      class="node-glass__add-btn" 
+    <!-- Add/Collapse Button -->
+    <button
+      v-if="isUnderInactiveMaster"
+      class="node-glass__collapse-btn"
+      @click="handleToggleCollapse"
+    >
+      <span
+        class="node-glass__collapse-icon"
+        :class="{ 'node-glass__collapse-icon--expanded': !data.isCollapsed }"
+      >
+        ^
+      </span>
+    </button>
+    <button
+      v-else
+      class="node-glass__add-btn"
       title="영상 추가"
       @click="handleAddChild"
     >

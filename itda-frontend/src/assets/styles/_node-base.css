@@ -202,6 +202,18 @@
     opacity: 1;
 }
 
+/* Inactive Master Node */
+.node-glass--inactive {
+    opacity: 0.75;
+    background: rgba(255, 255, 255, 0.4);
+    border-color: var(--gray-300, #D1D5DB);
+}
+
+.node-glass--inactive:hover {
+    opacity: 1;
+    background: var(--node-glass-bg-hover);
+}
+
 /* =============================================================================
    Node Header
    ============================================================================= */
@@ -450,7 +462,8 @@
 /* =============================================================================
    Add Button
    ============================================================================= */
-.node-glass__add-btn {
+.node-glass__add-btn,
+.node-glass__collapse-btn {
     position: absolute;
     bottom: -12px;
     left: 50%;
@@ -474,17 +487,31 @@
 }
 
 .node-glass:hover .node-glass__add-btn,
-.node-glass--selected .node-glass__add-btn {
+.node-glass--selected .node-glass__add-btn,
+.node-glass:hover .node-glass__collapse-btn,
+.node-glass--selected .node-glass__collapse-btn {
     opacity: 1;
 }
 
-.node-glass__add-btn:hover {
+.node-glass__add-btn:hover,
+.node-glass__collapse-btn:hover {
     transform: translateX(-50%) scale(1.15);
     box-shadow: 0 4px 12px rgba(255, 133, 161, 0.4);
 }
 
-.node-glass__add-btn:active {
+.node-glass__add-btn:active,
+.node-glass__collapse-btn:active {
     transform: translateX(-50%) scale(1.05);
+}
+
+.node-glass__collapse-icon {
+    display: block;
+    line-height: 1;
+    transition: transform 0.15s ease;
+}
+
+.node-glass__collapse-icon--expanded {
+    transform: rotate(180deg);
 }
 
 /* =============================================================================

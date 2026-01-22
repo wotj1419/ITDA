@@ -87,8 +87,13 @@ onMounted(async () => {
       sceneStore.loadScenes(projectId.value),
     ]);
     
-    // Vue Flow 노드 로드
-    await nodeStore.loadSceneNodes(sceneId.value);
+    // Vue Flow 노드 로드 (씬 정보 함께 전달)
+    const scene = currentScene.value;
+    await nodeStore.loadSceneNodes(sceneId.value, scene ? {
+      title: scene.title,
+      description: scene.description || '',
+      order: scene.order,
+    } : undefined);
     
     // 협업 방 입장
     collabStore.joinRoom(projectId.value);
@@ -106,7 +111,12 @@ onUnmounted(() => {
 // Route 변경 시 노드 다시 로드
 watch([projectId, sceneId], async ([, newSceneId]) => {
   if (newSceneId) {
-    await nodeStore.loadSceneNodes(newSceneId as string);
+    const scene = sceneStore.scenes.find((s) => s.sceneId === Number(newSceneId));
+    await nodeStore.loadSceneNodes(newSceneId as string, scene ? {
+      title: scene.title,
+      description: scene.description || '',
+      order: scene.order,
+    } : undefined);
   }
 });
 

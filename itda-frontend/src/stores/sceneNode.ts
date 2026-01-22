@@ -80,14 +80,17 @@ type NodePositionSnapshot = Array<{
 const MAX_POSITION_HISTORY = 20;
 
 function buildPositionSnapshot(nodes: SceneNode[]): NodePositionSnapshot {
-    return nodes.map((node) => ({
-        id: node.id,
-        position: { x: node.position.x, y: node.position.y },
-        dimensions: {
-            width: node.style?.width ?? '',
-            height: node.style?.height ?? '',
-        },
-    }));
+    return nodes.map((node) => {
+        const style = typeof node.style === 'object' && node.style !== null ? node.style : {};
+        return {
+            id: node.id,
+            position: { x: node.position.x, y: node.position.y },
+            dimensions: {
+                width: ('width' in style ? style.width : '') ?? '',
+                height: ('height' in style ? style.height : '') ?? '',
+            },
+        };
+    });
 }
 
 function snapshotsEqual(
@@ -219,7 +222,10 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
     // Actions - Load
     // ==========================================================================
 
-    async function loadSceneNodes(sceneIdParam: string): Promise<void> {
+    async function loadSceneNodes(
+        sceneIdParam: string,
+        sceneInfo?: { title: string; description: string; order: number }
+    ): Promise<void> {
         isLoading.value = true;
         try {
             sceneId.value = sceneIdParam;
@@ -251,8 +257,8 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
             nodes.value = [];
             edges.value = [];
 
-            // 씬 헤더 노드 자동 생성
-            ensureSceneHeaderNode();
+            // 씬 헤더 노드 자동 생성 (전 페이지에서 전달받은 씬 정보 사용)
+            ensureSceneHeaderNode(sceneInfo);
             // 마스터 노드 자동 생성
             ensureActiveMasterNode();
 
@@ -263,7 +269,9 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
         }
     }
 
-    function ensureSceneHeaderNode(): void {
+    function ensureSceneHeaderNode(
+        sceneInfo?: { title: string; description: string; order: number }
+    ): void {
         const hasHeader = nodes.value.some(
             (n) => n.data?.type === NodeType.SCENE_HEADER
         );
@@ -273,9 +281,9 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
                 ...createBaseNodeData(generateId(), NodeType.SCENE_HEADER),
                 type: NodeType.SCENE_HEADER,
                 sceneId: sceneId.value,
-                title: '새 씬',
-                description: '씬 설명을 입력하세요.',
-                sceneOrder: 1,
+                title: sceneInfo?.title || '새 씬',
+                description: sceneInfo?.description || '씬 설명을 입력하세요.',
+                sceneOrder: sceneInfo?.order || 1,
             };
 
             const newNode: SceneNode = {
@@ -629,11 +637,21 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
     // ==========================================================================
 
     function setActiveMaster(masterId: string): void {
+        let shouldSyncCollapse = false;
         nodes.value.forEach((n) => {
             if (n.data?.type === NodeType.MASTER_IMAGE) {
-                (n.data as MasterImageNodeData).isActive = n.id === masterId;
+                const masterData = n.data as MasterImageNodeData;
+                const isActive = n.id === masterId;
+                masterData.isActive = isActive;
+                if (isActive && masterData.isCollapsed) {
+                    masterData.isCollapsed = false;
+                    shouldSyncCollapse = true;
+                }
             }
         });
+        if (shouldSyncCollapse) {
+            syncHiddenByCollapse();
+        }
     }
 
     // ==========================================================================
@@ -690,6 +708,31 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
         const parent = nodes.value.find((n) => n.id === parentId);
         if (!parent?.data) return false;
         return parent.data.isCollapsed || hasCollapsedAncestor(parentId);
+    }
+
+    function getMasterAncestor(nodeId: string): SceneNode | null {
+        const startNode = nodes.value.find((n) => n.id === nodeId);
+        let parentId = startNode?.data?.parentNodeId ?? null;
+        const visited = new Set<string>();
+        while (parentId) {
+            if (visited.has(parentId)) return null;
+            visited.add(parentId);
+            const parent = nodes.value.find((n) => n.id === parentId);
+            if (!parent?.data) return null;
+            if (parent.data.type === NodeType.MASTER_IMAGE) {
+                return parent;
+            }
+            parentId = parent.data.parentNodeId;
+        }
+        return null;
+    }
+
+    function isUnderInactiveMaster(nodeId: string): boolean {
+        const masterNode = getMasterAncestor(nodeId);
+        if (!masterNode?.data || masterNode.data.type !== NodeType.MASTER_IMAGE) {
+            return false;
+        }
+        return !(masterNode.data as MasterImageNodeData).isActive;
     }
 
     // ==========================================================================
@@ -858,6 +901,7 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
 
         // Actions - Collapse
         toggleCollapse,
+        isUnderInactiveMaster,
 
         // Actions - End Shot
         startSelectEndShot,

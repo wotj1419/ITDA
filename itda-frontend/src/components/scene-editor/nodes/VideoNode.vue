@@ -52,11 +52,14 @@ const statusKey = computed(() => {
   return props.data.jobStatus;
 });
 
+const isUnderInactiveMaster = computed(() => store.isUnderInactiveMaster(props.id));
+
 const nodeClasses = computed(() => [
   'node-glass',
   'node-glass--video',
   {
     'node-glass--selected': props.selected,
+    'node-glass--inactive': isUnderInactiveMaster.value,
     'node-glass--confirmed': props.data.isConfirmed,
     [`node-glass--${statusKey.value}`]: !props.data.isConfirmed,
   },

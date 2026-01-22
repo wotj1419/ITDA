@@ -507,3 +507,146 @@ export interface GeneratePromptRequest {
   // ...
 }
 ```
+
+-------------------------------------------------------------------------------------
+
+## TypeScript 빌드 에러 수정 (2026-01-22)
+- **수정 내용**: Jenkins CI/CD 빌드 실패를 유발하던 TypeScript 컴파일 에러 3건 수정.
+- **이전 문제**: `npm run build` 실행 시 `vue-tsc` 단계에서 타입 에러로 빌드 실패.
+- **해결**: 미사용 매개변수 처리 및 타입 가드 추가.
+
+### 에러 목록 및 해결
+| 파일 | 라인 | 에러 코드 | 원인 | 해결 방법 |
+|------|------|-----------|------|-----------|
+| `mock/auth.ts` | 21 | TS6133 | `data` 매개변수 미사용 | `_data`로 변경 |
+| `stores/sceneNode.ts` | 87-88 | TS2339 | `node.style` 타입 불일치 | 타입 가드 추가 |
+
+### 수정된 파일
+- [auth.ts](../src/services/mock/auth.ts)
+  - 미사용 매개변수 앞에 언더스코어 prefix 추가
+  ```typescript
+  // ❌ Before: 에러 발생
+  async signup(data: SignupRequest) { ... }
+
+  // ✅ After: 에러 해결
+  async signup(_data: SignupRequest) { ... }
+  ```
+
+- [sceneNode.ts](../src/stores/sceneNode.ts)
+  - `buildPositionSnapshot` 함수에 타입 가드 추가
+  ```typescript
+  // ❌ Before: node.style이 함수일 수 있어 에러 발생
+  dimensions: {
+      width: node.style?.width ?? '',
+      height: node.style?.height ?? '',
+  }
+
+  // ✅ After: 객체 타입 확인 후 접근
+  const style = typeof node.style === 'object' && node.style !== null ? node.style : {};
+  dimensions: {
+      width: ('width' in style ? style.width : '') ?? '',
+      height: ('height' in style ? style.height : '') ?? '',
+  }
+  ```
+
+### 참고
+- **TS6133**: 선언되었지만 사용되지 않는 변수/매개변수 경고. 언더스코어(`_`)를 붙이면 "의도적으로 무시"함을 표시.
+- **TS2339**: 객체에 해당 속성이 존재하지 않음. Vue Flow의 `Node.style` 타입이 `Styles | StyleFunc` 유니온이라 함수일 경우 `width` 속성 접근 불가.
+
+-------------------------------------------------------------------------------------
+
+## 씬 정보 박스에 전 페이지 씬 데이터 연동 (2026-01-22)
+- **수정 내용**: 전 페이지(ProjectDetailPage)에서 가져온 씬 제목/설명/순서를 씬 에디터의 씬 정보 박스에 표시.
+- **이전 문제**: "씬 1: 새 씬", "씬 설명을 입력하세요"와 같은 기본값만 하드코딩되어 표시됨.
+- **해결**: `loadSceneNodes` 함수에 씬 정보 파라미터 추가 및 `ensureSceneHeaderNode`에서 전달받은 값 사용.
+
+### 수정된 파일
+- [sceneNode.ts](../src/stores/sceneNode.ts)
+  - `loadSceneNodes` 함수에 `sceneInfo` 파라미터 추가
+  - `ensureSceneHeaderNode` 함수에서 전달받은 씬 정보 사용
+  ```typescript
+  // 변경 전
+  async function loadSceneNodes(sceneIdParam: string): Promise<void>
+
+  // 변경 후 - 씬 정보 객체를 파라미터로 추가
+  async function loadSceneNodes(
+    sceneIdParam: string, 
+    sceneInfo?: { title: string; description: string; order: number }
+  ): Promise<void>
+  ```
+  ```typescript
+  // 변경 전 (ensureSceneHeaderNode 내부)
+  title: '새 씬',
+  description: '씬 설명을 입력하세요.',
+  sceneOrder: 1,
+
+  // 변경 후
+  title: sceneInfo?.title || '새 씬',
+  description: sceneInfo?.description || '씬 설명을 입력하세요.',
+  sceneOrder: sceneInfo?.order || 1,
+  ```
+
+- [SceneEditPage.vue](../src/pages/SceneEditPage.vue)
+  - 호출 시 `currentScene` 정보를 전달하도록 수정
+  ```typescript
+  // 변경 전
+  await nodeStore.loadSceneNodes(sceneId.value);
+
+  // 변경 후
+  const scene = currentScene.value;
+  await nodeStore.loadSceneNodes(sceneId.value, scene ? {
+    title: scene.title,
+    description: scene.description || '',
+    order: scene.order,
+  } : undefined);
+  ```
+
+-------------------------------------------------------------------------------------
+
+## ??? ??? ?? ?? (Scene Header) (2026-01-22)
+- **?? ??**: ? ?? ?? ??? ??? ??? ??(+) ??? ??, ?? ?? ?? ???? ????? ?? ??? ??.
+- **?? ??**: ??? ???? ??? ? ?? ???? UI? ?? ??? ??(3? ??)? ???? ??.
+- **??**: ? ?? ??? `+` ??? ???? NodeCanvas?? add-child ???? ?? `addMasterImageNode` ? `applyLayout()` ??.
+
+### ??? ??
+- [SceneHeaderNode.vue](../src/components/scene-editor/nodes/SceneHeaderNode.vue)
+  - UI: ?? ?? ??? `+` ?? ?? (Lucide `Plus` ???)
+  - Logic: ?? ? `emit('add-child')` ?? (NodeCanvas?? ??)
+- [NodeCanvas.vue](../src/components/scene-editor/NodeCanvas.vue)
+  - Logic: `addMasterImageNode` ?? ? `applyLayout()` ??
+  ```vue
+  <button
+    class="node-glass__add-btn"
+    title="??? ??? ??"
+    @click="addMasterImage"
+  >
+    <Plus :size="14" />
+  </button>
+  ```
+
+-------------------------------------------------------------------------------------
+
+## ??? ??? Active/Inactive ??/?? ?? ?? (2026-01-22)
+- **?? ??**: Active ????? `+` ?? ??, Inactive ??? `^` ?? ?? ??. Inactive ??? ?? ??(???/?/???)?? ??? ?? ?? ? ??? ??? ??.
+- **?? ??**: Active/Inactive ??? ??? ?? ??? ?? UI? ???? ??/??? ??.
+- **??**: ???/?? ??? Inactive ??? ??, ?? ?? ??, Active ?? ? ?? ?? ??.
+
+## ?? ??
+1. Active ???: `+` ???? ?? ??(???) ??.
+2. Inactive ???: `^` ???? ??/??? ??.
+3. Inactive ??? ?? ??: `+` ?? ?? ?? ??? `^` ?? ?? ??.
+4. Active ?? ? ?? ???? ?? ??? ???? ??.
+
+## ??? ??
+- [MasterImageNode.vue](../src/components/scene-editor/nodes/MasterImageNode.vue)
+  - Active ??? ?? `+`/`^` ?? ??, Inactive ??? ??
+- [StoryboardGridNode.vue](../src/components/scene-editor/nodes/StoryboardGridNode.vue)
+  - ??? ??? ??? ? `+` ? `^` ?? ??, Inactive ??? ??
+- [ShotNode.vue](../src/components/scene-editor/nodes/ShotNode.vue)
+  - ??? ??? ??? ? `+` ? `^` ?? ??, Inactive ??? ??
+- [VideoNode.vue](../src/components/scene-editor/nodes/VideoNode.vue)
+  - ??? ??? ??? ? Inactive ??? ??
+- [sceneNode.ts](../src/stores/sceneNode.ts)
+  - `isUnderInactiveMaster` ?? ??, Active ?? ? ?? ?? ??
+- [_node-base.css](../src/assets/styles/_node-base.css)
+  - Inactive ??? ? `^` ??? ?? ??? ??
