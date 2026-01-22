@@ -28,5 +28,10 @@ public interface SceneMapper {
     int reorderScenes(@Param("projectId") Long projectId,
                       @Param("orderedSceneIds") List<Long> orderedSceneIds);
 
+    int countByProjectId(@Param("projectId") Long projectId);
+
+    int countByProjectIdAndIds(@Param("projectId") Long projectId,
+                               @Param("sceneIds") List<Long> sceneIds);
+
     int findNextOrderIndex(@Param("projectId") Long projectId);
 }

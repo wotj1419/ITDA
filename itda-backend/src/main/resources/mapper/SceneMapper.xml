@@ -85,6 +85,22 @@
           </foreach>
     </update>
 
+    <select id="countByProjectId" resultType="int">
+        SELECT COUNT(*)
+        FROM scenes
+        WHERE project_id = #{projectId}
+    </select>
+
+    <select id="countByProjectIdAndIds" resultType="int">
+        SELECT COUNT(*)
+        FROM scenes
+        WHERE project_id = #{projectId}
+          AND id IN
+          <foreach collection="sceneIds" item="sceneId" open="(" separator="," close=")">
+              #{sceneId}
+          </foreach>
+    </select>
+
     <select id="findNextOrderIndex" resultType="int">
         SELECT COALESCE(MAX(order_index), 0) + 1
         FROM scenes

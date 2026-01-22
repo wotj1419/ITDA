@@ -16,7 +16,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
@@ -93,7 +95,29 @@ public class SceneService {
 
     @Transactional
     public void reorderScenes(Long userId, Long projectId, ReorderScenesRequest request) {
-        throw new UnsupportedOperationException("Scene reorder not implemented");
+        List<Long> orderedSceneIds = request.orderedSceneIds();
+        if (orderedSceneIds == null || orderedSceneIds.isEmpty() || orderedSceneIds.contains(null)) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST);
+        }
+
+        Set<Long> uniqueIds = new HashSet<>(orderedSceneIds);
+        if (uniqueIds.size() != orderedSceneIds.size()) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST);
+        }
+
+        ensureMember(projectId, userId);
+
+        int totalScenes = sceneMapper.countByProjectId(projectId);
+        if (totalScenes != orderedSceneIds.size()) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST);
+        }
+
+        int matchedScenes = sceneMapper.countByProjectIdAndIds(projectId, orderedSceneIds);
+        if (matchedScenes != orderedSceneIds.size()) {
+            throw new BusinessException(ErrorCode.SCENE_NOT_FOUND);
+        }
+
+        sceneMapper.reorderScenes(projectId, orderedSceneIds);
     }
 
     private void ensureMember(Long projectId, Long userId) {
