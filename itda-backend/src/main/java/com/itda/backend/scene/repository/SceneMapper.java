@@ -25,5 +25,8 @@ public interface SceneMapper {
 
     int deleteScene(@Param("id") Long id);
 
+    int reorderScenes(@Param("projectId") Long projectId,
+                      @Param("orderedSceneIds") List<Long> orderedSceneIds);
+
     int findNextOrderIndex(@Param("projectId") Long projectId);
 }

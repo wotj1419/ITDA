@@ -69,6 +69,22 @@
         WHERE id = #{id}
     </delete>
 
+    <!-- reorderScenes: batch update order_index -->
+    <update id="reorderScenes">
+        UPDATE scenes
+        SET order_index = CASE id
+            <foreach collection="orderedSceneIds" item="sceneId" index="idx">
+                WHEN #{sceneId} THEN #{idx} + 1
+            </foreach>
+            ELSE order_index
+        END
+        WHERE project_id = #{projectId}
+          AND id IN
+          <foreach collection="orderedSceneIds" item="sceneId" open="(" separator="," close=")">
+              #{sceneId}
+          </foreach>
+    </update>
+
     <select id="findNextOrderIndex" resultType="int">
         SELECT COALESCE(MAX(order_index), 0) + 1
         FROM scenes

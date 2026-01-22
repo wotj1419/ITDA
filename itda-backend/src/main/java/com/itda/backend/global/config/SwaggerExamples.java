@@ -157,7 +157,7 @@ public final class SwaggerExamples {
                           "details": null
                         }
                         """))
-                .addResponses("ValidationError", exampleResponse("Validation error", """
+                .addResponses("ValidationError", exampleResponse("Validation error (includes invalid request)", """
                         {
                           "code": "INVALID_INPUT_VALUE",
                           "message": "Validation failed",
