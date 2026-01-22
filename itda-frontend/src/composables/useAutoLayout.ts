@@ -29,16 +29,64 @@ const DEFAULT_OPTIONS: LayoutOptions = {
  */
 export function useAutoLayout() {
     /**
-     * 노드 타입별 너비 반환
+     * 노드의 실제 너비 반환 (동적 크기 지원)
      */
-    function getNodeWidth(type: string): number {
+    function getNodeWidth(nodeOrType: Node | string): number {
+        if (typeof nodeOrType === 'string') {
+            return NODE_WIDTHS[nodeOrType as NodeType] || 200;
+        }
+
+        const node = nodeOrType as any;
+
+        // 1. dimensions 속성 확인 (Vue Flow 내부 상태)
+        if (node.dimensions && node.dimensions.width > 0) {
+            return node.dimensions.width;
+        }
+
+        // 2. style 속성 확인
+        if (node.style && typeof node.style === 'object' && node.style.width) {
+            const styleWidth = parseInt(node.style.width as string);
+            if (!isNaN(styleWidth)) return styleWidth;
+        }
+
+        // 3. width 속성 확인
+        if (node.width && typeof node.width === 'number') {
+            return node.width;
+        }
+
+        // 4. 타입 기반 기본값
+        const type = (node.data as { type?: string })?.type || node.type || '';
         return NODE_WIDTHS[type as NodeType] || 200;
     }
 
     /**
-     * 노드 타입별 높이 반환
+     * 노드의 실제 높이 반환 (동적 크기 지원)
      */
-    function getNodeHeight(type: string): number {
+    function getNodeHeight(nodeOrType: Node | string): number {
+        if (typeof nodeOrType === 'string') {
+            return NODE_HEIGHTS[nodeOrType as NodeType] || 150;
+        }
+
+        const node = nodeOrType as any;
+
+        // 1. dimensions 속성 확인 (Vue Flow 내부 상태)
+        if (node.dimensions && node.dimensions.height > 0) {
+            return node.dimensions.height;
+        }
+
+        // 2. style 속성 확인
+        if (node.style && typeof node.style === 'object' && node.style.height) {
+            const styleHeight = parseInt(node.style.height as string);
+            if (!isNaN(styleHeight)) return styleHeight;
+        }
+
+        // 3. height 속성 확인
+        if (node.height && typeof node.height === 'number') {
+            return node.height;
+        }
+
+        // 4. 타입 기반 기본값
+        const type = (node.data as { type?: string })?.type || node.type || '';
         return NODE_HEIGHTS[type as NodeType] || 150;
     }
 
@@ -64,10 +112,9 @@ export function useAutoLayout() {
 
         // 노드 추가
         nodes.forEach((node) => {
-            const nodeType = (node.data as { type?: string })?.type || node.type || '';
             dagreGraph.setNode(node.id, {
-                width: getNodeWidth(nodeType),
-                height: getNodeHeight(nodeType),
+                width: getNodeWidth(node),
+                height: getNodeHeight(node),
             });
         });
 
@@ -82,13 +129,16 @@ export function useAutoLayout() {
         // 계산된 위치 적용
         const layoutedNodes = nodes.map((node) => {
             const nodeWithPosition = dagreGraph.node(node.id);
-            const nodeType = (node.data as { type?: string })?.type || node.type || '';
+
+            // 중앙 정렬을 위해 실제 너비/높이 사용
+            const width = getNodeWidth(node);
+            const height = getNodeHeight(node);
 
             return {
                 ...node,
                 position: {
-                    x: nodeWithPosition.x - getNodeWidth(nodeType) / 2,
-                    y: nodeWithPosition.y - getNodeHeight(nodeType) / 2,
+                    x: nodeWithPosition.x - width / 2,
+                    y: nodeWithPosition.y - height / 2,
                 },
             };
         });

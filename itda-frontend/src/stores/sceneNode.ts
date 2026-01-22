@@ -5,13 +5,15 @@
  * 설계 문서: docs/vue-flow-node-workflow-design.md Section 5
  */
 import { defineStore } from 'pinia';
-import { ref, computed } from 'vue';
+import { ref, computed, watch } from 'vue';
 import type { Node, Edge } from '@vue-flow/core';
 import {
     NodeType,
     JobStatus,
     PromptStatus,
     VALID_CONNECTIONS,
+    NODE_HEIGHTS,
+    NODE_WIDTHS,
     type BaseNodeData,
     type AnyNodeData,
     type SceneHeaderNodeData,
@@ -52,6 +54,13 @@ function createBaseNodeData(
     };
 }
 
+function getDefaultNodeDimensions(type: NodeType): { width: number; height: number } {
+    return {
+        width: NODE_WIDTHS[type] ?? 200,
+        height: NODE_HEIGHTS[type] ?? 150,
+    };
+}
+
 type EdgeMeta = {
     isTransition: boolean;
     isConfirmed: boolean;
@@ -62,6 +71,42 @@ type EdgeMeta = {
 // =============================================================================
 
 type SceneNode = Node<AnyNodeData>;
+type NodePositionSnapshot = Array<{
+    id: string;
+    position: { x: number; y: number };
+    dimensions?: { width: number | string; height: number | string };
+}>;
+
+const MAX_POSITION_HISTORY = 20;
+
+function buildPositionSnapshot(nodes: SceneNode[]): NodePositionSnapshot {
+    return nodes.map((node) => ({
+        id: node.id,
+        position: { x: node.position.x, y: node.position.y },
+        dimensions: {
+            width: node.style?.width ?? '',
+            height: node.style?.height ?? '',
+        },
+    }));
+}
+
+function snapshotsEqual(
+    a: NodePositionSnapshot,
+    b: NodePositionSnapshot
+): boolean {
+    if (a.length !== b.length) return false;
+    const positions = new Map(a.map((item) => [item.id, item]));
+    return b.every((item) => {
+        const existing = positions.get(item.id);
+        return (
+            existing !== undefined &&
+            existing.position.x === item.position.x &&
+            existing.position.y === item.position.y &&
+            existing.dimensions?.width === item.dimensions?.width &&
+            existing.dimensions?.height === item.dimensions?.height
+        );
+    });
+}
 
 // =============================================================================
 // Store
@@ -75,6 +120,7 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
     const nodes = ref<SceneNode[]>([]);
     const edges = ref<Edge[]>([]);
     const selectedNodeId = ref<string | null>(null);
+    const positionHistory = ref<NodePositionSnapshot[]>([]);
 
     // end shot 선택 모드 (트랜지션 영상용)
     const selectionMode = ref<'none' | 'selectEndShot'>('none');
@@ -122,6 +168,54 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
     );
 
     // ==========================================================================
+    // Actions - Persistence
+    // ==========================================================================
+
+    function getStorageKey(id: string): string {
+        return `scene-nodes-${id}`;
+    }
+
+    function saveToLocalStorage(): void {
+        if (!sceneId.value) return;
+        isSaving.value = true;
+        try {
+            const data = {
+                nodes: nodes.value,
+                edges: edges.value,
+                updatedAt: new Date().toISOString(),
+            };
+            localStorage.setItem(getStorageKey(sceneId.value), JSON.stringify(data));
+        } catch (e) {
+            console.error('Failed to save scene nodes:', e);
+        } finally {
+            setTimeout(() => {
+                isSaving.value = false;
+            }, 500);
+        }
+    }
+
+    // 간단한 디바운스 처리
+    let saveTimeout: ReturnType<typeof setTimeout> | null = null;
+    function debouncedSave() {
+        if (saveTimeout) clearTimeout(saveTimeout);
+        saveTimeout = setTimeout(() => {
+            saveToLocalStorage();
+        }, 1000); // 1초 후 저장
+    }
+
+    // 노드/엣지 변경 감지하여 자동 저장
+    // (로드 중이나 초기화 중에는 불필요하게 저장되지 않도록 주의)
+    watch(
+        [nodes, edges],
+        () => {
+            if (!isLoading.value && sceneId.value) {
+                debouncedSave();
+            }
+        },
+        { deep: true }
+    );
+
+    // ==========================================================================
     // Actions - Load
     // ==========================================================================
 
@@ -129,10 +223,30 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
         isLoading.value = true;
         try {
             sceneId.value = sceneIdParam;
-            // TODO: API 호출
-            // const response = await api.get(`/scenes/${sceneIdParam}/nodes`);
-            // nodes.value = response.data.nodes;
 
+            // 1. LocalStorage 확인
+            const savedData = localStorage.getItem(getStorageKey(sceneIdParam));
+            if (savedData) {
+                try {
+                    const parsed = JSON.parse(savedData);
+                    // 데이터 유효성 체크 대략적으로 (nodes 배열 존재 여부)
+                    if (Array.isArray(parsed.nodes)) {
+                        nodes.value = parsed.nodes;
+                        edges.value = parsed.edges || [];
+                        console.log('Restored nodes from localStorage');
+                        return; // 저장된 데이터가 있으면 여기서 종료
+                    }
+                } catch (e) {
+                    console.error('Failed to parse saved scene nodes:', e);
+                }
+            }
+
+            // 2. 저장된 데이터가 없으면 Mock 데이터 또는 초기상태 시작
+            // nodes.value = [];
+            // edges.value = [];
+            // positionHistory.value = [];
+
+            // (기존 초기화 로직 유지)
             // Mock: 빈 상태에서 시작
             nodes.value = [];
             edges.value = [];
@@ -154,6 +268,7 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
             (n) => n.data?.type === NodeType.SCENE_HEADER
         );
         if (!hasHeader && sceneId.value) {
+            const { width, height } = getDefaultNodeDimensions(NodeType.SCENE_HEADER);
             const headerData: SceneHeaderNodeData = {
                 ...createBaseNodeData(generateId(), NodeType.SCENE_HEADER),
                 type: NodeType.SCENE_HEADER,
@@ -167,6 +282,8 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
                 id: headerData.id,
                 type: 'sceneHeader',
                 position: { x: 0, y: 0 },
+                width,
+                height,
                 data: headerData,
             };
             nodes.value.push(newNode);
@@ -220,6 +337,7 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
             id,
             type: 'masterImage',
             position: { x: 0, y: 0 },
+            ...getDefaultNodeDimensions(NodeType.MASTER_IMAGE),
             data,
         };
 
@@ -247,6 +365,7 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
             id,
             type: 'storyboardGrid',
             position: { x: 0, y: 0 },
+            ...getDefaultNodeDimensions(NodeType.STORYBOARD_GRID),
             data,
         };
 
@@ -283,6 +402,7 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
             id,
             type: 'shot',
             position: { x: 0, y: 0 },
+            ...getDefaultNodeDimensions(NodeType.SHOT),
             data,
         };
 
@@ -313,6 +433,7 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
             id,
             type: 'video',
             position: { x: 0, y: 0 },
+            ...getDefaultNodeDimensions(NodeType.VIDEO),
             data,
         };
 
@@ -338,6 +459,14 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
     }
 
     function deleteNode(nodeId: string): void {
+        const targetNode = nodes.value.find((n) => n.id === nodeId);
+        if (
+            !targetNode ||
+            targetNode.data?.type === NodeType.SCENE_HEADER ||
+            targetNode.data?.type === NodeType.MASTER_IMAGE
+        )
+            return;
+
         // 하위 노드 재귀 삭제
         const descendants = getDescendantIds(nodeId);
         const toDelete = [nodeId, ...descendants];
@@ -362,6 +491,42 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
             childId,
             ...getDescendantIds(childId),
         ]);
+    }
+
+    // ==========================================================================
+    // Actions - Position History
+    // ==========================================================================
+
+    function pushPositionSnapshot(): void {
+        if (!nodes.value.length) return;
+        const snapshot = buildPositionSnapshot(nodes.value);
+        const lastSnapshot =
+            positionHistory.value[positionHistory.value.length - 1];
+        if (lastSnapshot && snapshotsEqual(lastSnapshot, snapshot)) return;
+
+        positionHistory.value.push(snapshot);
+        if (positionHistory.value.length > MAX_POSITION_HISTORY) {
+            positionHistory.value.shift();
+        }
+    }
+
+    function undoLastMove(): void {
+        const snapshot = positionHistory.value.pop();
+        if (!snapshot) return;
+
+        snapshot.forEach((item) => {
+            const node = nodes.value.find((n) => n.id === item.id);
+            if (node) {
+                node.position = { ...item.position };
+                if (item.dimensions) {
+                    node.style = {
+                        ...node.style,
+                        width: item.dimensions.width,
+                        height: item.dimensions.height,
+                    };
+                }
+            }
+        });
     }
 
     // ==========================================================================
@@ -621,6 +786,7 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
                 : generateMockSceneNodes(sceneIdParam);
             nodes.value = mockData.nodes;
             edges.value = mockData.edges;
+            positionHistory.value = [];
         } finally {
             isLoading.value = false;
         }
@@ -633,6 +799,7 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
     function clearNodes(): void {
         nodes.value = [];
         edges.value = [];
+        positionHistory.value = [];
         selectedNodeId.value = null;
         sceneId.value = null;
     }
@@ -672,6 +839,8 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
         // Actions - Update/Delete
         updateNode,
         deleteNode,
+        pushPositionSnapshot,
+        undoLastMove,
 
         // Actions - Edges
         addEdge,

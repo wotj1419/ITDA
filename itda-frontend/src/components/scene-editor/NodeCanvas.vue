@@ -39,7 +39,7 @@ const emit = defineEmits<{
 
 const nodeStore = useSceneNodeStore();
 const { getLayoutedElements } = useAutoLayout();
-const { fitView, onNodeClick } = useVueFlow();
+const { fitView, onNodeClick, onNodeDragStart, onSelectionDragStart } = useVueFlow();
 
 // =============================================================================
 // Lifecycle
@@ -73,7 +73,8 @@ function applyLayout(): void {
   const { nodes: layoutedNodes } = getLayoutedElements(
     nodeStore.nodes,
     nodeStore.edges,
-    { direction: 'TB' }
+    // 커스텀 자동 정렬용 간격 설정 (형제 노드 균등 간격 분배)
+    { direction: 'TB', nodeSep: 80, rankSep: 100 }
   );
 
   layoutedNodes.forEach((layoutedNode) => {
@@ -107,6 +108,13 @@ onNodeClick(({ node }) => {
   nodeStore.selectNode(node.id);
   emit('node-select', node.id);
 });
+
+const handleNodeDragStart = () => {
+  nodeStore.pushPositionSnapshot();
+};
+
+onNodeDragStart(handleNodeDragStart);
+onSelectionDragStart(handleNodeDragStart);
 
 function handlePaneClick(): void {
   // 캔버스 빈 영역 클릭 시 선택 해제
@@ -151,14 +159,15 @@ defineExpose({
     :class="{ 'selection-mode-active': nodeStore.selectionMode === 'selectEndShot' }"
   >
     <VueFlow
-      :nodes="nodeStore.nodes"
-      :edges="nodeStore.edges"
+      v-model:nodes="nodeStore.nodes"
+      v-model:edges="nodeStore.edges"
       :node-types="nodeTypes"
       :default-viewport="{ x: 0, y: 0, zoom: 1 }"
       :min-zoom="0.25"
       :max-zoom="2"
       fit-view-on-init
       @pane-click="handlePaneClick"
+      @node-resize-start="handleNodeDragStart"
     >
       <!-- Background -->
       <Background pattern-color="var(--rose-200)" :gap="24" />

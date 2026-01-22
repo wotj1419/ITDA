@@ -96,9 +96,9 @@ async function handleRegister() {
     uiStore.showToast({
       type: 'success',
       title: '회원가입 완료',
-      message: '환영합니다!',
+      message: '로그인 해주세요.',
     })
-    router.push('/dashboard')
+    activeTab.value = 'login'
   } catch (error) {
     uiStore.showToast({
       type: 'error',

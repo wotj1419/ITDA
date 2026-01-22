@@ -5,7 +5,8 @@ import { Star } from 'lucide-vue-next'
 import type { Project } from '../../types'
 import Badge from '../common/Badge.vue'
 import AvatarGroup from '../common/AvatarGroup.vue'
-import { formatRelativeTime, getProjectProgress } from '../../services/mock/projects'
+import TimeAgo from '../common/TimeAgo.vue'
+import { getProjectProgress } from '../../services/mock/projects'
 
 interface Props {
   project: Project
@@ -23,7 +24,6 @@ const progressPercent = computed(() => {
   return Math.round((progress.value.completed / progress.value.total) * 100)
 })
 
-const relativeTime = computed(() => formatRelativeTime(props.project.updatedAt))
 
 const badgeVariant = computed(() => {
   switch (props.project.genre?.toLowerCase()) {
@@ -48,6 +48,10 @@ const memberAvatars = computed(() => {
   }
   return avatars
 })
+
+defineEmits<{
+  (e: 'toggle-favorite', projectId: number): void
+}>()
 </script>
 
 <template>
@@ -97,15 +101,17 @@ const memberAvatars = computed(() => {
       <!-- Footer -->
       <div class="card-footer">
         <AvatarGroup :avatars="memberAvatars" :max="2" size="sm" />
-        <span class="card-time">Edited {{ relativeTime }}</span>
+        <span class="card-time">Edited <TimeAgo :date="project.updatedAt" /></span>
       </div>
     </div>
 
     <!-- Favorite Icon -->
     <Star
-      v-if="isFavorite"
+      v-if="project"
       class="favorite-icon"
       :fill="isFavorite ? 'currentColor' : 'none'"
+      :class="{ active: isFavorite }"
+      @click.prevent.stop="$emit('toggle-favorite', project.projectId)"
     />
   </RouterLink>
 </template>
@@ -125,7 +131,7 @@ const memberAvatars = computed(() => {
 
 .project-card:hover {
   border-color: var(--rose-200);
-  box-shadow: 0 8px 24px -4px rgba(244, 63, 94, 0.12);
+  box-shadow: 0 8px 24px -4px rgba(255, 133, 161, 0.12);
   transform: translateY(-2px);
 }
 
@@ -223,6 +229,7 @@ const memberAvatars = computed(() => {
 }
 
 /* Favorite */
+/* Favorite */
 .favorite-icon {
   position: absolute;
   top: 0.75rem;
@@ -231,5 +238,11 @@ const memberAvatars = computed(() => {
   height: 20px;
   color: var(--rose-400);
   filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.2));
+  cursor: pointer;
+  z-index: 10;
+}
+
+.favorite-icon:hover {
+  transform: scale(1.1);
 }
 </style>

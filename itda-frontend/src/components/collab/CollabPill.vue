@@ -13,7 +13,7 @@ const collabStore = useCollabStore();
 </script>
 
 <template>
-  <div class="collab-pill" @click="collabStore.togglePanel">
+  <div class="collab-pill">
     <!-- Live Indicator -->
     <div class="indicator">
       <span class="dot"></span>

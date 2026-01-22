@@ -11,7 +11,8 @@
 
 .vue-flow__node {
     border-radius: var(--radius-lg, 1rem);
-    transition: all var(--transition-normal, 0.2s ease);
+    /* transform 제외: 드래그 시 즉시 이동하도록 */
+    transition: box-shadow 0.2s ease, border-color 0.2s ease, opacity 0.2s ease;
 }
 
 .vue-flow__node.selected {
@@ -46,6 +47,29 @@
     height: 10px;
     background: var(--rose-500, #FF85A1);
     border: 2px solid white;
+}
+
+.vue-flow__resize-control.line {
+    display: none;
+    z-index: 2;
+}
+
+.vue-flow__resize-control.handle {
+    width: 16px;
+    height: 16px;
+    border-radius: 4px;
+    background: transparent;
+    border: 0;
+    box-shadow: none;
+    opacity: 0;
+    z-index: 3;
+}
+
+.vue-flow__resize-control.handle.top:not(.left):not(.right),
+.vue-flow__resize-control.handle.bottom:not(.left):not(.right),
+.vue-flow__resize-control.handle.left:not(.top):not(.bottom),
+.vue-flow__resize-control.handle.right:not(.top):not(.bottom) {
+    display: none;
 }
 
 .vue-flow__controls {
