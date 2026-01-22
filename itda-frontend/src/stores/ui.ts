@@ -33,20 +33,26 @@ export const useUIStore = defineStore('ui', () => {
     }
   }
 
-  function showToast(toast: Omit<Toast, 'id'>): void {
-    const id = 'toast_' + Date.now()
+  function showToast(toast: Omit<Toast, 'id'>): string {
+    const id = `toast_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`
     const newToast: Toast = {
       id,
       duration: 4000,
+      position: 'top-right',
+      autoClose: true,
       ...toast,
     }
 
     toasts.value.push(newToast)
 
-    // Auto remove
-    setTimeout(() => {
-      removeToast(id)
-    }, newToast.duration)
+    if (newToast.autoClose !== false) {
+      const duration = typeof newToast.duration === 'number' ? newToast.duration : 4000
+      setTimeout(() => {
+        removeToast(id)
+      }, duration)
+    }
+
+    return id
   }
 
   function removeToast(id: string): void {

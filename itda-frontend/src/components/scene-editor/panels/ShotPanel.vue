@@ -8,6 +8,7 @@ import type { ShotNodeData, StoryboardGridNodeData } from '../../../types/node';
 import { NodeType, PromptStatus, JobStatus } from '../../../types/node';
 import BasePanel from './BasePanel.vue';
 import { useSceneNodeStore } from '../../../stores/sceneNode';
+import { useGenerationToast } from '../../../composables/useGenerationToast';
 import { aiService } from '../../../services';
 import { Camera, Smile, PenLine, FileText, Sparkles, Check, RefreshCw, LayoutGrid, Loader2 } from 'lucide-vue-next';
 
@@ -17,6 +18,7 @@ interface Props {
 
 const props = defineProps<Props>();
 const nodeStore = useSceneNodeStore();
+const { startGenerationToast, finishGenerationToast } = useGenerationToast();
 
 // 로딩 상태
 const isGeneratingPrompt = ref(false);
@@ -24,7 +26,7 @@ const isGeneratingShot = ref(false);
 const errorMessage = ref<string | null>(null);
 
 const form = ref({
-  shotType: '',
+  shotTypes: [] as string[],
   expression: '',
   additionalDetail: '',
   prompt: '',
@@ -55,10 +57,35 @@ const gridCellOptions = computed(() =>
 );
 const selectedGridCell = computed(() => data.value?.gridCellIndex ?? 0);
 
+function normalizeShotTypes(value?: string | null): string[] {
+  if (!value) return [];
+  return value
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function buildShotTypeValue(types: string[]): string {
+  return types.map((item) => item.trim()).filter(Boolean).join(', ');
+}
+
+function toggleShotType(type: string): void {
+  const idx = form.value.shotTypes.indexOf(type);
+  if (idx >= 0) {
+    form.value.shotTypes.splice(idx, 1);
+  } else {
+    form.value.shotTypes.push(type);
+  }
+}
+
 watch(() => props.node.id, () => {
   if (!data.value) return;
+  const fallbackShotTypes =
+    data.value.shotTypes && data.value.shotTypes.length > 0
+      ? [...data.value.shotTypes]
+      : normalizeShotTypes(data.value.shotType);
   form.value = {
-    shotType: data.value.shotType || '',
+    shotTypes: fallbackShotTypes,
     expression: data.value.expression || '',
     additionalDetail: data.value.additionalDetail || '',
     prompt: data.value.prompt || '',
@@ -71,15 +98,23 @@ async function generatePrompt(): Promise<void> {
   errorMessage.value = null;
 
   try {
+    const shotTypeValue = buildShotTypeValue(form.value.shotTypes);
     const prompt = await aiService.generatePrompt({
       nodeType: 'SHOT',
-      shotType: form.value.shotType,
+      shotType: shotTypeValue,
       expression: form.value.expression,
       additionalDetail: form.value.additionalDetail,
     });
 
     form.value.prompt = prompt;
-    nodeStore.updateNode(props.node.id, { ...form.value, promptStatus: PromptStatus.GENERATED });
+    nodeStore.updateNode(props.node.id, {
+      shotType: shotTypeValue,
+      shotTypes: [...form.value.shotTypes],
+      expression: form.value.expression,
+      additionalDetail: form.value.additionalDetail,
+      prompt: form.value.prompt,
+      promptStatus: PromptStatus.GENERATED,
+    });
   } catch (error) {
     console.error('Failed to generate prompt:', error);
     errorMessage.value = '프롬프트 생성에 실패했습니다. 다시 시도해주세요.';
@@ -97,6 +132,7 @@ async function generateShot(): Promise<void> {
 
   isGeneratingShot.value = true;
   errorMessage.value = null;
+  const toastId = startGenerationToast('shot');
 
   try {
     nodeStore.updateNode(props.node.id, { jobStatus: JobStatus.RUNNING });
@@ -114,6 +150,7 @@ async function generateShot(): Promise<void> {
         imageUrl: result.resultUrl,
         thumbnailUrl: result.thumbnailUrl,
       });
+      finishGenerationToast(toastId, 'shot', 'success');
     } else {
       throw new Error(result.error?.message || 'Shot generation failed');
     }
@@ -121,6 +158,8 @@ async function generateShot(): Promise<void> {
     console.error('Failed to generate shot:', error);
     errorMessage.value = '샷 생성에 실패했습니다. 다시 시도해주세요.';
     nodeStore.updateNode(props.node.id, { jobStatus: JobStatus.FAILED });
+    const reason = error instanceof Error ? error.message : '알 수 없는 오류';
+    finishGenerationToast(toastId, 'shot', 'error', { reason });
   } finally {
     isGeneratingShot.value = false;
   }
@@ -164,12 +203,18 @@ function selectGridCell(index: number): void {
       <div class="panel-section">
         <label class="panel-label">
           <Camera class="panel-label-icon" />
-          샷 타입
+          샷 타입 (다중 선택)
         </label>
-        <select v-model="form.shotType" class="panel-select">
-          <option value="">선택하세요</option>
-          <option v-for="opt in shotTypeOptions" :key="opt" :value="opt">{{ opt }}</option>
-        </select>
+        <div class="panel-checkbox-group">
+          <label v-for="opt in shotTypeOptions" :key="opt" class="panel-checkbox">
+            <input
+              type="checkbox"
+              :checked="form.shotTypes.includes(opt)"
+              @change="toggleShotType(opt)"
+            />
+            <span class="panel-checkbox-label">{{ opt }}</span>
+          </label>
+        </div>
       </div>
 
       <!-- Expression -->

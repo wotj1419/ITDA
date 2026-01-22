@@ -9,8 +9,8 @@ import { computed } from 'vue';
 import { Handle, Position } from '@vue-flow/core';
 import { NodeResizer } from '@vue-flow/node-resizer';
 import { useSceneNodeStore } from '../../../stores/sceneNode';
-import { JobStatus, NODE_HEIGHTS, NODE_WIDTHS } from '../../../types/node';
-import type { MasterImageNodeData } from '../../../types/node';
+import { JobStatus, NODE_HEIGHTS, NODE_WIDTHS, NodeType } from '../../../types/node';
+import type { MasterImageNodeData, SceneHeaderNodeData } from '../../../types/node';
 import { 
   Film, 
   Star, 
@@ -84,6 +84,15 @@ const statusText = computed(() => {
 });
 
 const isRunning = computed(() => props.data.jobStatus === JobStatus.RUNNING);
+const sceneTitle = computed(() => {
+  const parentId = props.data.parentNodeId;
+  if (!parentId) return '';
+  const parent = store.nodes.find((node) => node.id === parentId);
+  if (parent?.data?.type === NodeType.SCENE_HEADER) {
+    return (parent.data as SceneHeaderNodeData).title;
+  }
+  return '';
+});
 
 // =============================================================================
 // Handlers
@@ -128,7 +137,10 @@ function handleToggleCollapse(event: Event): void {
         <Film class="node-glass__icon" />
         <div class="node-glass__title-group">
           <span class="node-glass__title">
-            마스터 이미지 v{{ data.version }}
+            마스터 이미지 {{ data.version }}
+          </span>
+          <span v-if="sceneTitle" class="node-glass__subtitle">
+            {{ sceneTitle }}
           </span>
         </div>
       </div>

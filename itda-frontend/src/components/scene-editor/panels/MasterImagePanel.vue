@@ -10,6 +10,7 @@ import type { MasterImageNodeData } from '../../../types/node';
 import { PromptStatus, JobStatus } from '../../../types/node';
 import BasePanel from './BasePanel.vue';
 import { useSceneNodeStore } from '../../../stores/sceneNode';
+import { useGenerationToast } from '../../../composables/useGenerationToast';
 import { aiService } from '../../../services';
 import { Film, Palette, Sun, Smile, Sparkles, FileText, Image, Check, RefreshCw, Star, Users, Loader2 } from 'lucide-vue-next';
 
@@ -19,6 +20,7 @@ interface Props {
 
 const props = defineProps<Props>();
 const nodeStore = useSceneNodeStore();
+const { startGenerationToast, finishGenerationToast } = useGenerationToast();
 
 // 로딩 상태
 const isGeneratingPrompt = ref(false);
@@ -127,6 +129,7 @@ async function generateImage(): Promise<void> {
 
   isGeneratingImage.value = true;
   errorMessage.value = null;
+  const toastId = startGenerationToast('image');
 
   try {
     // 노드 상태를 RUNNING으로 업데이트
@@ -147,6 +150,7 @@ async function generateImage(): Promise<void> {
         imageUrl: result.resultUrl,
         thumbnailUrl: result.thumbnailUrl,
       });
+      finishGenerationToast(toastId, 'image', 'success');
     } else {
       throw new Error(result.error?.message || 'Image generation failed');
     }
@@ -154,6 +158,8 @@ async function generateImage(): Promise<void> {
     console.error('Failed to generate image:', error);
     errorMessage.value = '이미지 생성에 실패했습니다. 다시 시도해주세요.';
     nodeStore.updateNode(props.node.id, { jobStatus: JobStatus.FAILED });
+    const reason = error instanceof Error ? error.message : '알 수 없는 오류';
+    finishGenerationToast(toastId, 'image', 'error', { reason });
   } finally {
     isGeneratingImage.value = false;
   }

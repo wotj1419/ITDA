@@ -10,12 +10,16 @@ import { useSceneStore } from '../stores/scene';
 import { useSceneNodeStore } from '../stores/sceneNode';
 import { useUIStore } from '../stores/ui';
 import { useCollabStore } from '../stores/collab';
+import { TIMELINE_PLAYBACK_MODAL_ID } from '../constants/ui';
+import type { VideoNodeData } from '../types/node';
 
 import EditorLayout from '../layouts/EditorLayout.vue';
 import EditorHeader from '../components/editor/EditorHeader.vue';
 import NodeCanvas from '../components/scene-editor/NodeCanvas.vue';
 import NodePanelContainer from '../components/scene-editor/panels/NodePanelContainer.vue';
 import MiniTimeline from '../components/editor/MiniTimeline.vue';
+import TimelinePlaybackModal from '../components/timeline/TimelinePlaybackModal.vue';
+import NodeDeleteConfirmModal from '../components/scene-editor/NodeDeleteConfirmModal.vue';
 import autolayoutIcon from '../assets/autolayout.svg';
 
 // =============================================================================
@@ -30,6 +34,9 @@ const uiStore = useUIStore();
 const collabStore = useCollabStore();
 
 const nodeCanvasRef = ref<InstanceType<typeof NodeCanvas> | null>(null);
+const pendingDeleteNodeId = ref<string | null>(null);
+
+const NODE_DELETE_MODAL_ID = 'node-delete-confirm';
 
 /**
  * 오른쪽 속성 패널 표시 여부
@@ -61,14 +68,21 @@ const sceneTitle = computed(() => {
 
 // Timeline clips from confirmed videos
 const timelineClips = computed(() => {
-  return nodeStore.confirmedVideos.map((n, index) => ({
-    clipId: n.id,
-    nodeId: parseInt(n.id.replace(/\D/g, '')) || index + 1,
-    thumbnailUrl: (n.data as any)?.thumbnailUrl || '',
-    duration: (n.data as any)?.duration || 5,
-    order: index + 1,
-    label: `Video v${n.data?.version || 1}`,
-  }));
+  return nodeStore.confirmedVideos.map((n, index) => {
+    const data = n.data as VideoNodeData;
+    const order = data.timelineOrder ?? index + 1;
+    return {
+      clipId: n.id,
+      nodeId: n.id,
+      sceneId: Number(sceneId.value) || undefined,
+      sourceNodeId: n.id,
+      thumbnailUrl: data.thumbnailUrl || '',
+      videoUrl: data.videoUrl || undefined,
+      duration: data.duration || 5,
+      order,
+      label: `영상 ${data.version || 1}`,
+    };
+  });
 });
 
 const totalDuration = computed(() => {
@@ -139,10 +153,11 @@ function handleEditorKeydown(event: KeyboardEvent): void {
 
   const key = event.key.toLowerCase();
   if (key === 'delete' || key === 'backspace') {
+    if (uiStore.activeModal === NODE_DELETE_MODAL_ID) return;
     const selectedId = nodeStore.selectedNodeId;
     if (selectedId) {
       event.preventDefault();
-      nodeStore.deleteNode(selectedId);
+      requestDeleteNode(selectedId);
     }
     return;
   }
@@ -163,6 +178,49 @@ function handleNodeSelect(nodeId: string | null): void {
       duration: 2000,
     });
   }
+}
+
+function requestDeleteNode(nodeId: string): void {
+  if (!nodeStore.canDeleteNode(nodeId)) return;
+
+  if (nodeStore.hasDescendants(nodeId)) {
+    pendingDeleteNodeId.value = nodeId;
+    uiStore.openModal(NODE_DELETE_MODAL_ID);
+    return;
+  }
+
+  nodeStore.deleteNode(nodeId);
+}
+
+function handleDeleteConfirm(): void {
+  if (pendingDeleteNodeId.value) {
+    nodeStore.deleteNode(pendingDeleteNodeId.value);
+  }
+  pendingDeleteNodeId.value = null;
+}
+
+function handleDeleteCancel(): void {
+  pendingDeleteNodeId.value = null;
+}
+
+function handleTimelineReorder(clipIds: string[]): void {
+  nodeStore.updateTimelineOrder(clipIds);
+}
+
+function handleTimelineRemove(clipId: string): void {
+  nodeStore.toggleVideoConfirm(clipId);
+}
+
+function handleTimelinePlay(): void {
+  if (!timelineClips.value.length) {
+    uiStore.showToast({
+      type: 'error',
+      title: '재생 불가',
+      message: '재생 가능한 영상이 없습니다.',
+    });
+    return;
+  }
+  uiStore.openModal(TIMELINE_PLAYBACK_MODAL_ID);
 }
 
 /**
@@ -211,10 +269,20 @@ function handleAutoLayout(): void {
         :total-duration="totalDuration"
         :project-id="projectId"
         :scene-id="Number(sceneId)"
+        @reorder="handleTimelineReorder"
+        @remove="handleTimelineRemove"
+        @play="handleTimelinePlay"
       />
     </template>
   </EditorLayout>
 
+  <NodeDeleteConfirmModal
+    :node-id="pendingDeleteNodeId"
+    @confirm="handleDeleteConfirm"
+    @cancel="handleDeleteCancel"
+  />
+
+  <TimelinePlaybackModal :clips="timelineClips" />
 
   <button 
     class="auto-layout-btn" 

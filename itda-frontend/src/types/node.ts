@@ -41,13 +41,11 @@ export type PromptStatus = (typeof PromptStatus)[keyof typeof PromptStatus];
 
 /** 카메라 모션 타입 */
 export type CameraMotion =
-    | 'zoomIn'
+    | 'lowZoomIn'
     | 'zoomOut'
-    | 'panLeft'
-    | 'panRight'
+    | 'panLeftToRight'
     | 'tiltUp'
-    | 'tiltDown'
-    | 'static';
+    | 'staticCamera';
 
 /** 그리드 레이아웃 타입 */
 export type GridLayout = '2x2' | '2x3' | '3x3';
@@ -128,6 +126,7 @@ export interface ShotNodeData extends BaseNodeData {
     // 입력 파라미터
     prompt: string;
     gridCellIndex: number;
+    shotTypes?: string[];
     shotType: string;
     expression: string;
     additionalDetail: string;
@@ -150,6 +149,7 @@ export interface VideoNodeData extends BaseNodeData {
     prompt: string;
     cameraMotion: CameraMotion;
     motionDescription: string;
+    timelineOrder?: number;
 }
 
 /** 모든 노드 데이터 타입 유니온 */

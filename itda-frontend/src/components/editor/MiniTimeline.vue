@@ -2,9 +2,10 @@
 /**
  * MiniTimeline - 확정된 비디오 클립을 보여주는 미니 타임라인
  */
+import { ref } from 'vue';
 import { RouterLink } from 'vue-router';
 import type { TimelineClip } from '../../types';
-import { Star, ArrowRight } from 'lucide-vue-next';
+import { Star, ArrowRight, Play, X } from 'lucide-vue-next';
 
 // =============================================================================
 // Props
@@ -21,6 +22,67 @@ interface Props {
 const props = withDefaults(defineProps<Props>(), {
   maxDuration: 60,
 });
+
+const emit = defineEmits<{
+  (e: 'reorder', clipIds: string[]): void;
+  (e: 'remove', clipId: string): void;
+  (e: 'play'): void;
+}>();
+
+const draggedId = ref<string | null>(null);
+const dragOverId = ref<string | null>(null);
+
+function handleDragStart(clipId: string, event: DragEvent) {
+  draggedId.value = clipId;
+  if (event.dataTransfer) {
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('text/plain', clipId);
+  }
+}
+
+function handleDragEnd() {
+  draggedId.value = null;
+  dragOverId.value = null;
+}
+
+function handleDragOver(clipId: string, event: DragEvent) {
+  event.preventDefault();
+  if (event.dataTransfer) {
+    event.dataTransfer.dropEffect = 'move';
+  }
+  dragOverId.value = clipId;
+}
+
+function handleDragLeave() {
+  dragOverId.value = null;
+}
+
+function handleDrop(targetClipId: string) {
+  if (!draggedId.value || draggedId.value === targetClipId) {
+    dragOverId.value = null;
+    return;
+  }
+
+  const clipIds = props.clips.map((c) => c.clipId);
+  const draggedIndex = clipIds.indexOf(draggedId.value);
+  const targetIndex = clipIds.indexOf(targetClipId);
+
+  if (draggedIndex !== -1 && targetIndex !== -1) {
+    clipIds.splice(draggedIndex, 1);
+    clipIds.splice(targetIndex, 0, draggedId.value);
+    emit('reorder', clipIds);
+  }
+
+  dragOverId.value = null;
+}
+
+function handleRemove(clipId: string) {
+  emit('remove', clipId);
+}
+
+function handlePlay() {
+  emit('play');
+}
 
 // =============================================================================
 // Computed
@@ -46,9 +108,19 @@ const progressPercent = Math.min(
         v-for="clip in clips"
         :key="clip.clipId"
         class="timeline-clip"
-        :title="clip.label"
+        :class="{ 'drag-over': dragOverId === clip.clipId }"
+        :title="clip.label || '확정 클립'"
+        draggable="true"
+        @dragstart="handleDragStart(clip.clipId, $event)"
+        @dragend="handleDragEnd"
+        @dragover="handleDragOver(clip.clipId, $event)"
+        @dragleave="handleDragLeave"
+        @drop="handleDrop(clip.clipId)"
       >
-        <img :src="clip.thumbnailUrl" :alt="clip.label" />
+        <button class="clip-remove" @click.stop="handleRemove(clip.clipId)">
+          <X class="remove-icon" />
+        </button>
+        <img :src="clip.thumbnailUrl" :alt="clip.label || '확정 클립'" />
         <span class="clip-duration">{{ clip.duration }}s</span>
       </div>
 
@@ -72,6 +144,11 @@ const progressPercent = Math.min(
     </span>
 
     <!-- Timeline Link -->
+    <button class="timeline-play" @click="handlePlay">
+      <Play class="link-icon" />
+      재생
+    </button>
+
     <RouterLink
       :to="{
         name: 'timeline',
@@ -142,6 +219,10 @@ const progressPercent = Math.min(
   transition: transform 0.2s ease;
 }
 
+.timeline-clip.drag-over {
+  box-shadow: 0 0 0 2px var(--rose-300);
+}
+
 .timeline-clip:hover {
   transform: scale(1.05);
 }
@@ -162,6 +243,37 @@ const progressPercent = Math.min(
   color: white;
   padding: 1px 4px;
   border-radius: 2px;
+}
+
+.clip-remove {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  cursor: pointer;
+  transition: opacity 0.2s ease, background 0.2s ease;
+}
+
+.timeline-clip:hover .clip-remove {
+  opacity: 1;
+}
+
+.clip-remove:hover {
+  background: rgba(220, 38, 38, 0.85);
+}
+
+.remove-icon {
+  width: 10px;
+  height: 10px;
+  color: white;
 }
 
 .timeline-empty {
@@ -218,6 +330,27 @@ const progressPercent = Math.min(
   text-decoration: none;
   transition: all 0.2s ease;
   white-space: nowrap;
+}
+
+.timeline-play {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--gray-700);
+  background: var(--gray-50);
+  border: 1px solid var(--gray-200);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.timeline-play:hover {
+  background: var(--gray-100);
+  color: var(--gray-900);
 }
 
 .timeline-link:hover {

@@ -85,12 +85,6 @@ const statusText = computed(() => {
 
 const isRunning = computed(() => props.data.jobStatus === JobStatus.RUNNING);
 
-/** Convert grid cell index to letter label (0 -> A, 1 -> B, etc.) */
-const shotLabel = computed(() => {
-  const index = props.data.gridCellIndex ?? 0;
-  return String.fromCharCode(65 + index);
-});
-
 // =============================================================================
 // Handlers
 // =============================================================================
@@ -128,7 +122,7 @@ function handleToggleCollapse(event: Event): void {
         <Camera class="node-glass__icon" />
         <div class="node-glass__title-group">
           <span class="node-glass__title">
-            샷 {{ shotLabel }} v{{ data.version }}
+            샷 {{ data.version }}
           </span>
           <span class="node-glass__subtitle">
             {{ data.shotType || '타입 미지정' }}

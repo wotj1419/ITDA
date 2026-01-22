@@ -121,7 +121,7 @@ function handleToggleCollapse(event: Event): void {
       <div class="node-glass__header-left">
         <LayoutGrid class="node-glass__icon" />
         <div class="node-glass__title-group">
-          <span class="node-glass__title">그리드 v{{ data.version }}</span>
+          <span class="node-glass__title">그리드 {{ data.version }}</span>
           <span class="node-glass__subtitle">{{ data.layout }} 레이아웃</span>
         </div>
       </div>
