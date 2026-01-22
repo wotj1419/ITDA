@@ -80,14 +80,17 @@ type NodePositionSnapshot = Array<{
 const MAX_POSITION_HISTORY = 20;
 
 function buildPositionSnapshot(nodes: SceneNode[]): NodePositionSnapshot {
-    return nodes.map((node) => ({
-        id: node.id,
-        position: { x: node.position.x, y: node.position.y },
-        dimensions: {
-            width: node.style?.width ?? '',
-            height: node.style?.height ?? '',
-        },
-    }));
+    return nodes.map((node) => {
+        const style = typeof node.style === 'function' ? undefined : node.style;
+        return {
+            id: node.id,
+            position: { x: node.position.x, y: node.position.y },
+            dimensions: {
+                width: style?.width ?? '',
+                height: style?.height ?? '',
+            },
+        };
+    });
 }
 
 function snapshotsEqual(

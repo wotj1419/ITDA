@@ -21,6 +21,7 @@ export const mockAuthService: AuthService = {
     async signup(data: SignupRequest) {
         await new Promise((resolve) => setTimeout(resolve, 500));
         // Auto login logic is usually handled by the store calling login() after this
+        void data;
     },
 
     async fetchMe() {
