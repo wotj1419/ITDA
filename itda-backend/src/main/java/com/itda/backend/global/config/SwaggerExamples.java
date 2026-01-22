@@ -12,6 +12,14 @@ public final class SwaggerExamples {
 
     public static void registerResponses(Components components) {
         components
+                .addResponses("Success", exampleResponse("Success", """
+                        {
+                          "code": "SUCCESS",
+                          "message": null,
+                          "data": null,
+                          "details": null
+                        }
+                        """))
                 .addResponses("ProjectCreateSuccess", exampleResponse("Create project success", """
                         {
                           "code": "SUCCESS",
@@ -99,12 +107,13 @@ public final class SwaggerExamples {
                               "sceneId": 201,
                               "title": "Scene 1",
                               "order": 1,
-                              "status": "COMPLETED"
+                              "status": null
                             },
                             {
                               "sceneId": 202,
                               "title": "Scene 2",
-                              "order": 2
+                              "order": 2,
+                              "status": null
                             }
                           ],
                           "details": null
@@ -148,7 +157,7 @@ public final class SwaggerExamples {
                           "details": null
                         }
                         """))
-                .addResponses("ValidationError", exampleResponse("Validation error", """
+                .addResponses("ValidationError", exampleResponse("Validation error (includes invalid request)", """
                         {
                           "code": "INVALID_INPUT_VALUE",
                           "message": "Validation failed",

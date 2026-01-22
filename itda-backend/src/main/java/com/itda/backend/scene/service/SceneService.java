@@ -4,6 +4,8 @@ import com.itda.backend.global.exception.BusinessException;
 import com.itda.backend.global.response.ErrorCode;
 import com.itda.backend.project.repository.ProjectMemberMapper;
 import com.itda.backend.scene.controller.dto.request.CreateSceneRequest;
+import com.itda.backend.scene.controller.dto.request.ReorderScenesRequest;
+import com.itda.backend.scene.controller.dto.request.UpdateSceneRequest;
 import com.itda.backend.scene.controller.dto.response.SceneCreateResponse;
 import com.itda.backend.scene.controller.dto.response.SceneDetailResponse;
 import com.itda.backend.scene.controller.dto.response.SceneSummaryResponse;
@@ -14,7 +16,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
@@ -55,6 +59,65 @@ public class SceneService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.SCENE_NOT_FOUND));
         ensureMember(scene.getProjectId(), userId);
         return SceneDetailResponse.from(scene);
+    }
+
+    @Transactional
+    public SceneDetailResponse updateScene(Long userId, Long sceneId, UpdateSceneRequest request) {
+        if (request.title() == null && request.description() == null) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST);
+        }
+
+        Scene scene = sceneMapper.findById(sceneId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.SCENE_NOT_FOUND));
+        ensureMember(scene.getProjectId(), userId);
+
+        int updated = sceneMapper.updateScene(sceneId, request.title(), request.description());
+        if (updated == 0) {
+            throw new BusinessException(ErrorCode.SCENE_NOT_FOUND);
+        }
+
+        Scene updatedScene = sceneMapper.findById(sceneId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.SCENE_NOT_FOUND));
+        return SceneDetailResponse.from(updatedScene);
+    }
+
+    @Transactional
+    public void deleteScene(Long userId, Long sceneId) {
+        Scene scene = sceneMapper.findById(sceneId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.SCENE_NOT_FOUND));
+        ensureMember(scene.getProjectId(), userId);
+
+        int deleted = sceneMapper.deleteScene(sceneId);
+        if (deleted == 0) {
+            throw new BusinessException(ErrorCode.SCENE_NOT_FOUND);
+        }
+    }
+
+    @Transactional
+    public void reorderScenes(Long userId, Long projectId, ReorderScenesRequest request) {
+        List<Long> orderedSceneIds = request.orderedSceneIds();
+        if (orderedSceneIds == null || orderedSceneIds.isEmpty() || orderedSceneIds.contains(null)) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST);
+        }
+
+        Set<Long> uniqueIds = new HashSet<>(orderedSceneIds);
+        if (uniqueIds.size() != orderedSceneIds.size()) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST);
+        }
+
+        ensureMember(projectId, userId);
+
+        int totalScenes = sceneMapper.countByProjectId(projectId);
+        if (totalScenes != orderedSceneIds.size()) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST);
+        }
+
+        int matchedScenes = sceneMapper.countByProjectIdAndIds(projectId, orderedSceneIds);
+        if (matchedScenes != orderedSceneIds.size()) {
+            throw new BusinessException(ErrorCode.SCENE_NOT_FOUND);
+        }
+
+        sceneMapper.reorderScenes(projectId, orderedSceneIds);
     }
 
     private void ensureMember(Long projectId, Long userId) {

@@ -26,3 +26,4 @@ build/
 
 # AI Tools
 .serena/
+/.metadata/

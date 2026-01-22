@@ -19,5 +19,19 @@ public interface SceneMapper {
 
     List<SceneSummary> findAllByProjectId(@Param("projectId") Long projectId);
 
+    int updateScene(@Param("id") Long id,
+                    @Param("title") String title,
+                    @Param("description") String description);
+
+    int deleteScene(@Param("id") Long id);
+
+    int reorderScenes(@Param("projectId") Long projectId,
+                      @Param("orderedSceneIds") List<Long> orderedSceneIds);
+
+    int countByProjectId(@Param("projectId") Long projectId);
+
+    int countByProjectIdAndIds(@Param("projectId") Long projectId,
+                               @Param("sceneIds") List<Long> sceneIds);
+
     int findNextOrderIndex(@Param("projectId") Long projectId);
 }

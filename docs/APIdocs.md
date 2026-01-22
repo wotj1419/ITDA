@@ -853,7 +853,7 @@ API /api/scenes/{id}
 메서드 DELETE
 보안 Bearer Token
 상태 완료
-설명 씬을 삭제합니다. 포함된 노드들도 함께 삭제됩니다.
+설명 씬을 삭제합니다. 포함된 노드들도 함께 삭제됩니다. 삭제 후 순서 정리는 /api/projects/{id}/scenes/order 호출로 처리합니다.
 ```
 
 ---

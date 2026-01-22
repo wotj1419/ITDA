@@ -48,6 +48,59 @@
         ORDER BY order_index ASC, id ASC
     </select>
 
+    <!-- updateScene: dynamic update (null fields ignored) -->
+    <update id="updateScene">
+        UPDATE scenes
+        <set>
+            <if test="title != null">
+                title = #{title},
+            </if>
+            <if test="description != null">
+                description = #{description},
+            </if>
+            updated_at = CURRENT_TIMESTAMP
+        </set>
+        WHERE id = #{id}
+    </update>
+
+    <!-- deleteScene: Hard Delete -->
+    <delete id="deleteScene">
+        DELETE FROM scenes
+        WHERE id = #{id}
+    </delete>
+
+    <!-- reorderScenes: batch update order_index -->
+    <update id="reorderScenes">
+        UPDATE scenes
+        SET order_index = CASE id
+            <foreach collection="orderedSceneIds" item="sceneId" index="idx">
+                WHEN #{sceneId} THEN #{idx} + 1
+            </foreach>
+            ELSE order_index
+        END
+        WHERE project_id = #{projectId}
+          AND id IN
+          <foreach collection="orderedSceneIds" item="sceneId" open="(" separator="," close=")">
+              #{sceneId}
+          </foreach>
+    </update>
+
+    <select id="countByProjectId" resultType="int">
+        SELECT COUNT(*)
+        FROM scenes
+        WHERE project_id = #{projectId}
+    </select>
+
+    <select id="countByProjectIdAndIds" resultType="int">
+        SELECT COUNT(*)
+        FROM scenes
+        WHERE project_id = #{projectId}
+          AND id IN
+          <foreach collection="sceneIds" item="sceneId" open="(" separator="," close=")">
+              #{sceneId}
+          </foreach>
+    </select>
+
     <select id="findNextOrderIndex" resultType="int">
         SELECT COALESCE(MAX(order_index), 0) + 1
         FROM scenes
