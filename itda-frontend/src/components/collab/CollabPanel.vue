@@ -323,7 +323,7 @@ function formatTime(timestamp: number): string {
 .message-input:focus {
   outline: none;
   border-color: var(--rose-400);
-  box-shadow: 0 0 0 3px rgba(244, 63, 94, 0.1);
+  box-shadow: 0 0 0 3px rgba(255, 133, 161, 0.1);
 }
 
 /* Uses global .icon-sm from base.css */

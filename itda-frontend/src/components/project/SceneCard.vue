@@ -115,7 +115,7 @@ const editLink = computed(() => ({
 
 .scene-card:hover {
   border-color: var(--rose-200);
-  box-shadow: 0 4px 12px rgba(244, 63, 94, 0.08);
+  box-shadow: 0 4px 12px rgba(255, 133, 161, 0.08);
 }
 
 .scene-card-content {

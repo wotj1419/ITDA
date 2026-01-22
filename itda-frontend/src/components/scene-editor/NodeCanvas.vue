@@ -167,6 +167,7 @@ defineExpose({
       :max-zoom="2"
       fit-view-on-init
       @pane-click="handlePaneClick"
+      @node-resize-start="handleNodeDragStart"
     >
       <!-- Background -->
       <Background pattern-color="var(--rose-200)" :gap="24" />

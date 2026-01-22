@@ -5,7 +5,7 @@
  * 설계 문서: docs/vue-flow-node-workflow-design.md Section 5
  */
 import { defineStore } from 'pinia';
-import { ref, computed } from 'vue';
+import { ref, computed, watch } from 'vue';
 import type { Node, Edge } from '@vue-flow/core';
 import {
     NodeType,
@@ -71,7 +71,11 @@ type EdgeMeta = {
 // =============================================================================
 
 type SceneNode = Node<AnyNodeData>;
-type NodePositionSnapshot = Array<{ id: string; position: { x: number; y: number } }>;
+type NodePositionSnapshot = Array<{
+    id: string;
+    position: { x: number; y: number };
+    dimensions?: { width: number | string; height: number | string };
+}>;
 
 const MAX_POSITION_HISTORY = 20;
 
@@ -79,6 +83,10 @@ function buildPositionSnapshot(nodes: SceneNode[]): NodePositionSnapshot {
     return nodes.map((node) => ({
         id: node.id,
         position: { x: node.position.x, y: node.position.y },
+        dimensions: {
+            width: node.style?.width ?? '',
+            height: node.style?.height ?? '',
+        },
     }));
 }
 
@@ -87,13 +95,15 @@ function snapshotsEqual(
     b: NodePositionSnapshot
 ): boolean {
     if (a.length !== b.length) return false;
-    const positions = new Map(a.map((item) => [item.id, item.position]));
+    const positions = new Map(a.map((item) => [item.id, item]));
     return b.every((item) => {
         const existing = positions.get(item.id);
         return (
             existing !== undefined &&
-            existing.x === item.position.x &&
-            existing.y === item.position.y
+            existing.position.x === item.position.x &&
+            existing.position.y === item.position.y &&
+            existing.dimensions?.width === item.dimensions?.width &&
+            existing.dimensions?.height === item.dimensions?.height
         );
     });
 }
@@ -158,6 +168,54 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
     );
 
     // ==========================================================================
+    // Actions - Persistence
+    // ==========================================================================
+
+    function getStorageKey(id: string): string {
+        return `scene-nodes-${id}`;
+    }
+
+    function saveToLocalStorage(): void {
+        if (!sceneId.value) return;
+        isSaving.value = true;
+        try {
+            const data = {
+                nodes: nodes.value,
+                edges: edges.value,
+                updatedAt: new Date().toISOString(),
+            };
+            localStorage.setItem(getStorageKey(sceneId.value), JSON.stringify(data));
+        } catch (e) {
+            console.error('Failed to save scene nodes:', e);
+        } finally {
+            setTimeout(() => {
+                isSaving.value = false;
+            }, 500);
+        }
+    }
+
+    // 간단한 디바운스 처리
+    let saveTimeout: ReturnType<typeof setTimeout> | null = null;
+    function debouncedSave() {
+        if (saveTimeout) clearTimeout(saveTimeout);
+        saveTimeout = setTimeout(() => {
+            saveToLocalStorage();
+        }, 1000); // 1초 후 저장
+    }
+
+    // 노드/엣지 변경 감지하여 자동 저장
+    // (로드 중이나 초기화 중에는 불필요하게 저장되지 않도록 주의)
+    watch(
+        [nodes, edges],
+        () => {
+            if (!isLoading.value && sceneId.value) {
+                debouncedSave();
+            }
+        },
+        { deep: true }
+    );
+
+    // ==========================================================================
     // Actions - Load
     // ==========================================================================
 
@@ -165,16 +223,35 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
         isLoading.value = true;
         try {
             sceneId.value = sceneIdParam;
-            // TODO: API 호출
-            // const response = await api.get(`/scenes/${sceneIdParam}/nodes`);
-            // nodes.value = response.data.nodes;
 
+            // 1. LocalStorage 확인
+            const savedData = localStorage.getItem(getStorageKey(sceneIdParam));
+            if (savedData) {
+                try {
+                    const parsed = JSON.parse(savedData);
+                    // 데이터 유효성 체크 대략적으로 (nodes 배열 존재 여부)
+                    if (Array.isArray(parsed.nodes)) {
+                        nodes.value = parsed.nodes;
+                        edges.value = parsed.edges || [];
+                        console.log('Restored nodes from localStorage');
+                        return; // 저장된 데이터가 있으면 여기서 종료
+                    }
+                } catch (e) {
+                    console.error('Failed to parse saved scene nodes:', e);
+                }
+            }
+
+            // 2. 저장된 데이터가 없으면 Mock 데이터 또는 초기상태 시작
+            // nodes.value = [];
+            // edges.value = [];
+            // positionHistory.value = [];
+
+            // (기존 초기화 로직 유지)
             // Mock: 빈 상태에서 시작
             nodes.value = [];
             edges.value = [];
 
             // 씬 헤더 노드 자동 생성
-            positionHistory.value = [];
             ensureSceneHeaderNode();
             // 마스터 노드 자동 생성
             ensureActiveMasterNode();
@@ -441,6 +518,13 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
             const node = nodes.value.find((n) => n.id === item.id);
             if (node) {
                 node.position = { ...item.position };
+                if (item.dimensions) {
+                    node.style = {
+                        ...node.style,
+                        width: item.dimensions.width,
+                        height: item.dimensions.height,
+                    };
+                }
             }
         });
     }

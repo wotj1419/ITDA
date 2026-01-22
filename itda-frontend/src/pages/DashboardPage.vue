@@ -207,7 +207,7 @@ const openNewProjectModal = () => {
 
 .quick-access-card:hover {
   border-color: var(--rose-200);
-  box-shadow: 0 4px 12px rgba(244, 63, 94, 0.1);
+  box-shadow: 0 4px 12px rgba(255, 133, 161, 0.1);
 }
 
 .quick-access-thumbnail {

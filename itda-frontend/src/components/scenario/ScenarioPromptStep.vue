@@ -237,7 +237,7 @@ const handleRegenerate = () => {
 .prompt-textarea:focus {
   outline: none;
   border-color: var(--rose-300);
-  box-shadow: 0 0 0 3px rgba(244, 63, 94, 0.1);
+  box-shadow: 0 0 0 3px rgba(255, 133, 161, 0.1);
 }
 
 .edit-actions {
