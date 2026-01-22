@@ -1,51 +1,20 @@
 import type { Project, ProjectDetail, ProjectMember } from '../../types'
 
-// Mock project members
+// 1. Mock 데이터 정의 (기존과 동일)
 const mockMembers: Record<number, ProjectMember[]> = {
   1: [
-    {
-      userId: 1,
-      email: 'minjun@example.com',
-      name: 'Minjun Kim',
-      role: 'OWNER',
-      profileImage: 'https://i.pravatar.cc/150?u=a',
-    },
-    {
-      userId: 2,
-      email: 'sujin@example.com',
-      name: 'Sujin Lee',
-      role: 'EDITOR',
-      profileImage: 'https://i.pravatar.cc/150?u=b',
-    },
+    { userId: 1, email: 'minjun@example.com', name: 'Minjun Kim', role: 'OWNER', profileImage: 'https://i.pravatar.cc/150?u=a' },
+    { userId: 2, email: 'sujin@example.com', name: 'Sujin Lee', role: 'EDITOR', profileImage: 'https://i.pravatar.cc/150?u=b' },
   ],
   2: [
-    {
-      userId: 1,
-      email: 'minjun@example.com',
-      name: 'Minjun Kim',
-      role: 'OWNER',
-      profileImage: 'https://i.pravatar.cc/150?u=a',
-    },
+    { userId: 1, email: 'minjun@example.com', name: 'Minjun Kim', role: 'OWNER', profileImage: 'https://i.pravatar.cc/150?u=a' },
   ],
   3: [
-    {
-      userId: 3,
-      email: 'yuna@example.com',
-      name: 'Yuna Park',
-      role: 'OWNER',
-      profileImage: 'https://i.pravatar.cc/150?u=c',
-    },
-    {
-      userId: 1,
-      email: 'minjun@example.com',
-      name: 'Minjun Kim',
-      role: 'VIEWER',
-      profileImage: 'https://i.pravatar.cc/150?u=a',
-    },
+    { userId: 3, email: 'yuna@example.com', name: 'Yuna Park', role: 'OWNER', profileImage: 'https://i.pravatar.cc/150?u=c' },
+    { userId: 1, email: 'minjun@example.com', name: 'Minjun Kim', role: 'VIEWER', profileImage: 'https://i.pravatar.cc/150?u=a' },
   ],
 }
 
-// Mock projects data
 export const mockProjects: Project[] = [
   {
     projectId: 1,
@@ -56,8 +25,8 @@ export const mockProjects: Project[] = [
     role: 'OWNER',
     memberCount: 2,
     sceneCount: 5,
-    updatedAt: new Date(Date.now() - 10 * 1000).toISOString(), // 10 seconds ago
-    createdAt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(), // 1 week ago
+    updatedAt: new Date(Date.now() - 10 * 1000).toISOString(),
+    createdAt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
   },
   {
     projectId: 2,
@@ -68,8 +37,8 @@ export const mockProjects: Project[] = [
     role: 'OWNER',
     memberCount: 1,
     sceneCount: 5,
-    updatedAt: new Date(Date.now() - 50 * 1000).toISOString(), // 50 seconds ago
-    createdAt: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString(), // 2 weeks ago
+    updatedAt: new Date(Date.now() - 50 * 1000).toISOString(),
+    createdAt: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString(),
   },
   {
     projectId: 3,
@@ -80,72 +49,43 @@ export const mockProjects: Project[] = [
     role: 'VIEWER',
     memberCount: 2,
     sceneCount: 8,
-    updatedAt: new Date(Date.now() - 90 * 1000).toISOString(), // 90 seconds ago
-    createdAt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(), // 1 month ago
+    updatedAt: new Date(Date.now() - 90 * 1000).toISOString(),
+    createdAt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
   },
 ]
 
-// Mock project details
 export const mockProjectDetails: Record<number, ProjectDetail> = {
   1: {
-    projectId: 1,
-    title: 'The Martian Red',
-    description: 'A survival story on Mars. The protagonist finds an ancient ruin.',
-    genre: 'Sci-Fi',
-    thumbnailUrl: 'https://images.unsplash.com/photo-1626814026160-2237a95fc5a0?w=600&auto=format',
-    role: 'OWNER',
-    memberCount: 2,
-    sceneCount: 5,
-    updatedAt: mockProjects[0]?.updatedAt ?? new Date().toISOString(),
+    ...mockProjects[0]!, // !를 써서 초기 데이터 존재 보장
     myRole: 'OWNER',
     ownerId: 1,
     members: mockMembers[1] ?? [],
   },
   2: {
-    projectId: 2,
-    title: 'Neon Dreams',
-    description: 'Cyberpunk thriller set in neo-Tokyo.',
-    genre: 'Draft',
-    thumbnailUrl: 'https://images.unsplash.com/photo-1518770660439-4636190af475?w=600&auto=format',
-    role: 'OWNER',
-    memberCount: 1,
-    sceneCount: 5,
-    updatedAt: mockProjects[1]?.updatedAt ?? new Date().toISOString(),
+    ...mockProjects[1]!,
     myRole: 'OWNER',
     ownerId: 1,
     members: mockMembers[2] ?? [],
   },
   3: {
-    projectId: 3,
-    title: 'Ocean Depths',
-    description: 'Deep sea exploration documentary with mysterious creatures.',
-    genre: 'Documentary',
-    thumbnailUrl: 'https://images.unsplash.com/photo-1682687220742-aba13b6e50ba?w=600&auto=format',
-    role: 'VIEWER',
-    memberCount: 2,
-    sceneCount: 8,
-    updatedAt: mockProjects[2]?.updatedAt ?? new Date().toISOString(),
+    ...mockProjects[2]!,
     myRole: 'VIEWER',
     ownerId: 3,
     members: mockMembers[3] ?? [],
   },
 }
 
+// 2. 유틸리티 및 API 함수들
 import { formatRelativeTime } from '../../utils/date'
 export { formatRelativeTime }
 
-
 import { getSceneProgress } from './scenes'
-
-export function getProjectProgress(projectId: number): { completed: number; total: number } {
-  // Get dynamic progress from mock scene data
+export function getProjectProgress(projectId: number) {
   return getSceneProgress(projectId)
 }
 
-// Simulated API delay
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
-// Mock API functions
 export async function fetchProjects(): Promise<Project[]> {
   await delay(300)
   return [...mockProjects]
@@ -172,18 +112,11 @@ export async function createProject(data: { title: string; description?: string;
   }
   mockProjects.unshift(newProject)
 
-  // Also add to mockProjectDetails so loadProject works
   mockProjectDetails[newProject.projectId] = {
     ...newProject,
     myRole: 'OWNER',
-    ownerId: 1, // Mock user ID
-    members: [{
-      userId: 1,
-      email: 'minjun@example.com',
-      name: 'Minjun Kim',
-      role: 'OWNER',
-      profileImage: 'https://i.pravatar.cc/150?u=user123',
-    }],
+    ownerId: 1,
+    members: [{ userId: 1, email: 'minjun@example.com', name: 'Minjun Kim', role: 'OWNER', profileImage: 'https://i.pravatar.cc/150?u=user123' }],
   }
 
   return newProject
@@ -194,31 +127,46 @@ export async function deleteProject(projectId: number): Promise<void> {
   const index = mockProjects.findIndex((p) => p.projectId === projectId)
   if (index > -1) {
     mockProjects.splice(index, 1)
+    delete mockProjectDetails[projectId]
   }
 }
 
+/**
+ * 프로젝트 업데이트 함수 (수정된 핵심 로직)
+ */
 export async function updateProject(projectId: number, data: Partial<Project>): Promise<Project | null> {
   await delay(300)
   const projectIndex = mockProjects.findIndex((p) => p.projectId === projectId)
 
+  // 1. 인덱스가 유효한지 확인
   if (projectIndex > -1) {
-    // Update main list
-    mockProjects[projectIndex] = {
-      ...mockProjects[projectIndex],
+    const targetProject = mockProjects[projectIndex]
+
+    // 2. 가드 클로즈: TypeScript가 targetProject가 존재함을 확신하게 함
+    if (!targetProject) return null
+
+    // 3. 업데이트 데이터 생성
+    const updatedDate = new Date().toISOString()
+    const updatedProject: Project = {
+      ...targetProject,
       ...data,
-      updatedAt: new Date().toISOString()
+      updatedAt: updatedDate
     }
 
-    // Update details (simulate backend sync)
+    // 4. 원본 배열(List) 업데이트
+    mockProjects[projectIndex] = updatedProject
+
+    // 5. 상세 정보(Detail) 업데이트 (동기화)
     if (mockProjectDetails[projectId]) {
       mockProjectDetails[projectId] = {
         ...mockProjectDetails[projectId],
         ...data,
-        updatedAt: mockProjects[projectIndex].updatedAt
+        updatedAt: updatedDate // 리스트와 동일한 시간 적용
       }
     }
 
-    return mockProjects[projectIndex]
+    return updatedProject
   }
+
   return null
 }
