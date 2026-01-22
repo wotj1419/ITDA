@@ -53,7 +53,7 @@ pipeline {
 
         stage('Deploy') {
             when {
-                branch 'develop'
+                expression { env.BRANCH_NAME == 'develop' || env.GIT_BRANCH == 'origin/develop' }
             }
             steps {
                 sh '''
