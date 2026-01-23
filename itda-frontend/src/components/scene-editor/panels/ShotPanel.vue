@@ -10,7 +10,7 @@ import BasePanel from './BasePanel.vue';
 import { useSceneNodeStore } from '../../../stores/sceneNode';
 import { useGenerationToast } from '../../../composables/useGenerationToast';
 import { aiService } from '../../../services';
-import { Camera, Smile, PenLine, FileText, Sparkles, Check, RefreshCw, LayoutGrid, Loader2 } from 'lucide-vue-next';
+import { Camera, Smile, PenLine, FileText, Sparkles, Check, RefreshCw, LayoutGrid } from 'lucide-vue-next';
 
 interface Props {
   node: Node<ShotNodeData>;

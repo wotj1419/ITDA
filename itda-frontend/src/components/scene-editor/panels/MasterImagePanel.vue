@@ -77,13 +77,7 @@ function toggleObject(objectId: string): void {
   }
 }
 
-// 선택된 오브젝트 이름 목록 반환
-function getSelectedObjectNames(): string {
-  return form.value.objectIds
-    .map(id => objectOptions.find(opt => opt.id === id)?.name)
-    .filter(Boolean)
-    .join(', ');
-}
+
 
 async function generatePrompt(): Promise<void> {
   isGeneratingPrompt.value = true;

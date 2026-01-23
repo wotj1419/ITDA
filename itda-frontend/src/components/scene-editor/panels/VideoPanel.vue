@@ -4,7 +4,7 @@
  * 트랜지션 영상 + 확정 기능 지원
  */
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
-import type { Node } from '@vue-flow/core';
+import type { Node as VueFlowNode } from '@vue-flow/core';
 import type { VideoNodeData, CameraMotion } from '../../../types/node';
 import { PromptStatus, JobStatus } from '../../../types/node';
 import BasePanel from './BasePanel.vue';
@@ -14,7 +14,7 @@ import { aiService } from '../../../services';
 import { Video, Repeat, Move, Timer, Text, FileText, Sparkles, Check, RefreshCw, Target, ZoomIn, ZoomOut, ArrowRight, ArrowUp, Circle } from 'lucide-vue-next';
 
 interface Props {
-  node: Node<VideoNodeData>;
+  node: VueFlowNode<VideoNodeData>;
 }
 
 const props = defineProps<Props>();

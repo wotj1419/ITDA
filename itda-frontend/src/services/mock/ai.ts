@@ -113,7 +113,7 @@ export async function pollJobUntilComplete(
     if (onProgress) {
       onProgress(nextJob)
     }
-    if (nextStatus === 'SUCCEEDED' || nextStatus === 'FAILED') {
+    if (nextStatus === 'SUCCEEDED') {
       return nextJob
     }
     await delay(intervalMs)

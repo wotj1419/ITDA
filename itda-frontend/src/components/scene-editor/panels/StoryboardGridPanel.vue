@@ -3,17 +3,17 @@
  * StoryboardGridPanel - 스토리보드 그리드 생성/편집 패널
  */
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
-import type { Node } from '@vue-flow/core';
+import type { Node as VueFlowNode } from '@vue-flow/core';
 import type { StoryboardGridNodeData, GridLayout } from '../../../types/node';
 import { PromptStatus, JobStatus } from '../../../types/node';
 import BasePanel from './BasePanel.vue';
 import { useSceneNodeStore } from '../../../stores/sceneNode';
 import { useGenerationToast } from '../../../composables/useGenerationToast';
 import { aiService } from '../../../services';
-import { LayoutGrid, Camera, Target, FileText, Sparkles, Check, RefreshCw, Loader2 } from 'lucide-vue-next';
+import { LayoutGrid, Camera, Target, FileText, Sparkles, Check, RefreshCw } from 'lucide-vue-next';
 
 interface Props {
-  node: Node<StoryboardGridNodeData>;
+  node: VueFlowNode<StoryboardGridNodeData>;
 }
 
 const props = defineProps<Props>();
