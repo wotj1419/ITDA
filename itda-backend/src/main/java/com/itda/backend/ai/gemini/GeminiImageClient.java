@@ -72,9 +72,12 @@ public class GeminiImageClient {
             throw new BusinessException(ErrorCode.INVALID_REQUEST, "Prompt is required");
         }
 
+        String model = requireNonBlank(geminiProperties.getImageModel(), "AI image model is not configured");
+        boolean geminiModel = isGeminiModel(model);
+
         log.info("[GeminiImageClient] stub={}, model={}, projectId={}, location={}",
                 geminiProperties.isStub(),
-                safeTrim(geminiProperties.getImageModel()),
+                model,
                 safeTrim(vertexAiProperties.getProjectId()),
                 safeTrim(vertexAiProperties.getLocation()));
 
@@ -83,8 +86,12 @@ public class GeminiImageClient {
             return new GeminiImageResult(STUB_PNG_BYTES, DEFAULT_CONTENT_TYPE);
         }
 
-        String endpoint = buildEndpoint();
-        String payload = buildPayload(prompt);
+        String endpoint = geminiModel
+                ? buildGenerateContentEndpoint(model)
+                : buildPredictEndpoint(model);
+        String payload = geminiModel
+                ? buildGenerateContentPayload(prompt)
+                : buildPredictPayload(prompt);
 
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
@@ -104,7 +111,9 @@ public class GeminiImageClient {
 
         try {
             ResponseEntity<String> response = restTemplate.exchange(endpoint, HttpMethod.POST, entity, String.class);
-            return parseResponse(response.getBody());
+            return geminiModel
+                    ? parseGenerateContentResponse(response.getBody())
+                    : parsePredictResponse(response.getBody());
         } catch (HttpStatusCodeException e) {
             throw mapHttpException(e);
         } catch (ResourceAccessException e) {
@@ -122,10 +131,9 @@ public class GeminiImageClient {
         return new RestTemplate(factory);
     }
 
-    private String buildEndpoint() {
+    private String buildPredictEndpoint(String model) {
         String projectId = requireNonBlank(vertexAiProperties.getProjectId(), "GCP project id is not configured");
         String location = requireNonBlank(vertexAiProperties.getLocation(), "GCP location is not configured");
-        String model = requireNonBlank(geminiProperties.getImageModel(), "AI image model is not configured");
 
         if (model.startsWith("projects/")) {
             return "https://" + location + "-aiplatform.googleapis.com/v1/" + model + ":predict";
@@ -140,6 +148,23 @@ public class GeminiImageClient {
                 "/locations/" + location + "/" + modelPath + ":predict";
     }
 
+    private String buildGenerateContentEndpoint(String model) {
+        String projectId = requireNonBlank(vertexAiProperties.getProjectId(), "GCP project id is not configured");
+        String location = requireNonBlank(vertexAiProperties.getLocation(), "GCP location is not configured");
+
+        if (model.startsWith("projects/")) {
+            return "https://" + location + "-aiplatform.googleapis.com/v1/" + model + ":generateContent";
+        }
+
+        String modelPath = model;
+        if (!model.startsWith("publishers/") && !model.startsWith("models/")) {
+            modelPath = "publishers/google/models/" + model;
+        }
+
+        return "https://" + location + "-aiplatform.googleapis.com/v1/projects/" + projectId +
+                "/locations/" + location + "/" + modelPath + ":generateContent";
+    }
+
     private String appendApiKey(String endpoint, String apiKey) {
         if (endpoint.contains("?")) {
             return endpoint + "&key=" + apiKey;
@@ -147,7 +172,7 @@ public class GeminiImageClient {
         return endpoint + "?key=" + apiKey;
     }
 
-    private String buildPayload(String prompt) {
+    private String buildPredictPayload(String prompt) {
         Map<String, Object> instance = new LinkedHashMap<>();
         instance.put("prompt", prompt);
 
@@ -173,7 +198,38 @@ public class GeminiImageClient {
         }
     }
 
-    private GeminiImageResult parseResponse(String body) throws IOException {
+    private String buildGenerateContentPayload(String prompt) {
+        Map<String, Object> part = new LinkedHashMap<>();
+        part.put("text", prompt);
+
+        Map<String, Object> content = new LinkedHashMap<>();
+        content.put("role", "user");
+        content.put("parts", List.of(part));
+
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("contents", List.of(content));
+
+        Map<String, Object> generationConfig = new LinkedHashMap<>();
+        if (geminiProperties.getSampleCount() > 0) {
+            generationConfig.put("candidateCount", geminiProperties.getSampleCount());
+        }
+        if (!generationConfig.isEmpty()) {
+            payload.put("generationConfig", generationConfig);
+        }
+
+        String aspectRatio = safeTrim(geminiProperties.getAspectRatio());
+        if (aspectRatio != null) {
+            log.info("[GeminiImageClient] aspectRatio is ignored for Gemini generateContent: {}", aspectRatio);
+        }
+
+        try {
+            return objectMapper.writeValueAsString(payload);
+        } catch (JsonProcessingException e) {
+            throw new BusinessException(ErrorCode.INTERNAL_ERROR, e);
+        }
+    }
+
+    private GeminiImageResult parsePredictResponse(String body) throws IOException {
         if (body == null || body.isBlank()) {
             throw new BusinessException(ErrorCode.AI_PROVIDER_ERROR, "Empty response from image provider");
         }
@@ -210,6 +266,79 @@ public class GeminiImageClient {
         }
 
         throw new BusinessException(ErrorCode.AI_PROVIDER_ERROR, "Unsupported prediction format");
+    }
+
+    private GeminiImageResult parseGenerateContentResponse(String body) throws IOException {
+        if (body == null || body.isBlank()) {
+            throw new BusinessException(ErrorCode.AI_PROVIDER_ERROR, "Empty response from image provider");
+        }
+
+        Map<String, Object> response = objectMapper.readValue(body, new TypeReference<>() {});
+        Object candidatesObj = response.get("candidates");
+        if (!(candidatesObj instanceof List<?> candidates) || candidates.isEmpty()) {
+            throw new BusinessException(ErrorCode.AI_PROVIDER_ERROR, "Missing candidates in response");
+        }
+
+        for (Object candidate : candidates) {
+            if (!(candidate instanceof Map<?, ?> candidateMap)) {
+                continue;
+            }
+            GeminiImageResult result = extractImageFromCandidate(candidateMap);
+            if (result != null) {
+                return result;
+            }
+        }
+
+        throw new BusinessException(ErrorCode.AI_PROVIDER_ERROR, "Image bytes not found in Gemini response");
+    }
+
+    private GeminiImageResult extractImageFromCandidate(Map<?, ?> candidateMap) {
+        Object contentObj = candidateMap.get("content");
+        if (contentObj instanceof Map<?, ?> contentMap) {
+            Object partsObj = contentMap.get("parts");
+            if (partsObj instanceof List<?> parts) {
+                for (Object part : parts) {
+                    if (part instanceof Map<?, ?> partMap) {
+                        GeminiImageResult result = extractImageFromPart(partMap);
+                        if (result != null) {
+                            return result;
+                        }
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
+    private GeminiImageResult extractImageFromPart(Map<?, ?> partMap) {
+        Map<?, ?> inlineData = findMap(partMap, "inlineData", "inline_data");
+        if (inlineData != null) {
+            GeminiImageResult result = buildImageResultFromMap(inlineData);
+            if (result != null) {
+                return result;
+            }
+        }
+        return buildImageResultFromMap(partMap);
+    }
+
+    private GeminiImageResult buildImageResultFromMap(Map<?, ?> map) {
+        String base64 = findString(map, BASE64_KEYS);
+        if (base64 == null) {
+            return null;
+        }
+        String mimeType = findString(map, MIME_KEYS);
+        byte[] bytes = Base64.getDecoder().decode(base64);
+        return new GeminiImageResult(bytes, mimeType != null ? mimeType : DEFAULT_CONTENT_TYPE);
+    }
+
+    private Map<?, ?> findMap(Map<?, ?> map, String... keys) {
+        for (String key : keys) {
+            Object value = map.get(key);
+            if (value instanceof Map<?, ?> nested) {
+                return nested;
+            }
+        }
+        return null;
     }
 
     private String findString(Map<?, ?> map, List<String> keys) {
@@ -285,5 +414,9 @@ public class GeminiImageClient {
         }
         String trimmed = value.trim();
         return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private boolean isGeminiModel(String model) {
+        return model.toLowerCase().contains("gemini");
     }
 }
