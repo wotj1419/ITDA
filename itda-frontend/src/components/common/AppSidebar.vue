@@ -43,7 +43,7 @@ const closeProfileMenu = (e: MouseEvent) => {
 
 const handleLogout = () => {
   authStore.logout()
-  router.push('/login')
+  router.push('/auth')
 }
 
 onMounted(() => {
@@ -154,7 +154,7 @@ const sidebarClasses = computed(() => [
            <div class="menu-group">
              <button class="menu-item text-danger" @click="handleLogout">
                <LogOut class="icon-sm" />
-               <span>로그아웃</span>
+                <span>로그아웃</span>
              </button>
            </div>
         </div>

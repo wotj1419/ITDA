@@ -36,6 +36,14 @@ export const useScenarioStore = defineStore('scenario', () => {
     const isDrawerOpen = ref(false)
     const currentStep = ref<ScenarioStep>(1)
     const isGenerating = ref(false)
+    const activeProjectId = ref<number | null>(null)
+    const projectStates = ref<Record<number, {
+        currentStep: ScenarioStep
+        input: ScenarioInput
+        prompt: ScenarioPrompt
+        plot: ScenarioPlot
+        scenes: ScenarioScene[]
+    }>>({})
 
     const input = ref<ScenarioInput>({
         genre: '',
@@ -102,19 +110,58 @@ export const useScenarioStore = defineStore('scenario', () => {
         scenes.value = []
     }
 
+    const saveCurrentState = () => {
+        if (activeProjectId.value) {
+            projectStates.value[activeProjectId.value] = {
+                currentStep: currentStep.value,
+                input: JSON.parse(JSON.stringify(input.value)),
+                prompt: JSON.parse(JSON.stringify(prompt.value)),
+                plot: JSON.parse(JSON.stringify(plot.value)),
+                scenes: JSON.parse(JSON.stringify(scenes.value)),
+            }
+        }
+    }
+
+    const switchProject = (projectId: number) => {
+        // Close drawer to prevent confusion
+        isDrawerOpen.value = false
+
+        // Save current project state if exists
+        if (activeProjectId.value && activeProjectId.value !== projectId) {
+            saveCurrentState()
+        }
+
+        activeProjectId.value = projectId
+
+        // Restore or reset
+        if (projectStates.value[projectId]) {
+            const state = projectStates.value[projectId]
+            currentStep.value = state.currentStep
+            input.value = JSON.parse(JSON.stringify(state.input))
+            prompt.value = JSON.parse(JSON.stringify(state.prompt))
+            plot.value = JSON.parse(JSON.stringify(state.plot))
+            scenes.value = JSON.parse(JSON.stringify(state.scenes))
+        } else {
+            resetWizard()
+        }
+    }
+
     const goToStep = (step: ScenarioStep) => {
         currentStep.value = step
+        saveCurrentState()
     }
 
     const nextStep = () => {
         if (currentStep.value < 4) {
             currentStep.value = (currentStep.value + 1) as ScenarioStep
+            saveCurrentState()
         }
     }
 
     const prevStep = () => {
         if (currentStep.value > 1) {
             currentStep.value = (currentStep.value - 1) as ScenarioStep
+            saveCurrentState()
         }
     }
 
@@ -233,6 +280,7 @@ export const useScenarioStore = defineStore('scenario', () => {
         const scene = scenes.value.find(s => s.id === id)
         if (scene) {
             Object.assign(scene, updates)
+            saveCurrentState()
         }
     }
 
@@ -242,6 +290,7 @@ export const useScenarioStore = defineStore('scenario', () => {
             return { ...scene, order: index + 1 }
         })
         scenes.value = newScenes
+        saveCurrentState()
     }
 
     const regenerateScene = async (id: number) => {
@@ -251,6 +300,7 @@ export const useScenarioStore = defineStore('scenario', () => {
         const scene = scenes.value.find(s => s.id === id)
         if (scene) {
             scene.description += ' (새롭게 생성된 내용)'
+            saveCurrentState()
         }
 
         isGenerating.value = false
@@ -264,6 +314,7 @@ export const useScenarioStore = defineStore('scenario', () => {
             title: `새 씬 ${newId}`,
             description: '새로운 씬 설명을 입력하세요.',
         })
+        saveCurrentState()
     }
 
     const removeScene = (id: number) => {
@@ -274,6 +325,7 @@ export const useScenarioStore = defineStore('scenario', () => {
             scenes.value.forEach((scene, idx) => {
                 scene.order = idx + 1
             })
+            saveCurrentState()
         }
     }
 
@@ -282,6 +334,7 @@ export const useScenarioStore = defineStore('scenario', () => {
         isDrawerOpen,
         currentStep,
         isGenerating,
+        activeProjectId,
         input,
         prompt,
         plot,
@@ -293,6 +346,7 @@ export const useScenarioStore = defineStore('scenario', () => {
         openDrawer,
         closeDrawer,
         resetWizard,
+        switchProject,
         goToStep,
         nextStep,
         prevStep,
@@ -310,3 +364,4 @@ export const useScenarioStore = defineStore('scenario', () => {
         removeScene,
     }
 })
+
