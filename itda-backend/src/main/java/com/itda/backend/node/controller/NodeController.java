@@ -76,6 +76,33 @@ public class NodeController {
         return ApiResponse.success(null);
     }
 
+    @Operation(summary = "Activate master", description = "Set a master node as active (one per scene)")
+    @PostMapping("/nodes/{id}/activate")
+    public ResponseEntity<ApiResponse<Void>> activateMaster(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @PathVariable Long id) {
+        nodeService.setActiveMaster(userDetails.getUserId(), id);
+        return ApiResponse.success(null);
+    }
+
+    @Operation(summary = "Confirm video", description = "Confirm a video node (one per shot)")
+    @PostMapping("/nodes/{id}/confirm")
+    public ResponseEntity<ApiResponse<Void>> confirmVideo(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @PathVariable Long id) {
+        nodeService.confirmVideo(userDetails.getUserId(), id);
+        return ApiResponse.success(null);
+    }
+
+    @Operation(summary = "Unconfirm video", description = "Unconfirm a video node")
+    @DeleteMapping("/nodes/{id}/confirm")
+    public ResponseEntity<ApiResponse<Void>> unconfirmVideo(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @PathVariable Long id) {
+        nodeService.unconfirmVideo(userDetails.getUserId(), id);
+        return ApiResponse.success(null);
+    }
+
     @Operation(summary = "Update node positions", description = "Bulk update node positions (SCENE_HEADER ignored)")
     @PutMapping("/scenes/{sceneId}/nodes/positions")
     public ResponseEntity<ApiResponse<Void>> updatePositions(
