@@ -1,8 +1,22 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import { useUIStore } from '../../stores/ui'
-import { CheckCircle, XCircle, AlertTriangle, Info, X } from 'lucide-vue-next'
+import { CheckCircle, XCircle, AlertTriangle, Info, X, Loader2 } from 'lucide-vue-next'
 
 const uiStore = useUIStore()
+
+const toastGroups = computed(() => [
+  {
+    key: 'top-right',
+    className: 'toast-container--top-right',
+    toasts: uiStore.toasts.filter((toast) => toast.position !== 'bottom-right'),
+  },
+  {
+    key: 'bottom-right',
+    className: 'toast-container--bottom-right',
+    toasts: uiStore.toasts.filter((toast) => toast.position === 'bottom-right'),
+  },
+])
 
 const getIcon = (type: string) => {
   switch (type) {
@@ -12,6 +26,8 @@ const getIcon = (type: string) => {
       return XCircle
     case 'warning':
       return AlertTriangle
+    case 'progress':
+      return Loader2
     default:
       return Info
   }
@@ -19,17 +35,28 @@ const getIcon = (type: string) => {
 </script>
 
 <template>
-  <div class="toast-container">
+  <div
+    v-for="group in toastGroups"
+    :key="group.key"
+    class="toast-container"
+    :class="group.className"
+  >
     <TransitionGroup name="toast">
       <div
-        v-for="toast in uiStore.toasts"
+        v-for="toast in group.toasts"
         :key="toast.id"
         class="toast"
         :class="[`toast-${toast.type}`]"
       >
-        <component :is="getIcon(toast.type)" class="toast-icon" />
+        <component
+          :is="getIcon(toast.type)"
+          :class="['toast-icon', { 'toast-icon--spin': toast.type === 'progress' }]"
+        />
         <div class="toast-content">
-          <div class="toast-title">{{ toast.title }}</div>
+          <div class="toast-header">
+            <div class="toast-title">{{ toast.title }}</div>
+            <div v-if="toast.meta" class="toast-meta">{{ toast.meta }}</div>
+          </div>
           <div v-if="toast.message" class="toast-message">{{ toast.message }}</div>
         </div>
         <button class="toast-close" @click="uiStore.removeToast(toast.id)">
@@ -43,13 +70,21 @@ const getIcon = (type: string) => {
 <style scoped>
 .toast-container {
   position: fixed;
-  top: 1.5rem;
   right: 1.5rem;
   z-index: 100;
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
   max-width: 400px;
+}
+
+.toast-container--top-right {
+  top: 1.5rem;
+}
+
+.toast-container--bottom-right {
+  bottom: 1.5rem;
+  flex-direction: column-reverse;
 }
 
 .toast {
@@ -85,21 +120,40 @@ const getIcon = (type: string) => {
   color: var(--info);
 }
 
+.toast-progress .toast-icon {
+  color: var(--rose-500);
+}
+
 .toast-content {
   flex: 1;
   min-width: 0;
+}
+
+.toast-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
 }
 
 .toast-title {
   font-size: 0.875rem;
   font-weight: 600;
   color: var(--gray-900);
+  flex: 1;
+}
+
+.toast-meta {
+  font-size: 0.75rem;
+  color: var(--gray-400);
+  white-space: nowrap;
 }
 
 .toast-message {
   font-size: 0.75rem;
   color: var(--gray-500);
   margin-top: 0.25rem;
+  white-space: pre-line;
 }
 
 .toast-close {
@@ -115,6 +169,16 @@ const getIcon = (type: string) => {
 .toast-close:hover {
   background: var(--gray-100);
   color: var(--gray-600);
+}
+
+.toast-icon--spin {
+  animation: toast-spin 1s linear infinite;
+}
+
+@keyframes toast-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* Transition */

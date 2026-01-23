@@ -7,10 +7,12 @@
 import { ref, computed, watch } from 'vue';
 import type { Node } from '@vue-flow/core';
 import type { MasterImageNodeData } from '../../../types/node';
-import { PromptStatus } from '../../../types/node';
+import { PromptStatus, JobStatus } from '../../../types/node';
 import BasePanel from './BasePanel.vue';
 import { useSceneNodeStore } from '../../../stores/sceneNode';
-import { Film, Palette, Sun, Smile, Sparkles, FileText, Image, Check, RefreshCw, Star, Users } from 'lucide-vue-next';
+import { useGenerationToast } from '../../../composables/useGenerationToast';
+import { aiService } from '../../../services';
+import { Film, Palette, Sun, Smile, Sparkles, FileText, Image, Check, RefreshCw, Star, Users, Loader2 } from 'lucide-vue-next';
 
 interface Props {
   node: Node<MasterImageNodeData>;
@@ -18,6 +20,12 @@ interface Props {
 
 const props = defineProps<Props>();
 const nodeStore = useSceneNodeStore();
+const { startGenerationToast, finishGenerationToast } = useGenerationToast();
+
+// 로딩 상태
+const isGeneratingPrompt = ref(false);
+const isGeneratingImage = ref(false);
+const errorMessage = ref<string | null>(null);
 
 // 폼 상태 - objectIds는 배열로 관리 (다중 선택)
 const form = ref({
@@ -44,7 +52,7 @@ const objectOptions = [
 const data = computed(() => props.node.data as MasterImageNodeData | undefined);
 const isPromptGenerated = computed(() => data.value?.promptStatus !== PromptStatus.DRAFT);
 const isPromptApproved = computed(() => data.value?.promptStatus === PromptStatus.APPROVED);
-const canGenerate = computed(() => isPromptApproved.value);
+const canGenerate = computed(() => isPromptApproved.value && !isGeneratingImage.value);
 
 // 노드 변경 시 폼 동기화
 watch(() => props.node.id, () => {
@@ -56,6 +64,7 @@ watch(() => props.node.id, () => {
     objectIds: data.value.objectIds || [],
     prompt: data.value.prompt || '',
   };
+  errorMessage.value = null;
 }, { immediate: true });
 
 // 오브젝트 선택 토글
@@ -76,22 +85,36 @@ function getSelectedObjectNames(): string {
     .join(', ');
 }
 
-function generatePrompt(): void {
-  // objectIds에서 선택된 오브젝트 이름들을 프롬프트에 포함
-  const objectNames = getSelectedObjectNames();
-  const objectPart = objectNames ? `, featuring: ${objectNames}` : '';
-  
-  const promptText = `Wide establishing shot of a scene, style: ${form.value.style}, time: ${form.value.timeOfDay}, mood: ${form.value.mood}${objectPart}`;
-  form.value.prompt = promptText;
-  
-  nodeStore.updateNode(props.node.id, {
-    style: form.value.style,
-    timeOfDay: form.value.timeOfDay,
-    mood: form.value.mood,
-    objectIds: form.value.objectIds,
-    prompt: form.value.prompt,
-    promptStatus: PromptStatus.GENERATED,
-  });
+async function generatePrompt(): Promise<void> {
+  isGeneratingPrompt.value = true;
+  errorMessage.value = null;
+
+  try {
+    // AI API 호출
+    const prompt = await aiService.generatePrompt({
+      nodeType: 'MASTER',
+      style: form.value.style,
+      timeOfDay: form.value.timeOfDay,
+      mood: form.value.mood,
+      objectIds: form.value.objectIds,
+    });
+
+    form.value.prompt = prompt;
+    
+    nodeStore.updateNode(props.node.id, {
+      style: form.value.style,
+      timeOfDay: form.value.timeOfDay,
+      mood: form.value.mood,
+      objectIds: form.value.objectIds,
+      prompt: form.value.prompt,
+      promptStatus: PromptStatus.GENERATED,
+    });
+  } catch (error) {
+    console.error('Failed to generate prompt:', error);
+    errorMessage.value = '프롬프트 생성에 실패했습니다. 다시 시도해주세요.';
+  } finally {
+    isGeneratingPrompt.value = false;
+  }
 }
 
 function approvePrompt(): void {
@@ -101,9 +124,45 @@ function approvePrompt(): void {
   });
 }
 
-function generateImage(): void {
-  console.log('Generate image with:', form.value);
-  // TODO: API 연동 시 여기에 실제 호출 추가
+async function generateImage(): Promise<void> {
+  if (!form.value.prompt) return;
+
+  isGeneratingImage.value = true;
+  errorMessage.value = null;
+  const toastId = startGenerationToast('image');
+
+  try {
+    // 노드 상태를 RUNNING으로 업데이트
+    nodeStore.updateNode(props.node.id, { jobStatus: JobStatus.RUNNING });
+
+    // 이미지 생성 요청
+    const jobId = await aiService.generateNode(props.node.id, form.value.prompt);
+    console.log('Image generation job started:', jobId);
+
+    // 폴링으로 완료 대기
+    const result = await aiService.pollJobUntilComplete(jobId, (status) => {
+      console.log('Job status:', status.status);
+    });
+
+    if (result.status === 'SUCCEEDED') {
+      nodeStore.updateNode(props.node.id, {
+        jobStatus: JobStatus.SUCCEEDED,
+        imageUrl: result.resultUrl,
+        thumbnailUrl: result.thumbnailUrl,
+      });
+      finishGenerationToast(toastId, 'image', 'success');
+    } else {
+      throw new Error(result.error?.message || 'Image generation failed');
+    }
+  } catch (error) {
+    console.error('Failed to generate image:', error);
+    errorMessage.value = '이미지 생성에 실패했습니다. 다시 시도해주세요.';
+    nodeStore.updateNode(props.node.id, { jobStatus: JobStatus.FAILED });
+    const reason = error instanceof Error ? error.message : '알 수 없는 오류';
+    finishGenerationToast(toastId, 'image', 'error', { reason });
+  } finally {
+    isGeneratingImage.value = false;
+  }
 }
 
 function setActive(): void {
@@ -185,10 +244,20 @@ function setActive(): void {
         </div>
       </div>
 
+      <!-- Error Message -->
+      <div v-if="errorMessage" class="panel-error">
+        {{ errorMessage }}
+      </div>
+
       <!-- Generate Prompt -->
-      <button class="panel-btn panel-btn--secondary panel-btn--full" @click="generatePrompt">
-        <Sparkles class="panel-btn-icon" />
-        프롬프트 생성
+      <button 
+        class="panel-btn panel-btn--secondary panel-btn--full" 
+        :disabled="isGeneratingPrompt"
+        @click="generatePrompt"
+      >
+        <Loader2 v-if="isGeneratingPrompt" class="panel-btn-icon panel-btn-icon--spin" />
+        <Sparkles v-else class="panel-btn-icon" />
+        {{ isGeneratingPrompt ? '생성 중...' : '프롬프트 생성' }}
       </button>
 
       <!-- Generated Prompt -->
@@ -219,8 +288,9 @@ function setActive(): void {
         :disabled="!canGenerate"
         @click="generateImage"
       >
-        <Image class="panel-btn-icon" />
-        이미지 생성
+        <Loader2 v-if="isGeneratingImage" class="panel-btn-icon panel-btn-icon--spin" />
+        <Image v-else class="panel-btn-icon" />
+        {{ isGeneratingImage ? '생성 중...' : '이미지 생성' }}
       </button>
     </template>
   </BasePanel>

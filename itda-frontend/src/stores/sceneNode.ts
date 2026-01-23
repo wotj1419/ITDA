@@ -82,13 +82,13 @@ const MAX_POSITION_HISTORY = 20;
 
 function buildPositionSnapshot(nodes: SceneNode[]): NodePositionSnapshot {
     return nodes.map((node) => {
-        const style = typeof node.style === 'function' ? undefined : node.style;
+        const style = typeof node.style === 'object' && node.style !== null ? node.style : {};
         return {
             id: node.id,
             position: { x: node.position.x, y: node.position.y },
             dimensions: {
-                width: style?.width ?? '',
-                height: style?.height ?? '',
+                width: ('width' in style ? style.width : '') ?? '',
+                height: ('height' in style ? style.height : '') ?? '',
             },
         };
     });
@@ -170,13 +170,21 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
         ) || null
     );
 
-    const confirmedVideos = computed(() =>
-        nodes.value.filter(
+    const confirmedVideos = computed(() => {
+        const videos = nodes.value.filter(
             (n) =>
                 n.data?.type === NodeType.VIDEO &&
                 (n.data as VideoNodeData).isConfirmed
-        )
-    );
+        );
+        return [...videos].sort((a, b) => {
+            const orderA = (a.data as VideoNodeData).timelineOrder ?? Number.MAX_SAFE_INTEGER;
+            const orderB = (b.data as VideoNodeData).timelineOrder ?? Number.MAX_SAFE_INTEGER;
+            if (orderA !== orderB) return orderA - orderB;
+            const createdA = a.data?.createdAt ?? '';
+            const createdB = b.data?.createdAt ?? '';
+            return createdA.localeCompare(createdB);
+        });
+    });
 
     const childNodes = computed(() => (parentId: string) =>
         edges.value
@@ -237,7 +245,10 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
     // Actions - Load
     // ==========================================================================
 
-    async function loadSceneNodes(sceneIdParam: string): Promise<void> {
+    async function loadSceneNodes(
+        sceneIdParam: string,
+        sceneInfo?: { title: string; description: string; order: number }
+    ): Promise<void> {
         isLoading.value = true;
         try {
             sceneId.value = sceneIdParam;
@@ -251,6 +262,7 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
                     if (Array.isArray(parsed.nodes)) {
                         nodes.value = parsed.nodes;
                         edges.value = parsed.edges || [];
+                        ensureTimelineOrder();
                         console.log('Restored nodes from localStorage');
                         return; // 저장된 데이터가 있으면 여기서 종료
                     }
@@ -269,19 +281,22 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
             nodes.value = [];
             edges.value = [];
 
-            // 씬 헤더 노드 자동 생성
-            ensureSceneHeaderNode();
+            // 씬 헤더 노드 자동 생성 (전 페이지에서 전달받은 씬 정보 사용)
+            ensureSceneHeaderNode(sceneInfo);
             // 마스터 노드 자동 생성
             ensureActiveMasterNode();
 
             // 엣지 파생
             edges.value = deriveEdges();
+            ensureTimelineOrder();
         } finally {
             isLoading.value = false;
         }
     }
 
-    function ensureSceneHeaderNode(): void {
+    function ensureSceneHeaderNode(
+        sceneInfo?: { title: string; description: string; order: number }
+    ): void {
         const hasHeader = nodes.value.some(
             (n) => n.data?.type === NodeType.SCENE_HEADER
         );
@@ -291,9 +306,9 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
                 ...createBaseNodeData(generateId(), NodeType.SCENE_HEADER),
                 type: NodeType.SCENE_HEADER,
                 sceneId: sceneId.value,
-                title: '새 씬',
-                description: '씬 설명을 입력하세요.',
-                sceneOrder: 1,
+                title: sceneInfo?.title || '새 씬',
+                description: sceneInfo?.description || '씬 설명을 입력하세요.',
+                sceneOrder: sceneInfo?.order || 1,
             };
 
             const newNode: SceneNode = {
@@ -335,10 +350,11 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
             (n) => n.data?.type === NodeType.MASTER_IMAGE
         ).length;
         if (masterCount >= 3) return null;
+        const nextVersion = masterCount + 1;
 
         const id = generateId();
         const data: MasterImageNodeData = {
-            ...createBaseNodeData(id, NodeType.MASTER_IMAGE, parentNodeId),
+            ...createBaseNodeData(id, NodeType.MASTER_IMAGE, parentNodeId, nextVersion),
             type: NodeType.MASTER_IMAGE,
             sceneId: sceneId.value || '',
             isActive,
@@ -368,9 +384,16 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
     function addStoryboardGridNode(parentNodeId: string): SceneNode | null {
         if (!canConnect(parentNodeId, NodeType.STORYBOARD_GRID)) return null;
 
+        const gridCount = nodes.value.filter(
+            (n) =>
+                n.data?.type === NodeType.STORYBOARD_GRID &&
+                n.data.parentNodeId === parentNodeId
+        ).length;
+        const nextVersion = gridCount + 1;
+
         const id = generateId();
         const data: StoryboardGridNodeData = {
-            ...createBaseNodeData(id, NodeType.STORYBOARD_GRID, parentNodeId),
+            ...createBaseNodeData(id, NodeType.STORYBOARD_GRID, parentNodeId, nextVersion),
             type: NodeType.STORYBOARD_GRID,
             imageUrl: null,
             thumbnailUrl: null,
@@ -397,22 +420,23 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
     function addShotNode(parentNodeId: string, gridCellIndex?: number): SceneNode | null {
         if (!canConnect(parentNodeId, NodeType.SHOT)) return null;
 
-        const nextGridIndex =
-            gridCellIndex ??
-            nodes.value.filter(
-                (n) =>
-                    n.data?.type === NodeType.SHOT &&
-                    n.data.parentNodeId === parentNodeId
-            ).length;
+        const existingShots = nodes.value.filter(
+            (n) =>
+                n.data?.type === NodeType.SHOT &&
+                n.data.parentNodeId === parentNodeId
+        );
+        const nextGridIndex = gridCellIndex ?? existingShots.length;
+        const nextVersion = existingShots.length + 1;
 
         const id = generateId();
         const data: ShotNodeData = {
-            ...createBaseNodeData(id, NodeType.SHOT, parentNodeId),
+            ...createBaseNodeData(id, NodeType.SHOT, parentNodeId, nextVersion),
             type: NodeType.SHOT,
             imageUrl: null,
             thumbnailUrl: null,
             prompt: '',
             gridCellIndex: nextGridIndex,
+            shotTypes: [],
             shotType: '',
             expression: '',
             additionalDetail: '',
@@ -435,9 +459,16 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
     function addVideoNode(parentNodeId: string): SceneNode | null {
         if (!canConnect(parentNodeId, NodeType.VIDEO)) return null;
 
+        const videoCount = nodes.value.filter(
+            (n) =>
+                n.data?.type === NodeType.VIDEO &&
+                n.data.parentNodeId === parentNodeId
+        ).length;
+        const nextVersion = videoCount + 1;
+
         const id = generateId();
         const data: VideoNodeData = {
-            ...createBaseNodeData(id, NodeType.VIDEO, parentNodeId),
+            ...createBaseNodeData(id, NodeType.VIDEO, parentNodeId, nextVersion),
             type: NodeType.VIDEO,
             startShotId: parentNodeId,
             endShotId: null,
@@ -446,7 +477,7 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
             duration: 5,
             isConfirmed: false,
             prompt: '',
-            cameraMotion: 'static',
+            cameraMotion: 'staticCamera',
             motionDescription: '',
         };
 
@@ -515,6 +546,19 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
             childId,
             ...getDescendantIds(childId),
         ]);
+    }
+
+    function hasDescendants(nodeId: string): boolean {
+        return getDescendantIds(nodeId).length > 0;
+    }
+
+    function canDeleteNode(nodeId: string): boolean {
+        const targetNode = nodes.value.find((n) => n.id === nodeId);
+        if (!targetNode?.data) return false;
+        return (
+            targetNode.data.type !== NodeType.SCENE_HEADER &&
+            targetNode.data.type !== NodeType.MASTER_IMAGE
+        );
     }
 
     // ==========================================================================
@@ -654,11 +698,21 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
     // ==========================================================================
 
     function setActiveMaster(masterId: string): void {
+        let shouldSyncCollapse = false;
         nodes.value.forEach((n) => {
             if (n.data?.type === NodeType.MASTER_IMAGE) {
-                (n.data as MasterImageNodeData).isActive = n.id === masterId;
+                const masterData = n.data as MasterImageNodeData;
+                const isActive = n.id === masterId;
+                masterData.isActive = isActive;
+                if (isActive && masterData.isCollapsed) {
+                    masterData.isCollapsed = false;
+                    shouldSyncCollapse = true;
+                }
             }
         });
+        if (shouldSyncCollapse) {
+            syncHiddenByCollapse();
+        }
         ensureSceneInProgress();
     }
 
@@ -674,18 +728,92 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
             node.data.jobStatus === JobStatus.SUCCEEDED
         ) {
             const parentShotId = node.data.parentNodeId;
+            const shouldConfirm = !(node.data as VideoNodeData).isConfirmed;
+            const nextOrder = shouldConfirm ? getNextTimelineOrder() : undefined;
             // 같은 부모 샷의 다른 영상들 확정 해제
             nodes.value.forEach((n) => {
                 if (
                     n.data?.type === NodeType.VIDEO &&
                     n.data.parentNodeId === parentShotId
                 ) {
-                    (n.data as VideoNodeData).isConfirmed =
-                        n.id === videoId ? !(n.data as VideoNodeData).isConfirmed : false;
+                    const videoData = n.data as VideoNodeData;
+                    if (n.id === videoId) {
+                        videoData.isConfirmed = shouldConfirm;
+                        videoData.timelineOrder = shouldConfirm ? nextOrder : undefined;
+                        videoData.updatedAt = new Date().toISOString();
+                    } else {
+                        videoData.isConfirmed = false;
+                        videoData.timelineOrder = undefined;
+                        videoData.updatedAt = new Date().toISOString();
+                    }
                 }
             });
         }
         syncEdgeMeta();
+    }
+
+    function getNextTimelineOrder(): number {
+        return nodes.value.reduce((max, node) => {
+            if (node.data?.type !== NodeType.VIDEO) return max;
+            const videoData = node.data as VideoNodeData;
+            if (!videoData.isConfirmed) return max;
+            return Math.max(max, videoData.timelineOrder ?? 0);
+        }, 0) + 1;
+    }
+
+    function ensureTimelineOrder(): void {
+        const confirmed = nodes.value
+            .filter(
+                (n) =>
+                    n.data?.type === NodeType.VIDEO &&
+                    (n.data as VideoNodeData).isConfirmed
+            )
+            .sort((a, b) => {
+                const createdA = a.data?.createdAt ?? '';
+                const createdB = b.data?.createdAt ?? '';
+                return createdA.localeCompare(createdB);
+            });
+        let maxOrder = confirmed.reduce((max, node) => {
+            const order = (node.data as VideoNodeData).timelineOrder ?? 0;
+            return Math.max(max, order);
+        }, 0);
+        confirmed.forEach((node) => {
+            const videoData = node.data as VideoNodeData;
+            if (!videoData.timelineOrder) {
+                maxOrder += 1;
+                videoData.timelineOrder = maxOrder;
+            }
+        });
+    }
+
+    function updateTimelineOrder(orderedIds: string[]): void {
+        const orderedSet = new Set(orderedIds);
+        let order = 1;
+
+        orderedIds.forEach((id) => {
+            const node = nodes.value.find((n) => n.id === id);
+            if (node?.data?.type === NodeType.VIDEO) {
+                const videoData = node.data as VideoNodeData;
+                if (videoData.isConfirmed) {
+                    videoData.timelineOrder = order;
+                    videoData.updatedAt = new Date().toISOString();
+                    order += 1;
+                }
+            }
+        });
+
+        const remaining = nodes.value.filter(
+            (n) =>
+                n.data?.type === NodeType.VIDEO &&
+                (n.data as VideoNodeData).isConfirmed &&
+                !orderedSet.has(n.id)
+        );
+        remaining.forEach((node) => {
+            const videoData = node.data as VideoNodeData;
+            videoData.timelineOrder = order;
+            videoData.updatedAt = new Date().toISOString();
+            order += 1;
+        });
     }
 
     // ==========================================================================
@@ -716,6 +844,31 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
         const parent = nodes.value.find((n) => n.id === parentId);
         if (!parent?.data) return false;
         return parent.data.isCollapsed || hasCollapsedAncestor(parentId);
+    }
+
+    function getMasterAncestor(nodeId: string): SceneNode | null {
+        const startNode = nodes.value.find((n) => n.id === nodeId);
+        let parentId = startNode?.data?.parentNodeId ?? null;
+        const visited = new Set<string>();
+        while (parentId) {
+            if (visited.has(parentId)) return null;
+            visited.add(parentId);
+            const parent = nodes.value.find((n) => n.id === parentId);
+            if (!parent?.data) return null;
+            if (parent.data.type === NodeType.MASTER_IMAGE) {
+                return parent;
+            }
+            parentId = parent.data.parentNodeId;
+        }
+        return null;
+    }
+
+    function isUnderInactiveMaster(nodeId: string): boolean {
+        const masterNode = getMasterAncestor(nodeId);
+        if (!masterNode?.data || masterNode.data.type !== NodeType.MASTER_IMAGE) {
+            return false;
+        }
+        return !(masterNode.data as MasterImageNodeData).isActive;
     }
 
     // ==========================================================================
@@ -866,6 +1019,8 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
         // Actions - Update/Delete
         updateNode,
         deleteNode,
+        hasDescendants,
+        canDeleteNode,
         pushPositionSnapshot,
         undoLastMove,
 
@@ -882,9 +1037,11 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
 
         // Actions - Video
         toggleVideoConfirm,
+        updateTimelineOrder,
 
         // Actions - Collapse
         toggleCollapse,
+        isUnderInactiveMaster,
 
         // Actions - End Shot
         startSelectEndShot,

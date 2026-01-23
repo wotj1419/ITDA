@@ -1,18 +1,20 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted } from 'vue'
+import { computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useProjectStore } from '../stores/project'
 import { useTimelineStore } from '../stores/timeline'
 import { useUIStore } from '../stores/ui'
 import { useCollabStore } from '../stores/collab'
+import { TIMELINE_PLAYBACK_MODAL_ID } from '../constants/ui'
 
 import TimelineLayout from '../layouts/TimelineLayout.vue'
 import VideoPreview from '../components/timeline/VideoPreview.vue'
 import VideoTrack from '../components/timeline/VideoTrack.vue'
 import TimeRuler from '../components/timeline/TimeRuler.vue'
 import MergeProgress from '../components/timeline/MergeProgress.vue'
+import TimelinePlaybackModal from '../components/timeline/TimelinePlaybackModal.vue'
 import Button from '../components/common/Button.vue'
-import { GitMerge, RefreshCw } from 'lucide-vue-next'
+import { GitMerge, RefreshCw, Play } from 'lucide-vue-next'
 
 const route = useRoute()
 const projectStore = useProjectStore()
@@ -22,18 +24,29 @@ const collabStore = useCollabStore()
 
 const projectId = computed(() => Number(route.params.id))
 const project = computed(() => projectStore.currentProject)
+const sceneId = computed(() => {
+  const raw = route.query.sceneId
+  const value = Array.isArray(raw) ? raw[0] : raw
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : null
+})
 
 onMounted(async () => {
   if (projectId.value) {
     await Promise.all([
       projectStore.loadProject(projectId.value),
-      timelineStore.loadClips(projectId.value),
+      timelineStore.loadClips(projectId.value, sceneId.value ?? undefined),
     ])
     
     // 협업 방 입장
     collabStore.joinRoom(projectId.value)
     collabStore.updateLocation('Timeline 편집 중')
   }
+})
+
+watch([projectId, sceneId], async ([nextProjectId, nextSceneId]) => {
+  if (!nextProjectId) return
+  await timelineStore.loadClips(nextProjectId, nextSceneId ?? undefined)
 })
 
 onUnmounted(() => {
@@ -82,6 +95,10 @@ function handleDownload() {
 
 function handleReset() {
   timelineStore.resetMerge()
+}
+
+function handlePlay() {
+  uiStore.openModal(TIMELINE_PLAYBACK_MODAL_ID)
 }
 
 const timelineMaxTime = computed(() => {
@@ -136,7 +153,17 @@ function handleWheel(e: WheelEvent) {
       <template v-else>
         <!-- Preview -->
         <section>
-          <h3 class="section-title">미리보기</h3>
+          <div class="section-header">
+            <h3 class="section-title">미리보기</h3>
+            <Button
+              variant="ghost"
+              :disabled="timelineStore.orderedClips.length === 0"
+              @click="handlePlay"
+            >
+              <Play class="icon-md" />
+              재생
+            </Button>
+          </div>
           <Card class="preview-card">
             <VideoPreview
               :thumbnail-url="timelineStore.orderedClips[0]?.thumbnailUrl"
@@ -194,6 +221,8 @@ function handleWheel(e: WheelEvent) {
       </template>
     </div>
   </TimelineLayout>
+
+  <TimelinePlaybackModal :clips="timelineStore.orderedClips" />
 </template>
 
 <style scoped>

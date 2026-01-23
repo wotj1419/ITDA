@@ -1,63 +1,128 @@
 {
     "tech_stack": [
         "TypeScript",
-        "Vue.js",
-        "Vite",
-        "Pinia",
+        "Vue.js 3",
         "Vue Router",
+        "Pinia",
         "Vue Flow",
         "Axios",
-        "Lucide Vue Next"
+        "WebRTC",
+        "Vite"
     ],
     "features": [
         {
             "name": "Authentication",
-            "description": "User login and registration functionality",
+            "description": "User authentication including login, signup, logout, token management with JWT",
             "files": [
                 "src/pages/AuthPage.vue",
                 "src/stores/auth.ts",
-                "src/services/auth.interface.ts"
+                "src/services/api/auth.ts",
+                "src/services/mock/auth.ts"
             ]
         },
         {
             "name": "Dashboard",
-            "description": "Main dashboard for users",
+            "description": "Project dashboard showing list of projects with create/edit/delete functionality",
             "files": [
-                "src/pages/DashboardPage.vue"
+                "src/pages/DashboardPage.vue",
+                "src/stores/project.ts",
+                "src/services/api/projects.ts",
+                "src/services/mock/projects.ts"
             ]
         },
         {
             "name": "Project Detail",
-            "description": "Detailed view and management of a project",
+            "description": "Project detail page with Story/Scenes/Objects tabs, member management",
             "files": [
                 "src/pages/ProjectDetailPage.vue",
-                "src/stores/project.ts"
+                "src/stores/project.ts",
+                "src/stores/scene.ts",
+                "src/services/api/scenes.ts"
             ]
         },
         {
             "name": "Scene Editor",
-            "description": "Node-based scene editor with collaboration support",
+            "description": "Vue Flow based node canvas for scene editing with master/grid/shot/video workflow",
             "files": [
                 "src/pages/SceneEditPage.vue",
-                "src/stores/scene.ts",
+                "src/components/scene-editor/NodeCanvas.vue",
                 "src/stores/sceneNode.ts",
-                "src/stores/collab.ts"
+                "src/components/scene-editor/nodes/MasterImageNode.vue",
+                "src/components/scene-editor/nodes/StoryboardGridNode.vue",
+                "src/components/scene-editor/nodes/ShotNode.vue",
+                "src/components/scene-editor/nodes/VideoNode.vue",
+                "src/components/scene-editor/nodes/SceneHeaderNode.vue"
+            ]
+        },
+        {
+            "name": "Node Panels",
+            "description": "Side panel components for editing node properties and AI prompt generation",
+            "files": [
+                "src/components/scene-editor/panels/MasterImagePanel.vue",
+                "src/components/scene-editor/panels/StoryboardGridPanel.vue",
+                "src/components/scene-editor/panels/ShotPanel.vue",
+                "src/components/scene-editor/panels/VideoPanel.vue",
+                "src/components/scene-editor/panels/SceneHeaderPanel.vue",
+                "src/components/scene-editor/panels/NodePanelContainer.vue"
+            ]
+        },
+        {
+            "name": "AI Generation",
+            "description": "AI prompt generation and image/video generation with job polling",
+            "files": [
+                "src/services/api/ai.ts",
+                "src/services/mock/ai.ts",
+                "src/stores/sceneNode.ts"
             ]
         },
         {
             "name": "Timeline",
-            "description": "Timeline view for scene/video clips",
+            "description": "Video timeline for confirmed clips, reordering, merging and playback",
             "files": [
                 "src/pages/TimelinePage.vue",
-                "src/stores/timeline.ts"
+                "src/stores/timeline.ts",
+                "src/services/api/timeline.ts",
+                "src/components/timeline/VideoTrack.vue",
+                "src/components/timeline/ClipItem.vue",
+                "src/components/timeline/TimelinePlaybackModal.vue",
+                "src/components/timeline/MergeProgress.vue"
             ]
         },
         {
-            "name": "User Profile",
+            "name": "Collaboration",
+            "description": "WebRTC based collaboration with video call, screen sharing, and presence",
+            "files": [
+                "src/stores/collab.ts",
+                "src/components/collab/CollabContainer.vue",
+                "src/components/collab/CollabPanel.vue",
+                "src/components/collab/CollabPill.vue",
+                "src/components/collab/ParticipantAvatar.vue"
+            ]
+        },
+        {
+            "name": "Scenario Generation",
+            "description": "AI scenario generation with 4-step flow for story creation",
+            "files": [
+                "src/stores/scenario.ts",
+                "src/services/api/scenario.ts",
+                "src/components/scenario"
+            ]
+        },
+        {
+            "name": "Profile Management",
             "description": "User profile viewing and editing",
             "files": [
                 "src/pages/ProfilePage.vue",
                 "src/pages/ProfileEditPage.vue"
+            ]
+        },
+        {
+            "name": "UI Components",
+            "description": "Common UI components including toast notifications, modals, layouts",
+            "files": [
+                "src/stores/ui.ts",
+                "src/components/common",
+                "src/layouts"
             ]
         }
     ]

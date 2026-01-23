@@ -140,8 +140,11 @@ export type CameraMotion =
 
 export interface TimelineClip {
   clipId: string;
-  nodeId: number;
+  nodeId: number | string;
+  sceneId?: number;
+  sourceNodeId?: string;
   thumbnailUrl: string;
+  videoUrl?: string;
   duration: number;
   order: number;
   label?: string;
@@ -252,8 +255,11 @@ export interface TimelineItem {
 
 export interface TimelineClip {
   clipId: string;
-  nodeId: number;
+  nodeId: number | string;
+  sceneId?: number;
+  sourceNodeId?: string;
   thumbnailUrl: string;
+  videoUrl?: string;
   duration: number;
   order: number;
   label?: string;
@@ -296,10 +302,13 @@ export interface Job {
 // ================================
 export interface Toast {
   id: string;
-  type: 'success' | 'error' | 'warning' | 'info';
+  type: 'success' | 'error' | 'warning' | 'info' | 'progress';
   title: string;
   message?: string;
+  meta?: string;
   duration?: number;
+  position?: 'top-right' | 'bottom-right';
+  autoClose?: boolean;
 }
 
 export interface ModalConfig {

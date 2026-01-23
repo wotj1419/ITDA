@@ -46,11 +46,14 @@ const emit = defineEmits<{
 // Computed
 // =============================================================================
 
+const isUnderInactiveMaster = computed(() => store.isUnderInactiveMaster(props.id));
+
 const nodeClasses = computed(() => [
   'node-glass',
   'node-glass--shot',
   {
     'node-glass--selected': props.selected,
+    'node-glass--inactive': isUnderInactiveMaster.value,
     [`node-glass--${statusKey.value}`]: true,
   },
 ]);
@@ -82,12 +85,6 @@ const statusText = computed(() => {
 
 const isRunning = computed(() => props.data.jobStatus === JobStatus.RUNNING);
 
-/** Convert grid cell index to letter label (0 -> A, 1 -> B, etc.) */
-const shotLabel = computed(() => {
-  const index = props.data.gridCellIndex ?? 0;
-  return String.fromCharCode(65 + index);
-});
-
 // =============================================================================
 // Handlers
 // =============================================================================
@@ -95,6 +92,11 @@ const shotLabel = computed(() => {
 function handleAddChild(event: Event): void {
   event.stopPropagation();
   emit('add-child');
+}
+
+function handleToggleCollapse(event: Event): void {
+  event.stopPropagation();
+  store.toggleCollapse(props.id);
 }
 </script>
 
@@ -120,7 +122,7 @@ function handleAddChild(event: Event): void {
         <Camera class="node-glass__icon" />
         <div class="node-glass__title-group">
           <span class="node-glass__title">
-            샷 {{ shotLabel }} v{{ data.version }}
+            샷 {{ data.version }}
           </span>
           <span class="node-glass__subtitle">
             {{ data.shotType || '타입 미지정' }}
@@ -163,9 +165,22 @@ function handleAddChild(event: Event): void {
       class="node-glass__handle" 
     />
 
-    <!-- Add Button -->
-    <button 
-      class="node-glass__add-btn" 
+    <!-- Add/Collapse Button -->
+    <button
+      v-if="isUnderInactiveMaster"
+      class="node-glass__collapse-btn"
+      @click="handleToggleCollapse"
+    >
+      <span
+        class="node-glass__collapse-icon"
+        :class="{ 'node-glass__collapse-icon--expanded': !data.isCollapsed }"
+      >
+        ^
+      </span>
+    </button>
+    <button
+      v-else
+      class="node-glass__add-btn"
       title="영상 추가"
       @click="handleAddChild"
     >
