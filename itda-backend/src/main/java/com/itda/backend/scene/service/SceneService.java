@@ -49,24 +49,8 @@ public class SceneService {
     public List<Scene> createScenesAppend(Long userId, Long projectId, List<SceneDraft> drafts) {
         ensureMember(projectId, userId);
 
-        if (drafts == null || drafts.isEmpty()) {
-            throw new BusinessException(ErrorCode.INVALID_REQUEST);
-        }
-
-        int nextOrderIndex = sceneMapper.findNextOrderIndex(projectId);
-        List<Scene> created = new ArrayList<>(drafts.size());
-        int orderIndex = nextOrderIndex;
-
-        for (SceneDraft draft : drafts) {
-            if (draft == null) {
-                throw new BusinessException(ErrorCode.INVALID_REQUEST);
-            }
-            Scene scene = Scene.create(projectId, draft.title(), draft.description(), orderIndex++);
-            sceneMapper.insertScene(scene);
-            created.add(scene);
-        }
-
-        return created;
+        validateDrafts(drafts);
+        return appendScenes(projectId, drafts);
     }
 
     @Transactional(readOnly = true)
@@ -150,5 +134,28 @@ public class SceneService {
         if (!projectMemberMapper.existsMember(projectId, userId)) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
+    }
+
+    private void validateDrafts(List<SceneDraft> drafts) {
+        if (drafts == null || drafts.isEmpty()) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST);
+        }
+        for (SceneDraft draft : drafts) {
+            if (draft == null) {
+                throw new BusinessException(ErrorCode.INVALID_REQUEST);
+            }
+        }
+    }
+
+    private List<Scene> appendScenes(Long projectId, List<SceneDraft> drafts) {
+        int orderIndex = sceneMapper.findNextOrderIndex(projectId);
+        List<Scene> created = new ArrayList<>(drafts.size());
+
+        for (SceneDraft draft : drafts) {
+            Scene scene = Scene.create(projectId, draft.title(), draft.description(), orderIndex++);
+            sceneMapper.insertScene(scene);
+            created.add(scene);
+        }
+        return created;
     }
 }
