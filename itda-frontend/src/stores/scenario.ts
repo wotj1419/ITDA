@@ -311,8 +311,8 @@ export const useScenarioStore = defineStore('scenario', () => {
         scenes.value.push({
             id: newId,
             order: scenes.value.length + 1,
-            title: `새 씬 ${newId}`,
-            description: '새로운 씬 설명을 입력하세요.',
+            title: '', // 빈 문자열로 시작
+            description: '', // 빈 문자열로 시작
         })
         saveCurrentState()
     }

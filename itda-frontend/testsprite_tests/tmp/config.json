@@ -7,10 +7,10 @@
     "projectName": "itda-frontend",
     "projectPath": "c:\\Users\\SSAFY\\Desktop\\commom\\S14P11C205\\itda-frontend",
     "testIds": [],
-    "additionalInstruction": "",
+    "additionalInstruction": "Focus on testing the key features based on PRD v2.5: Authentication, Dashboard, Scene Editor nodes, AI generation prompts, Timeline confirm/playback, and Collaboration panel visibility.",
     "envs": {
       "API_KEY": "sk-user-U8uqSDsZBkUEmzPspCNqhuIo_zca5Lo1V5FREb1H1KKibvocXpRQT8OXSjNyw9RNDPgHt48xK9Lv593DTk1WHyKkPkCEvJO6sFo2ILeGn-BMbV-zRonOw2DqAXDGn-Qe1aQ"
     }
   },
-  "proxy": "http://f25c0090-3612-4aef-9312-e2378e82b7e7:k9VUYbt7LAiyUpp9AH8ZEuPOgeP7e5HE@tun.testsprite.com:8080"
+  "proxy": "http://0528082c-ac6c-42b6-9c9e-1cbecc7728b6:YmK4fGeHoZaVXHLDwCVj5a9LmlGG7gih@tun.testsprite.com:8080"
 }

@@ -89,6 +89,16 @@ const totalDuration = computed(() => {
   return timelineClips.value.reduce((sum, clip) => sum + clip.duration, 0);
 });
 
+/**
+ * 레이아웃 정렬 버튼의 동적 bottom 위치
+ * 타임라인에 클립이 있으면 타임라인 높이만큼 위로 이동
+ */
+const layoutButtonBottom = computed(() => {
+  const baseBottom = 80; // 기본 위치
+  const timelineHeight = timelineClips.value.length > 0 ? 30 : 0; // 타임라인 대략 높이
+  return baseBottom + timelineHeight;
+});
+
 // =============================================================================
 // Lifecycle
 // =============================================================================
@@ -287,6 +297,7 @@ function handleAutoLayout(): void {
   <button 
     class="auto-layout-btn" 
     :class="{ 'panel-open': isPanelOpen }" 
+    :style="{ '--bottom': `${layoutButtonBottom}px` }"
     @click="handleAutoLayout"
   >
     <span class="icon-wrap">
