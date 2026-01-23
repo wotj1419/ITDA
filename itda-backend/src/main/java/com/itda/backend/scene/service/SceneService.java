@@ -2,6 +2,7 @@ package com.itda.backend.scene.service;
 
 import com.itda.backend.global.exception.BusinessException;
 import com.itda.backend.global.response.ErrorCode;
+import com.itda.backend.project.repository.ProjectMapper;
 import com.itda.backend.project.repository.ProjectMemberMapper;
 import com.itda.backend.scene.controller.dto.request.CreateSceneRequest;
 import com.itda.backend.scene.controller.dto.request.ReorderScenesRequest;
@@ -28,9 +29,11 @@ public class SceneService {
 
     private final SceneMapper sceneMapper;
     private final ProjectMemberMapper projectMemberMapper;
+    private final ProjectMapper projectMapper;
 
     @Transactional
     public SceneCreateResponse createScene(Long userId, Long projectId, CreateSceneRequest request) {
+        requireProject(projectId);
         ensureMember(projectId, userId);
 
         int nextOrderIndex = sceneMapper.findNextOrderIndex(projectId);
@@ -47,6 +50,7 @@ public class SceneService {
 
     @Transactional
     public List<Scene> createScenesAppend(Long userId, Long projectId, List<SceneDraft> drafts) {
+        requireProject(projectId);
         ensureMember(projectId, userId);
 
         if (drafts == null || drafts.isEmpty()) {
@@ -71,6 +75,7 @@ public class SceneService {
 
     @Transactional(readOnly = true)
     public List<SceneSummaryResponse> listScenes(Long userId, Long projectId) {
+        requireProject(projectId);
         ensureMember(projectId, userId);
 
         List<SceneSummary> scenes = sceneMapper.findAllByProjectId(projectId);
@@ -131,6 +136,7 @@ public class SceneService {
             throw new BusinessException(ErrorCode.INVALID_REQUEST);
         }
 
+        requireProject(projectId);
         ensureMember(projectId, userId);
 
         int totalScenes = sceneMapper.countByProjectId(projectId);
@@ -150,5 +156,10 @@ public class SceneService {
         if (!projectMemberMapper.existsMember(projectId, userId)) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
+    }
+
+    private void requireProject(Long projectId) {
+        projectMapper.findById(projectId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.PROJECT_NOT_FOUND));
     }
 }
