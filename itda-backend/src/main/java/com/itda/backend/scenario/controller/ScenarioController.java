@@ -8,6 +8,7 @@ import com.itda.backend.scenario.controller.dto.request.UpdatePromptRequest;
 import com.itda.backend.scenario.controller.dto.response.ScenarioPlotResponse;
 import com.itda.backend.scenario.controller.dto.response.ScenarioPromptResponse;
 import com.itda.backend.scenario.controller.dto.response.ScenarioResponse;
+import com.itda.backend.scenario.controller.dto.response.ScenarioScenesResponse;
 import com.itda.backend.scenario.service.ScenarioService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -228,5 +229,44 @@ public class ScenarioController {
             @Valid @RequestBody UpdatePlotRequest request) {
         scenarioService.updatePlot(userDetails.getUserId(), projectId, request);
         return ApiResponse.success();
+    }
+
+    @Operation(
+            summary = "씬 생성",
+            description = "승인된 줄거리를 바탕으로 씬을 생성합니다."
+    )
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "200",
+                    description = "생성 성공",
+                    content = @Content(schema = @Schema(implementation = ScenarioScenesResponse.class))
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "401",
+                    description = "인증 필요"
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "403",
+                    description = "프로젝트 접근 권한 없음"
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "404",
+                    description = "프로젝트 또는 시나리오를 찾을 수 없음"
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "409",
+                    description = "시나리오 버전 충돌"
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "422",
+                    description = "시나리오 상태가 올바르지 않음"
+            )
+    })
+    @PostMapping("/projects/{projectId}/scenario/scenes/generate")
+    public ResponseEntity<ApiResponse<ScenarioScenesResponse>> generateScenes(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @PathVariable Long projectId) {
+        ScenarioScenesResponse response = scenarioService.generateScenes(userDetails.getUserId(), projectId);
+        return ApiResponse.success(response);
     }
 }

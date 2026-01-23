@@ -47,6 +47,7 @@ public enum ErrorCode {
 
     // ===== 422 Unprocessable Entity =====
     SCENARIO_INVALID_STATE(422, "시나리오 상태가 올바르지 않습니다"),
+    AI_RESPONSE_INVALID(422, "AI 응답 형식이 올바르지 않습니다"),
 
     // ===== 429 Too Many Requests =====
     AI_RATE_LIMITED(429, "AI 요청이 너무 많습니다"),

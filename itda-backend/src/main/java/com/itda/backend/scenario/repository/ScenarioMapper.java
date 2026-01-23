@@ -28,4 +28,8 @@ public interface ScenarioMapper {
                    @Param("plotStatus") String plotStatus,
                    @Param("currentStep") String currentStep,
                    @Param("version") Integer version);
+
+    int updateCurrentStep(@Param("projectId") Long projectId,
+                          @Param("currentStep") String currentStep,
+                          @Param("version") Integer version);
 }

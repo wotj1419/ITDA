@@ -12,10 +12,12 @@ import com.itda.backend.scene.controller.dto.response.SceneSummaryResponse;
 import com.itda.backend.scene.domain.Scene;
 import com.itda.backend.scene.repository.SceneMapper;
 import com.itda.backend.scene.repository.dto.SceneSummary;
+import com.itda.backend.scene.service.dto.SceneDraft;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -41,6 +43,30 @@ public class SceneService {
                 scene.getTitle(),
                 scene.getOrderIndex()
         );
+    }
+
+    @Transactional
+    public List<Scene> createScenesAppend(Long userId, Long projectId, List<SceneDraft> drafts) {
+        ensureMember(projectId, userId);
+
+        if (drafts == null || drafts.isEmpty()) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST);
+        }
+
+        int nextOrderIndex = sceneMapper.findNextOrderIndex(projectId);
+        List<Scene> created = new ArrayList<>(drafts.size());
+        int orderIndex = nextOrderIndex;
+
+        for (SceneDraft draft : drafts) {
+            if (draft == null) {
+                throw new BusinessException(ErrorCode.INVALID_REQUEST);
+            }
+            Scene scene = Scene.create(projectId, draft.title(), draft.description(), orderIndex++);
+            sceneMapper.insertScene(scene);
+            created.add(scene);
+        }
+
+        return created;
     }
 
     @Transactional(readOnly = true)
