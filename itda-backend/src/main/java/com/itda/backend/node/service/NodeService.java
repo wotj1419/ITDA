@@ -172,6 +172,44 @@ public class NodeService {
         log.debug("Set active master: nodeId={}, sceneId={}", nodeId, scene.getId());
     }
 
+    /**
+     * VIDEO 확정 (SHOT 당 1개)
+     */
+    @Transactional
+    public void confirmVideo(Long userId, Long nodeId) {
+        Node node = getNodeOrThrow(nodeId);
+        Scene scene = getSceneAndEnsureMemberForUpdate(node.getSceneId(), userId);
+
+        assertVideoNode(node.getNodeType());
+        Long shotNodeId = node.getParentNodeId();
+        if (shotNodeId == null) {
+            throw new BusinessException(ErrorCode.INVALID_NODE_RELATION);
+        }
+        validateShotNodeReference(scene.getId(), shotNodeId);
+
+        nodeMapper.clearConfirmedByShotId(shotNodeId);
+        int updated = nodeMapper.setConfirmedVideo(nodeId);
+        if (updated == 0) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST);
+        }
+
+        log.debug("Confirmed video: nodeId={}, shotNodeId={}, sceneId={}", nodeId, shotNodeId, scene.getId());
+    }
+
+    /**
+     * VIDEO 확정 해제
+     */
+    @Transactional
+    public void unconfirmVideo(Long userId, Long nodeId) {
+        Node node = getNodeOrThrow(nodeId);
+        getSceneAndEnsureMemberForUpdate(node.getSceneId(), userId);
+
+        assertVideoNode(node.getNodeType());
+        nodeMapper.clearConfirmedVideo(nodeId);
+
+        log.debug("Unconfirmed video: nodeId={}", nodeId);
+    }
+
     // ========== Private Helper Methods ==========
 
     private Scene getSceneOrThrow(Long sceneId) {
@@ -218,6 +256,12 @@ public class NodeService {
 
     private void assertMasterNode(NodeType nodeType) {
         if (nodeType != NodeType.MASTER) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST);
+        }
+    }
+
+    private void assertVideoNode(NodeType nodeType) {
+        if (nodeType != NodeType.VIDEO) {
             throw new BusinessException(ErrorCode.INVALID_REQUEST);
         }
     }

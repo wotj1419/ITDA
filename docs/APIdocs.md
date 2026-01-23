@@ -1148,7 +1148,7 @@ API /api/nodes/{id}/activate
 메서드 POST
 보안 Bearer Token
 상태 완료
-설명 (Master 노드) 해당 마스터 노드를 씬의 Active Master로 설정합니다.
+설명 (Master 노드) 해당 마스터 노드를 씬의 Active Master로 설정합니다. 동일 씬에서 Active Master는 1개만 유지되며, 새로 활성화 시 기존 Active는 자동 해제됩니다.
 ```
 
 ---
@@ -1159,7 +1159,7 @@ API /api/nodes/{id}/confirm
 메서드 POST
 보안 Bearer Token
 상태 완료
-설명 VIDEO 타입 노드를 타임라인에 사용할 영상으로 확정합니다.
+설명 VIDEO 타입 노드를 타임라인에 사용할 영상으로 확정합니다. 동일 SHOT에서 확정 VIDEO는 1개만 유지되며, 새로 확정 시 기존 확정은 자동 해제됩니다.
 ```
 ※ 동일 SHOT 아래 기존 확정이 있으면 자동 해제됩니다.
 
@@ -2085,5 +2085,6 @@ WS /ws/projects/{projectId}?token=<JWT>
   }
 }
 ```
+
 
 
