@@ -124,6 +124,8 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
     const edges = ref<Edge[]>([]);
 
     async function ensureSceneInProgress() {
+        if (isLoading.value) return; // 로딩 중에는 상태 변경 안 함
+
         if (sceneId.value) {
             // We need to find the scene object from the store
             const scene = sceneStore.scenes.find(s => s.sceneId === Number(sceneId.value));

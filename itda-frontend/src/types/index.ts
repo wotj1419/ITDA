@@ -52,6 +52,7 @@ export interface Project {
   sceneCount: number;
   updatedAt: string;
   createdAt?: string;
+  isDeleted?: boolean;
 }
 
 export interface ProjectListItem extends Project {

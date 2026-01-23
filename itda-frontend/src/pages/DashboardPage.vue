@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, computed } from 'vue'
+import { onMounted, computed, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import { Plus, Star } from 'lucide-vue-next'
 import { useProjectStore } from '../stores/project'
@@ -7,10 +7,14 @@ import { useUIStore } from '../stores/ui'
 import DefaultLayout from '../layouts/DefaultLayout.vue'
 import ProjectCard from '../components/project/ProjectCard.vue'
 import NewProjectModal from '../components/project/NewProjectModal.vue'
-import TimeAgo from '../components/common/TimeAgo.vue'
+import ConfirmModal from '../components/common/ConfirmModal.vue'
 
 const projectStore = useProjectStore()
 const uiStore = useUIStore()
+
+// Delete Confirmation State
+const showDeleteModal = ref(false)
+const projectToDelete = ref<{ projectId: number; title: string } | null>(null)
 
 // Load projects on mount
 onMounted(async () => {
@@ -31,6 +35,29 @@ const handleToggleFavorite = (projectId: number) => {
 
 const openNewProjectModal = () => {
   uiStore.openModal('new-project')
+}
+
+// Delete Handlers
+const handleRequestDelete = (projectId: number) => {
+  const project = projectStore.projects.find(p => p.projectId === projectId)
+  if (project) {
+    projectToDelete.value = { projectId, title: project.title }
+    showDeleteModal.value = true
+  }
+}
+
+const confirmDelete = async () => {
+  if (projectToDelete.value) {
+    await projectStore.moveToTrash(projectToDelete.value.projectId)
+    // No toast message as requested by user
+    showDeleteModal.value = false
+    projectToDelete.value = null
+  }
+}
+
+const cancelDelete = () => {
+  showDeleteModal.value = false
+  projectToDelete.value = null
 }
 </script>
 
@@ -103,6 +130,7 @@ const openNewProjectModal = () => {
             :project="project"
             :is-favorite="isFavorite(project.projectId)"
             @toggle-favorite="handleToggleFavorite"
+            @delete="handleRequestDelete"
           />
 
           <!-- Add New Project Card -->
@@ -118,6 +146,17 @@ const openNewProjectModal = () => {
 
     <!-- New Project Modal -->
     <NewProjectModal />
+
+    <!-- Confirm Modal -->
+    <ConfirmModal
+      :is-open="showDeleteModal"
+      title="잠깐! 휴지통으로 보낼까요? 🗑️"
+      :message="`'${projectToDelete?.title}' 프로젝트를 정말 삭제하시겠어요? 🥺\n30일 동안은 보관되니까 너무 걱정 마세요!`"
+      confirm-text="네, 보낼래요"
+      :is-dangerous="true"
+      @confirm="confirmDelete"
+      @cancel="cancelDelete"
+    />
   </DefaultLayout>
 </template>
 

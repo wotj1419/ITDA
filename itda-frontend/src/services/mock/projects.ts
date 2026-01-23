@@ -27,6 +27,7 @@ export const mockProjects: Project[] = [
     sceneCount: 5,
     updatedAt: new Date(Date.now() - 10 * 1000).toISOString(),
     createdAt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
+    isDeleted: false,
   },
   {
     projectId: 2,
@@ -39,6 +40,7 @@ export const mockProjects: Project[] = [
     sceneCount: 5,
     updatedAt: new Date(Date.now() - 50 * 1000).toISOString(),
     createdAt: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString(),
+    isDeleted: false,
   },
   {
     projectId: 3,
@@ -51,6 +53,7 @@ export const mockProjects: Project[] = [
     sceneCount: 8,
     updatedAt: new Date(Date.now() - 90 * 1000).toISOString(),
     createdAt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
+    isDeleted: false,
   },
 ]
 
@@ -84,16 +87,18 @@ export function getProjectProgress(projectId: number) {
   return getSceneProgress(projectId)
 }
 
-const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, 50))
 
 export async function fetchProjects(): Promise<Project[]> {
   await delay(300)
-  return [...mockProjects]
+  return mockProjects.filter(p => !p.isDeleted)
 }
 
 export async function fetchProjectById(projectId: number): Promise<ProjectDetail | null> {
   await delay(300)
-  return mockProjectDetails[projectId] || null
+  const project = mockProjectDetails[projectId]
+  if (!project || project.isDeleted) return null
+  return project
 }
 
 export async function createProject(data: { title: string; description?: string; genre?: string }): Promise<Project> {
@@ -109,8 +114,9 @@ export async function createProject(data: { title: string; description?: string;
     sceneCount: 0,
     updatedAt: new Date().toISOString(),
     createdAt: new Date().toISOString(),
+    isDeleted: false,
   }
-  mockProjects.unshift(newProject)
+  mockProjects.push(newProject)
 
   mockProjectDetails[newProject.projectId] = {
     ...newProject,
@@ -124,11 +130,48 @@ export async function createProject(data: { title: string; description?: string;
 
 export async function deleteProject(projectId: number): Promise<void> {
   await delay(300)
-  const index = mockProjects.findIndex((p) => p.projectId === projectId)
+  // Soft delete
+  const now = new Date().toISOString()
+  const project = mockProjects.find((p) => p.projectId === projectId)
+  if (project) {
+    project.isDeleted = true
+    project.deletedAt = now
+  }
+
+  const detail = mockProjectDetails[projectId]
+  if (detail) {
+    detail.isDeleted = true
+    detail.deletedAt = now
+  }
+}
+
+export async function fetchDeletedProjects(): Promise<Project[]> {
+  await delay(300)
+  return mockProjects.filter(p => p.isDeleted)
+}
+
+export async function restoreProject(projectId: number): Promise<void> {
+  await delay(300)
+  const project = mockProjects.find(p => p.projectId === projectId)
+  if (project) {
+    project.isDeleted = false
+    project.deletedAt = undefined
+  }
+
+  const detail = mockProjectDetails[projectId]
+  if (detail) {
+    detail.isDeleted = false
+    detail.deletedAt = undefined
+  }
+}
+
+export async function hardDeleteProject(projectId: number): Promise<void> {
+  await delay(300)
+  const index = mockProjects.findIndex(p => p.projectId === projectId)
   if (index > -1) {
     mockProjects.splice(index, 1)
-    delete mockProjectDetails[projectId]
   }
+  delete mockProjectDetails[projectId]
 }
 
 /**
