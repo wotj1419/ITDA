@@ -53,18 +53,12 @@ public class SceneService {
         requireProject(projectId);
         ensureMember(projectId, userId);
 
-        if (drafts == null || drafts.isEmpty()) {
-            throw new BusinessException(ErrorCode.INVALID_REQUEST);
-        }
-
+        validateDrafts(drafts);
         int nextOrderIndex = sceneMapper.findNextOrderIndex(projectId);
         List<Scene> created = new ArrayList<>(drafts.size());
         int orderIndex = nextOrderIndex;
 
         for (SceneDraft draft : drafts) {
-            if (draft == null) {
-                throw new BusinessException(ErrorCode.INVALID_REQUEST);
-            }
             Scene scene = Scene.create(projectId, draft.title(), draft.description(), orderIndex++);
             sceneMapper.insertScene(scene);
             created.add(scene);
@@ -86,20 +80,15 @@ public class SceneService {
 
     @Transactional(readOnly = true)
     public SceneDetailResponse getSceneDetail(Long userId, Long sceneId) {
-        Scene scene = sceneMapper.findById(sceneId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.SCENE_NOT_FOUND));
+        Scene scene = requireScene(sceneId);
         ensureMember(scene.getProjectId(), userId);
         return SceneDetailResponse.from(scene);
     }
 
     @Transactional
     public SceneDetailResponse updateScene(Long userId, Long sceneId, UpdateSceneRequest request) {
-        if (request.title() == null && request.description() == null) {
-            throw new BusinessException(ErrorCode.INVALID_REQUEST);
-        }
-
-        Scene scene = sceneMapper.findById(sceneId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.SCENE_NOT_FOUND));
+        validateUpdateRequest(request);
+        Scene scene = requireScene(sceneId);
         ensureMember(scene.getProjectId(), userId);
 
         int updated = sceneMapper.updateScene(sceneId, request.title(), request.description());
@@ -107,15 +96,13 @@ public class SceneService {
             throw new BusinessException(ErrorCode.SCENE_NOT_FOUND);
         }
 
-        Scene updatedScene = sceneMapper.findById(sceneId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.SCENE_NOT_FOUND));
+        Scene updatedScene = requireScene(sceneId);
         return SceneDetailResponse.from(updatedScene);
     }
 
     @Transactional
     public void deleteScene(Long userId, Long sceneId) {
-        Scene scene = sceneMapper.findById(sceneId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.SCENE_NOT_FOUND));
+        Scene scene = requireScene(sceneId);
         ensureMember(scene.getProjectId(), userId);
 
         int deleted = sceneMapper.deleteScene(sceneId);
@@ -126,16 +113,7 @@ public class SceneService {
 
     @Transactional
     public void reorderScenes(Long userId, Long projectId, ReorderScenesRequest request) {
-        List<Long> orderedSceneIds = request.orderedSceneIds();
-        if (orderedSceneIds == null || orderedSceneIds.isEmpty() || orderedSceneIds.contains(null)) {
-            throw new BusinessException(ErrorCode.INVALID_REQUEST);
-        }
-
-        Set<Long> uniqueIds = new HashSet<>(orderedSceneIds);
-        if (uniqueIds.size() != orderedSceneIds.size()) {
-            throw new BusinessException(ErrorCode.INVALID_REQUEST);
-        }
-
+        List<Long> orderedSceneIds = validateReorderRequest(request);
         requireProject(projectId);
         ensureMember(projectId, userId);
 
@@ -151,7 +129,9 @@ public class SceneService {
 
         sceneMapper.reorderScenes(projectId, orderedSceneIds);
     }
-
+    
+    // ========== Private Helper Methods ==========
+    
     private void ensureMember(Long projectId, Long userId) {
         if (!projectMemberMapper.existsMember(projectId, userId)) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
@@ -161,5 +141,39 @@ public class SceneService {
     private void requireProject(Long projectId) {
         projectMapper.findById(projectId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.PROJECT_NOT_FOUND));
+    }
+
+    private Scene requireScene(Long sceneId) {
+        return sceneMapper.findById(sceneId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.SCENE_NOT_FOUND));
+    }
+
+    private void validateDrafts(List<SceneDraft> drafts) {
+        if (drafts == null || drafts.isEmpty()) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST);
+        }
+        for (SceneDraft draft : drafts) {
+            if (draft == null) {
+                throw new BusinessException(ErrorCode.INVALID_REQUEST);
+            }
+        }
+    }
+
+    private void validateUpdateRequest(UpdateSceneRequest request) {
+        if (request.title() == null && request.description() == null) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST);
+        }
+    }
+
+    private List<Long> validateReorderRequest(ReorderScenesRequest request) {
+        List<Long> orderedSceneIds = request.orderedSceneIds();
+        if (orderedSceneIds == null || orderedSceneIds.isEmpty() || orderedSceneIds.contains(null)) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST);
+        }
+        Set<Long> uniqueIds = new HashSet<>(orderedSceneIds);
+        if (uniqueIds.size() != orderedSceneIds.size()) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST);
+        }
+        return orderedSceneIds;
     }
 }

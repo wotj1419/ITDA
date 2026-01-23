@@ -65,6 +65,9 @@
 - reorder API Swagger 수동 테스트 완료 (정상 동작 확인)
 - 씬 CRUD 완료
 - reorder Mapper/SQL + Service 검증 로직 완료
+- SceneService 공통 검증/조회 헬퍼 정리 (requireProject/requireScene/validate*)
+- projectId 존재 확인 선행으로 404/403 응답 일관성 보완
+- SceneService 헬퍼 메서드 구분
 
 ## 다음 작업
 - reorder 동작 테스트 및 결과 기록
