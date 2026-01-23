@@ -87,7 +87,7 @@ export function getProjectProgress(projectId: number) {
   return getSceneProgress(projectId)
 }
 
-const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, 50))
+const delay = (_ms: number) => new Promise((resolve) => setTimeout(resolve, 50))
 
 export async function fetchProjects(): Promise<Project[]> {
   await delay(300)

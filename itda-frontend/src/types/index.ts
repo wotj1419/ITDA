@@ -53,6 +53,7 @@ export interface Project {
   updatedAt: string;
   createdAt?: string;
   isDeleted?: boolean;
+  deletedAt?: string;
 }
 
 export interface ProjectListItem extends Project {
