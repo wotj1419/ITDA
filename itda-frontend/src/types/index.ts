@@ -52,6 +52,7 @@ export interface Project {
   sceneCount: number;
   updatedAt: string;
   createdAt?: string;
+  isDeleted?: boolean;
 }
 
 export interface ProjectListItem extends Project {
@@ -341,3 +342,5 @@ export interface CollabMessage {
 }
 
 
+
+export * from './scene';

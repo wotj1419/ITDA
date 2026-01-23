@@ -80,7 +80,7 @@ export const useProjectStore = defineStore('project', () => {
 
     try {
       const newProject = await mockCreateProject(data)
-      projects.value.unshift(newProject)
+      projects.value.push(newProject)
       return newProject
     } catch (e) {
       error.value = 'Failed to create project'
@@ -91,7 +91,7 @@ export const useProjectStore = defineStore('project', () => {
     }
   }
 
-  async function removeProject(projectId: number): Promise<boolean> {
+  async function moveToTrash(projectId: number): Promise<boolean> {
     isLoading.value = true
     error.value = null
 
@@ -103,7 +103,7 @@ export const useProjectStore = defineStore('project', () => {
       }
       return true
     } catch (e) {
-      error.value = 'Failed to delete project'
+      error.value = 'Failed to move project to trash'
       console.error(e)
       return false
     } finally {
@@ -142,6 +142,52 @@ export const useProjectStore = defineStore('project', () => {
     }
   }
 
+  async function getDeletedProjects(): Promise<Project[]> {
+    isLoading.value = true
+    error.value = null
+    try {
+      const { fetchDeletedProjects } = await import('../services/mock/projects')
+      return await fetchDeletedProjects()
+    } catch (e) {
+      console.error(e)
+      return []
+    } finally {
+      isLoading.value = false
+    }
+  }
+
+  async function restoreProject(projectId: number): Promise<void> {
+    isLoading.value = true
+    error.value = null
+    try {
+      const { restoreProject: mockRestore } = await import('../services/mock/projects')
+      await mockRestore(projectId)
+      // Reload projects to reflect restoration if we are in main list, 
+      // but usually we just want to update local state if we had it.
+      // Since we filter in loadProjects, reloading is safest.
+      await loadProjects()
+    } catch (e) {
+      error.value = 'Failed to restore project'
+      console.error(e)
+    } finally {
+      isLoading.value = false
+    }
+  }
+
+  async function permanentDeleteProject(projectId: number): Promise<void> {
+    isLoading.value = true
+    error.value = null
+    try {
+      const { hardDeleteProject } = await import('../services/mock/projects')
+      await hardDeleteProject(projectId)
+    } catch (e) {
+      error.value = 'Failed to permanently delete project'
+      console.error(e)
+    } finally {
+      isLoading.value = false
+    }
+  }
+
   function clearCurrentProject(): void {
     currentProject.value = null
   }
@@ -162,8 +208,11 @@ export const useProjectStore = defineStore('project', () => {
     loadProjects,
     loadProject,
     addProject,
-    removeProject,
+    moveToTrash,
     updateProject,
     clearCurrentProject,
+    getDeletedProjects,
+    restoreProject,
+    permanentDeleteProject,
   }
 })

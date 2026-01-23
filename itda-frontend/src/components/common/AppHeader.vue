@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
+import { RouterLink } from 'vue-router'
 import { Search, Share2, Users } from 'lucide-vue-next'
 import AvatarGroup from './AvatarGroup.vue'
 
@@ -39,6 +40,14 @@ const handleSearch = () => {
 <template>
   <header class="header">
     <div class="header-left">
+      <!-- Logo -->
+      <RouterLink to="/dashboard" class="header-logo">
+        <div class="logo-icon"></div>
+        <span class="logo-text">AI Movie Studio</span>
+      </RouterLink>
+
+      <div class="divider"></div>
+
       <!-- Collaborator Avatars -->
       <AvatarGroup
         v-if="showCollaborators"
@@ -98,9 +107,36 @@ const handleSearch = () => {
   gap: 0.75rem;
 }
 
+/* Logo */
+.header-logo {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  text-decoration: none;
+  color: var(--gray-900);
+  margin-right: 0.5rem;
+}
+
+.logo-icon {
+  width: 24px;
+  height: 24px;
+  background: linear-gradient(135deg, var(--rose-400), var(--rose-500));
+  border-radius: 6px;
+  flex-shrink: 0;
+}
+
+.logo-text {
+  font-weight: 700;
+  font-size: 1rem;
+  white-space: nowrap;
+}
+
+/* Header Layout Refinement */
 .header-center {
-  flex: 1;
-  max-width: 400px;
+  flex: 0 1 400px; /* Grow 0 to prevent bounce, Shrink 1, Basis 400px */
+  margin: 0 auto;
+  min-width: 0;
+  transition: all 0.2s ease;
 }
 
 .divider {
@@ -147,9 +183,70 @@ const handleSearch = () => {
   box-shadow: 0 0 0 3px rgba(255, 133, 161, 0.1);
 }
 
+/* Prevent right section from being crushed */
+.header-right {
+  flex-shrink: 0;
+}
+
+/* Responsive Header */
+@media (max-width: 1100px) {
+  /* No special flex change needed if we keep base logic consistent */
+}
+
+@media (max-width: 800px) {
+  /* Hide text labels delayed to 800px */
+  .btn span {
+    display: none;
+  }
+  
+  .btn .icon-sm {
+    margin: 0;
+  }
+}
+
+@media (max-width: 768px) {
+  /* Reuse mobile/tablet logic */
+  .header-left .divider,
+  .header-left :deep(.avatar-group) {
+    display: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .logo-text {
+    display: none;
+  }
+
+  /* On mobile, let search take more space since other items are hidden */
+  .header-center {
+    max-width: none; /* Uncap width on very small screens */
+    margin: 0 0.5rem;
+  }
+  
+  .header-search {
+    padding: 0.5rem 0.5rem 0.5rem 2rem;
+    min-width: 0;
+  }
+  
+  .search-wrapper {
+    width: 100%;
+  }
+
+  .header {
+    padding: 0 0.75rem;
+    gap: 0.5rem;
+  }
+}
+
 /* Icons */
 .icon-sm {
   width: 16px;
   height: 16px;
+  flex-shrink: 0;
+}
+
+/* Ensure buttons don't wrap text weirdly before disappearing */
+.btn {
+  white-space: nowrap;
 }
 </style>

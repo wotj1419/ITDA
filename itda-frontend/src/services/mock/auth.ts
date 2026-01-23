@@ -1,4 +1,4 @@
- import type { AuthService } from '../auth.interface';
+import type { AuthService } from '../auth.interface';
 import type { LoginRequest, SignupRequest, User } from '../../types';
 
 export const mockAuthService: AuthService = {
@@ -18,7 +18,7 @@ export const mockAuthService: AuthService = {
         return { user: mockUser, token: mockToken };
     },
 
-    async signup(data: SignupRequest) {
+    async signup(_data: SignupRequest) {
         await new Promise((resolve) => setTimeout(resolve, 500));
         // Auto login logic is usually handled by the store calling login() after this
         void data;

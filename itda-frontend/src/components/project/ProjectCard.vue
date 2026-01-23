@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { RouterLink } from 'vue-router'
-import { Star } from 'lucide-vue-next'
+import { Star, MoreVertical, Trash2, Pencil, Share2 } from 'lucide-vue-next'
 import type { Project } from '../../types'
 import Badge from '../common/Badge.vue'
 import AvatarGroup from '../common/AvatarGroup.vue'
@@ -16,6 +16,9 @@ interface Props {
 const props = withDefaults(defineProps<Props>(), {
   isFavorite: false,
 })
+
+const isMenuOpen = ref(false)
+const menuRef = ref<HTMLElement | null>(null)
 
 const progress = computed(() => getProjectProgress(props.project.projectId))
 
@@ -49,9 +52,42 @@ const memberAvatars = computed(() => {
   return avatars
 })
 
-defineEmits<{
+const toggleMenu = (e: Event) => {
+  e.preventDefault()
+  e.stopPropagation()
+  isMenuOpen.value = !isMenuOpen.value
+}
+
+const closeMenu = () => {
+  isMenuOpen.value = false
+}
+
+// Click outside handler
+const handleClickOutside = (e: MouseEvent) => {
+  if (menuRef.value && !menuRef.value.contains(e.target as Node)) {
+    closeMenu()
+  }
+}
+
+onMounted(() => {
+  document.addEventListener('click', handleClickOutside)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('click', handleClickOutside)
+})
+
+const emit = defineEmits<{
   (e: 'toggle-favorite', projectId: number): void
+  (e: 'delete', projectId: number): void
 }>()
+
+const handleDeleteRequest = (e: Event) => {
+  e.preventDefault()
+  e.stopPropagation()
+  closeMenu()
+  emit('delete', props.project.projectId)
+}
 </script>
 
 <template>
@@ -59,6 +95,37 @@ defineEmits<{
     :to="`/projects/${project.projectId}`"
     class="project-card"
   >
+    <!-- Favorite Icon (Top-Left) -->
+    <Star
+      v-if="project"
+      class="favorite-icon"
+      :fill="isFavorite ? 'currentColor' : 'none'"
+      :class="{ active: isFavorite }"
+      @click.prevent.stop="$emit('toggle-favorite', project.projectId)"
+    />
+
+    <!-- More Menu (Top-Right) -->
+    <div class="more-menu-container" ref="menuRef">
+      <button class="more-btn" @click="toggleMenu">
+        <MoreVertical class="icon-sm" />
+      </button>
+      <div v-if="isMenuOpen" class="dropdown-menu">
+        <button class="menu-item" @click="closeMenu">
+          <Pencil class="icon-sm" />
+          수정
+        </button>
+        <button class="menu-item" @click="closeMenu">
+          <Share2 class="icon-sm" />
+          공유
+        </button>
+        <div class="menu-divider"></div>
+        <button class="menu-item delete" @click="handleDeleteRequest">
+          <Trash2 class="icon-sm" />
+          삭제
+        </button>
+      </div>
+    </div>
+
     <!-- Thumbnail -->
     <div class="card-thumbnail">
       <img
@@ -95,7 +162,9 @@ defineEmits<{
             :style="{ width: `${progressPercent}%` }"
           ></div>
         </div>
-        <span class="progress-text">{{ progress.completed }}/{{ progress.total }}</span>
+        <span class="progress-text">
+          {{ progress.total === 0 ? '진행 전' : `${progress.completed}/${progress.total}` }}
+        </span>
       </div>
 
       <!-- Footer -->
@@ -104,15 +173,6 @@ defineEmits<{
         <span class="card-time">Edited <TimeAgo :date="project.updatedAt" /></span>
       </div>
     </div>
-
-    <!-- Favorite Icon -->
-    <Star
-      v-if="project"
-      class="favorite-icon"
-      :fill="isFavorite ? 'currentColor' : 'none'"
-      :class="{ active: isFavorite }"
-      @click.prevent.stop="$emit('toggle-favorite', project.projectId)"
-    />
   </RouterLink>
 </template>
 
@@ -198,7 +258,7 @@ defineEmits<{
 .progress-bar {
   flex: 1;
   height: 4px;
-  background: var(--rose-100);
+  background: var(--gray-100);
   border-radius: 2px;
   overflow: hidden;
 }
@@ -229,11 +289,10 @@ defineEmits<{
 }
 
 /* Favorite */
-/* Favorite */
 .favorite-icon {
   position: absolute;
   top: 0.75rem;
-  right: 0.75rem;
+  left: 0.75rem;
   width: 20px;
   height: 20px;
   color: var(--rose-400);
@@ -244,5 +303,87 @@ defineEmits<{
 
 .favorite-icon:hover {
   transform: scale(1.1);
+}
+
+/* More Menu */
+.more-menu-container {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  z-index: 20;
+}
+
+.more-btn {
+  width: 32px;
+  height: 32px;
+  background: transparent;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--rose-400); 
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.2));
+  cursor: pointer;
+  transition: all 0.2s;
+  border-radius: 8px; /* Optional slight radius for hover effect */
+}
+
+.more-btn:hover {
+  background: var(--rose-50);
+  color: var(--rose-600);
+  box-shadow: 0 2px 8px rgba(255, 133, 161, 0.2);
+}
+
+.dropdown-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 0.25rem;
+  background: white;
+  border: 1px solid var(--rose-100);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  min-width: 140px;
+  padding: 0.5rem;
+  overflow: hidden;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.menu-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  border: none;
+  background: transparent;
+  color: var(--gray-700);
+  font-size: 0.875rem;
+  text-align: left;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: background 0.2s;
+}
+
+.menu-item:hover {
+  background: var(--rose-50);
+  color: var(--gray-900);
+}
+
+.menu-item.delete {
+  color: var(--red-500);
+}
+
+.menu-item.delete:hover {
+  background: var(--red-50);
+}
+
+.menu-divider {
+  height: 1px;
+  background: var(--gray-100);
+  margin: 0.25rem 0;
 }
 </style>
