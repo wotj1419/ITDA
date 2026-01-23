@@ -1,6 +1,6 @@
 import apiClient from './client';
 import type { AuthService } from '../auth.interface';
-import type { LoginRequest, SignupRequest, User } from '../../types';
+import type { LoginRequest, SignupRequest, User, ApiResponse } from '../../types';
 
 export const apiAuthService: AuthService = {
     async login(credentials: LoginRequest) {
@@ -13,8 +13,8 @@ export const apiAuthService: AuthService = {
     },
 
     async fetchMe() {
-        const response = await apiClient.get<User>('/users/me');
-        return response.data;
+        const response = await apiClient.get<ApiResponse<User>>('/auth/me');
+        return response.data.data!;
     },
 
     logout() {

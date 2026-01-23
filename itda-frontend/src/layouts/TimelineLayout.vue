@@ -112,7 +112,7 @@ function formatDuration(seconds: number): string {
           <slot name="actions" />
           <div class="duration-badge">
             <Clock class="badge-icon" />
-            <span>{{ formatDuration(totalDuration) }} / 1:00</span>
+            <span>{{ formatDuration(totalDuration) }}</span>
           </div>
         </div>
       </header>

@@ -76,6 +76,51 @@ const mockNodesData: Record<string, Node[]> = {
             },
         },
     ],
+    '1-2': [
+        {
+            nodeId: 21,
+            type: 'VIDEO',
+            parentNodeId: undefined,
+            prompt: 'Astronaut walking on Mars surface...',
+            status: 'SUCCEEDED',
+            contentUrl: 'https://example.com/video2.mp4',
+            thumbnailUrl: 'https://images.unsplash.com/photo-1541873676-a18131494184?w=200&auto=format',
+            position: { x: 0, y: 0 },
+            title: 'Walking Sequence',
+            isConfirmed: true,
+            settings: { duration: 5 },
+        },
+    ],
+    '1-3': [
+        {
+            nodeId: 31,
+            type: 'VIDEO',
+            parentNodeId: undefined,
+            prompt: 'Discovering the ancient monolith...',
+            status: 'SUCCEEDED',
+            contentUrl: 'https://example.com/video3.mp4',
+            thumbnailUrl: 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=200&auto=format',
+            position: { x: 0, y: 0 },
+            title: 'Discovery',
+            isConfirmed: true,
+            settings: { duration: 8 },
+        },
+    ],
+    '1-4': [
+        {
+            nodeId: 41,
+            type: 'VIDEO',
+            parentNodeId: undefined,
+            prompt: 'Base countdown sequence...',
+            status: 'SUCCEEDED',
+            contentUrl: 'https://example.com/video4.mp4',
+            thumbnailUrl: 'https://images.unsplash.com/photo-1534447677768-be436bb09401?w=200&auto=format',
+            position: { x: 0, y: 0 },
+            title: 'Countdown',
+            isConfirmed: true,
+            settings: { duration: 6 },
+        },
+    ],
 };
 
 // =============================================================================

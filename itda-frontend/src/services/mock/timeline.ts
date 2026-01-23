@@ -1,48 +1,51 @@
 import type { TimelineClip } from '../../types'
 
-// 타임라인 클립 데이터 (확정된 영상들)
-const mockTimelineData: Record<number, TimelineClip[]> = {
-    1: [
-        {
-            clipId: 'clip-1',
-            nodeId: 4,
-            thumbnailUrl: 'https://images.unsplash.com/photo-1614728853975-69c960f723ad?w=300&auto=format',
-            duration: 10,
-            order: 1,
-            label: '씬 1: 사막',
-        },
-        {
-            clipId: 'clip-2',
-            nodeId: 8,
-            thumbnailUrl: 'https://images.unsplash.com/photo-1541873676-a18131494184?w=300&auto=format',
-            duration: 15,
-            order: 2,
-            label: '씬 2: 탐사',
-        },
-        {
-            clipId: 'clip-3',
-            nodeId: 12,
-            thumbnailUrl: 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=300&auto=format',
-            duration: 20,
-            order: 3,
-            label: '씬 3: 구조물',
-        },
-        {
-            clipId: 'clip-4',
-            nodeId: 16,
-            thumbnailUrl: 'https://images.unsplash.com/photo-1534447677768-be436bb09401?w=300&auto=format',
-            duration: 15,
-            order: 4,
-            label: '씬 4: 출발',
-        },
-    ],
-}
+import { fetchScenesByProjectId } from './scenes'
+import { fetchNodesBySceneId } from './nodes'
+
+// Cache (In-memory storage for reordering persistence during session)
+const mockTimelineData: Record<number, TimelineClip[]> = {}
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
 export async function fetchTimelineClips(projectId: number): Promise<TimelineClip[]> {
     await delay(300)
-    return mockTimelineData[projectId] || []
+
+    // 1. If we have cached/reordered data, might want to use it? 
+    // BUT user wants data to be "real" when videos are made. 
+    // So we should try to sync: Fetch confirmed nodes, and merge with cache if necessary.
+    // For simplicity in this mock: Always rebuild from nodes to ensure "freshness", 
+    // unless we strictly want to support reordering persistence.
+    // Let's rebuilding from sources first.
+
+    const scenes = await fetchScenesByProjectId(projectId)
+    const clips: TimelineClip[] = []
+
+    for (const scene of scenes) {
+        const nodes = await fetchNodesBySceneId(projectId, scene.sceneId)
+        const videoNodes = nodes.filter((n) => n.type === 'VIDEO' && n.isConfirmed)
+
+        videoNodes.forEach((node, index) => {
+            clips.push({
+                clipId: `${scene.sceneId}-${node.nodeId}`,
+                nodeId: node.nodeId,
+                thumbnailUrl: node.thumbnailUrl || '',
+                duration: node.settings?.duration || 4,
+                order: scene.order * 100 + index, // Default order based on scene
+                label: node.title || scene.title,
+            })
+        })
+    }
+
+    // Sort by default order
+    clips.sort((a, b) => a.order - b.order)
+
+    // Update cache (simple override for now)
+    // In a real app, we'd check if 'mockTimelineData' has custom orders and apply them.
+    // Here, let's just refresh.
+    mockTimelineData[projectId] = clips
+
+    return clips
 }
 
 export async function reorderClips(

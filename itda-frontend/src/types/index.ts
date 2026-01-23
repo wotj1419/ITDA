@@ -350,3 +350,5 @@ export interface CollabMessage {
 }
 
 
+
+export * from './scene';

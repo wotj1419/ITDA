@@ -43,7 +43,7 @@ const closeProfileMenu = (e: MouseEvent) => {
 
 const handleLogout = () => {
   authStore.logout()
-  router.push('/login')
+  router.push('/auth')
 }
 
 onMounted(() => {
@@ -78,11 +78,6 @@ const sidebarClasses = computed(() => [
       >
         <Menu class="icon-md" />
       </button>
-
-      <RouterLink to="/" class="sidebar-logo">
-        <div class="logo-icon"></div>
-        <span class="sidebar-text logo-text">AI Movie Studio</span>
-      </RouterLink>
     </div>
 
     <!-- Navigation -->
@@ -159,7 +154,7 @@ const sidebarClasses = computed(() => [
            <div class="menu-group">
              <button class="menu-item text-danger" @click="handleLogout">
                <LogOut class="icon-sm" />
-               <span>로그아웃</span>
+                <span>로그아웃</span>
              </button>
            </div>
         </div>
