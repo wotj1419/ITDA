@@ -12,10 +12,11 @@ export interface ApiResponse<T = unknown> {
 // User Types
 // ================================
 export interface User {
-  userId: number;
+  id: number;
   email: string;
   name: string;
-  profileImage?: string;
+  profileImageUrl?: string | null;
+  role: string;
 }
 
 export interface LoginRequest {
@@ -25,9 +26,8 @@ export interface LoginRequest {
 
 export interface LoginResponse {
   accessToken: string;
-  tokenType: string;
+  refreshToken: string;
   expiresIn: number;
-  user: User;
 }
 
 export interface SignupRequest {

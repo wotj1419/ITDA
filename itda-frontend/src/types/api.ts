@@ -16,11 +16,13 @@
  */
 export interface GeneratePromptRequest {
     nodeType: 'MASTER' | 'GRID' | 'SHOT' | 'VIDEO';
+    sceneOneLine?: string;
     // Master Image
     style?: string;
     timeOfDay?: string;
     mood?: string;
     objectIds?: string[];
+    objects?: string[];
     // Storyboard Grid
     layout?: string;
     shotTypes?: string[];
@@ -53,6 +55,7 @@ export interface GeneratePromptResponse {
 export interface GenerateNodeRequest {
     prompt: string;
     nodeType: 'MASTER' | 'GRID' | 'SHOT' | 'VIDEO';
+    settings?: Record<string, unknown>;
 }
 
 /**
