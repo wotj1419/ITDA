@@ -1,7 +1,7 @@
-import type { LoginRequest, SignupRequest, User } from '../types';
+import type { LoginRequest, SignupRequest, User, LoginResponse } from '../types';
 
 export interface AuthService {
-    login(credentials: LoginRequest): Promise<{ user: User; token: string }>;
+    login(credentials: LoginRequest): Promise<LoginResponse>;
     signup(data: SignupRequest): Promise<void>;
     fetchMe(): Promise<User>;
     logout(): void;
