@@ -306,19 +306,19 @@ export function generateMockSceneNodes(sceneId: string): MockSceneNodesResult {
         createShot(shotCId, grid3Id, 0, '투샷', JobStatus.SUCCEEDED, 1),
 
         // Video A1 under Shot A (Confirmed ✓)
-        createVideo(videoA1Id, shotAId, 'zoomIn', 5, JobStatus.SUCCEEDED, true),
+        createVideo(videoA1Id, shotAId, 'lowZoomIn', 5, JobStatus.SUCCEEDED, true),
 
         // Video B1 under Shot B (Succeeded, not confirmed)
-        createVideo(videoB1Id, shotBId, 'panRight', 4, JobStatus.SUCCEEDED, false),
+        createVideo(videoB1Id, shotBId, 'panLeftToRight', 4, JobStatus.SUCCEEDED, false),
 
         // Video B2 under Shot B (Running)
-        createVideo(videoB2Id, shotBId, 'static', 3, JobStatus.RUNNING, false, null, 2),
+        createVideo(videoB2Id, shotBId, 'staticCamera', 3, JobStatus.RUNNING, false, null, 2),
 
         // Video C1 under Shot C (Failed)
         createVideo(videoC1Id, shotCId, 'tiltUp', 5, JobStatus.FAILED, false),
 
         // Transition Video (C → A)
-        createVideo(transitionId, shotCId, 'panLeft', 3, JobStatus.SUCCEEDED, false, shotAId, 1),
+        createVideo(transitionId, shotCId, 'panLeftToRight', 3, JobStatus.SUCCEEDED, false, shotAId, 1),
     ];
 
     // Create edges
@@ -377,7 +377,7 @@ export function generateSimpleMockNodes(sceneId: string): MockSceneNodesResult {
         createMasterImage(masterId, headerId, sceneId, true, JobStatus.SUCCEEDED),
         createStoryboardGrid(gridId, masterId, '2x2', JobStatus.SUCCEEDED),
         createShot(shotId, gridId, 0, '와이드샷', JobStatus.SUCCEEDED),
-        createVideo(videoId, shotId, 'static', 5, JobStatus.SUCCEEDED, true),
+        createVideo(videoId, shotId, 'staticCamera', 5, JobStatus.SUCCEEDED, true),
     ];
 
     const edges: Edge[] = [

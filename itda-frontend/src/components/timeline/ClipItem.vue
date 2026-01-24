@@ -20,7 +20,7 @@ const emit = defineEmits<{
   <div
     class="clip-item"
     :draggable="draggable"
-    :style="{ width: `${Math.max(120, clip.duration * 12)}px` }"
+    :style="{ width: `${clip.duration * 20}px` }"
   >
     <img :src="clip.thumbnailUrl" :alt="clip.label" class="clip-thumbnail" />
     <div class="clip-info">

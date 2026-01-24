@@ -1,0 +1,9 @@
+
+> ams@0.0.0 build
+> vue-tsc -b && vite build
+
+src/services/mock/auth.ts(21,18): error TS6133: 'data' is declared but its value is never read.
+src/stores/sceneNode.ts(88,32): error TS2339: Property 'width' does not exist on type 'Styles | StyleFunc<GraphNode<AnyNodeData, any, string>>'.
+  Property 'width' does not exist on type 'StyleFunc<GraphNode<AnyNodeData, any, string>>'.
+src/stores/sceneNode.ts(89,33): error TS2339: Property 'height' does not exist on type 'Styles | StyleFunc<GraphNode<AnyNodeData, any, string>>'.
+  Property 'height' does not exist on type 'StyleFunc<GraphNode<AnyNodeData, any, string>>'.

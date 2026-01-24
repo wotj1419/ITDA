@@ -35,3 +35,55 @@ export async function getProjectProgress(projectId: number): Promise<{ completed
     const response = await apiClient.get<ApiResponse<{ completed: number; total: number }>>(`/projects/${projectId}/progress`)
     return response.data.data || { completed: 0, total: 0 }
 }
+
+// ============================================================================
+// Members
+// ============================================================================
+
+export interface ProjectMember {
+    memberId: number
+    userId: number
+    name: string
+    role: 'OWNER' | 'EDITOR' | 'VIEWER'
+}
+
+export async function fetchProjectMembers(projectId: number): Promise<ProjectMember[]> {
+    const response = await apiClient.get<ApiResponse<ProjectMember[]>>(`/projects/${projectId}/members`)
+    return response.data.data || []
+}
+
+export async function inviteMember(projectId: number, email: string): Promise<void> {
+    await apiClient.post(`/projects/${projectId}/members`, { email })
+}
+
+export async function updateMemberRole(projectId: number, memberId: number, role: string): Promise<void> {
+    await apiClient.patch(`/projects/${projectId}/members/${memberId}`, { role })
+}
+
+// ============================================================================
+// Object Sheets
+// ============================================================================
+
+export interface ObjectSheet {
+    objectId: number
+    name: string
+    description: string
+    imageUrl?: string
+}
+
+export async function fetchProjectObjects(projectId: number): Promise<ObjectSheet[]> {
+    const response = await apiClient.get<ApiResponse<ObjectSheet[]>>(`/projects/${projectId}/objects`)
+    return response.data.data || []
+}
+
+export async function createProjectObject(projectId: number, data: { name: string; description: string }): Promise<ObjectSheet> {
+    const response = await apiClient.post<ApiResponse<ObjectSheet>>(`/projects/${projectId}/objects`, data)
+    if (!response.data.data) throw new Error('Failed to create object')
+    return response.data.data
+}
+
+export async function fetchObjectById(objectId: number): Promise<ObjectSheet> {
+    const response = await apiClient.get<ApiResponse<ObjectSheet>>(`/objects/${objectId}`)
+    if (!response.data.data) throw new Error('Object not found')
+    return response.data.data
+}

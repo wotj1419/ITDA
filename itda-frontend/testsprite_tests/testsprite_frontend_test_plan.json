@@ -1,515 +1,436 @@
 [
   {
     "id": "TC001",
-    "title": "Successful user login with valid credentials",
-    "description": "Verify that a user can successfully log in using valid username/email and password.",
+    "title": "User login success with valid credentials",
+    "description": "Verify that the user can successfully log in using valid username and password credentials.",
     "category": "functional",
     "priority": "High",
     "steps": [
       {
         "type": "action",
-        "description": "Navigate to login page"
+        "description": "Navigate to the login page."
       },
       {
         "type": "action",
-        "description": "Enter valid username/email"
+        "description": "Enter valid username and password."
       },
       {
         "type": "action",
-        "description": "Enter valid password"
-      },
-      {
-        "type": "action",
-        "description": "Click the login button"
+        "description": "Click the login button."
       },
       {
         "type": "assertion",
-        "description": "Check user is successfully authenticated and redirected to dashboard"
+        "description": "Verify that the login is successful and dashboard is displayed."
       }
     ]
   },
   {
     "id": "TC002",
-    "title": "Login failure with invalid credentials",
-    "description": "Verify that login fails when invalid username/email or password is provided and error message is displayed.",
-    "category": "error handling",
+    "title": "User registration success with valid data",
+    "description": "Verify that a new user can register successfully with valid registration data.",
+    "category": "functional",
     "priority": "High",
     "steps": [
       {
         "type": "action",
-        "description": "Navigate to login page"
+        "description": "Navigate to the registration page."
       },
       {
         "type": "action",
-        "description": "Enter invalid username/email"
+        "description": "Enter valid registration details."
       },
       {
         "type": "action",
-        "description": "Enter invalid password"
-      },
-      {
-        "type": "action",
-        "description": "Click the login button"
+        "description": "Submit the registration form."
       },
       {
         "type": "assertion",
-        "description": "Verify login failure and error notification is shown"
+        "description": "Verify that the registration completes and user is redirected to the dashboard or login page."
       }
     ]
   },
   {
     "id": "TC003",
-    "title": "User registration success",
-    "description": "Validate new users can register successfully using a valid registration form.",
+    "title": "Dashboard loads and displays user projects",
+    "description": "Verify that after login, the dashboard loads and correctly displays the user projects with accessible links.",
     "category": "functional",
     "priority": "High",
     "steps": [
       {
         "type": "action",
-        "description": "Navigate to registration page"
+        "description": "Log in successfully."
       },
       {
         "type": "action",
-        "description": "Fill registration form with valid data"
-      },
-      {
-        "type": "action",
-        "description": "Submit registration form"
+        "description": "Wait for dashboard page to load."
       },
       {
         "type": "assertion",
-        "description": "Confirm new user is registered and redirected or informed correctly"
+        "description": "Verify the projects list is displayed and contains valid project items."
+      },
+      {
+        "type": "action",
+        "description": "Click on a project item."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify navigation to the project detail page."
       }
     ]
   },
   {
     "id": "TC004",
-    "title": "Dashboard loads projects for authenticated user",
-    "description": "Verify the dashboard displays a list of projects belonging to the logged-in user.",
+    "title": "Project detail page loads project and scenes with loading indication",
+    "description": "Verify that the project detail page asynchronously loads both project data and associated scenes with loading spinners or status displayed during fetch.",
     "category": "functional",
     "priority": "High",
     "steps": [
       {
         "type": "action",
-        "description": "Log in with valid credentials"
-      },
-      {
-        "type": "action",
-        "description": "Navigate to dashboard page"
+        "description": "Navigate to a project detail page with valid projectId."
       },
       {
         "type": "assertion",
-        "description": "Verify projects list is displayed with correct project titles and statuses"
+        "description": "Verify loading spinner or status indicator appears while project and scenes data are being fetched."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify project and scenes data loaded successfully and displayed."
       }
     ]
   },
   {
     "id": "TC005",
-    "title": "Project detail page loads project and scene data asynchronously",
-    "description": "Verify that upon loading the project detail page, project and scenes data load asynchronously with loading indicators visible.",
-    "category": "functional",
-    "priority": "High",
-    "steps": [
-      {
-        "type": "action",
-        "description": "Navigate to a project detail page with valid projectId and sceneId in URL"
-      },
-      {
-        "type": "assertion",
-        "description": "Confirm loading spinner or status indicator is shown during data fetch"
-      },
-      {
-        "type": "assertion",
-        "description": "Verify project and scene data loaded successfully and displayed"
-      }
-    ]
-  },
-  {
-    "id": "TC006",
-    "title": "Validate URL parameters projectId and sceneId parsing",
-    "description": "Verify that URL parameters 'projectId' and 'sceneId' are correctly parsed on the project detail and scene editor pages.",
-    "category": "functional",
-    "priority": "Medium",
-    "steps": [
-      {
-        "type": "action",
-        "description": "Navigate to project detail page with various valid and invalid projectId and sceneId URL parameters"
-      },
-      {
-        "type": "assertion",
-        "description": "Verify parameters are parsed correctly for valid data"
-      },
-      {
-        "type": "assertion",
-        "description": "Verify appropriate error or fallback UI is shown for invalid or missing parameters"
-      }
-    ]
-  },
-  {
-    "id": "TC007",
-    "title": "Handle failure in loadSceneNodes API gracefully",
-    "description": "Confirm that if nodeStore.loadSceneNodes API call fails, the UI shows appropriate error feedback and remains stable.",
+    "title": "Error handling when nodeStore.loadSceneNodes API fails",
+    "description": "Validate that when loading scene nodes fails due to API error, the UI displays appropriate error messaging and allows retry or recovery.",
     "category": "error handling",
     "priority": "High",
     "steps": [
       {
         "type": "action",
-        "description": "Simulate failure of loadSceneNodes API while opening scene editor"
+        "description": "Simulate failure of nodeStore.loadSceneNodes API call."
+      },
+      {
+        "type": "action",
+        "description": "Navigate to scene editor page."
       },
       {
         "type": "assertion",
-        "description": "Verify error message or UI indication is shown to user"
+        "description": "Verify the UI shows a meaningful error message indicating the failure."
       },
       {
         "type": "assertion",
-        "description": "Ensure application does not crash or freeze"
+        "description": "Verify retry mechanism or error dismissal is available."
+      }
+    ]
+  },
+  {
+    "id": "TC006",
+    "title": "URL parameters projectId and sceneId parsed correctly on page load",
+    "description": "Confirm that the application correctly parses and uses projectId and sceneId from the URL parameters when loading the project and scene pages.",
+    "category": "functional",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Manually construct and load URL with valid projectId and sceneId parameters."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify that the corresponding project and scene data are fetched and displayed correctly."
+      }
+    ]
+  },
+  {
+    "id": "TC007",
+    "title": "Node selection and deselection updates states properly",
+    "description": "Verify that selecting and deselecting nodes on the scene editor updates the internal node selection state accordingly and triggers relevant events.",
+    "category": "functional",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Open scene editor and select a node by clicking it."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the node appears selected and state reflects selection."
+      },
+      {
+        "type": "action",
+        "description": "Click the selected node again or elsewhere to deselect."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the node is deselected and state updates accordingly."
       }
     ]
   },
   {
     "id": "TC008",
-    "title": "Node selection and deselection updates state correctly",
-    "description": "Verify that selecting and deselecting nodes in the scene editor updates the selection state accordingly.",
+    "title": "Keyboard shortcuts Delete and Backspace delete nodes only when input not focused",
+    "description": "Verify that pressing Delete or Backspace keys deletes selected nodes only if input fields are not focused to prevent accidental deletion during text editing.",
     "category": "functional",
     "priority": "High",
     "steps": [
       {
         "type": "action",
-        "description": "Open scene editor with multiple nodes present"
-      },
-      {
-        "type": "action",
-        "description": "Select a node by clicking it"
+        "description": "Select one or more nodes in the scene editor."
       },
       {
         "type": "assertion",
-        "description": "Verify node is marked as selected in UI and state"
+        "description": "Ensure no input field is focused."
       },
       {
         "type": "action",
-        "description": "Click outside any node or perform deselection action"
+        "description": "Press Delete key."
       },
       {
         "type": "assertion",
-        "description": "Verify selection state is cleared in UI and state"
+        "description": "Verify selected nodes are deleted."
+      },
+      {
+        "type": "action",
+        "description": "Focus an input field inside scene editor."
+      },
+      {
+        "type": "action",
+        "description": "Press Delete or Backspace key."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify nodes are not deleted."
       }
     ]
   },
   {
     "id": "TC009",
-    "title": "Delete nodes with Delete and Backspace keys only when input not focused",
-    "description": "Verify keyboard shortcuts Delete and Backspace delete selected nodes only when no input or text field is focused.",
+    "title": "Ctrl+Z undo reverts last node editing action properly",
+    "description": "Check that pressing Ctrl+Z correctly reverts the last changes made to nodes, integrating with the nodeStore history stack.",
     "category": "functional",
     "priority": "High",
     "steps": [
       {
         "type": "action",
-        "description": "Focus is not in any input or text field on scene editor"
+        "description": "Modify or delete a node on the scene editor."
       },
       {
         "type": "action",
-        "description": "Select one or more nodes"
-      },
-      {
-        "type": "action",
-        "description": "Press Delete key"
+        "description": "Press Ctrl+Z keyboard shortcut."
       },
       {
         "type": "assertion",
-        "description": "Verify selected node(s) are deleted"
-      },
-      {
-        "type": "action",
-        "description": "Focus on a text input field"
-      },
-      {
-        "type": "action",
-        "description": "Press Backspace key"
-      },
-      {
-        "type": "assertion",
-        "description": "Verify currently focused input is affected but nodes are not deleted"
+        "description": "Verify that the last action is undone and node state is restored appropriately."
       }
     ]
   },
   {
     "id": "TC010",
-    "title": "Undo node actions using Ctrl+Z keyboard shortcut",
-    "description": "Test that Ctrl+Z keyboard shortcut correctly triggers undo functionality integrated with nodeStore history stack.",
+    "title": "Auto-layout rearranges nodes correctly without layout corruption",
+    "description": "Verify that invoking the auto-layout feature recalculates node positions and visually arranges nodes without corrupting graph structure or breaking links.",
     "category": "functional",
-    "priority": "High",
+    "priority": "Medium",
     "steps": [
       {
         "type": "action",
-        "description": "Perform multiple node actions such as node deletion and repositioning"
+        "description": "Add multiple nodes to the scene in disorder."
       },
       {
         "type": "action",
-        "description": "Press Ctrl+Z to undo last change"
+        "description": "Click the auto-layout button."
       },
       {
         "type": "assertion",
-        "description": "Verify last node action is reversed successfully"
-      },
-      {
-        "type": "action",
-        "description": "Press Ctrl+Z repeatedly to undo multiple actions"
+        "description": "Verify nodes are repositioned neatly."
       },
       {
         "type": "assertion",
-        "description": "Verify node state reverts correctly for each undo operation"
+        "description": "Verify no links or graph connections are lost or corrupted."
       }
     ]
   },
   {
     "id": "TC011",
-    "title": "Auto-layout rearranges nodes without corrupting graph",
-    "description": "Verify that the auto-layout feature arranges nodes logically and maintains graph integrity without corruption.",
+    "title": "Real-time collaboration room join establishes socket connection",
+    "description": "Confirm that when a user opens the scene editor, the collabStore.joinRoom method correctly initiates a socket connection and joins the collaboration room for real-time updates.",
     "category": "functional",
-    "priority": "Medium",
+    "priority": "High",
     "steps": [
       {
         "type": "action",
-        "description": "Arrange nodes manually in a complex graph with overlaps"
-      },
-      {
-        "type": "action",
-        "description": "Click the auto-layout button to trigger layout rearrangement"
+        "description": "Open scene editor page with an active project and scene."
       },
       {
         "type": "assertion",
-        "description": "Verify nodes repositioned to non-overlapping layout"
-      },
-      {
-        "type": "assertion",
-        "description": "Verify graph connectivity and relationships remain consistent"
+        "description": "Verify socket connection is established and user has joined the collaboration room."
       }
     ]
   },
   {
     "id": "TC012",
-    "title": "Real-time collaboration - socket connection established on scene editor mount",
-    "description": "Validate collabStore.joinRoom initiates socket connection when the scene editor component is mounted.",
+    "title": "Real-time collaboration room leave disconnects socket cleanly",
+    "description": "Verify that when the scene editor is closed or user leaves the page, collabStore.leaveRoom disconnects the socket properly to avoid zombie connections.",
     "category": "functional",
     "priority": "High",
     "steps": [
       {
         "type": "action",
-        "description": "Open scene editor page"
+        "description": "Close or navigate away from the scene editor page."
       },
       {
         "type": "assertion",
-        "description": "Verify socket connection is established to join collaboration room"
+        "description": "Verify that the socket connection is disconnected properly without residual open connections."
       }
     ]
   },
   {
     "id": "TC013",
-    "title": "Real-time collaboration - socket disconnects cleanly on scene editor unmount",
-    "description": "Ensure collabStore.leaveRoom disconnects socket properly when scene editor is unmounted to prevent zombie connections.",
+    "title": "Real-time cursor and state updates reflect other user's activity instantly",
+    "description": "Verify that when multiple users are collaborating, cursor positions and node state changes from other remote users appear instantly and correctly on the current user's scene editor.",
     "category": "functional",
     "priority": "High",
     "steps": [
       {
         "type": "action",
-        "description": "Open scene editor page and confirm socket connection is active"
+        "description": "User A and User B both open the same scene editor."
       },
       {
         "type": "action",
-        "description": "Navigate away from scene editor page or close it"
+        "description": "User A moves cursor or edits nodes."
       },
       {
         "type": "assertion",
-        "description": "Verify socket connection is terminated cleanly"
+        "description": "Verify User B sees User A's cursor movement and node changes in real-time without delay."
       }
     ]
   },
   {
     "id": "TC014",
-    "title": "Real-time updates reflect other users' cursors and state changes instantly",
-    "description": "Verify that cursor positions and node state changes made by other users in the collaboration room are updated in real-time.",
+    "title": "Timeline clips recompute immediately after confirmedVideos data changes",
+    "description": "Check that when confirmedVideos data is updated, the timeline clips data recomputes immediately with updated durations and thumbnails.",
     "category": "functional",
     "priority": "High",
     "steps": [
       {
         "type": "action",
-        "description": "Join collaboration room with two users in scene editor"
-      },
-      {
-        "type": "action",
-        "description": "User A moves cursor or modifies node state"
+        "description": "Modify or update confirmedVideos data in timeline store."
       },
       {
         "type": "assertion",
-        "description": "User B sees cursor position and updates reflect instantly"
+        "description": "Verify timeline clips are recalculated and UI updates to reflect the changes."
       }
     ]
   },
   {
     "id": "TC015",
-    "title": "Timeline clips recompute immediately on changes to confirmedVideos data",
-    "description": "Verify that timelineClips are recalculated instantly when the underlying video clip data changes.",
+    "title": "Timeline totalDuration sums clip durations accurately",
+    "description": "Verify that the totalDuration of timeline clips sums all clip durations correctly and gracefully handles missing thumbnail or version info without rendering errors.",
     "category": "functional",
     "priority": "Medium",
     "steps": [
       {
         "type": "action",
-        "description": "Open timeline view"
-      },
-      {
-        "type": "action",
-        "description": "Update confirmedVideos data (e.g., add, remove, modify clips)"
+        "description": "Provide timeline clips with varying durations including some with missing thumbnails or version data."
       },
       {
         "type": "assertion",
-        "description": "Verify timeline clips recompute instantaneously and display updated info"
+        "description": "Verify totalDuration is accurate and no UI errors occur due to missing data."
       }
     ]
   },
   {
     "id": "TC016",
-    "title": "Total duration sums clip durations correctly and handles missing metadata gracefully",
-    "description": "Confirm totalDuration calculation sums clip durations correctly and does not produce rendering errors when thumbnail or version info is missing.",
-    "category": "functional",
+    "title": "UI elements like auto-layout button maintain position after drag-and-drop",
+    "description": "Confirm that UI elements such as the auto-layout button retain their placement and do not overlap or move unexpectedly after drag-and-drop node operations on the scene editor canvas.",
+    "category": "ui",
     "priority": "Medium",
     "steps": [
       {
         "type": "action",
-        "description": "Open timeline view with clips including some missing thumbnail or version metadata"
+        "description": "Drag and drop multiple nodes around the scene editor."
       },
       {
         "type": "assertion",
-        "description": "Verify totalDuration is accurately summed from clip durations"
-      },
-      {
-        "type": "assertion",
-        "description": "Verify UI renders without errors despite missing metadata"
+        "description": "Verify that the auto-layout button remains in its correct position and is accessible."
       }
     ]
   },
   {
     "id": "TC017",
-    "title": "Auto-layout button maintains consistent position after drag-and-drop",
-    "description": "Verify the auto-layout button stays in the correct UI position after performing drag-and-drop operations on the scene editor canvas.",
+    "title": "Responsive layout adapts correctly on various screen sizes",
+    "description": "Test that the UI layout including canvas, panels, buttons, and menus adapts fluidly to smaller and larger screen sizes without overlap, distortion, or hidden controls.",
     "category": "ui",
-    "priority": "Low",
+    "priority": "High",
     "steps": [
       {
         "type": "action",
-        "description": "Open scene editor"
-      },
-      {
-        "type": "action",
-        "description": "Drag and drop nodes around the canvas"
+        "description": "Resize browser window or simulate multiple device screen sizes."
       },
       {
         "type": "assertion",
-        "description": "Check that the auto-layout button remains fixed in its designated UI location and visible"
+        "description": "Verify no overlapping panels or controls."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the canvas and UI scale appropriately and remain fully functional."
       }
     ]
   },
   {
     "id": "TC018",
-    "title": "Responsive UI layout does not overlap or distort on screen resize",
-    "description": "Verify that UI elements including canvas and panels adapt responsively to different screen sizes without overlap or distortion.",
-    "category": "ui",
+    "title": "User profile viewing and editing saves changes successfully",
+    "description": "Confirm that user can view their profile information, make edits, and save updates successfully, with changes persisting after reload.",
+    "category": "functional",
     "priority": "High",
     "steps": [
       {
         "type": "action",
-        "description": "Open any main page such as dashboard or scene editor"
-      },
-      {
-        "type": "action",
-        "description": "Resize browser window from large to smallest supported viewport"
+        "description": "Navigate to user profile page."
       },
       {
         "type": "assertion",
-        "description": "Verify no UI element overlaps another or distorts, and all content remains accessible"
+        "description": "Verify profile fields are displayed correctly."
+      },
+      {
+        "type": "action",
+        "description": "Edit profile information."
+      },
+      {
+        "type": "action",
+        "description": "Save changes."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify changes are saved and reflected in the profile view."
+      },
+      {
+        "type": "action",
+        "description": "Refresh or reopen profile page."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify updated information persists."
       }
     ]
   },
   {
     "id": "TC019",
-    "title": "User can view their profile information correctly",
-    "description": "Verify that the user profile page displays the correct user information fetched from backend.",
-    "category": "functional",
-    "priority": "Medium",
-    "steps": [
-      {
-        "type": "action",
-        "description": "Navigate to user profile page after login"
-      },
-      {
-        "type": "assertion",
-        "description": "Verify user details such as name, email and other profile fields are displayed correctly"
-      }
-    ]
-  },
-  {
-    "id": "TC020",
-    "title": "User can edit and save profile updates successfully",
-    "description": "Verify that profile information can be edited and saved, and changes persist after reload.",
-    "category": "functional",
-    "priority": "Medium",
-    "steps": [
-      {
-        "type": "action",
-        "description": "Navigate to profile edit page"
-      },
-      {
-        "type": "action",
-        "description": "Modify one or more profile fields"
-      },
-      {
-        "type": "action",
-        "description": "Save profile changes"
-      },
-      {
-        "type": "assertion",
-        "description": "Confirm save is successful and new data is reflected on profile page and after refresh"
-      }
-    ]
-  },
-  {
-    "id": "TC021",
-    "title": "Robust asynchronous data loading using Promise.all",
-    "description": "Validate that project and scene data APIs are requested and handled in parallel with Promise.all and results processed in order.",
+    "title": "Robust asynchronous data loading with Promise.all for project and scenes",
+    "description": "Validate that project and scenes data are loaded asynchronously using Promise.all and the operations resolve in intended sequence with correct data mapping.",
     "category": "functional",
     "priority": "High",
     "steps": [
       {
         "type": "action",
-        "description": "Open project detail page triggering loadProject and loadScenes API calls"
+        "description": "Load project detail page for a valid project."
       },
       {
         "type": "assertion",
-        "description": "Verify both API calls are requested concurrently and resolved successfully in expected sequence"
+        "description": "Verify Promise.all resolves successfully for loadProject and loadScenes APIs."
       },
       {
         "type": "assertion",
-        "description": "Verify UI updates only after all data is loaded"
-      }
-    ]
-  },
-  {
-    "id": "TC022",
-    "title": "Logout and cleanup socket connection on page exit",
-    "description": "Verify user logout triggers socket disconnection and cleans up collaboration resources to avoid zombie connections.",
-    "category": "functional",
-    "priority": "High",
-    "steps": [
-      {
-        "type": "action",
-        "description": "Log in and join collaboration room"
-      },
-      {
-        "type": "action",
-        "description": "Logout or navigate away from scene editor"
-      },
-      {
-        "type": "assertion",
-        "description": "Verify socket is disconnected cleanly and resources freed"
+        "description": "Confirm UI displays data only after both API calls complete."
       }
     ]
   }

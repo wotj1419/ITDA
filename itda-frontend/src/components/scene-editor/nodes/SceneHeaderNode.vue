@@ -8,10 +8,10 @@
 import { computed } from 'vue';
 import { Handle, Position } from '@vue-flow/core';
 import { NodeResizer } from '@vue-flow/node-resizer';
-import { useSceneNodeStore } from '../../../stores/sceneNode';
 import { NODE_HEIGHTS, NODE_WIDTHS } from '../../../types/node';
 import type { SceneHeaderNodeData } from '../../../types/node';
-import { BookOpen } from 'lucide-vue-next';
+import { BookOpen, Plus } from 'lucide-vue-next';
+import { useSceneNodeStore } from '../../../stores/sceneNode';
 
 // =============================================================================
 // Props
@@ -24,8 +24,12 @@ interface Props {
 }
 
 const props = defineProps<Props>();
-const store = useSceneNodeStore();
 
+const emit = defineEmits<{
+  (e: 'add-child'): void;
+}>();
+
+const store = useSceneNodeStore();
 const nodeStyle = { '--node-resizer-color': 'var(--rose-500, #FF85A1)' } as Record<string, string>;
 
 const minWidth = NODE_WIDTHS[props.data.type] ?? 200;
@@ -45,6 +49,11 @@ const truncatedDescription = computed(() => {
   const desc = props.data.description || '';
   return desc.length > 80 ? `${desc.substring(0, 80)}...` : desc;
 });
+
+function addMasterImage(event: Event) {
+  event.stopPropagation();
+  emit('add-child');
+}
 </script>
 
 <template>
@@ -81,5 +90,13 @@ const truncatedDescription = computed(() => {
       :position="Position.Bottom"
       class="node-glass__handle"
     />
+    <!-- Header -->
+    <button
+      class="node-glass__add-btn"
+      title="마스터 이미지 추가"
+      @click="addMasterImage"
+    >
+      <Plus :size="14" />
+    </button>
   </div>
 </template>

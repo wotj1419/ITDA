@@ -51,7 +51,7 @@ async function handleLogin() {
     uiStore.showToast({
       type: 'success',
       title: '로그인 성공',
-      message: '환영합니다!',
+      message: '환영합니다.',
     })
     router.push('/dashboard')
   } catch (error) {
@@ -103,7 +103,7 @@ async function handleRegister() {
     uiStore.showToast({
       type: 'error',
       title: '회원가입 실패',
-      message: '다시 시도해주세요.',
+      message: '회원가입에 실패했습니다.',
     })
   } finally {
     isLoading.value = false
@@ -131,6 +131,7 @@ async function handleRegister() {
         <div class="tabs">
           <button
             class="tab"
+            data-testid="auth-tab-login"
             :class="{ active: activeTab === 'login' }"
             @click="activeTab = 'login'"
           >
@@ -138,6 +139,7 @@ async function handleRegister() {
           </button>
           <button
             class="tab"
+            data-testid="auth-tab-register"
             :class="{ active: activeTab === 'register' }"
             @click="activeTab = 'register'"
           >
@@ -169,7 +171,7 @@ async function handleRegister() {
                 v-model="loginForm.password"
                 :type="showLoginPassword ? 'text' : 'password'"
                 class="form-input with-icon with-right-icon"
-                placeholder="••••••••"
+                placeholder="비밀번호"
                 required
               />
               <button
@@ -190,7 +192,12 @@ async function handleRegister() {
             <a href="#" class="forgot-link">비밀번호 찾기</a>
           </div>
 
-          <button type="submit" class="btn btn-primary w-full btn-lg" :disabled="isLoading">
+          <button
+            type="submit"
+            class="btn btn-primary w-full btn-lg"
+            :disabled="isLoading"
+            data-testid="auth-submit-login"
+          >
             {{ isLoading ? '로그인 중...' : '로그인' }}
             <ArrowRight v-if="!isLoading" class="w-5 h-5" />
           </button>
@@ -204,7 +211,7 @@ async function handleRegister() {
               v-model="registerForm.name"
               type="text"
               class="form-input"
-              placeholder="홍길동"
+              placeholder="이름을 입력하세요"
               required
             />
           </div>
@@ -253,11 +260,11 @@ async function handleRegister() {
               type="password"
               class="form-input"
               :class="{ 'input-error': registerForm.passwordConfirm && !passwordsMatch }"
-              placeholder="비밀번호 재입력"
+              placeholder="비밀번호 다시 입력"
               required
             />
             <div v-if="registerForm.passwordConfirm && !passwordsMatch" class="form-error">
-              비밀번호가 일치하지 않습니다
+              비밀번호가 일치하지 않습니다.
             </div>
           </div>
 
@@ -271,7 +278,12 @@ async function handleRegister() {
             </label>
           </div>
 
-          <button type="submit" class="btn btn-primary w-full btn-lg" :disabled="isLoading">
+          <button
+            type="submit"
+            class="btn btn-primary w-full btn-lg"
+            :disabled="isLoading"
+            data-testid="auth-submit-register"
+          >
             {{ isLoading ? '가입 중...' : '회원가입' }}
             <ArrowRight v-if="!isLoading" class="w-5 h-5" />
           </button>

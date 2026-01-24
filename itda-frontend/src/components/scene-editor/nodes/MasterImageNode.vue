@@ -9,8 +9,8 @@ import { computed } from 'vue';
 import { Handle, Position } from '@vue-flow/core';
 import { NodeResizer } from '@vue-flow/node-resizer';
 import { useSceneNodeStore } from '../../../stores/sceneNode';
-import { JobStatus, NODE_HEIGHTS, NODE_WIDTHS } from '../../../types/node';
-import type { MasterImageNodeData } from '../../../types/node';
+import { JobStatus, NODE_HEIGHTS, NODE_WIDTHS, NodeType } from '../../../types/node';
+import type { MasterImageNodeData, SceneHeaderNodeData } from '../../../types/node';
 import { 
   Film, 
   Star, 
@@ -53,6 +53,7 @@ const nodeClasses = computed(() => [
   {
     'node-glass--selected': props.selected,
     'node-glass--active': props.data.isActive,
+    'node-glass--inactive': !props.data.isActive,
     [`node-glass--${statusKey.value}`]: true,
   },
 ]);
@@ -83,6 +84,15 @@ const statusText = computed(() => {
 });
 
 const isRunning = computed(() => props.data.jobStatus === JobStatus.RUNNING);
+const sceneTitle = computed(() => {
+  const parentId = props.data.parentNodeId;
+  if (!parentId) return '';
+  const parent = store.nodes.find((node) => node.id === parentId);
+  if (parent?.data?.type === NodeType.SCENE_HEADER) {
+    return (parent.data as SceneHeaderNodeData).title;
+  }
+  return '';
+});
 
 // =============================================================================
 // Handlers
@@ -91,6 +101,11 @@ const isRunning = computed(() => props.data.jobStatus === JobStatus.RUNNING);
 function handleAddChild(event: Event): void {
   event.stopPropagation();
   emit('add-child');
+}
+
+function handleToggleCollapse(event: Event): void {
+  event.stopPropagation();
+  store.toggleCollapse(props.id);
 }
 </script>
 
@@ -122,7 +137,10 @@ function handleAddChild(event: Event): void {
         <Film class="node-glass__icon" />
         <div class="node-glass__title-group">
           <span class="node-glass__title">
-            마스터 이미지 v{{ data.version }}
+            마스터 이미지 {{ data.version }}
+          </span>
+          <span v-if="sceneTitle" class="node-glass__subtitle">
+            {{ sceneTitle }}
           </span>
         </div>
       </div>
@@ -163,8 +181,21 @@ function handleAddChild(event: Event): void {
       class="node-glass__handle"
     />
 
-    <!-- Add Button (hover) -->
+    <!-- Add/Collapse Button (hover) -->
     <button
+      v-if="!data.isActive"
+      class="node-glass__collapse-btn"
+      @click="handleToggleCollapse"
+    >
+      <span
+        class="node-glass__collapse-icon"
+        :class="{ 'node-glass__collapse-icon--expanded': !data.isCollapsed }"
+      >
+        ^
+      </span>
+    </button>
+    <button
+      v-else
       class="node-glass__add-btn"
       title="그리드 추가"
       @click="handleAddChild"

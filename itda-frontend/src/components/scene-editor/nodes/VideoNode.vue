@@ -52,11 +52,14 @@ const statusKey = computed(() => {
   return props.data.jobStatus;
 });
 
+const isUnderInactiveMaster = computed(() => store.isUnderInactiveMaster(props.id));
+
 const nodeClasses = computed(() => [
   'node-glass',
   'node-glass--video',
   {
     'node-glass--selected': props.selected,
+    'node-glass--inactive': isUnderInactiveMaster.value,
     'node-glass--confirmed': props.data.isConfirmed,
     [`node-glass--${statusKey.value}`]: !props.data.isConfirmed,
   },
@@ -88,15 +91,18 @@ const isRunning = computed(() => props.data.jobStatus === JobStatus.RUNNING);
 /** Camera motion labels in Korean */
 const cameraMotionLabel = computed(() => {
   const labels: Record<string, string> = {
-    zoomIn: '줌인',
+    lowZoomIn: '로우 줌인',
     zoomOut: '줌아웃',
-    panLeft: '팬 좌',
-    panRight: '팬 우',
+    panLeftToRight: '좌->우 팬',
     tiltUp: '틸트 업',
-    tiltDown: '틸트 다운',
-    static: '정지',
+    staticCamera: '정지 카메라',
+    zoomIn: '로우 줌인',
+    panLeft: '좌->우 팬',
+    panRight: '좌->우 팬',
+    tiltDown: '틸트 업',
+    static: '정지 카메라',
   };
-  return labels[props.data.cameraMotion] ?? '정지';
+  return labels[props.data.cameraMotion] ?? '정지 카메라';
 });
 
 /** Transition video has endShotId */
@@ -153,7 +159,7 @@ function handleConfirm(event: Event): void {
         <Video class="node-glass__icon" />
         <div class="node-glass__title-group">
           <span class="node-glass__title">
-            영상 v{{ data.version }}
+            영상 {{ data.version }}
             <span v-if="isTransition" class="node-glass__tag">트랜지션</span>
           </span>
           <span class="node-glass__subtitle">

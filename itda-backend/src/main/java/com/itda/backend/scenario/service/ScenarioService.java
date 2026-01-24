@@ -123,32 +123,16 @@ public class ScenarioService {
         ensurePromptApproved(record);
         ensurePlotApproved(record);
 
-        String aiPrompt = buildPromptForSceneGeneration(record);
-        String aiResponse = generateText(aiPrompt);
+        String aiResponse = generateText(buildPromptForSceneGeneration(record));
 
         List<AiSceneItem> aiScenes = parseAiScenes(aiResponse);
-        int expectedCount = record.getInputSceneCount();
-        if (aiScenes.size() != expectedCount) {
-            throw new BusinessException(ErrorCode.AI_RESPONSE_INVALID,
-                    "scene count mismatch: expected " + expectedCount + " but got " + aiScenes.size());
-        }
-
-        List<SceneDraft> drafts = aiScenes.stream()
-                .map(item -> new SceneDraft(item.title(), item.description()))
-                .toList();
+        validateSceneCount(record.getInputSceneCount(), aiScenes.size());
+        List<SceneDraft> drafts = toSceneDrafts(aiScenes);
 
         List<SceneDetailResponse> created = sceneService.createScenesAppend(userId, projectId, drafts);
         updateCurrentStepOrThrow(projectId, STEP_SCENES, resolveVersion(record));
 
-        List<ScenarioSceneItem> responseScenes = created.stream()
-                .map(scene -> new ScenarioSceneItem(
-                        scene.sceneId(),
-                        scene.order(),
-                        scene.title(),
-                        scene.description()
-                ))
-                .toList();
-        return ScenarioScenesResponse.of(responseScenes, STEP_SCENES);
+        return ScenarioScenesResponse.of(toScenarioSceneItems(created), STEP_SCENES);
     }
 
     private ScenarioRecord buildScenarioRecord(Long projectId,
@@ -406,6 +390,30 @@ public class ScenarioService {
         } catch (Exception e) {
             throw new BusinessException(ErrorCode.AI_RESPONSE_INVALID, "Failed to parse AI response");
         }
+    }
+
+    private void validateSceneCount(int expectedCount, int actualCount) {
+        if (actualCount != expectedCount) {
+            throw new BusinessException(ErrorCode.AI_RESPONSE_INVALID,
+                    "scene count mismatch: expected " + expectedCount + " but got " + actualCount);
+        }
+    }
+
+    private List<SceneDraft> toSceneDrafts(List<AiSceneItem> aiScenes) {
+        return aiScenes.stream()
+                .map(item -> new SceneDraft(item.title(), item.description()))
+                .toList();
+    }
+
+    private List<ScenarioSceneItem> toScenarioSceneItems(List<SceneDetailResponse> scenes) {
+        return scenes.stream()
+                .map(scene -> new ScenarioSceneItem(
+                        scene.sceneId(),
+                        scene.order(),
+                        scene.title(),
+                        scene.description()
+                ))
+                .toList();
     }
 
     private String extractJsonArray(String text) {

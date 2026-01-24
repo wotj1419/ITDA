@@ -81,6 +81,9 @@ onMounted(async () => {
       characterStore.loadCharacters(projectId.value),
     ])
     
+    // Switch scenario store context
+    scenarioStore.switchProject(projectId.value)
+    
     // Simulate 'Recent Activity' by updating timestamp
     await projectStore.updateProject(projectId.value, { updatedAt: new Date().toISOString() }) 
     
@@ -104,6 +107,10 @@ watch(
       const id = Number(newId)
       scenePreviewMap.value = {}
       previewLoadingMap.value = {}
+      
+      // Switch scenario store context
+      scenarioStore.switchProject(id)
+
       await Promise.all([
         projectStore.loadProject(id),
         sceneStore.loadScenes(id),

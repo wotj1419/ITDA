@@ -46,11 +46,14 @@ const emit = defineEmits<{
 // Computed
 // =============================================================================
 
+const isUnderInactiveMaster = computed(() => store.isUnderInactiveMaster(props.id));
+
 const nodeClasses = computed(() => [
   'node-glass',
   'node-glass--grid',
   {
     'node-glass--selected': props.selected,
+    'node-glass--inactive': isUnderInactiveMaster.value,
     [`node-glass--${statusKey.value}`]: true,
   },
 ]);
@@ -90,6 +93,11 @@ function handleAddChild(event: Event): void {
   event.stopPropagation();
   emit('add-child');
 }
+
+function handleToggleCollapse(event: Event): void {
+  event.stopPropagation();
+  store.toggleCollapse(props.id);
+}
 </script>
 
 <template>
@@ -113,7 +121,7 @@ function handleAddChild(event: Event): void {
       <div class="node-glass__header-left">
         <LayoutGrid class="node-glass__icon" />
         <div class="node-glass__title-group">
-          <span class="node-glass__title">그리드 v{{ data.version }}</span>
+          <span class="node-glass__title">그리드 {{ data.version }}</span>
           <span class="node-glass__subtitle">{{ data.layout }} 레이아웃</span>
         </div>
       </div>
@@ -153,9 +161,22 @@ function handleAddChild(event: Event): void {
       class="node-glass__handle" 
     />
 
-    <!-- Add Button -->
-    <button 
-      class="node-glass__add-btn" 
+    <!-- Add/Collapse Button -->
+    <button
+      v-if="isUnderInactiveMaster"
+      class="node-glass__collapse-btn"
+      @click="handleToggleCollapse"
+    >
+      <span
+        class="node-glass__collapse-icon"
+        :class="{ 'node-glass__collapse-icon--expanded': !data.isCollapsed }"
+      >
+        ^
+      </span>
+    </button>
+    <button
+      v-else
+      class="node-glass__add-btn"
       title="샷 추가"
       @click="handleAddChild"
     >
