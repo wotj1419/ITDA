@@ -1,16 +1,8 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import type { Scene, CreateSceneRequest } from '../types'
-import {
-  fetchScenesByProjectId as mockFetchScenes,
-  createScene as mockCreateScene,
-  createScenes as mockCreateScenes,
-  updateScene as mockUpdateScene,
-  deleteScene as mockDeleteScene,
-  reorderScenes as mockReorderScenes,
-  generateScenesWithAI as mockGenerateScenes,
-  type GenerateScenesRequest,
-} from '../services/mock/scenes'
+import { sceneService } from '../services'
+import type { GenerateScenesRequest } from '../services/mock/scenes' // Keep type import if needed, or move to types
 
 export const useSceneStore = defineStore('scene', () => {
   // State
@@ -46,7 +38,8 @@ export const useSceneStore = defineStore('scene', () => {
     currentProjectId.value = projectId
 
     try {
-      scenes.value = await mockFetchScenes(projectId)
+      const scenesData = await sceneService.fetchScenesByProjectId(projectId)
+      scenes.value = scenesData
     } catch (e) {
       error.value = 'Failed to load scenes'
       console.error(e)
@@ -65,7 +58,7 @@ export const useSceneStore = defineStore('scene', () => {
     error.value = null
 
     try {
-      const newScene = await mockCreateScene(currentProjectId.value, data)
+      const newScene = await sceneService.createScene(currentProjectId.value, data)
       scenes.value.push(newScene)
       return newScene
     } catch (e) {
@@ -87,7 +80,7 @@ export const useSceneStore = defineStore('scene', () => {
     error.value = null
 
     try {
-      const newScenes = await mockCreateScenes(currentProjectId.value, dataList)
+      const newScenes = await sceneService.createScenes(currentProjectId.value, dataList)
       scenes.value.push(...newScenes)
       return newScenes
     } catch (e) {
@@ -106,7 +99,7 @@ export const useSceneStore = defineStore('scene', () => {
     }
 
     try {
-      const updated = await mockUpdateScene(currentProjectId.value, sceneId, data)
+      const updated = await sceneService.updateScene(currentProjectId.value, sceneId, data)
       if (updated) {
         const index = scenes.value.findIndex((s) => s.sceneId === sceneId)
         if (index !== -1) {
@@ -132,7 +125,7 @@ export const useSceneStore = defineStore('scene', () => {
     error.value = null
 
     try {
-      const success = await mockDeleteScene(currentProjectId.value, sceneId)
+      const success = await sceneService.deleteScene(currentProjectId.value, sceneId)
       if (success) {
         scenes.value = scenes.value.filter((s) => s.sceneId !== sceneId)
         // Re-order remaining scenes
@@ -157,7 +150,7 @@ export const useSceneStore = defineStore('scene', () => {
     }
 
     try {
-      const reordered = await mockReorderScenes(currentProjectId.value, sceneIds)
+      const reordered = await sceneService.reorderScenes(currentProjectId.value, sceneIds)
       scenes.value = reordered
       return true
     } catch (e) {
@@ -177,7 +170,7 @@ export const useSceneStore = defineStore('scene', () => {
     error.value = null
 
     try {
-      const generated = await mockGenerateScenes(currentProjectId.value, request)
+      const generated = await sceneService.generateScenesWithAI(currentProjectId.value, request)
       scenes.value.push(...generated)
       return generated
     } catch (e) {
