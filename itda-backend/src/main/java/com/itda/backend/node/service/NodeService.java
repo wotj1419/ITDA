@@ -5,7 +5,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.itda.backend.global.exception.BusinessException;
 import com.itda.backend.global.response.ErrorCode;
 import com.itda.backend.job.domain.Job;
-import com.itda.backend.job.domain.JobStatus;
 import com.itda.backend.job.domain.JobType;
 import com.itda.backend.job.service.JobService;
 import com.itda.backend.media.MediaUrlResolver;
@@ -245,8 +244,8 @@ public class NodeService {
                 idempotencyKey
         );
 
-        if (job.getStatus() == JobStatus.PENDING || job.getStatus() == JobStatus.RUNNING) {
-            NodeStatus targetStatus = job.getStatus() == JobStatus.RUNNING
+        if (job.isInProgress()) {
+            NodeStatus targetStatus = job.isRunning()
                     ? NodeStatus.RUNNING
                     : NodeStatus.PENDING;
             Node updatedNode = buildGenerationNode(nodeId, node, updateRequest, shotIds, targetStatus);
