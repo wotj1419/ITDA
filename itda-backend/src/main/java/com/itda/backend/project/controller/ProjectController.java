@@ -2,17 +2,26 @@ package com.itda.backend.project.controller;
 
 import com.itda.backend.global.response.ApiResponse;
 import com.itda.backend.global.security.CustomUserDetails;
+import com.itda.backend.job.controller.dto.JobAcceptedResponse;
+import com.itda.backend.job.domain.Job;
+import com.itda.backend.media.MediaFile;
+import com.itda.backend.media.MediaFileService;
 import com.itda.backend.project.controller.dto.request.CreateProjectRequest;
 import com.itda.backend.project.controller.dto.request.UpdateProjectRequest;
 import com.itda.backend.project.controller.dto.response.ProjectCreateResponse;
 import com.itda.backend.project.controller.dto.response.ProjectDetailResponse;
+import com.itda.backend.project.controller.dto.response.ProjectExportResponse;
 import com.itda.backend.project.controller.dto.response.ProjectListResponse;
+import com.itda.backend.project.controller.dto.response.ProjectTimelineResponse;
 import com.itda.backend.project.service.ProjectService;
+import com.itda.backend.project.service.ProjectMediaService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.core.io.Resource;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -32,6 +41,8 @@ import org.springframework.web.bind.annotation.RestController;
 public class ProjectController {
 
     private final ProjectService projectService;
+    private final ProjectMediaService projectMediaService;
+    private final MediaFileService mediaFileService;
 
     @Operation(summary = "Create project", description = "Create a new project and assign the requester as owner.")
     @ApiResponses({
@@ -95,6 +106,47 @@ public class ProjectController {
             @PathVariable Long projectId) {
         projectService.deleteProject(userDetails.getUserId(), projectId);
         return ApiResponse.success();
+    }
+
+    @Operation(summary = "Get project timeline", description = "Get confirmed video timeline for a project.")
+    @GetMapping("/{projectId}/timeline")
+    public ResponseEntity<ApiResponse<ProjectTimelineResponse>> getTimeline(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @PathVariable Long projectId) {
+        ProjectTimelineResponse response = projectMediaService.getTimeline(userDetails.getUserId(), projectId);
+        return ApiResponse.success(response);
+    }
+
+    @Operation(summary = "Request project merge", description = "Create merge job for a project.")
+    @PostMapping("/{projectId}/merge")
+    public ResponseEntity<ApiResponse<JobAcceptedResponse>> mergeProject(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @PathVariable Long projectId) {
+        Job job = projectMediaService.requestMerge(userDetails.getUserId(), projectId);
+        return ApiResponse.accepted(JobAcceptedResponse.from(job));
+    }
+
+    @Operation(summary = "Get project export", description = "Get export URL when merge is completed.")
+    @GetMapping("/{projectId}/export")
+    public ResponseEntity<ApiResponse<ProjectExportResponse>> getExport(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @PathVariable Long projectId) {
+        ProjectExportResponse response = projectMediaService.getExport(userDetails.getUserId(), projectId);
+        return ApiResponse.success(response);
+    }
+
+    @Operation(summary = "Download project export", description = "Download merged project file.")
+    @GetMapping("/{projectId}/export/file")
+    public ResponseEntity<Resource> downloadExport(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @PathVariable Long projectId) {
+        MediaFile mediaFile = mediaFileService.loadProjectExport(userDetails.getUserId(), projectId);
+        return ResponseEntity.ok()
+                .contentType(mediaFile.mediaType())
+                .contentLength(mediaFile.contentLength())
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        "inline; filename=\"" + mediaFile.filename() + "\"")
+                .body(mediaFile.resource());
     }
 }
 
