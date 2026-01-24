@@ -111,12 +111,12 @@ const sidebarClasses = computed(() => [
         <div
           class="user-avatar"
           :style="{
-            backgroundImage: authStore.user?.profileImage
-              ? `url(${authStore.user.profileImage})`
+            backgroundImage: authStore.user?.profileImageUrl
+              ? `url(${authStore.user.profileImageUrl})`
               : undefined,
           }"
         >
-          <span v-if="!authStore.user?.profileImage">{{
+          <span v-if="!authStore.user?.profileImageUrl">{{
             authStore.user?.name?.[0] || 'U'
           }}</span>
         </div>
@@ -134,12 +134,12 @@ const sidebarClasses = computed(() => [
              <div
                 class="user-avatar header-avatar"
                 :style="{
-                  backgroundImage: authStore.user?.profileImage
-                    ? `url(${authStore.user.profileImage})`
+                  backgroundImage: authStore.user?.profileImageUrl
+                    ? `url(${authStore.user.profileImageUrl})`
                     : undefined,
                 }"
               >
-                <span v-if="!authStore.user?.profileImage">{{
+                <span v-if="!authStore.user?.profileImageUrl">{{
                   authStore.user?.name?.[0] || 'U'
                 }}</span>
               </div>
