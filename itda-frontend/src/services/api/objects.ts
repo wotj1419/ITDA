@@ -18,13 +18,10 @@ export async function createCharacter(projectId: number, data: CreateObjectReque
     if (response.data.code === 'ACCEPTED') {
         // 비동기 처리일 경우 플레이스홀더를 반환하거나 다른 처리가 필요할 수 있음
         // 현재 스토어 구조(즉시 반환 기대)와의 호환성을 위해 가상 객체 반환:
-        const jobId = (response.data.data as any).jobId
+        const _jobId = (response.data.data as any).jobId
         return {
             objectId: -1, // 임시 ID
-            name: data.name,
             type: 'CHARACTER', // 기본값, 데이터에 type이 있다면 덮어씌움
-            description: data.description,
-            style: data.style || '',
             sheetImageUrl: '', // 이미지 생성 대기 중
             ...data // 데이터가 있으면 덮어쓰기
         } as ObjectSheet
