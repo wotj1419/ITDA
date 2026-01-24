@@ -75,7 +75,7 @@ public class JobExecutor {
         }
 
         // RUNNING 전환 (낙관적 락 - 기대 상태 체크)
-        boolean started = markRunning(jobId);
+        boolean started = markRunning(jobId, maxRetryCount);
         
         if (!started) {
             log.info("[JobExecutor] Job not eligible to run (status changed), skipping: id={}", jobId);
@@ -87,8 +87,10 @@ public class JobExecutor {
         try {
             updateNodeStatusIfApplicable(job, NodeStatus.RUNNING, null);
             ExecutionResult result = executeByType(job);
-
-            if (result == null || result.resultAssetId() == null) {
+            if (result == null) {
+                throw new IllegalStateException("Worker returned null result");
+            }
+            if (requiresResultAssetId(job) && result.resultAssetId() == null) {
                 throw new IllegalStateException("Worker returned null resultAssetId");
             }
 
@@ -176,7 +178,7 @@ public class JobExecutor {
         }
         String relativePath = "exports/" + projectId + "/final.mp4";
         createMockAsset(relativePath, MockAssetType.MP4);
-        return new ExecutionResult(projectId, null);
+        return new ExecutionResult(null, null);
     }
 
     private Long requireNodeId(Job job) {
@@ -194,10 +196,15 @@ public class JobExecutor {
                 && job.getType() != JobType.VIDEO_GENERATION) {
             return;
         }
+        int updated;
         if (contentUrl == null) {
-            nodeMapper.updateStatus(job.getNodeId(), status);
+            updated = nodeMapper.updateStatus(job.getNodeId(), status);
         } else {
-            nodeMapper.updateStatusAndContentUrl(job.getNodeId(), status, contentUrl);
+            updated = nodeMapper.updateStatusAndContentUrl(job.getNodeId(), status, contentUrl);
+        }
+        if (updated == 0) {
+            log.warn("[JobExecutor] Node status update ignored: jobId={}, nodeId={}, status={}, contentUrlPresent={}",
+                    job.getId(), job.getNodeId(), status, contentUrl != null);
         }
     }
 
@@ -260,15 +267,21 @@ public class JobExecutor {
                 : message;
     }
 
-    private boolean markRunning(Long jobId) {
+    private boolean markRunning(Long jobId, int maxRetryCount) {
         return Boolean.TRUE.equals(transactionTemplate.execute(status ->
                 jobMapper.updateStatusIfExpected(
                         jobId,
                         List.of(JobStatus.PENDING, JobStatus.FAILED),
                         JobStatus.RUNNING,
-                        null
+                        null,
+                        maxRetryCount
                 ) > 0
         ));
+    }
+
+    private boolean requiresResultAssetId(Job job) {
+        return job.getType() == JobType.IMAGE_GENERATION
+                || job.getType() == JobType.VIDEO_GENERATION;
     }
 
     private boolean markSucceeded(Long jobId, Long resultAssetId) {

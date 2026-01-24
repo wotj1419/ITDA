@@ -54,7 +54,8 @@ public interface JobMapper {
     int updateStatusIfExpected(@Param("id") Long id,
                                @Param("expectedStatuses") List<JobStatus> expectedStatuses,
                                @Param("newStatus") JobStatus newStatus,
-                               @Param("errorMessage") String errorMessage);
+                               @Param("errorMessage") String errorMessage,
+                               @Param("maxRetryCount") int maxRetryCount);
 
     /**
      * 결과 저장 및 성공 처리 (RUNNING 상태에서만)

@@ -93,6 +93,11 @@
             <foreach collection="expectedStatuses" item="s" open="(" separator="," close=")">
                 #{s}
             </foreach>
+          AND (
+              #{maxRetryCount} <= 0
+              OR status != 'FAILED'
+              OR retry_count < #{maxRetryCount}
+          )
     </update>
 
     <!-- UPDATE Result (성공 처리 - RUNNING 상태에서만) -->
