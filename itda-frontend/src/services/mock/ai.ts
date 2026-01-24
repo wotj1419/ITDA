@@ -53,7 +53,8 @@ export async function generatePrompt(
 
 export async function improvePrompt(
   currentPrompt: string,
-  userFeedback: string
+  userFeedback: string,
+  _nodeType?: GeneratePromptRequest['nodeType']
 ): Promise<string> {
   await delay(400)
   return `${currentPrompt} (improved: ${userFeedback})`
@@ -61,7 +62,8 @@ export async function improvePrompt(
 
 export async function generateNode(
   nodeId: string | number,
-  prompt: string
+  prompt: string,
+  _options?: { nodeType?: GeneratePromptRequest['nodeType']; settings?: Record<string, unknown> }
 ): Promise<number> {
   await delay(300)
   const jobId = ++jobIdCounter

@@ -1,21 +1,19 @@
 import type { AuthService } from '../auth.interface';
-import type { LoginRequest, SignupRequest, User } from '../../types';
+import type { LoginRequest, SignupRequest } from '../../types';
 
 export const mockAuthService: AuthService = {
-    async login(credentials: LoginRequest) {
+    async login(_credentials: LoginRequest) {
         // Simulate network delay
         await new Promise((resolve) => setTimeout(resolve, 500));
 
         // Mock response
-        const mockUser: User = {
-            userId: 1,
-            email: credentials.email,
-            name: 'Minjun Kim',
-            profileImage: 'https://i.pravatar.cc/150?u=user123',
-        };
-
         const mockToken = 'mock_access_token_' + Date.now();
-        return { user: mockUser, token: mockToken };
+        const mockRefreshToken = 'mock_refresh_token_' + Date.now();
+        return {
+            accessToken: mockToken,
+            refreshToken: mockRefreshToken,
+            expiresIn: 3600,
+        };
     },
 
     async signup(_data: SignupRequest) {
@@ -27,10 +25,11 @@ export const mockAuthService: AuthService = {
     async fetchMe() {
         await new Promise((resolve) => setTimeout(resolve, 300));
         return {
-            userId: 1,
+            id: 1,
             email: 'minjun@example.com',
             name: 'Minjun Kim',
-            profileImage: 'https://i.pravatar.cc/150?u=user123',
+            profileImageUrl: 'https://i.pravatar.cc/150?u=user123',
+            role: 'USER',
         };
     },
 
