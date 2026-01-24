@@ -23,15 +23,27 @@ import {
     type VideoNodeData,
 } from '../types/node';
 import { generateMockSceneNodes, generateSimpleMockNodes } from '../services/mock/sceneNodes';
+import {
+    fetchSceneNodes,
+    createNode as apiCreateNode,
+    updateNode as apiUpdateNode,
+    deleteNode as apiDeleteNode,
+    confirmNode as apiConfirmNode,
+    unconfirmNode as apiUnconfirmNode,
+    activateMaster as apiActivateMaster,
+    type NodeSummary,
+    type ApiNodeType,
+} from '../services/api/nodes';
+import {
+    subscribeProjectEvents,
+    type ProjectEventMessage,
+    type ProjectEventPayload,
+} from '../services/ws/projectEvents';
 import { useSceneStore } from './scene';
 
 // =============================================================================
 // Helper Functions
 // =============================================================================
-
-function generateId(): string {
-    return `node-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-}
 
 function createBaseNodeData(
     id: string,
@@ -62,6 +74,81 @@ function getDefaultNodeDimensions(type: NodeType): { width: number; height: numb
     };
 }
 
+const API_TO_UI_NODE_TYPE: Record<ApiNodeType, NodeType> = {
+    SCENE_HEADER: NodeType.SCENE_HEADER,
+    MASTER: NodeType.MASTER_IMAGE,
+    GRID: NodeType.STORYBOARD_GRID,
+    SHOT: NodeType.SHOT,
+    VIDEO: NodeType.VIDEO,
+};
+
+const UI_TO_API_NODE_TYPE: Record<NodeType, ApiNodeType> = {
+    [NodeType.SCENE_HEADER]: 'SCENE_HEADER',
+    [NodeType.MASTER_IMAGE]: 'MASTER',
+    [NodeType.STORYBOARD_GRID]: 'GRID',
+    [NodeType.SHOT]: 'SHOT',
+    [NodeType.VIDEO]: 'VIDEO',
+};
+
+function toJobStatus(status?: string | null): JobStatus | null {
+    if (!status) return null;
+    const normalized = status.toUpperCase();
+    switch (normalized) {
+        case 'PENDING':
+            return JobStatus.PENDING;
+        case 'RUNNING':
+            return JobStatus.RUNNING;
+        case 'SUCCEEDED':
+            return JobStatus.SUCCEEDED;
+        case 'FAILED':
+            return JobStatus.FAILED;
+        default:
+            return null;
+    }
+}
+
+function toFiniteNumber(value: string | number): number | null {
+    const numeric = typeof value === 'number' ? value : Number(value);
+    return Number.isFinite(numeric) ? numeric : null;
+}
+
+function buildNodeSettings(data: AnyNodeData): Record<string, unknown> {
+    switch (data.type) {
+        case NodeType.MASTER_IMAGE:
+            return {
+                style: data.style,
+                timeOfDay: data.timeOfDay,
+                mood: data.mood,
+                objectIds: data.objectIds,
+            };
+        case NodeType.STORYBOARD_GRID:
+            return {
+                layout: data.layout,
+                shotTypes: data.shotTypes,
+                compositionHint: data.compositionHint,
+            };
+        case NodeType.SHOT:
+            return {
+                gridCellIndex: data.gridCellIndex,
+                shotTypes: data.shotTypes,
+                shotType: data.shotType,
+                expression: data.expression,
+                additionalDetail: data.additionalDetail,
+            };
+        case NodeType.VIDEO:
+            return {
+                startShotId: data.startShotId,
+                endShotId: data.endShotId,
+                cameraMotion: data.cameraMotion,
+                motionDescription: data.motionDescription,
+                duration: data.duration,
+                timelineOrder: data.timelineOrder,
+            };
+        default:
+            return {};
+    }
+}
+
 type EdgeMeta = {
     isTransition: boolean;
     isConfirmed: boolean;
@@ -79,6 +166,130 @@ type NodePositionSnapshot = Array<{
 }>;
 
 const MAX_POSITION_HISTORY = 20;
+
+function applyNodeResultUrl(node: SceneNode, url: string): void {
+    if (!node.data) return;
+    if (node.data.type === NodeType.VIDEO) {
+        const videoData = node.data as VideoNodeData;
+        videoData.videoUrl = url;
+        videoData.thumbnailUrl = url;
+    } else if (node.data.type === NodeType.MASTER_IMAGE) {
+        const masterData = node.data as MasterImageNodeData;
+        masterData.imageUrl = url;
+        masterData.thumbnailUrl = url;
+    } else if (node.data.type === NodeType.STORYBOARD_GRID) {
+        const gridData = node.data as StoryboardGridNodeData;
+        gridData.imageUrl = url;
+        gridData.thumbnailUrl = url;
+    } else if (node.data.type === NodeType.SHOT) {
+        const shotData = node.data as ShotNodeData;
+        shotData.imageUrl = url;
+        shotData.thumbnailUrl = url;
+    }
+}
+
+function createSceneNodeFromApi(
+    node: NodeSummary,
+    sceneId: string,
+    sceneInfo?: { title: string; description: string; order: number }
+): SceneNode {
+    const uiType = API_TO_UI_NODE_TYPE[node.type];
+    const id = String(node.nodeId);
+    const fallbackHeaderId = String(-Number(sceneId));
+    const resolvedParentId = node.parentNodeId
+        ? String(node.parentNodeId)
+        : uiType === NodeType.MASTER_IMAGE
+            ? fallbackHeaderId
+            : null;
+    const base = createBaseNodeData(id, uiType, resolvedParentId);
+    base.jobStatus = toJobStatus(node.status ?? null);
+    base.parentNodeId = resolvedParentId;
+
+    let data: AnyNodeData;
+    switch (uiType) {
+        case NodeType.SCENE_HEADER:
+            data = {
+                ...base,
+                type: NodeType.SCENE_HEADER,
+                sceneId,
+                title: node.title || sceneInfo?.title || '새 씬',
+                description: node.description || sceneInfo?.description || '',
+                sceneOrder: sceneInfo?.order || 1,
+            };
+            break;
+        case NodeType.MASTER_IMAGE:
+            data = {
+                ...base,
+                type: NodeType.MASTER_IMAGE,
+                sceneId,
+                isActive: !!node.isActive,
+                imageUrl: node.contentUrl || null,
+                thumbnailUrl: node.contentUrl || null,
+                prompt: '',
+                style: '',
+                timeOfDay: '',
+                mood: '',
+                objectIds: [],
+            };
+            break;
+        case NodeType.STORYBOARD_GRID:
+            data = {
+                ...base,
+                type: NodeType.STORYBOARD_GRID,
+                imageUrl: node.contentUrl || null,
+                thumbnailUrl: node.contentUrl || null,
+                prompt: '',
+                layout: '2x2',
+                shotTypes: [],
+                compositionHint: '',
+            };
+            break;
+        case NodeType.SHOT:
+            data = {
+                ...base,
+                type: NodeType.SHOT,
+                imageUrl: node.contentUrl || null,
+                thumbnailUrl: node.contentUrl || null,
+                prompt: '',
+                gridCellIndex: 0,
+                shotTypes: [],
+                shotType: '',
+                expression: '',
+                additionalDetail: '',
+            };
+            break;
+        case NodeType.VIDEO:
+        default:
+            data = {
+                ...base,
+                type: NodeType.VIDEO,
+                startShotId: base.parentNodeId || '',
+                endShotId: null,
+                videoUrl: node.contentUrl || null,
+                thumbnailUrl: node.contentUrl || null,
+                duration: 5,
+                isConfirmed: !!node.isConfirmed,
+                prompt: '',
+                cameraMotion: 'staticCamera',
+                motionDescription: '',
+                timelineOrder: undefined,
+            };
+            break;
+    }
+
+    const { width, height } = getDefaultNodeDimensions(uiType);
+    return {
+        id,
+        type: uiType,
+        position: {
+            x: node.position?.x ?? 0,
+            y: node.position?.y ?? 0,
+        },
+        width,
+        height,
+        data,
+    };
+}
 
 function buildPositionSnapshot(nodes: SceneNode[]): NodePositionSnapshot {
     return nodes.map((node) => {
@@ -150,6 +361,8 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
     const isLoading = ref(false);
     const isSaving = ref(false);
 
+    let unsubscribeProjectEvents: (() => void) | null = null;
+
     // ==========================================================================
     // Getters
     // ==========================================================================
@@ -192,6 +405,30 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
             .map((e) => nodes.value.find((n) => n.id === e.target))
             .filter(Boolean) as SceneNode[]
     );
+
+    const handleProjectEvent = (message: ProjectEventMessage) => {
+        const payload = message.data as ProjectEventPayload;
+
+        if (!payload?.type || payload.target?.type !== 'NODE') return;
+
+        const nodeId = payload.target.id;
+        if (!nodeId) return;
+
+        const targetNode = nodes.value.find((n) => n.id === String(nodeId));
+        if (!targetNode?.data) return;
+
+        const nextStatus = payload.status
+            ? toJobStatus(payload.status)
+            : message.event === 'job.failed'
+                ? JobStatus.FAILED
+                : JobStatus.SUCCEEDED;
+
+        targetNode.data.jobStatus = nextStatus;
+
+        if (message.event === 'job.done' || payload.status === 'SUCCEEDED') {
+            applyNodeResultUrl(targetNode, payload.resultUrl || '');
+        }
+    };
 
     // ==========================================================================
     // Actions - Persistence
@@ -252,43 +489,34 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
         isLoading.value = true;
         try {
             sceneId.value = sceneIdParam;
-
-            // 1. LocalStorage 확인
-            const savedData = localStorage.getItem(getStorageKey(sceneIdParam));
-            if (savedData) {
-                try {
-                    const parsed = JSON.parse(savedData);
-                    // 데이터 유효성 체크 대략적으로 (nodes 배열 존재 여부)
-                    if (Array.isArray(parsed.nodes)) {
-                        nodes.value = parsed.nodes;
-                        edges.value = parsed.edges || [];
-                        ensureTimelineOrder();
-                        console.log('Restored nodes from localStorage');
-                        return; // 저장된 데이터가 있으면 여기서 종료
-                    }
-                } catch (e) {
-                    console.error('Failed to parse saved scene nodes:', e);
-                }
-            }
-
-            // 2. 저장된 데이터가 없으면 Mock 데이터 또는 초기상태 시작
-            // nodes.value = [];
-            // edges.value = [];
-            // positionHistory.value = [];
-
-            // (기존 초기화 로직 유지)
-            // Mock: 빈 상태에서 시작
             nodes.value = [];
             edges.value = [];
 
-            // 씬 헤더 노드 자동 생성 (전 페이지에서 전달받은 씬 정보 사용)
-            ensureSceneHeaderNode(sceneInfo);
-            // 마스터 노드 자동 생성
-            ensureActiveMasterNode();
+            const numericSceneId = toFiniteNumber(sceneIdParam);
+            if (numericSceneId === null) return;
 
-            // 엣지 파생
+            const apiNodes = await fetchSceneNodes(numericSceneId);
+            nodes.value = apiNodes.map((node) =>
+                createSceneNodeFromApi(node, sceneIdParam, sceneInfo)
+            );
+
+            if (!nodes.value.find((n) => n.data?.type === NodeType.SCENE_HEADER)) {
+                ensureSceneHeaderNode(sceneInfo);
+            }
+
+            await ensureActiveMasterNode();
             edges.value = deriveEdges();
             ensureTimelineOrder();
+
+            const projectId = sceneStore.currentProjectId;
+            if (projectId) {
+                if (unsubscribeProjectEvents) {
+                    unsubscribeProjectEvents();
+                }
+                unsubscribeProjectEvents = subscribeProjectEvents(projectId, handleProjectEvent);
+            }
+        } catch (error) {
+            console.error('Failed to load scene nodes:', error);
         } finally {
             isLoading.value = false;
         }
@@ -302,8 +530,9 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
         );
         if (!hasHeader && sceneId.value) {
             const { width, height } = getDefaultNodeDimensions(NodeType.SCENE_HEADER);
+            const headerId = String(-Number(sceneId.value));
             const headerData: SceneHeaderNodeData = {
-                ...createBaseNodeData(generateId(), NodeType.SCENE_HEADER),
+                ...createBaseNodeData(headerId, NodeType.SCENE_HEADER),
                 type: NodeType.SCENE_HEADER,
                 sceneId: sceneId.value,
                 title: sceneInfo?.title || '새 씬',
@@ -323,7 +552,7 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
         }
     }
 
-    function ensureActiveMasterNode(): void {
+    async function ensureActiveMasterNode(): Promise<void> {
         const hasMaster = nodes.value.some(
             (n) => n.data?.type === NodeType.MASTER_IMAGE
         );
@@ -332,7 +561,7 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
                 (n) => n.data?.type === NodeType.SCENE_HEADER
             );
             if (headerNode) {
-                addMasterImageNode(headerNode.id, true);
+                await addMasterImageNode(headerNode.id, true);
             }
         }
     }
@@ -341,18 +570,35 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
     // Actions - Add Nodes
     // ==========================================================================
 
-    function addMasterImageNode(
+    async function addMasterImageNode(
         parentNodeId: string,
         isActive: boolean = false
-    ): SceneNode | null {
+    ): Promise<SceneNode | null> {
         // 마스터 최대 3개 제한
         const masterCount = nodes.value.filter(
             (n) => n.data?.type === NodeType.MASTER_IMAGE
         ).length;
         if (masterCount >= 3) return null;
         const nextVersion = masterCount + 1;
+        if (!sceneId.value) return null;
+        const sceneNumericId = toFiniteNumber(sceneId.value);
+        if (sceneNumericId === null) return null;
 
-        const id = generateId();
+        let apiNodeId: number;
+        try {
+            apiNodeId = await apiCreateNode(sceneNumericId, {
+                nodeType: UI_TO_API_NODE_TYPE[NodeType.MASTER_IMAGE],
+                parentNodeId: null,
+            });
+            if (isActive) {
+                await apiActivateMaster(apiNodeId);
+            }
+        } catch (error) {
+            console.error('Failed to create master node:', error);
+            return null;
+        }
+
+        const id = String(apiNodeId);
         const data: MasterImageNodeData = {
             ...createBaseNodeData(id, NodeType.MASTER_IMAGE, parentNodeId, nextVersion),
             type: NodeType.MASTER_IMAGE,
@@ -381,7 +627,7 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
         return newNode;
     }
 
-    function addStoryboardGridNode(parentNodeId: string): SceneNode | null {
+    async function addStoryboardGridNode(parentNodeId: string): Promise<SceneNode | null> {
         if (!canConnect(parentNodeId, NodeType.STORYBOARD_GRID)) return null;
 
         const gridCount = nodes.value.filter(
@@ -391,7 +637,22 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
         ).length;
         const nextVersion = gridCount + 1;
 
-        const id = generateId();
+        if (!sceneId.value) return null;
+        const sceneNumericId = toFiniteNumber(sceneId.value);
+        if (sceneNumericId === null) return null;
+
+        let apiNodeId: number;
+        try {
+            apiNodeId = await apiCreateNode(sceneNumericId, {
+                nodeType: UI_TO_API_NODE_TYPE[NodeType.STORYBOARD_GRID],
+                parentNodeId: Number(parentNodeId),
+            });
+        } catch (error) {
+            console.error('Failed to create grid node:', error);
+            return null;
+        }
+
+        const id = String(apiNodeId);
         const data: StoryboardGridNodeData = {
             ...createBaseNodeData(id, NodeType.STORYBOARD_GRID, parentNodeId, nextVersion),
             type: NodeType.STORYBOARD_GRID,
@@ -417,7 +678,7 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
         return newNode;
     }
 
-    function addShotNode(parentNodeId: string, gridCellIndex?: number): SceneNode | null {
+    async function addShotNode(parentNodeId: string, gridCellIndex?: number): Promise<SceneNode | null> {
         if (!canConnect(parentNodeId, NodeType.SHOT)) return null;
 
         const existingShots = nodes.value.filter(
@@ -428,7 +689,22 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
         const nextGridIndex = gridCellIndex ?? existingShots.length;
         const nextVersion = existingShots.length + 1;
 
-        const id = generateId();
+        if (!sceneId.value) return null;
+        const sceneNumericId = toFiniteNumber(sceneId.value);
+        if (sceneNumericId === null) return null;
+
+        let apiNodeId: number;
+        try {
+            apiNodeId = await apiCreateNode(sceneNumericId, {
+                nodeType: UI_TO_API_NODE_TYPE[NodeType.SHOT],
+                parentNodeId: Number(parentNodeId),
+            });
+        } catch (error) {
+            console.error('Failed to create shot node:', error);
+            return null;
+        }
+
+        const id = String(apiNodeId);
         const data: ShotNodeData = {
             ...createBaseNodeData(id, NodeType.SHOT, parentNodeId, nextVersion),
             type: NodeType.SHOT,
@@ -456,7 +732,7 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
         return newNode;
     }
 
-    function addVideoNode(parentNodeId: string): SceneNode | null {
+    async function addVideoNode(parentNodeId: string): Promise<SceneNode | null> {
         if (!canConnect(parentNodeId, NodeType.VIDEO)) return null;
 
         const videoCount = nodes.value.filter(
@@ -466,7 +742,22 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
         ).length;
         const nextVersion = videoCount + 1;
 
-        const id = generateId();
+        if (!sceneId.value) return null;
+        const sceneNumericId = toFiniteNumber(sceneId.value);
+        if (sceneNumericId === null) return null;
+
+        let apiNodeId: number;
+        try {
+            apiNodeId = await apiCreateNode(sceneNumericId, {
+                nodeType: UI_TO_API_NODE_TYPE[NodeType.VIDEO],
+                parentNodeId: Number(parentNodeId),
+            });
+        } catch (error) {
+            console.error('Failed to create video node:', error);
+            return null;
+        }
+
+        const id = String(apiNodeId);
         const data: VideoNodeData = {
             ...createBaseNodeData(id, NodeType.VIDEO, parentNodeId, nextVersion),
             type: NodeType.VIDEO,
@@ -499,20 +790,33 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
     // Actions - Update / Delete
     // ==========================================================================
 
-    function updateNode(nodeId: string, updates: Partial<AnyNodeData>): void {
+    async function updateNode(nodeId: string, updates: Partial<AnyNodeData>): Promise<void> {
         const nodeIndex = nodes.value.findIndex((n) => n.id === nodeId);
         const targetNode = nodeIndex !== -1 ? nodes.value[nodeIndex] : undefined;
         if (targetNode && targetNode.data) {
-            targetNode.data = {
+            const nextData = {
                 ...targetNode.data,
                 ...updates,
                 updatedAt: new Date().toISOString(),
             } as AnyNodeData;
+            targetNode.data = nextData;
             ensureSceneInProgress();
+
+            const numericNodeId = toFiniteNumber(nodeId);
+            if (numericNodeId !== null && nextData.type !== NodeType.SCENE_HEADER) {
+                try {
+                    await apiUpdateNode(numericNodeId, {
+                        prompt: 'prompt' in nextData ? nextData.prompt : undefined,
+                        settings: buildNodeSettings(nextData),
+                    });
+                } catch (error) {
+                    console.error('Failed to update node:', error);
+                }
+            }
         }
     }
 
-    function deleteNode(nodeId: string): void {
+    async function deleteNode(nodeId: string): Promise<void> {
         const targetNode = nodes.value.find((n) => n.id === nodeId);
         if (
             !targetNode ||
@@ -535,6 +839,15 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
             selectedNodeId.value = null;
         }
         ensureSceneInProgress();
+
+        const numericNodeId = toFiniteNumber(nodeId);
+        if (numericNodeId !== null) {
+            try {
+                await apiDeleteNode(numericNodeId);
+            } catch (error) {
+                console.error('Failed to delete node:', error);
+            }
+        }
     }
 
     function getDescendantIds(nodeId: string): string[] {
@@ -697,7 +1010,7 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
     // Actions - Active Master
     // ==========================================================================
 
-    function setActiveMaster(masterId: string): void {
+    async function setActiveMaster(masterId: string): Promise<void> {
         let shouldSyncCollapse = false;
         nodes.value.forEach((n) => {
             if (n.data?.type === NodeType.MASTER_IMAGE) {
@@ -714,13 +1027,22 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
             syncHiddenByCollapse();
         }
         ensureSceneInProgress();
+
+        const numericId = toFiniteNumber(masterId);
+        if (numericId !== null) {
+            try {
+                await apiActivateMaster(numericId);
+            } catch (error) {
+                console.error('Failed to activate master:', error);
+            }
+        }
     }
 
     // ==========================================================================
     // Actions - Video Confirm
     // ==========================================================================
 
-    function toggleVideoConfirm(videoId: string): void {
+    async function toggleVideoConfirm(videoId: string): Promise<void> {
         const node = nodes.value.find((n) => n.id === videoId);
         if (
             node?.data &&
@@ -731,7 +1053,7 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
             const shouldConfirm = !(node.data as VideoNodeData).isConfirmed;
             const nextOrder = shouldConfirm ? getNextTimelineOrder() : undefined;
             // 같은 부모 샷의 다른 영상들 확정 해제
-            nodes.value.forEach((n) => {
+            for (const n of nodes.value) {
                 if (
                     n.data?.type === NodeType.VIDEO &&
                     n.data.parentNodeId === parentShotId
@@ -741,13 +1063,33 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
                         videoData.isConfirmed = shouldConfirm;
                         videoData.timelineOrder = shouldConfirm ? nextOrder : undefined;
                         videoData.updatedAt = new Date().toISOString();
+                        const numericId = toFiniteNumber(videoId);
+                        if (numericId !== null) {
+                            try {
+                                if (shouldConfirm) {
+                                    await apiConfirmNode(numericId);
+                                } else {
+                                    await apiUnconfirmNode(numericId);
+                                }
+                            } catch (error) {
+                                console.error('Failed to update confirm state:', error);
+                            }
+                        }
                     } else {
                         videoData.isConfirmed = false;
                         videoData.timelineOrder = undefined;
                         videoData.updatedAt = new Date().toISOString();
+                        const numericId = toFiniteNumber(n.id);
+                        if (numericId !== null) {
+                            try {
+                                await apiUnconfirmNode(numericId);
+                            } catch (error) {
+                                console.error('Failed to unconfirm video:', error);
+                            }
+                        }
                     }
                 }
-            });
+            }
         }
         syncEdgeMeta();
     }
@@ -982,6 +1324,10 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
         positionHistory.value = [];
         selectedNodeId.value = null;
         sceneId.value = null;
+        if (unsubscribeProjectEvents) {
+            unsubscribeProjectEvents();
+            unsubscribeProjectEvents = null;
+        }
     }
 
     // ==========================================================================

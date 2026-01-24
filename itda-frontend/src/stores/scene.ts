@@ -2,15 +2,20 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import type { Scene, CreateSceneRequest } from '../types'
 import {
-  fetchScenesByProjectId as mockFetchScenes,
-  createScene as mockCreateScene,
-  createScenes as mockCreateScenes,
-  updateScene as mockUpdateScene,
-  deleteScene as mockDeleteScene,
-  reorderScenes as mockReorderScenes,
-  generateScenesWithAI as mockGenerateScenes,
-  type GenerateScenesRequest,
-} from '../services/mock/scenes'
+  fetchScenes,
+  createScene,
+  createScenes,
+  updateScene as updateSceneApi,
+  deleteScene,
+  reorderScenes as reorderScenesApi,
+} from '../services/api/scenes'
+
+export interface GenerateScenesRequest {
+  genre: string
+  mood: string
+  sceneCount: number
+  synopsis: string
+}
 
 export const useSceneStore = defineStore('scene', () => {
   // State
@@ -46,7 +51,7 @@ export const useSceneStore = defineStore('scene', () => {
     currentProjectId.value = projectId
 
     try {
-      scenes.value = await mockFetchScenes(projectId)
+      scenes.value = await fetchScenes(projectId)
     } catch (e) {
       error.value = 'Failed to load scenes'
       console.error(e)
@@ -65,7 +70,7 @@ export const useSceneStore = defineStore('scene', () => {
     error.value = null
 
     try {
-      const newScene = await mockCreateScene(currentProjectId.value, data)
+      const newScene = await createScene(currentProjectId.value, data)
       scenes.value.push(newScene)
       return newScene
     } catch (e) {
@@ -87,7 +92,7 @@ export const useSceneStore = defineStore('scene', () => {
     error.value = null
 
     try {
-      const newScenes = await mockCreateScenes(currentProjectId.value, dataList)
+      const newScenes = await createScenes(currentProjectId.value, dataList)
       scenes.value.push(...newScenes)
       return newScenes
     } catch (e) {
@@ -106,7 +111,7 @@ export const useSceneStore = defineStore('scene', () => {
     }
 
     try {
-      const updated = await mockUpdateScene(currentProjectId.value, sceneId, data)
+      const updated = await updateSceneApi(sceneId, data)
       if (updated) {
         const index = scenes.value.findIndex((s) => s.sceneId === sceneId)
         if (index !== -1) {
@@ -132,7 +137,8 @@ export const useSceneStore = defineStore('scene', () => {
     error.value = null
 
     try {
-      const success = await mockDeleteScene(currentProjectId.value, sceneId)
+      await deleteScene(sceneId)
+      const success = true
       if (success) {
         scenes.value = scenes.value.filter((s) => s.sceneId !== sceneId)
         // Re-order remaining scenes
@@ -157,8 +163,11 @@ export const useSceneStore = defineStore('scene', () => {
     }
 
     try {
-      const reordered = await mockReorderScenes(currentProjectId.value, sceneIds)
-      scenes.value = reordered
+      await reorderScenesApi(currentProjectId.value, sceneIds)
+      scenes.value = [...scenes.value].map((scene) => ({
+        ...scene,
+        order: sceneIds.indexOf(scene.sceneId) + 1,
+      }))
       return true
     } catch (e) {
       error.value = 'Failed to reorder scenes'
@@ -177,9 +186,8 @@ export const useSceneStore = defineStore('scene', () => {
     error.value = null
 
     try {
-      const generated = await mockGenerateScenes(currentProjectId.value, request)
-      scenes.value.push(...generated)
-      return generated
+      console.warn('generateScenes is not supported by the API yet', request)
+      return []
     } catch (e) {
       error.value = 'Failed to generate scenes'
       console.error(e)
