@@ -1,9 +1,19 @@
 import apiClient from './client'
 import type { Project, ProjectDetail, CreateProjectRequest, ApiResponse } from '../../types'
 
+type ProjectListResponse = {
+    items: Project[];
+    page: number;
+    size: number;
+    total: number;
+};
+
 export async function fetchProjects(): Promise<Project[]> {
-    const response = await apiClient.get<ApiResponse<Project[]>>('/projects')
-    return response.data.data || []
+    const response = await apiClient.get<ApiResponse<Project[] | ProjectListResponse>>('/projects')
+    const data = response.data.data
+    if (!data) return []
+    if (Array.isArray(data)) return data
+    return data.items || []
 }
 
 export async function fetchProjectById(projectId: number): Promise<ProjectDetail | null> {
@@ -24,7 +34,7 @@ export async function deleteProject(projectId: number): Promise<void> {
 }
 
 export async function updateProject(projectId: number, data: Partial<Project>): Promise<Project | null> {
-    const response = await apiClient.patch<ApiResponse<Project>>(`/projects/${projectId}`, data)
+    const response = await apiClient.put<ApiResponse<Project>>(`/projects/${projectId}`, data)
     return response.data.data || null
 }
 
