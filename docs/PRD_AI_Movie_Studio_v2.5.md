@@ -1,7 +1,7 @@
 # 🎬 AI Movie Studio - Product Requirements Document (PRD)
 
 > **버전**: 2.5.3  
-> **최종 수정일**: 2026-01-15  
+> **최종 수정일**: 2026-01-24  
 > **프로젝트 기간**: 6주  
 
 ---
@@ -92,7 +92,7 @@
 |------|------|
 | Frontend | Vue.js 3 (Composition API), Vue Flow (노드 기반 에디터) |
 | Backend | Spring Boot 3.x |
-| 실시간 통신 | WebRTC (시그널링 WebSocket) + 프로젝트 이벤트 WebSocket(Job 완료/실패 알림) |
+| 실시간 통신 | W3: STOMP 프로젝트 이벤트 WS(Job 완료/실패) / W5: Raw WS 기반 WebRTC·Chat·Presence |
 | 실시간 동기화 | Yjs / CRDT (P1, 피그마 스타일 협업) |
 | AI 이미지 생성 | Google Gemini API (Gemini 2.5 Pro Image) |
 | AI 영상 생성 | Google Veo 3.1 API (P0), 오픈소스 모델 (P1: Stable Video Diffusion 등) |
@@ -159,8 +159,8 @@
 | **P0** | 프로젝트 관리 | 프로젝트 생성, 씬 관리 | ✅ |
 | **P0** | 오브젝트 시트 생성 | 주요 오브젝트(캐릭터, 소품 등) 레퍼런스 이미지 생성 (일관성 유지용) | ✅ |
 | **P0** | AI 시나리오 생성 | 키워드 → 시나리오 아이디어 제안 | ✅ |
-| **P0** | 협업 (플로팅 바) | 화상통화 + 화면공유, 화면 이동해도 통화 유지 | ✅ |
-| **P0** | Presence 표시 | 팀원이 어느 화면에서 작업 중인지 실시간 표시 (WebSocket) | ✅ |
+| **P1** | 협업 (플로팅 바) | 화상통화 + 화면공유, 화면 이동해도 통화 유지 (W5) | ⬜ |
+| **P1** | Presence 표시 | 팀원이 어느 화면에서 작업 중인지 실시간 표시 (W5, Raw WS) | ⬜ |
 | **P0** | 노드 기반 씬 편집 | Vue Flow 기반 노드 캔버스로 마스터→샷→영상 흐름 시각화 | ✅ |
 | **P0** | 마스터 이미지 생성 | 씬의 기준점이 되는 와이드 샷 이미지 생성 + AI 프롬프트 개선 | ✅ |
 | **P0** | 스토리보드 그리드 생성 | 마스터 기반 다양한 샷(OTS, 클로즈업 등)을 그리드 이미지로 생성 | ✅ |
@@ -1578,20 +1578,18 @@ CREATE TABLE node_edges (
 ```
 POST /api/auth/signup       - 회원가입
 POST /api/auth/login        - 로그인
+GET  /api/auth/me           - 내 정보 조회
+
+💡 W3 응답 규칙:
+  - signup: { code: "SUCCESS", data: { id, email, name, profileImageUrl, role } }
+  - login:  { code: "SUCCESS", data: { accessToken, refreshToken, expiresIn } }
+
+[W4~W5]
 POST /api/auth/refresh      - 토큰 재발급 (Rotation)
 POST /api/auth/logout       - 로그아웃
-GET  /api/auth/me           - 내 정보 조회
 PUT  /api/auth/me           - 내 프로필 수정 (이름/프로필 이미지 등)
-
-💡 토큰 응답 규칙(MVP):
-  - login/refresh 응답: { code: "SUCCESS", data: { accessToken, refreshToken, expiresIn } }
-  - logout: Refresh Token 무효화 (Redis 삭제)
-
-[P0] 비밀번호 재설정 (이메일)
-POST /api/auth/password/reset/request - 재설정 요청 (이메일로 링크/코드 발송)
-POST /api/auth/password/reset/confirm - 재설정 완료 (token/code + 새 비밀번호)
-
-[P1] OAuth 소셜 로그인
+POST /api/auth/password/reset/request - 재설정 요청
+POST /api/auth/password/reset/confirm - 재설정 완료
 POST /api/auth/oauth/google - Google OAuth 로그인
 ```
 
@@ -1603,23 +1601,15 @@ GET    /api/projects/{id}         - 프로젝트 상세
 PUT    /api/projects/{id}         - 프로젝트 수정
 DELETE /api/projects/{id}         - 프로젝트 삭제
 
-GET    /api/projects/{id}/members                         - 멤버 목록
-POST   /api/projects/{id}/members                         - 멤버 추가 (Owner만, 가입된 유저만)
-  - body: { email: "user@example.com", role: "EDITOR|VIEWER" }
-PATCH  /api/projects/{id}/members/{memberId}              - 멤버 권한 변경 (Owner만)
-DELETE /api/projects/{id}/members/{memberId}              - 멤버 강퇴 (Owner만)
-DELETE /api/projects/{id}/members/me                      - 프로젝트 탈퇴 (본인)
-
-💡 Owner 탈퇴 정책 (MVP):
-  - Owner는 `/members/me`로 탈퇴할 수 없습니다. (권한 위임 또는 프로젝트 삭제 필요)
-  - (선택, P1) Owner 권한 위임 API로 확장 가능
-
-💡 MVP(P0): 초대 링크/토큰 방식 없이, 가입된 유저만 멤버로 추가합니다.
-  - 유저가 없으면 `USER_NOT_FOUND`로 응답하고 "가입 후 다시 초대"를 안내합니다.
-💡 (선택, P1): 초대함/알림 기반 '수락' 플로우로 확장 가능
+[W4~W5] 멤버/권한
+GET    /api/projects/{id}/members
+POST   /api/projects/{id}/members
+PATCH  /api/projects/{id}/members/{memberId}
+DELETE /api/projects/{id}/members/{memberId}
+DELETE /api/projects/{id}/members/me
 ```
 
-### 8.3 오브젝트 시트 API
+### 8.3 오브젝트 시트 API (W4~W5)
 ```
 POST   /api/projects/{id}/objects     - 오브젝트 생성 (AI 이미지 생성 Job)
 GET    /api/projects/{id}/objects     - 오브젝트 목록
@@ -1633,85 +1623,65 @@ DELETE /api/objects/{id}              - 오브젝트 삭제
 POST   /api/projects/{id}/scenes       - 씬 생성
 GET    /api/projects/{id}/scenes       - 씬 목록
 GET    /api/scenes/{id}                - 씬 상세 (설명/등장 오브젝트/상태)
+PUT    /api/projects/{id}/scenes/order - 씬 순서 변경
+
+[W4~W5]
 PUT    /api/scenes/{id}                - 씬 수정
 DELETE /api/scenes/{id}                - 씬 삭제
-PUT    /api/projects/{id}/scenes/order - 씬 순서 변경
 ```
 
 ### 8.5 노드 API (씬 편집)
 ```
-POST   /api/scenes/{sceneId}/nodes     - 노드 생성 (마스터/그리드/샷/영상)
-GET    /api/scenes/{sceneId}/nodes     - 씬의 노드 트리 조회
-GET    /api/nodes/{id}                 - 노드 상세
-GET    /api/nodes/{id}/export          - 노드 결과 다운로드 URL 발급 (이미지/영상)
+POST   /api/scenes/{sceneId}/nodes     - 노드 생성 (MASTER/GRID/SHOT/VIDEO)
+GET    /api/scenes/{sceneId}/nodes     - 씬의 노드 목록 조회
 PUT    /api/nodes/{id}                 - 노드 수정 (프롬프트, 설정 등)
-PUT    /api/scenes/{sceneId}/nodes/positions - 노드 위치 일괄 저장 (드래그 후)
-DELETE /api/nodes/{id}                 - 노드 삭제 (하위 노드 함께)
-POST   /api/nodes/{id}/regenerate      - 재생성: 새 버전 노드 생성 + AI Job
-POST   /api/nodes/{id}/activate        - Active Master 변경 (master 노드만)
-POST   /api/nodes/{id}/confirm         - 타임라인 확정 (영상 노드만)
+POST   /api/nodes/{id}/confirm         - 확정 (영상 노드만)
 DELETE /api/nodes/{id}/confirm         - 확정 취소
+POST   /api/nodes/{id}/generate        - 노드 기준 AI Job 생성
 
-💡 scene_header 노드:
-  - 씬 메타(제목/설명) 표시용 가상 노드로 `GET /api/scenes/{sceneId}/nodes` 응답에 포함됩니다.
-  - 생성/삭제 대상이 아니며, 씬 정보와 자동 동기화됩니다.
-
-💡 P0 연결 규칙: 노드 연결은 `parent_node_id` 기반 트리 구조로만 생성(마스터→그리드→샷→영상)
-   - Vue Flow용 edge는 서버가 트리로부터 계산해 내려줌(수동 edge 편집은 P1)
-💡 Active Master: master는 여러 개 생성 가능하지만 scene당 Active는 최대 1개이며, 신규 그리드는 기본적으로 Active 아래에 생성됩니다.
-💡 하드 리밋: 씬당 master 노드 최대 3개로 제한합니다.
-💡 확정 규칙: 한 shot 아래 video는 최대 1개만 확정(서버가 자동으로 기존 확정을 해제)
-💡 재생성(regenerate) 정책(MVP):
-  - 기존 노드를 덮어쓰지 않고, 동일 부모 아래 **새 버전 노드**를 생성합니다(히스토리 보존).
-  - 응답 예: `{ jobId, newNodeId }`
-  - 새 버전은 UI에서 기본 선택/포커스(최신 버전 자동 선택)됩니다.
-  - 실패 재시도 버튼은 `regenerate` 호출을 기본으로 합니다. (같은 jobId 재실행은 운영/관리 목적)
-💡 삭제 정책(MVP):
-  - 노드 삭제 시 하위 노드가 함께 삭제됩니다.
-  - 삭제된 노드에 대해 뒤늦게 도착한 Job 결과는 서버가 무시(무효화)합니다.
-💡 다운로드(export) 정책(MVP):
-  - `status=SUCCEEDED`인 노드만 다운로드 URL을 발급합니다.
-  - response(예): `{ downloadUrl }` (S3 Presigned URL)
+[W4~W5]
+GET    /api/nodes/{id}
+GET    /api/nodes/{id}/export
+PUT    /api/scenes/{sceneId}/nodes/positions
+DELETE /api/nodes/{id}
+POST   /api/nodes/{id}/regenerate
+POST   /api/nodes/{id}/activate
 ```
 
-### 8.6 AI 생성 API
+### 8.6 AI 생성 API (W3)
 ```
-POST /api/ai/scenario
-  - body: { genre, mood, plot, sceneCount, keywords? }  // keywords: 콤마 구분 문자열
-  - response: { scenario, scenes[] }
+GET  /api/projects/{id}/scenario
 
-💡 프롬프트 생성/개선 (LLM 기반)
+POST /api/projects/{id}/scenario/prompt/generate
+  - body: { genre, mood, sceneCount, keywords[], characterHints?, backgroundHints?, referenceStyle? }
+
+POST /api/projects/{id}/scenario/plot/generate
+POST /api/projects/{id}/scenario/scenes/generate
+
 POST /api/ai/prompts/generate
-  - 목적: UI 입력(씬 한줄 설명/스타일/시간대/분위기/등장 오브젝트 등) → 최종 프롬프트 생성
-  - 필수(예): { nodeType, sceneOneLine, style, timeOfDay, mood }
-  - 선택(예): { objects[], motionDescription, lens, lighting, color, negativeKeywords[] }
-  - response: { prompt, negativePrompt?, meta? }
+  - body: { nodeType, sceneOneLine, style, timeOfDay, mood, objects[] }
+  - response: { prompt }
 
 POST /api/ai/prompts/improve
-  - 목적: 기존 프롬프트 + 개선 지시(예: "더 시네마틱하게") → 개선 프롬프트 생성
-  - body(예): { nodeType, prompt, instruction?, context? }
-  - response: { prompt, negativePrompt?, meta? }
+  - body: { nodeType, prompt, instruction? }
+  - response: { prompt }
 
-💡 이미지/영상 생성은 노드 중심으로 처리:
-POST /api/nodes/{id}/regenerate
-  - node_type에 따라 작업이 결정됨 (master/grid/shot → IMAGE, video → VIDEO)
-  - video 노드 settings 예: { startShotNodeId, endShotNodeId?, cameraMotion, duration, motionDescription, provider }
-  - response: { jobId, newNodeId }
+POST /api/nodes/{id}/generate
+  - body: { prompt, settings }
+  - response: { jobId, status }
 
-POST /api/music/upload [P1]
-  - body: multipart/form-data (file, projectId)
-  - response: { musicId, url, duration }
-  - 💡 음악 업로드/보관은 P1 기능, 최종 병합 반영은 P2에서 검토
-
-GET /api/ai/jobs/{jobId}
-  - response: { status, progress?, target, resultUrl?, error? }
+GET  /api/ai/jobs/{jobId}
+  - response: { jobId, type, status, resultUrl?, error? }
   - 💡 완료/실패는 프로젝트 이벤트 WebSocket(8.10)으로도 전달됩니다.
 
+[W4~W5]
+POST /api/ai/scenario
+POST /api/nodes/{id}/regenerate
 POST /api/ai/jobs/{jobId}/requeue
-  - description: 같은 jobId를 재실행 요청 (운영/특수 케이스용)
+POST /api/music/upload
 ```
 
-### 8.7 파일 API [P1]
+### 8.7 파일 API (W4~W5)
 ```
 POST   /api/files/presign   - Presigned URL 발급 (S3 직접 업로드)
 POST   /api/files/complete  - 업로드 완료 등록 (메타데이터/소유자/용도 저장)
@@ -1721,30 +1691,23 @@ DELETE /api/files/{id}      - 파일 삭제
 💡 P1 기능: MVP에서는 AI 생성 이미지/영상만 사용, 외부 업로드는 P1에서 지원
 ```
 
-### 8.8 타임라인/영상 편집 API
+### 8.8 타임라인/영상 편집 API (W3)
 ```
-GET    /api/projects/{id}/timeline
-  - 목적: 프로젝트 타임라인(확정된 클립) 조회
-  - response(예): { items: [ { videoNodeId, sceneId, order } ] }
-
-PUT    /api/projects/{id}/timeline
-  - 목적: 클립 순서 변경 (드래그 앤 드롭)
-  - body(예): { orderedVideoNodeIds: [101, 102, 103] }
-  - 💡 정렬 대상 = `videoNodeId` (확정된 video 노드)
+GET  /api/projects/{id}/timeline
+  - 목적: 프로젝트 타임라인(확정된 VIDEO 노드) 조회
+  - response(예): { items: [ { videoNodeId, sceneId, order, url } ] }
 
 POST /api/projects/{id}/merge
-  - body: { includeMusic: boolean } // P2 (음악 믹싱 반영)
-  - response: { jobId }
-  - 💡 merge 결과는 타임라인 순서를 기준으로 병합됩니다. (P1은 영상만 병합)
+  - response: { jobId, status }
 
-GET /api/projects/{id}/export
-  - response: { downloadUrl }
+GET  /api/projects/{id}/export
+  - response: { exportUrl }
 ```
 
-### 8.9 WebRTC 시그널링 (WebSocket)
+### 8.9 WebRTC 시그널링 (Raw WS, W5)
 ```
-/ws/room/{roomId}?token=<JWT>
-  - auth      : JWT 기반 인증(쿼리 파라미터 또는 쿠키 기반)
+/ws/room/{roomId}
+  - auth      : JWT 기반 인증(헤더 또는 인증 메시지)
   - authorize : roomId(=projectId) 기준, **프로젝트 멤버만** join 가능
   - join      : 방 입장
   - leave     : 방 퇴장
@@ -1752,21 +1715,21 @@ GET /api/projects/{id}/export
   - answer    : SDP Answer 전송
   - candidate : ICE Candidate 전송
   - chat      : 텍스트 채팅
-
-💡 MVP: 채팅 히스토리 저장 없음 (세션/연결 단위)
 ```
 
-### 8.10 프로젝트 이벤트 (WebSocket)
+### 8.10 프로젝트 이벤트 (STOMP, W3)
 ```
-/ws/projects/{projectId}?token=<JWT>
-  - auth      : JWT 기반 인증(쿼리 파라미터 또는 쿠키 기반)
+/ws (SockJS)
+  - subscribe: /topic/projects/{projectId}
+  - auth      : Authorization: Bearer <JWT>
   - authorize : projectId 기준, **프로젝트 멤버만** 구독 가능
 
 이벤트(예시):
-  - job.done   : { jobId, target: { type: "NODE", id }, resultUrl }
-  - job.failed : { jobId, target: { type: "NODE", id }, error }
+  - job.done   : { jobId, target: { type: "NODE|PROJECT", id }, resultUrl }
+  - job.failed : { jobId, target: { type: "NODE|PROJECT", id }, error }
 
-💡 MVP 범위: AI Job 완료/실패 알림만 제공(진행률 푸시는 미제공)
+💡 W3 범위: AI Job 완료/실패 알림만 제공(진행률 푸시는 미제공)
+💡 W5 확장: Raw WS `/ws/projects/{projectId}` 별도 구현
 ```
 
 ---
