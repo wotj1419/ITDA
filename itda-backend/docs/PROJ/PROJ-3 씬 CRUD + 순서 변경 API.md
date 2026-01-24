@@ -16,13 +16,14 @@
 ### Mapper/SQL
 - `SceneMapper.updateScene`
 - `SceneMapper.deleteScene`
+- `findNextOrderIndex`에 FOR UPDATE 적용 (동시 생성 orderIndex 보호)
 - SQL: dynamic update / hard delete
 
 ### Service 로직
 - updateScene
   - title/description 둘 다 null이면 INVALID_REQUEST
   - scene 존재 확인 + 멤버십 체크
-  - update 실행 후 재조회 반환
+  - update 실행 후 요청 값 기준으로 응답 구성
 - deleteScene
   - scene 존재 확인 + 멤버십 체크
   - delete 실행 결과 확인
@@ -39,6 +40,7 @@
 - 브랜치: feat/proj-3-scene-crud-reorder (커밋/날짜 기록)
 
 ## reorder API 작업
+- 전제: Full-list reorder (프로젝트 내 전체 씬 ID 리스트 전송)
 ### DTO 검증
 - orderedSceneIds: @NotEmpty + 요소 @NotNull
 
@@ -65,6 +67,10 @@
 - reorder API Swagger 수동 테스트 완료 (정상 동작 확인)
 - 씬 CRUD 완료
 - reorder Mapper/SQL + Service 검증 로직 완료
+- SceneService 공통 검증/조회 헬퍼 정리 (requireProject/requireScene/validate*)
+- projectId 존재 확인 선행으로 404/403 응답 일관성 보완
+- SceneService 헬퍼 메서드 구분
+- createScenesAppend 반환 타입을 DTO 리스트로 통일
 
 ## 다음 작업
 - reorder 동작 테스트 및 결과 기록
