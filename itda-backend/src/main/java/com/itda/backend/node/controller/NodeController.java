@@ -2,7 +2,12 @@ package com.itda.backend.node.controller;
 
 import com.itda.backend.global.response.ApiResponse;
 import com.itda.backend.global.security.CustomUserDetails;
+import com.itda.backend.job.controller.dto.JobAcceptedResponse;
+import com.itda.backend.job.domain.Job;
+import com.itda.backend.media.MediaFile;
+import com.itda.backend.media.MediaFileService;
 import com.itda.backend.node.controller.dto.request.CreateNodeRequest;
+import com.itda.backend.node.controller.dto.request.GenerateNodeRequest;
 import com.itda.backend.node.controller.dto.request.UpdateNodePositionsRequest;
 import com.itda.backend.node.controller.dto.request.UpdateNodeRequest;
 import com.itda.backend.node.controller.dto.response.NodeCreateResponse;
@@ -13,6 +18,8 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.core.io.Resource;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
@@ -28,6 +35,7 @@ import org.springframework.web.bind.annotation.*;
 public class NodeController {
 
     private final NodeService nodeService;
+    private final MediaFileService mediaFileService;
 
     @Operation(summary = "Create node", description = "Create a new node in the scene canvas")
     @PostMapping("/scenes/{sceneId}/nodes")
@@ -65,6 +73,30 @@ public class NodeController {
             @Valid @RequestBody UpdateNodeRequest request) {
         nodeService.updateNode(userDetails.getUserId(), id, request);
         return ApiResponse.success(null);
+    }
+
+    @Operation(summary = "Generate node", description = "Request AI generation for a node")
+    @PostMapping("/nodes/{id}/generate")
+    public ResponseEntity<ApiResponse<JobAcceptedResponse>> generateNode(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @PathVariable Long id,
+            @Valid @RequestBody GenerateNodeRequest request) {
+        Job job = nodeService.generateNode(userDetails.getUserId(), id, request);
+        return ApiResponse.accepted(JobAcceptedResponse.from(job));
+    }
+
+    @Operation(summary = "Download node content", description = "Download generated content for a node.")
+    @GetMapping("/nodes/{id}/content")
+    public ResponseEntity<Resource> downloadNodeContent(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @PathVariable Long id) {
+        MediaFile mediaFile = mediaFileService.loadNodeContent(userDetails.getUserId(), id);
+        return ResponseEntity.ok()
+                .contentType(mediaFile.mediaType())
+                .contentLength(mediaFile.contentLength())
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        "inline; filename=\"" + mediaFile.filename() + "\"")
+                .body(mediaFile.resource());
     }
 
     @Operation(summary = "Delete node", description = "Delete a node and its children (cascade)")

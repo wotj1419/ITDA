@@ -4,7 +4,13 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.itda.backend.global.exception.BusinessException;
 import com.itda.backend.global.response.ErrorCode;
+import com.itda.backend.job.domain.Job;
+import com.itda.backend.job.domain.JobStatus;
+import com.itda.backend.job.domain.JobType;
+import com.itda.backend.job.service.JobService;
+import com.itda.backend.media.MediaUrlResolver;
 import com.itda.backend.node.controller.dto.request.CreateNodeRequest;
+import com.itda.backend.node.controller.dto.request.GenerateNodeRequest;
 import com.itda.backend.node.controller.dto.request.NodePosition;
 import com.itda.backend.node.controller.dto.request.UpdateNodeRequest;
 import com.itda.backend.node.controller.dto.response.NodeCreateResponse;
@@ -26,6 +32,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 /**
  * Node 서비스
@@ -44,6 +51,8 @@ public class NodeService {
     private final SceneMapper sceneMapper;
     private final ProjectMemberMapper projectMemberMapper;
     private final ObjectMapper objectMapper;
+    private final JobService jobService;
+    private final MediaUrlResolver mediaUrlResolver;
 
     private record VideoShotIds(Long startShotNodeId, Long endShotNodeId) {}
 
@@ -84,7 +93,8 @@ public class NodeService {
 
         // 실제 노드들 변환
         for (Node node : nodes) {
-            responses.add(NodeSummaryResponse.from(node));
+            String contentUrl = mediaUrlResolver.nodeContentUrl(node);
+            responses.add(NodeSummaryResponse.from(node, contentUrl));
         }
 
         return new NodeTreeResponse(responses);
@@ -99,7 +109,8 @@ public class NodeService {
         Scene scene = getSceneAndEnsureMember(node.getSceneId(), userId);
 
         Map<String, Object> settings = deserializeSettings(node.getDataJson());
-        return NodeDetailResponse.from(node, settings);
+        String contentUrl = mediaUrlResolver.nodeContentUrl(node);
+        return NodeDetailResponse.from(node, settings, contentUrl);
     }
 
     /**
@@ -208,6 +219,40 @@ public class NodeService {
         nodeMapper.clearConfirmedVideo(nodeId);
 
         log.debug("Unconfirmed video: nodeId={}", nodeId);
+    }
+
+    /**
+     * 노드 AI 생성 요청
+     */
+    @Transactional
+    public Job generateNode(Long userId, Long nodeId, GenerateNodeRequest request) {
+        Node node = getNodeOrThrow(nodeId);
+        Scene scene = getSceneAndEnsureMemberForUpdate(node.getSceneId(), userId);
+        assertNotSceneHeader(node.getNodeType());
+
+        UpdateNodeRequest updateRequest = new UpdateNodeRequest(request.prompt(), request.settings());
+        VideoShotIds shotIds = resolveUpdatedVideoShotIds(node, updateRequest);
+
+        JobType jobType = resolveJobType(node.getNodeType());
+        String requestJson = buildGenerationRequestJson(updateRequest, node);
+        String idempotencyKey = request.force() ? UUID.randomUUID().toString() : null;
+        Job job = jobService.createAndEnqueue(
+                jobType,
+                scene.getProjectId(),
+                scene.getId(),
+                node.getId(),
+                requestJson,
+                idempotencyKey
+        );
+
+        if (job.getStatus() == JobStatus.PENDING || job.getStatus() == JobStatus.RUNNING) {
+            NodeStatus targetStatus = job.getStatus() == JobStatus.RUNNING
+                    ? NodeStatus.RUNNING
+                    : NodeStatus.PENDING;
+            Node updatedNode = buildGenerationNode(nodeId, node, updateRequest, shotIds, targetStatus);
+            nodeMapper.updateNode(updatedNode);
+        }
+        return job;
     }
 
     // ========== Private Helper Methods ==========
@@ -408,12 +453,45 @@ public class NodeService {
                 .build();
     }
 
+    private Node buildGenerationNode(Long nodeId, Node node, UpdateNodeRequest request, VideoShotIds shotIds, NodeStatus status) {
+        return Node.builder()
+                .id(nodeId)
+                .prompt(resolvePrompt(request, node))
+                .dataJson(resolveDataJson(request, node))
+                .status(status)
+                .isActive(node.getIsActive())
+                .isConfirmed(node.getIsConfirmed())
+                .contentUrl(null)
+                .startShotNodeId(shotIds.startShotNodeId())
+                .endShotNodeId(shotIds.endShotNodeId())
+                .build();
+    }
+
     private String resolvePrompt(UpdateNodeRequest request, Node node) {
         return request.prompt() != null ? request.prompt() : node.getPrompt();
     }
 
     private String resolveDataJson(UpdateNodeRequest request, Node node) {
         return request.settings() != null ? serializeSettings(request.settings()) : node.getDataJson();
+    }
+
+    private JobType resolveJobType(NodeType nodeType) {
+        return nodeType == NodeType.VIDEO ? JobType.VIDEO_GENERATION : JobType.IMAGE_GENERATION;
+    }
+
+    private String buildGenerationRequestJson(UpdateNodeRequest request, Node node) {
+        try {
+            String resolvedPrompt = resolvePrompt(request, node);
+            Map<String, Object> resolvedSettings = request.settings() != null
+                    ? request.settings()
+                    : deserializeSettings(node.getDataJson());
+            Map<String, Object> payload = new java.util.LinkedHashMap<>();
+            payload.put("prompt", resolvedPrompt);
+            payload.put("settings", resolvedSettings);
+            return objectMapper.writeValueAsString(payload);
+        } catch (JsonProcessingException e) {
+            throw new BusinessException(ErrorCode.INTERNAL_ERROR);
+        }
     }
 
     private List<NodePosition> filterSceneHeaderPositions(List<NodePosition> positions) {
