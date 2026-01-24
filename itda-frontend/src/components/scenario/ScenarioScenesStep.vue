@@ -45,13 +45,39 @@ const handleDragEnd = () => {
 }
 
 const handleApplyToProject = async () => {
-  // Generate scenes to SceneStore (Batch)
-  const scenesToCreate = scenarioStore.scenes.map(scene => ({
-    title: scene.title,
-    description: scene.description,
-  }))
+  const projectId = sceneStore.currentProjectId
+  if (!projectId) return
 
-  await sceneStore.addScenes(scenesToCreate)
+  await sceneStore.loadScenes(projectId)
+  const existingIds = new Set(sceneStore.scenes.map((scene) => scene.sceneId))
+  const idMap = new Map<number, number>()
+
+  for (const scene of scenarioStore.scenes) {
+    if (existingIds.has(scene.id)) {
+      idMap.set(scene.id, scene.id)
+      await sceneStore.updateScene(scene.id, {
+        title: scene.title,
+        description: scene.description,
+      })
+      continue
+    }
+
+    const created = await sceneStore.addScene({
+      title: scene.title,
+      description: scene.description,
+    })
+    if (created) {
+      idMap.set(scene.id, created.sceneId)
+    }
+  }
+
+  const orderedIds = scenarioStore.scenes
+    .map((scene) => idMap.get(scene.id))
+    .filter((id): id is number => typeof id === 'number')
+
+  if (orderedIds.length) {
+    await sceneStore.reorderScenes(orderedIds)
+  }
 
   uiStore.showToast({
     type: 'success',
