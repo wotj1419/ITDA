@@ -96,8 +96,7 @@ public class SceneService {
             throw new BusinessException(ErrorCode.SCENE_NOT_FOUND);
         }
 
-        Scene updatedScene = requireScene(sceneId);
-        return SceneDetailResponse.from(updatedScene);
+        return buildUpdatedDetailResponse(scene, request);
     }
 
     @Transactional
@@ -117,6 +116,7 @@ public class SceneService {
         requireProject(projectId);
         ensureMember(projectId, userId);
 
+        // Full-list reorder 전제: 프로젝트의 전체 sceneId를 모두 포함해야 함.
         int totalScenes = sceneMapper.countByProjectId(projectId);
         if (totalScenes != orderedSceneIds.size()) {
             throw new BusinessException(ErrorCode.INVALID_REQUEST);
@@ -163,6 +163,18 @@ public class SceneService {
         if (request.title() == null && request.description() == null) {
             throw new BusinessException(ErrorCode.INVALID_REQUEST);
         }
+    }
+
+    private SceneDetailResponse buildUpdatedDetailResponse(Scene scene, UpdateSceneRequest request) {
+        String title = request.title() != null ? request.title() : scene.getTitle();
+        String description = request.description() != null ? request.description() : scene.getDescription();
+        return new SceneDetailResponse(
+                scene.getId(),
+                scene.getProjectId(),
+                title,
+                description,
+                scene.getOrderIndex()
+        );
     }
 
     private List<Long> validateReorderRequest(ReorderScenesRequest request) {
