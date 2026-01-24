@@ -49,19 +49,19 @@ public class SceneService {
     }
 
     @Transactional
-    public List<Scene> createScenesAppend(Long userId, Long projectId, List<SceneDraft> drafts) {
+    public List<SceneDetailResponse> createScenesAppend(Long userId, Long projectId, List<SceneDraft> drafts) {
         requireProject(projectId);
         ensureMember(projectId, userId);
 
         validateDrafts(drafts);
         int nextOrderIndex = sceneMapper.findNextOrderIndex(projectId);
-        List<Scene> created = new ArrayList<>(drafts.size());
+        List<SceneDetailResponse> created = new ArrayList<>(drafts.size());
         int orderIndex = nextOrderIndex;
 
         for (SceneDraft draft : drafts) {
             Scene scene = Scene.create(projectId, draft.title(), draft.description(), orderIndex++);
             sceneMapper.insertScene(scene);
-            created.add(scene);
+            created.add(SceneDetailResponse.from(scene));
         }
 
         return created;

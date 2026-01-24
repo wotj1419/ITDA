@@ -9,7 +9,7 @@ import com.itda.backend.global.exception.BusinessException;
 import com.itda.backend.global.response.ErrorCode;
 import com.itda.backend.project.repository.ProjectMapper;
 import com.itda.backend.project.repository.ProjectMemberMapper;
-import com.itda.backend.scene.domain.Scene;
+import com.itda.backend.scene.controller.dto.response.SceneDetailResponse;
 import com.itda.backend.scene.service.SceneService;
 import com.itda.backend.scene.service.dto.SceneDraft;
 import com.itda.backend.scenario.controller.dto.request.GeneratePromptRequest;
@@ -137,11 +137,16 @@ public class ScenarioService {
                 .map(item -> new SceneDraft(item.title(), item.description()))
                 .toList();
 
-        List<Scene> created = sceneService.createScenesAppend(userId, projectId, drafts);
+        List<SceneDetailResponse> created = sceneService.createScenesAppend(userId, projectId, drafts);
         updateCurrentStepOrThrow(projectId, STEP_SCENES, resolveVersion(record));
 
         List<ScenarioSceneItem> responseScenes = created.stream()
-                .map(ScenarioSceneItem::from)
+                .map(scene -> new ScenarioSceneItem(
+                        scene.sceneId(),
+                        scene.order(),
+                        scene.title(),
+                        scene.description()
+                ))
                 .toList();
         return ScenarioScenesResponse.of(responseScenes, STEP_SCENES);
     }
