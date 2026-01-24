@@ -9,7 +9,7 @@ import { useUIStore } from '../stores/ui'
 import { useCollabStore } from '../stores/collab'
 import { useScenarioStore } from '../stores/scenario'
 import type { ObjectSheet, Scene, SceneStatus } from '../types'
-import { fetchNodesBySceneId } from '../services/mock/nodes'
+import { fetchSceneNodes } from '../services/api/nodes'
 
 import ProjectLayout from '../layouts/ProjectLayout.vue'
 import Card from '../components/common/Card.vue'
@@ -84,9 +84,6 @@ onMounted(async () => {
     // Switch scenario store context
     scenarioStore.switchProject(projectId.value)
     
-    // Simulate 'Recent Activity' by updating timestamp
-    await projectStore.updateProject(projectId.value, { updatedAt: new Date().toISOString() }) 
-    
     // 협업 방 입장
     collabStore.joinRoom(projectId.value)
     collabStore.updateLocation('프로젝트 상세 페이지')
@@ -142,13 +139,13 @@ const isPreviewLoading = (sceneId: number): boolean =>
 
 const buildScenePreview = async (sceneId: number): Promise<ScenePreview> => {
   if (!projectId.value) return { clips: [], totalDuration: 0 }
-  const nodes = await fetchNodesBySceneId(projectId.value, sceneId)
+  const nodes = await fetchSceneNodes(sceneId)
   const clips = nodes
     .filter((node) => node.type === 'VIDEO' && node.isConfirmed)
     .map((node) => ({
-      thumbnailUrl: node.thumbnailUrl || '',
-      duration: node.settings?.duration || 4,
-      label: node.title,
+      thumbnailUrl: node.contentUrl || '',
+      duration: 4,
+      label: node.title || '',
       contentUrl: node.contentUrl || '',
     }))
   const totalDuration = clips.reduce((sum, clip) => sum + clip.duration, 0)
