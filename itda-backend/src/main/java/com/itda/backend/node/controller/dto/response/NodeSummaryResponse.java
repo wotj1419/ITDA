@@ -35,13 +35,17 @@ public record NodeSummaryResponse(
         @Schema(description = "Is confirmed (for VIDEO)", example = "false")
         Boolean isConfirmed,
 
-        @Schema(description = "Content URL", example = "https://...")
+        @Schema(description = "Content URL", example = "/api/nodes/301/content")
         String contentUrl,
 
         @Schema(description = "Position")
         PositionDto position
 ) {
     public static NodeSummaryResponse from(Node node) {
+        return from(node, node.getContentUrl());
+    }
+
+    public static NodeSummaryResponse from(Node node, String contentUrl) {
         return new NodeSummaryResponse(
                 node.getId(),
                 node.getNodeType(),
@@ -51,7 +55,7 @@ public record NodeSummaryResponse(
                 node.getStatus(),
                 node.getIsActive(),
                 node.getIsConfirmed(),
-                node.getContentUrl(),
+                contentUrl,
                 new PositionDto(node.getPositionX(), node.getPositionY())
         );
     }
