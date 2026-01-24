@@ -1,13 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import type { Project, ProjectDetail, CreateProjectRequest } from '../types'
-import {
-  fetchProjects as mockFetchProjects,
-  fetchProjectById as mockFetchProjectById,
-  createProject as mockCreateProject,
-  deleteProject as mockDeleteProject,
-  updateProject as mockUpdateProject,
-} from '../services/mock/projects'
+import { projectService } from '../services'
 
 export const useProjectStore = defineStore('project', () => {
   // State
@@ -48,7 +42,7 @@ export const useProjectStore = defineStore('project', () => {
     error.value = null
 
     try {
-      projects.value = await mockFetchProjects()
+      projects.value = await projectService.fetchProjects()
     } catch (e) {
       error.value = 'Failed to load projects'
       console.error(e)
@@ -62,7 +56,7 @@ export const useProjectStore = defineStore('project', () => {
     error.value = null
 
     try {
-      currentProject.value = await mockFetchProjectById(projectId)
+      currentProject.value = await projectService.fetchProjectById(projectId)
       if (!currentProject.value) {
         error.value = 'Project not found'
       }
@@ -79,7 +73,7 @@ export const useProjectStore = defineStore('project', () => {
     error.value = null
 
     try {
-      const newProject = await mockCreateProject(data)
+      const newProject = await projectService.createProject(data)
       projects.value.unshift(newProject)
       return newProject
     } catch (e) {
@@ -96,7 +90,7 @@ export const useProjectStore = defineStore('project', () => {
     error.value = null
 
     try {
-      await mockDeleteProject(projectId)
+      await projectService.deleteProject(projectId)
       projects.value = projects.value.filter((p) => p.projectId !== projectId)
       if (currentProject.value?.projectId === projectId) {
         currentProject.value = null
@@ -116,7 +110,7 @@ export const useProjectStore = defineStore('project', () => {
     error.value = null
 
     try {
-      const updatedProject = await mockUpdateProject(projectId, data)
+      const updatedProject = await projectService.updateProject(projectId, data)
       if (updatedProject) {
         // Update item in projects list
         const index = projects.value.findIndex((p) => p.projectId === projectId)

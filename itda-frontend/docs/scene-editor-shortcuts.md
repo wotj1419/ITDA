@@ -1065,3 +1065,57 @@ export interface GeneratePromptRequest {
 -------------------------------------------------------------------------------------
 
  
+
+## API 연동 및 서비스 레이어 전환 구현 (2026-01-24)
+- **수정 내용**: 프론트엔드와 백엔드 간의 API 연동을 위한 서비스 레이어를 구축하고, 환경 변수(`VITE_USE_MOCK`)에 따라 Mock/Real API를 전환할 수 있도록 구현.
+- **이전 문제**: 모든 데이터가 하드코딩된 Mock 파일(`services/mock/*`)에 의존하고 있어 실제 백엔드 연동이 불가능했음.
+- **해결**: `services/index.ts`를 서비스 애그리게이터(Aggregator)로 만들고, 각 스토어(`stores/*.ts`)가 이를 통해 데이터를 요청하도록 리팩토링.
+
+### 동작 흐름
+1. 앱 실행 시 `services/config.ts`가 `VITE_USE_MOCK` 환경 변수 확인
+2. `services/index.ts`가 설정값에 따라 `mock/*` 또는 `api/*` 모듈을 export
+3. Pinia Store(`project`, `scene`, `auth` 등)는 `import { projectService } from '../services'` 형태로 주입받은 서비스 사용
+4. 결과적으로 코드 수정 없이 환경 변수만으로 테스트/운영 모드 전환 가능
+
+### 수정된 파일
+- [`itda-frontend/src/services/config.ts`](../src/services/config.ts) (신규)
+  - 환경 변수 로드 및 `useMock` 플래그 관리
+- [`itda-frontend/src/services/index.ts`](../src/services/index.ts)
+  - Mock 서비스와 Real API 서비스를 조건부로 export하는 진입점
+- [`itda-frontend/src/services/api/*.ts`](../src/services/api/) (신규)
+  - `auth`, `projects`, `scenes`, `nodes`, `timeline`, `objects`, `ai` 등 실제 Axios API 호출 구현체
+- [`itda-frontend/src/stores/*.ts`](../src/stores/) (`project`, `scene`, `auth`, `character`, `timeline`)
+  - 기존 Mock 직접 import 구문을 `services/index.ts`의 서비스 객체 호출로 변경
+  - 예: `mockFetchProjects()` -> `projectService.fetchProjects()`
+
+### 코드 변경 전/후 비교 (Store 예시: `project.ts`)
+**변경 전 (Before)**: Mock 함수를 직접 import하여 사용
+```typescript
+// ❌ Mock 파일 직접 의존
+import { 
+  fetchProjects as mockFetchProjects, 
+  createProject as mockCreateProject 
+} from '../services/mock/projects'
+
+export const useProjectStore = defineStore('project', () => {
+  async function loadProjects() {
+    // Mock 함수 직접 호출
+    projects.value = await mockFetchProjects()
+  }
+})
+```
+
+**변경 후 (After)**: Service Aggregator를 통해 주입받은 서비스 사용
+```typescript
+// ✅ Service Aggregator 사용 (설정에 따라 Mock/API 자동 전환)
+import { projectService } from '../services'
+
+export const useProjectStore = defineStore('project', () => {
+  async function loadProjects() {
+    // Service 인터페이스 호출
+    projects.value = await projectService.fetchProjects()
+  }
+})
+```
+
+-------------------------------------------------------------------------------------
