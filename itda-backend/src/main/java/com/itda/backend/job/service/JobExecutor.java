@@ -1,14 +1,22 @@
 package com.itda.backend.job.service;
 
+import com.itda.backend.global.config.FileStorageProperties;
 import com.itda.backend.job.domain.Job;
 import com.itda.backend.job.domain.JobStatus;
+import com.itda.backend.job.domain.JobType;
 import com.itda.backend.job.repository.JobMapper;
+import com.itda.backend.node.domain.NodeStatus;
+import com.itda.backend.node.repository.NodeMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
+import java.util.concurrent.ThreadLocalRandom;
 
 /**
  * Job 실행 진입점
@@ -24,9 +32,11 @@ public class JobExecutor {
     private static final int MAX_ERROR_MESSAGE_LENGTH = 2000;
 
     private final JobMapper jobMapper;
+    private final NodeMapper nodeMapper;
     private final JobEventPublisher jobEventPublisher;
     private final TransactionTemplate transactionTemplate;
     private final JobExecutionProperties jobExecutionProperties;
+    private final FileStorageProperties fileStorageProperties;
 
     // TODO: 팀원들이 Worker 구현 후 주입
     // private final ImageGenerationWorker imageWorker;   // 이용호
@@ -75,46 +85,43 @@ public class JobExecutor {
         log.info("[JobExecutor] Job started: id={}, type={}", jobId, job.getType());
 
         try {
-            Long resultAssetId = executeByType(job);
+            updateNodeStatusIfApplicable(job, NodeStatus.RUNNING, null);
+            ExecutionResult result = executeByType(job);
 
-            if (resultAssetId == null) {
+            if (result == null || result.resultAssetId() == null) {
                 throw new IllegalStateException("Worker returned null resultAssetId");
             }
 
             // 성공 처리
-            boolean succeeded = markSucceeded(jobId, resultAssetId);
+            boolean succeeded = markSucceeded(jobId, result.resultAssetId());
             if (!succeeded) {
                 log.warn("[JobExecutor] Job success ignored (status changed): id={}", jobId);
                 return;
             }
 
-            log.info("[JobExecutor] Job succeeded: id={}, resultAssetId={}", jobId, resultAssetId);
+            updateNodeStatusIfApplicable(job, NodeStatus.SUCCEEDED, result.nodeContentKey());
+            log.info("[JobExecutor] Job succeeded: id={}, resultAssetId={}", jobId, result.resultAssetId());
             publishDoneSafely(jobId);
 
         } catch (Exception e) {
-            handleFailure(jobId, e);
+            handleFailure(job, e);
         }
     }
 
     /**
      * 타입별 Worker 호출
      */
-    private Long executeByType(Job job) {
+    private ExecutionResult executeByType(Job job) {
+        simulateDelay();
         switch (job.getType()) {
             case IMAGE_GENERATION -> {
-                // TODO: 이용호 구현 후 주석 해제
-                // return imageWorker.execute(job);
-                throw new UnsupportedOperationException("IMAGE_GENERATION worker not implemented");
+                return executeImageGeneration(job);
             }
             case VIDEO_GENERATION -> {
-                // TODO: 김은서 구현 후 주석 해제
-                // return videoWorker.execute(job);
-                throw new UnsupportedOperationException("VIDEO_GENERATION worker not implemented");
+                return executeVideoGeneration(job);
             }
             case SCENE_MERGE, PROJECT_MERGE -> {
-                // TODO: 장현준 구현 후 주석 해제
-                // return mergeWorker.execute(job);
-                throw new UnsupportedOperationException("MERGE worker not implemented");
+                return executeProjectMerge(job);
             }
         }
         throw new IllegalStateException("Unsupported job type: " + job.getType());
@@ -123,7 +130,8 @@ public class JobExecutor {
     /**
      * 실패 처리
      */
-    private void handleFailure(Long jobId, Exception e) {
+    private void handleFailure(Job job, Exception e) {
+        Long jobId = job.getId();
         String errorMessage = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
         log.error("[JobExecutor] Job failed: id={}, error={}", jobId, errorMessage, e);
 
@@ -133,7 +141,113 @@ public class JobExecutor {
             return;
         }
 
+        updateNodeStatusIfApplicable(job, NodeStatus.FAILED, null);
         publishFailedSafely(jobId);
+    }
+
+    private void simulateDelay() {
+        int delayMs = ThreadLocalRandom.current().nextInt(1000, 2001);
+        try {
+            Thread.sleep(delayMs);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("Job execution interrupted", e);
+        }
+    }
+
+    private ExecutionResult executeImageGeneration(Job job) {
+        Long nodeId = requireNodeId(job);
+        String relativePath = "ai/images/node-" + nodeId + ".png";
+        String contentKey = createMockAsset(relativePath, MockAssetType.PNG);
+        return new ExecutionResult(nodeId, contentKey);
+    }
+
+    private ExecutionResult executeVideoGeneration(Job job) {
+        Long nodeId = requireNodeId(job);
+        String relativePath = "ai/videos/node-" + nodeId + ".mp4";
+        String contentKey = createMockAsset(relativePath, MockAssetType.MP4);
+        return new ExecutionResult(nodeId, contentKey);
+    }
+
+    private ExecutionResult executeProjectMerge(Job job) {
+        Long projectId = job.getProjectId();
+        if (projectId == null) {
+            throw new IllegalStateException("Project merge job missing projectId");
+        }
+        String relativePath = "exports/" + projectId + "/final.mp4";
+        createMockAsset(relativePath, MockAssetType.MP4);
+        return new ExecutionResult(projectId, null);
+    }
+
+    private Long requireNodeId(Job job) {
+        if (job.getNodeId() == null) {
+            throw new IllegalStateException("Node job missing nodeId");
+        }
+        return job.getNodeId();
+    }
+
+    private void updateNodeStatusIfApplicable(Job job, NodeStatus status, String contentUrl) {
+        if (job.getNodeId() == null) {
+            return;
+        }
+        if (job.getType() != JobType.IMAGE_GENERATION
+                && job.getType() != JobType.VIDEO_GENERATION) {
+            return;
+        }
+        if (contentUrl == null) {
+            nodeMapper.updateStatus(job.getNodeId(), status);
+        } else {
+            nodeMapper.updateStatusAndContentUrl(job.getNodeId(), status, contentUrl);
+        }
+    }
+
+    private String createMockAsset(String relativePath, MockAssetType assetType) {
+        Path targetPath = resolveUploadPath(relativePath);
+        try {
+            Files.createDirectories(targetPath.getParent());
+            if (!Files.exists(targetPath)) {
+                Files.write(targetPath, assetType.bytes());
+            }
+        } catch (IOException e) {
+            throw new IllegalStateException("Failed to create mock asset", e);
+        }
+        return normalizeRelativePath(relativePath);
+    }
+
+    private Path resolveUploadPath(String relativePath) {
+        return Path.of(fileStorageProperties.getUploadDir()).resolve(relativePath);
+    }
+
+    private String normalizeRelativePath(String relativePath) {
+        return relativePath.replace("\\", "/");
+    }
+
+    private record ExecutionResult(Long resultAssetId, String nodeContentKey) {
+    }
+
+    private enum MockAssetType {
+        PNG(new byte[] {
+                (byte) 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
+                0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52,
+                0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+                0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, (byte) 0xC4,
+                (byte) 0x89, 0x00, 0x00, 0x00, 0x0A, 0x49, 0x44, 0x41,
+                0x54, 0x78, (byte) 0x9C, 0x63, 0x00, 0x01, 0x00, 0x00,
+                0x05, 0x00, 0x01, 0x0D, 0x0A, 0x2D, (byte) 0xB4, 0x00,
+                0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, (byte) 0xAE,
+                0x42, 0x60, (byte) 0x82
+        }),
+        MP4("ITDA MOCK VIDEO".getBytes());
+
+        private final byte[] bytes;
+
+        MockAssetType(byte[] bytes) {
+            this.bytes = bytes;
+        }
+
+        public byte[] bytes() {
+            return bytes;
+        }
     }
 
     /**
