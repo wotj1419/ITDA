@@ -23,6 +23,7 @@ import {
     type VideoNodeData,
 } from '../types/node';
 import { generateMockSceneNodes, generateSimpleMockNodes } from '../services/mock/sceneNodes';
+import { useSceneStore } from './scene';
 
 // =============================================================================
 // Helper Functions
@@ -120,8 +121,20 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
     // State
     // ==========================================================================
 
+    const sceneStore = useSceneStore();
+
     const nodes = ref<SceneNode[]>([]);
     const edges = ref<Edge[]>([]);
+
+    async function ensureSceneInProgress() {
+        if (sceneId.value) {
+            // We need to find the scene object from the store
+            const scene = sceneStore.scenes.find(s => s.sceneId === Number(sceneId.value));
+            if (scene && scene.status === 'DRAFT') {
+                await sceneStore.updateScene(scene.sceneId, { status: 'IN_PROGRESS' });
+            }
+        }
+    }
     const selectedNodeId = ref<string | null>(null);
     const positionHistory = ref<NodePositionSnapshot[]>([]);
 
@@ -362,6 +375,7 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
 
         nodes.value.push(newNode);
         addEdge(parentNodeId, id);
+        ensureSceneInProgress();
         return newNode;
     }
 
@@ -397,6 +411,7 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
 
         nodes.value.push(newNode);
         addEdge(parentNodeId, id);
+        ensureSceneInProgress();
         return newNode;
     }
 
@@ -435,6 +450,7 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
 
         nodes.value.push(newNode);
         addEdge(parentNodeId, id);
+        ensureSceneInProgress();
         return newNode;
     }
 
@@ -473,6 +489,7 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
 
         nodes.value.push(newNode);
         addEdge(parentNodeId, id);
+        ensureSceneInProgress();
         return newNode;
     }
 
@@ -489,6 +506,7 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
                 ...updates,
                 updatedAt: new Date().toISOString(),
             } as AnyNodeData;
+            ensureSceneInProgress();
         }
     }
 
@@ -514,6 +532,7 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
         if (selectedNodeId.value && toDelete.includes(selectedNodeId.value)) {
             selectedNodeId.value = null;
         }
+        ensureSceneInProgress();
     }
 
     function getDescendantIds(nodeId: string): string[] {
@@ -555,6 +574,7 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
         if (positionHistory.value.length > MAX_POSITION_HISTORY) {
             positionHistory.value.shift();
         }
+        ensureSceneInProgress();
     }
 
     function undoLastMove(): void {
@@ -691,6 +711,7 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
         if (shouldSyncCollapse) {
             syncHiddenByCollapse();
         }
+        ensureSceneInProgress();
     }
 
     // ==========================================================================
@@ -884,6 +905,7 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
         selectionMode.value = 'none';
         endShotTargetVideoId.value = null;
         syncEdgeMeta();
+        ensureSceneInProgress();
     }
 
     function cancelSelectEndShot(): void {

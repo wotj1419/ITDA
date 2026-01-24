@@ -100,6 +100,20 @@ function handleReset() {
 function handlePlay() {
   uiStore.openModal(TIMELINE_PLAYBACK_MODAL_ID)
 }
+
+const timelineMaxTime = computed(() => {
+  // Base 10 mins (600s), or total duration + 5 mins buffer (300s)
+  return Math.max(600, timelineStore.totalDuration + 300)
+})
+
+function handleWheel(e: WheelEvent) {
+  if (timelineStore.clipCount === 0) return
+  const container = e.currentTarget as HTMLElement
+  if (e.deltaY !== 0) {
+     e.preventDefault()
+     container.scrollLeft += e.deltaY * 3
+  }
+}
 </script>
 
 <template>
@@ -167,16 +181,27 @@ function handlePlay() {
           </div>
 
           <Card class="track-card">
-            <TimeRuler :max-time="60" />
-            <VideoTrack
-              :clips="timelineStore.orderedClips"
-              @reorder="handleReorder"
-              @remove="handleRemove"
-            />
+            <div 
+              class="timeline-scroll-container" 
+              :style="{ overflowX: timelineStore.clipCount === 0 ? 'hidden' : 'auto' }"
+              @wheel="handleWheel"
+            >
+              <div 
+                class="timeline-inner-wrapper"
+                :style="{ width: timelineStore.clipCount === 0 ? '100%' : `${timelineMaxTime * 20}px` }"
+              >
+                <TimeRuler :max-time="timelineMaxTime" :px-per-sec="20" />
+                <VideoTrack
+                  :clips="timelineStore.orderedClips"
+                  @reorder="handleReorder"
+                  @remove="handleRemove"
+                />
+              </div>
+            </div>
             <div class="track-info">
               <span class="clip-count">{{ timelineStore.clipCount }}개 클립</span>
               <span class="duration-text">
-                총 길이: {{ timelineStore.totalDuration }}초 / 60초
+                총 길이: {{ timelineStore.totalDuration }}초
               </span>
             </div>
           </Card>
@@ -282,6 +307,44 @@ function handlePlay() {
   font-size: 0.875rem;
   font-weight: 600;
   color: var(--rose-500);
+}
+
+.timeline-scroll-container {
+  overflow-x: auto;
+  border: 1px solid var(--rose-200);
+  border-radius: 8px;
+  background: var(--rose-50);
+  /* Custom scrollbar styling */
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+  transition: scrollbar-color 0.3s;
+}
+
+.timeline-scroll-container:hover {
+  scrollbar-color: var(--rose-300) transparent;
+}
+
+.timeline-scroll-container::-webkit-scrollbar {
+  height: 40px; /* Horizontal scrollbar height increased */
+  background: transparent;
+}
+
+.timeline-scroll-container::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 4px;
+}
+
+.timeline-scroll-container:hover::-webkit-scrollbar-thumb {
+  background: var(--rose-300);
+}
+
+.timeline-scroll-container::-webkit-scrollbar-thumb:hover {
+  background: var(--rose-400);
+}
+
+.timeline-inner-wrapper {
+  padding: 0;
+  position: relative;
 }
 
 .timeline-actions {

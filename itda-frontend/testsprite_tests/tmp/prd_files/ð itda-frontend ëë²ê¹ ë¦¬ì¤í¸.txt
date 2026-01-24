@@ -1,0 +1,221 @@
+🔍 itda-frontend 디버깅 리스트
+문서 기반: 
+PRD_AI_Movie_Studio_v2.5.md
+
+분석 대상: itda-frontend/src/ 폴더
+작성일: 2026-01-23
+
+📋 목차
+사용자 인증 (Auth)
+프로젝트 관리
+씬 편집 (Scene Editor)
+노드 시스템 (Vue Flow)
+AI 생성 기능
+타임라인 / 영상 편집
+협업 기능 (WebRTC)
+WebSocket / 실시간 알림
+UI/UX 디버깅
+API 연동 확인
+1. 사용자 인증 (Auth)
+📂 관련 파일
+AuthPage.vue
+auth.ts (store)
+auth.ts (api)
+✅ 디버깅 체크리스트
+#	항목	PRD 요구사항	확인 포인트
+1.1	회원가입	이메일/비밀번호 기반	폼 유효성 검사, API 연동, 에러 처리
+1.2	로그인	JWT 토큰 발급	Access Token(1일), Refresh Token(7일) 저장 위치 확인
+1.3	로그아웃	토큰 무효화	localStorage/sessionStorage 정리, 리다이렉트
+1.4	토큰 재발급	Refresh Token Rotation	자동 갱신 로직, 만료 시 로그인 리다이렉트
+1.5	프로필 수정	이름, 프로필 이미지	
+ProfileEditPage.vue
+ 동작 확인
+1.6	비밀번호 재설정	이메일 링크/코드 기반	(P0) 구현 여부 확인
+2. 프로젝트 관리
+📂 관련 파일
+DashboardPage.vue
+ProjectDetailPage.vue
+project.ts (store)
+projects.ts (api)
+✅ 디버깅 체크리스트
+#	항목	PRD 요구사항	확인 포인트
+2.1	프로젝트 목록	대시보드 표시	페이지네이션, 정렬, 프로젝트 카드 렌더링
+2.2	프로젝트 생성	제목, 설명, 장르	모달 UI, 필수값 유효성 검사
+2.3	프로젝트 수정/삭제	CRUD 동작	권한 체크(Owner만), 삭제 확인 모달
+2.4	프로젝트 썸네일	첫 씬 Active Master 이미지	이미지 없을 시 플레이스홀더 표시
+2.5	멤버 관리	이메일로 초대	Owner/Editor/Viewer 권한 구분
+2.6	프로젝트 탈퇴	본인 탈퇴 (Owner 제외)	/members/me API 연동
+2.7	탭 구조	Story / Scenes / Objects	탭 전환 및 컨텐츠 렌더링
+3. 씬 편집 (Scene Editor)
+📂 관련 파일
+SceneEditPage.vue
+scene.ts (store)
+scenes.ts (api)
+✅ 디버깅 체크리스트
+#	항목	PRD 요구사항	확인 포인트
+3.1	씬 목록 조회	프로젝트 내 씬 리스트	순서 표시, 드래그 순서 변경
+3.2	씬 추가/삭제	CRUD 동작	새 씬 생성, 삭제 확인 모달
+3.3	씬 순서 변경	드래그 앤 드롭	API PUT /projects/{id}/scenes/order 호출
+3.4	씬 편집 진입	씬 카드 클릭 → 에디터	라우팅, 데이터 로드 타이밍
+3.5	씬 제목/설명 동기화	양방향 동기화	프로젝트 상세 ↔ 씬 에디터
+4. 노드 시스템 (Vue Flow)
+📂 관련 파일
+NodeCanvas.vue
+sceneNode.ts (store)
+노드 컴포넌트:
+SceneHeaderNode.vue
+MasterImageNode.vue
+StoryboardGridNode.vue
+ShotNode.vue
+VideoNode.vue
+패널 컴포넌트:
+MasterImagePanel.vue
+StoryboardGridPanel.vue
+ShotPanel.vue
+VideoPanel.vue
+✅ 디버깅 체크리스트
+#	항목	PRD 요구사항	확인 포인트
+4.1	노드 5종 렌더링	scene_header, master, grid, shot, video	타입별 노드 컴포넌트 렌더링
+4.2	씬 헤더 노드	읽기 전용, 자동 생성	씬 진입 시 자동 표시, 편집 불가
+4.3	마스터 이미지 노드	씬당 최대 3개, Active 1개	isActive 표시, 마스터 추가 버튼
+4.4	Active Master 변경	클릭으로 Active 전환	API 호출, UI 즉시 반영
+4.5	노드 분기	마스터→그리드→샷→영상	연결 규칙 준수, 분기 허용
+4.6	노드 선택	클릭으로 선택, 사이드바 표시	selectedNodeId 상태 관리
+4.7	노드 삭제	하위 노드 함께 삭제	경고 모달, cascade 삭제
+4.8	노드 위치 저장	드래그 후 저장	debouncedSave(), localStorage
+4.9	자동 레이아웃	세로 흐름(위→아래)	handleAutoLayout() 기능
+4.10	상태 표시	PENDING/RUNNING/SUCCEEDED/FAILED	노드에 배지 표시
+4.11	재생성(Regenerate)	새 버전 노드 생성	히스토리 보존, 최신 버전 포커스
+5. AI 생성 기능
+📂 관련 파일
+ai.ts (api)
+ai.ts (mock)
+scenario.ts (store)
+✅ 디버깅 체크리스트
+#	항목	PRD 요구사항	확인 포인트
+5.1	AI 프롬프트 생성	POST /api/ai/prompts/generate	노드 설정값 → 영어 프롬프트 변환
+5.2	AI 프롬프트 개선	POST /api/ai/prompts/improve	사용자 피드백 → 개선된 프롬프트
+5.3	프롬프트 승인 플로우	입력→생성→검토/수정→승인	각 패널의 승인 버튼 동작
+5.4	이미지 생성 요청	master/grid/shot 노드	generateNode() API 호출
+5.5	영상 생성 요청	video 노드 (Veo 3.1)	카메라 움직임, 길이 설정
+5.6	Job 상태 폴링	pollJobUntilComplete()	2초 간격, 최대 2분, 타임아웃 처리
+5.7	생성 완료 처리	resultUrl 반영	노드 이미지/영상 URL 업데이트
+5.8	생성 실패 처리	에러 표시 + 재시도	토스트 알림, 재생성 버튼
+5.9	백그라운드 생성	다른 씬 작업 가능	UI 블로킹 없음 확인
+5.10	AI 시나리오 생성	4단계 플로우	장르→프롬프트→줄거리→씬별 스토리
+6. 타임라인 / 영상 편집
+📂 관련 파일
+TimelinePage.vue
+timeline.ts (store)
+timeline.ts (api)
+컴포넌트:
+VideoTrack.vue
+ClipItem.vue
+TimelinePlaybackModal.vue
+MergeProgress.vue
+✅ 디버깅 체크리스트
+#	항목	PRD 요구사항	확인 포인트
+6.1	확정(Confirm)	영상 노드 → 타임라인 추가	isConfirmed 플래그 설정
+6.2	확정 해제	타임라인에서 제거	DELETE /nodes/{id}/confirm 호출
+6.3	shot당 1개 확정	동일 shot에서 1개만 확정	기존 확정 자동 해제
+6.4	씬 타임라인	씬 편집 화면 하단	확정된 클립 표시, 순서 변경
+6.5	프로젝트 타임라인	모든 씬 영상 표시	씬 순서, 총 길이 표시
+6.6	클립 순서 변경	드래그 앤 드롭	handleTimelineReorder() 동작
+6.7	순차 재생	▶ 버튼 클릭	TimelinePlaybackModal 동작
+6.8	씬 영상 병합	씬 내 클립 → 씬 영상	(Backend Job) 상태 표시
+6.9	최종 영상 병합	모든 씬 → 최종 영화	POST /projects/{id}/merge
+6.10	다운로드	MP4 파일	GET /projects/{id}/export
+6.11	총 길이 제한	최대 60초 (1분)	제한 초과 시 경고 표시
+7. 협업 기능 (WebRTC)
+📂 관련 파일
+collab.ts (store)
+CollabContainer.vue
+CollabPanel.vue
+CollabPill.vue
+services/webrtc 폴더
+✅ 디버깅 체크리스트
+#	항목	PRD 요구사항	확인 포인트
+7.1	플로팅 협업 바	모든 화면 하단 오버레이	화면 이동 시에도 통화 유지
+7.2	협업 시작/종료	버튼 클릭으로 토글	WebRTC 연결/해제
+7.3	화상통화	WebRTC P2P	카메라/마이크 스트림
+7.4	마이크 ON/OFF	토글 버튼	로컬 오디오 mute/unmute
+7.5	카메라 ON/OFF	토글 버튼	로컬 비디오 enable/disable
+7.6	화면 공유	현재 화면 공유	getDisplayMedia() API
+7.7	참여자 표시	아바타 목록	접속 중인 멤버 표시
+7.8	채팅 기능	텍스트 메시지	WebSocket 기반 (세션 단위)
+7.9	Presence 표시	"팀원 → Scene 1 편집 중"	현재 작업 위치 표시
+7.10	접기/확장 토글	작업 방해 최소화	협업 바 접힘 상태 관리
+8. WebSocket / 실시간 알림
+📂 관련 파일
+ui.ts (store)
+ToastContainer 컴포넌트 (common)
+✅ 디버깅 체크리스트
+#	항목	PRD 요구사항	확인 포인트
+8.1	프로젝트 이벤트 WS	/ws/projects/{projectId}	연결 상태, 인증
+8.2	job.done 이벤트	생성 완료 알림	토스트 표시, 노드 상태 업데이트
+8.3	job.failed 이벤트	생성 실패 알림	에러 토스트, 재시도 버튼
+8.4	토스트 알림	success/error/warning/progress	showToast() 동작
+8.5	노드 상태 배지	PENDING/RUNNING/SUCCEEDED/FAILED	실시간 애니메이션
+8.6	재연결 로직	연결 끊김 시 재시도	자동 재연결, 에러 알림
+9. UI/UX 디버깅
+📂 관련 파일
+LandingPage.vue
+src/layouts 폴더
+src/components/common 폴더
+✅ 디버깅 체크리스트
+#	항목	PRD 요구사항	확인 포인트
+9.1	랜딩 페이지	서비스 소개, 로그인 CTA	디자인, 반응형
+9.2	반응형 디자인	Desktop 우선	다양한 화면 크기 테스트
+9.3	로딩 상태	스피너/스켈레톤	데이터 로드 중 표시
+9.4	에러 처리 원칙	원인 + 3가지 조치 제안	사용자 친화적 에러 메시지
+9.5	피드백 즉시성	모든 액션에 시각적 피드백	버튼 클릭, 호버 효과
+9.6	고급 옵션 접기	기본 접힘 상태	localStorage에 상태 저장
+9.7	삭제 경고 모달	"하위 노드도 삭제됨"	NodeDeleteConfirmModal 동작
+9.8	키보드 단축키	Delete 키로 노드 삭제	handleEditorKeydown()
+10. API 연동 확인
+📂 관련 파일
+client.ts
+src/services/api 폴더 전체
+src/services/mock 폴더 (개발용 Mock)
+✅ 디버깅 체크리스트
+#	항목	PRD API 명세	확인 포인트
+10.1	API Client 설정	baseURL, 인터셉터	Authorization 헤더 자동 첨부
+10.2	공통 응답 포맷	{ code, message, data }	응답 파싱, 에러 코드 처리
+10.3	Mock 서비스	개발 환경용	Mock ↔ 실제 API 전환 로직
+10.4	인증 API	/api/auth/*	로그인/로그아웃 연동
+10.5	프로젝트 API	/api/projects/*	CRUD + 멤버 관리
+10.6	씬 API	/api/projects/{id}/scenes/*	씬 목록, 순서 변경
+10.7	노드 API	/api/scenes/{sceneId}/nodes/*	노드 CRUD, 확정, 재생성
+10.8	AI API	/api/ai/*	프롬프트 생성, Job 조회
+10.9	타임라인 API	/api/projects/{id}/timeline	순서 변경, 병합
+10.10	파일 API (P1)	/api/files/*	Presigned URL, 업로드
+🧪 테스트 환경
+Playwright 테스트
+설정 파일: 
+playwright.config.ts
+테스트 폴더: tests/
+실행 명령: npx playwright test
+리포트: playwright-report/
+테스트 실행 방법
+cd itda-frontend
+npm run dev          # 개발 서버 실행 (5173 포트)
+npx playwright test  # E2E 테스트 실행
+📌 우선순위 높은 디버깅 항목
+IMPORTANT
+
+다음 항목들은 MVP(P0)에서 필수 기능이므로 우선적으로 확인이 필요합니다.
+
+노드 시스템 (4.1-4.11): Vue Flow 기반 핵심 워크플로우
+AI 생성 기능 (5.1-5.9): 프롬프트 생성 및 이미지/영상 생성
+타임라인 확정 (6.1-6.3): 영상 선택 및 타임라인 반영
+WebSocket 알림 (8.1-8.5): Job 완료/실패 실시간 알림
+프로젝트 관리 (2.1-2.4): 기본 CRUD 동작
+🔄 Mock ↔ 실제 API 전환 확인
+현재 src/services/mock/ 폴더에 Mock 서비스들이 구현되어 있습니다:
+
+ai.ts, auth.ts, characters.ts, nodes.ts, projects.ts, sceneNodes.ts, scenes.ts, timeline.ts
+확인 필요 사항:
+
+ Mock과 실제 API 전환 메커니즘
+ 환경 변수 기반 분기 로직
+ Mock 데이터와 실제 API 응답 포맷 일치 여부

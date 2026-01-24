@@ -138,11 +138,6 @@ const progressPercent = Math.min(
       />
     </div>
 
-    <!-- Total Duration -->
-    <span class="timeline-total">
-      {{ totalDuration }}s / {{ maxDuration }}s
-    </span>
-
     <!-- Timeline Link -->
     <button class="timeline-play" @click="handlePlay">
       <Play class="link-icon" />
@@ -299,18 +294,6 @@ const progressPercent = Math.min(
   background: linear-gradient(90deg, var(--rose-400), var(--rose-500));
   border-radius: 2px;
   transition: width 0.3s ease;
-}
-
-/* ==========================================================================
-   Total Duration
-   ========================================================================== */
-
-.timeline-total {
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: var(--gray-600);
-  white-space: nowrap;
-  font-family: 'JetBrains Mono', monospace;
 }
 
 /* ==========================================================================

@@ -81,7 +81,7 @@ const editLink = computed(() => ({
         <slot name="actions-left" />
         <RouterLink :to="editLink" custom v-slot="{ navigate }">
           <Button
-            :variant="scene.status === 'COMPLETED' ? 'primary' : 'secondary'"
+            :variant="scene.status === 'IN_PROGRESS' ? 'primary' : 'secondary'"
             size="sm"
             @click="navigate"
           >

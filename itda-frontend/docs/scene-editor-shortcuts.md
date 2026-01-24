@@ -1064,7 +1064,155 @@ export interface GeneratePromptRequest {
 
 -------------------------------------------------------------------------------------
 
- 
+## 코드 분석 및 품질 문서화 (2026-01-23)
+- **수정 내용**: itda-frontend 전체 코드베이스(Vue 72개, TypeScript 50개, JSON 10개)를 분석하여 코드 품질 보고서 작성.
+- **이전 문제**: 프로젝트의 코드 일관성, 중복 정의, 최적화 포인트에 대한 공식 문서가 없었음.
+- **해결**: `docs/code-analysis.md` 문서를 생성하여 타입 중복, 파일 크기 불균형, 개선 권장사항을 체계적으로 정리.
+
+### 발견된 주요 이슈
+
+#### 🔴 중복 타입 정의
+| 타입 | 위치 | 문제 |
+|------|------|------|
+| `TimelineClip` | `types/index.ts` L139, L254 | 동일 인터페이스 2회 정의 |
+| `ApiResponse` | `types/index.ts` L4, `types/api.ts` L94 | 타입 불일치 (`code` 필드) |
+| `GridLayout` | `types/index.ts` L157, `types/node.ts` L51 | 동일 타입 2회 정의 |
+
+#### 🟡 파일 크기 불균형
+| 파일 | 라인 수 | 권장 |
+|------|---------|------|
+| `stores/sceneNode.ts` | 1,054줄 | 200줄 이하로 분리 필요 |
+| `pages/ProjectDetailPage.vue` | ~900줄 | 모니터링 필요 |
+
+### 신규 파일
+- [code-analysis.md](./code-analysis.md) - 전체 코드 분석 보고서
+
+### 권장 리팩토링 순서
+1. **즉시**: 중복 타입 제거 (`TimelineClip`, `ApiResponse`, `GridLayout`)
+2. **1주 내**: `sceneNode.ts` 파일 분리, 스토리지 매니저 추가
+3. **2주 내**: 번들 최적화, 타입 안전성 강화
+
+-------------------------------------------------------------------------------------
+
+## Merge feat/UI 브랜치 통합 (2026-01-23)
+- **수정 내용**: `feat/UI` 브랜치의 변경사항을 `feat/node-0119` 브랜치에 머지.
+- **이전 문제**: UI 관련 변경사항이 별도 브랜치에 있어 최신 기능과 분리되어 있었음.
+- **해결**: `git merge origin/feat/UI`를 통해 UI 개선사항을 현재 작업 브랜치에 통합.
+
+### 머지된 주요 변경사항
+- 미니 타임라인 드래그 앤 드롭 기능
+- 타임라인 재생 모달
+- 카메라 움직임 옵션 UI 개선
+- 영상 패널 확정 체크박스 추가
+
+### 영향받은 파일
+- [SceneEditPage.vue](../src/pages/SceneEditPage.vue)
+- [TimelinePage.vue](../src/pages/TimelinePage.vue)
+- [MiniTimeline.vue](../src/components/scene-editor/MiniTimeline.vue)
+- [VideoPanel.vue](../src/components/scene-editor/panels/VideoPanel.vue)
+- [sceneNode.ts](../src/stores/sceneNode.ts)
+- [timeline.ts](../src/stores/timeline.ts)
+- [ui.ts](../src/stores/ui.ts)
+- [node.ts](../src/types/node.ts)
+- [index.ts](../src/types/index.ts)
+
+-------------------------------------------------------------------------------------
+
+## Jenkins/Mattermost 연동 (2026-01-23)
+- **수정 내용**: CI/CD 파이프라인(Jenkins)과 Mattermost 알림 연동 설정.
+- **이전 문제**: 빌드/배포 상태를 수동으로 확인해야 했음.
+- **해결**: `Jenkinsfile` 추가 및 Mattermost Webhook 연결.
+
+### 신규/수정 파일
+- `Jenkinsfile` - 🆕 Jenkins 파이프라인 정의
+- `deploy/docker-compose.yml` - 🆕 Docker Compose 설정
+- `deploy/nginx/conf.d/app.conf` - 🆕 Nginx 설정
+- `deploy/prometheus/prometheus.yml` - 🆕 Prometheus 모니터링 설정
+
+### 테스트 커밋
+- `1108732`: 멀티브랜치 적용 테스트
+- `f5a4428`: Mattermost 연결 테스트
+- `a94a8fc`: Mattermost 연결 테스트
+
+-------------------------------------------------------------------------------------
+
+## AI 생성 토스트 개선 (2026-01-23)
+- **수정 내용**: AI 이미지/영상 생성 프로세스에 대한 토스트 알림 UX 개선.
+- **이전 문제**: 생성 중/완료/실패 상태에 대한 피드백이 불명확했음.
+- **해결**: `useGenerationToast` 컴포저블을 통해 일관된 토스트 알림 제공.
+
+### 수정된 파일
+- [useGenerationToast.ts](../src/composables/useGenerationToast.ts)
+  - 생성 시작/완료/실패에 대한 토스트 함수 제공
+  - 에러 시 원인/권고 메시지 포함
+  - 에러 토스트는 자동 닫힘 비활성화
+  ```typescript
+  // 사용 예시
+  const { startGenerationToast, finishGenerationToast } = useGenerationToast();
+  
+  // 생성 시작
+  const toastId = startGenerationToast('image');
+  
+  // 성공 시
+  finishGenerationToast(toastId, 'image', 'success');
+  
+  // 실패 시 (원인/권고 포함)
+  finishGenerationToast(toastId, 'image', 'error', {
+    reason: '네트워크 오류',
+    advice: '인터넷 연결을 확인해주세요.',
+  });
+  ```
+
+-------------------------------------------------------------------------------------
+
+## Mock AI 서비스 개선 (2026-01-23)
+- **수정 내용**: 개발 중 AI API 호출을 대체하는 Mock 서비스 개선.
+- **이전 문제**: Mock 데이터가 실제 API 응답과 일치하지 않아 통합 시 문제 발생 가능성.
+- **해결**: Mock 응답 구조를 실제 API 스펙에 맞게 정렬.
+
+### 수정된 파일
+- [ai.ts](../src/services/mock/ai.ts)
+  - 프롬프트 생성 Mock 응답 개선
+  - 이미지/영상 생성 Job 폴링 시뮬레이션 추가
+  ```typescript
+  // Mock AI 서비스 구조
+  export const mockAiService = {
+    generatePrompt: async (params) => { ... },
+    generateNode: async (nodeId, prompt) => { ... },
+    pollJobUntilComplete: async (jobId) => { ... },
+  };
+  ```
+
+- [sceneNodes.ts](../src/services/mock/sceneNodes.ts)
+  - Mock 씬 노드 데이터에 신규 카메라 모션 값 적용
+  - `timelineOrder` 필드 추가
+
+-------------------------------------------------------------------------------------
+
+## UI 상수 정의 (2026-01-23)
+- **수정 내용**: UI 관련 상수를 중앙 집중화하여 관리.
+- **이전 문제**: 매직 넘버와 문자열이 여러 파일에 흩어져 있어 유지보수 어려움.
+- **해결**: `constants/ui.ts`에 UI 상수 정의.
+
+### 수정된 파일
+- [ui.ts](../src/constants/ui.ts)
+  - 토스트 기본 duration
+  - 모달 ID 상수
+  - 애니메이션 타이밍 등
+  ```typescript
+  export const UI_CONSTANTS = {
+    TOAST_DEFAULT_DURATION: 4000,
+    MODAL_ANIMATION_DURATION: 300,
+    DEBOUNCE_DELAY: 300,
+  } as const;
+  
+  export const MODAL_IDS = {
+    TIMELINE_PLAYBACK: 'timeline-playback',
+    NODE_DELETE_CONFIRM: 'node-delete-confirm',
+  } as const;
+  ```
+
+-------------------------------------------------------------------------------------
 
 ## API 연동 및 서비스 레이어 전환 구현 (2026-01-24)
 - **수정 내용**: 프론트엔드와 백엔드 간의 API 연동을 위한 서비스 레이어를 구축하고, 환경 변수(`VITE_USE_MOCK`)에 따라 Mock/Real API를 전환할 수 있도록 구현.
@@ -1119,3 +1267,9 @@ export const useProjectStore = defineStore('project', () => {
 ```
 
 -------------------------------------------------------------------------------------
+
+
+ 
+
+
+

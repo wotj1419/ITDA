@@ -16,6 +16,7 @@ const uiStore = useUIStore();
 const videoRef = ref<HTMLVideoElement | null>(null);
 const currentIndex = ref(0);
 const isPlaying = ref(false);
+const isLastClipEnded = ref(false); // 마지막 클립 종료 상태
 
 const isOpen = computed(() => uiStore.activeModal === TIMELINE_PLAYBACK_MODAL_ID);
 const currentClip = computed(() => props.clips[currentIndex.value]);
@@ -98,19 +99,28 @@ async function playPrev(): Promise<void> {
 function handleEnded(): void {
   if (currentIndex.value >= props.clips.length - 1) {
     isPlaying.value = false;
+    isLastClipEnded.value = true; // 마지막 클립 종료 상태로 설정
     return;
   }
   void playNext();
 }
 
+function handleReplay(): void {
+  isLastClipEnded.value = false;
+  currentIndex.value = 0;
+  void playClipAt(0);
+}
+
 function handleClose(): void {
   isPlaying.value = false;
+  isLastClipEnded.value = false; // 상태 초기화
   videoRef.value?.pause();
 }
 
 watch(isOpen, (open) => {
   if (open) {
     currentIndex.value = 0;
+    isLastClipEnded.value = false; // 상태 초기화
     void playClipAt(0);
     return;
   }
@@ -131,7 +141,20 @@ watch(isOpen, (open) => {
           <div class="player-title">
             {{ currentClip?.label || '클립 재생' }}
           </div>
-          <div class="player-controls">
+          
+          <!-- 마지막 클립 종료 시 다시보기/닫기 버튼 -->
+          <div v-if="isLastClipEnded" class="player-controls">
+            <button class="player-btn player-btn--primary" @click="handleReplay">
+              <Play class="player-icon" />
+              다시보기
+            </button>
+            <button class="player-btn" @click="handleClose">
+              닫기
+            </button>
+          </div>
+          
+          <!-- 일반 재생 컨트롤 -->
+          <div v-else class="player-controls">
             <button class="player-btn" @click="playPrev">
               <SkipBack class="player-icon" />
               이전

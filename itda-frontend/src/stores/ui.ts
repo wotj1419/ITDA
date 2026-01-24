@@ -4,7 +4,7 @@ import type { Toast } from '../types'
 
 export const useUIStore = defineStore('ui', () => {
   // State
-  const sidebarExpanded = ref(true)
+  const sidebarExpanded = ref(false)
   const sidebarPinned = ref(false) // Disabled - always allow auto-collapse
   const toasts = ref<Toast[]>([])
   const activeModal = ref<string | null>(null)
