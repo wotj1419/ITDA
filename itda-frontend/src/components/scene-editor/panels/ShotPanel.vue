@@ -135,9 +135,18 @@ async function generateShot(): Promise<void> {
   const toastId = startGenerationToast('shot');
 
   try {
+    const shotTypeValue = buildShotTypeValue(form.value.shotTypes);
     nodeStore.updateNode(props.node.id, { jobStatus: JobStatus.RUNNING });
 
-    const jobId = await aiService.generateNode(props.node.id, form.value.prompt);
+    const jobId = await aiService.generateNode(props.node.id, form.value.prompt, {
+      nodeType: 'SHOT',
+      settings: {
+        gridCellIndex: data.value?.gridCellIndex ?? 0,
+        shotType: shotTypeValue,
+        expression: form.value.expression,
+        additionalDetail: form.value.additionalDetail,
+      },
+    });
     console.log('Shot generation job started:', jobId);
 
     const result = await aiService.pollJobUntilComplete(jobId, (status) => {

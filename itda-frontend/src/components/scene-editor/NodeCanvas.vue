@@ -126,27 +126,27 @@ function handlePaneClick(): void {
 // Node Actions
 // =============================================================================
 
-function handleAddChild(nodeId: string, nodeType: NodeType): void {
+async function handleAddChild(nodeId: string, nodeType: NodeType): Promise<void> {
   switch (nodeType) {
     case NodeType.SCENE_HEADER:
-      nodeStore.addMasterImageNode(nodeId);
+      await nodeStore.addMasterImageNode(nodeId);
       break;
     case NodeType.MASTER_IMAGE:
-      nodeStore.addStoryboardGridNode(nodeId);
+      await nodeStore.addStoryboardGridNode(nodeId);
       break;
     case NodeType.STORYBOARD_GRID:
-      nodeStore.addShotNode(nodeId);
+      await nodeStore.addShotNode(nodeId);
       break;
     case NodeType.SHOT:
-      nodeStore.addVideoNode(nodeId);
+      await nodeStore.addVideoNode(nodeId);
       break;
   }
   // 레이아웃 재적용
   applyLayout();
 }
 
-function handleConfirmVideo(nodeId: string): void {
-  nodeStore.toggleVideoConfirm(nodeId);
+async function handleConfirmVideo(nodeId: string): Promise<void> {
+  await nodeStore.toggleVideoConfirm(nodeId);
 }
 
 // Expose for parent

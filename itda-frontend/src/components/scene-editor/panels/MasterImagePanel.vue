@@ -130,7 +130,15 @@ async function generateImage(): Promise<void> {
     nodeStore.updateNode(props.node.id, { jobStatus: JobStatus.RUNNING });
 
     // 이미지 생성 요청
-    const jobId = await aiService.generateNode(props.node.id, form.value.prompt);
+    const jobId = await aiService.generateNode(props.node.id, form.value.prompt, {
+      nodeType: 'MASTER',
+      settings: {
+        style: form.value.style,
+        timeOfDay: form.value.timeOfDay,
+        mood: form.value.mood,
+        objectIds: form.value.objectIds,
+      },
+    });
     console.log('Image generation job started:', jobId);
 
     // 폴링으로 완료 대기

@@ -158,7 +158,14 @@ async function generateGrid(): Promise<void> {
   try {
     nodeStore.updateNode(props.node.id, { jobStatus: JobStatus.RUNNING });
 
-    const jobId = await aiService.generateNode(props.node.id, form.value.prompt);
+    const jobId = await aiService.generateNode(props.node.id, form.value.prompt, {
+      nodeType: 'GRID',
+      settings: {
+        layout: form.value.layout,
+        shotTypes: form.value.shotTypes,
+        compositionHint: form.value.compositionHint,
+      },
+    });
     console.log('Grid generation job started:', jobId);
 
     const result = await aiService.pollJobUntilComplete(jobId, (status) => {
