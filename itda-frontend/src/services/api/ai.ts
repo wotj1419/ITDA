@@ -9,6 +9,7 @@ import type {
     ApiResponse,
     GeneratePromptRequest,
     GeneratePromptResponse,
+    GenerateNodeRequest,
     GenerateJobResponse,
     JobStatusResponse,
 } from '../../types/api';
@@ -40,11 +41,12 @@ export async function generatePrompt(
  */
 export async function improvePrompt(
     currentPrompt: string,
-    userFeedback: string
+    userFeedback: string,
+    nodeType?: GeneratePromptRequest['nodeType']
 ): Promise<string> {
     const response = await apiClient.post<ApiResponse<GeneratePromptResponse>>(
         '/ai/prompts/improve',
-        { prompt: currentPrompt, feedback: userFeedback }
+        { nodeType, prompt: currentPrompt, instruction: userFeedback }
     );
     if (!response.data.data?.prompt) {
         throw new Error('Failed to improve prompt');
@@ -63,11 +65,12 @@ export async function improvePrompt(
  */
 export async function generateNode(
     nodeId: string | number,
-    prompt: string
+    prompt: string,
+    options?: { nodeType?: GenerateNodeRequest['nodeType']; settings?: Record<string, unknown> }
 ): Promise<number> {
     const response = await apiClient.post<ApiResponse<GenerateJobResponse>>(
         `/nodes/${nodeId}/generate`,
-        { prompt }
+        { prompt, nodeType: options?.nodeType, settings: options?.settings }
     );
     if (!response.data.data?.jobId) {
         throw new Error('Failed to start generation job');
