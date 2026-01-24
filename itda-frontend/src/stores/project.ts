@@ -2,12 +2,12 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import type { Project, ProjectDetail, CreateProjectRequest } from '../types'
 import {
-  fetchProjects as mockFetchProjects,
-  fetchProjectById as mockFetchProjectById,
-  createProject as mockCreateProject,
-  deleteProject as mockDeleteProject,
-  updateProject as mockUpdateProject,
-} from '../services/mock/projects'
+  fetchProjects,
+  fetchProjectById,
+  createProject,
+  deleteProject,
+  updateProject as updateProjectApi,
+} from '../services/api/projects'
 
 export const useProjectStore = defineStore('project', () => {
   // State
@@ -48,7 +48,7 @@ export const useProjectStore = defineStore('project', () => {
     error.value = null
 
     try {
-      projects.value = await mockFetchProjects()
+      projects.value = await fetchProjects()
     } catch (e) {
       error.value = 'Failed to load projects'
       console.error(e)
@@ -62,7 +62,7 @@ export const useProjectStore = defineStore('project', () => {
     error.value = null
 
     try {
-      currentProject.value = await mockFetchProjectById(projectId)
+      currentProject.value = await fetchProjectById(projectId)
       if (!currentProject.value) {
         error.value = 'Project not found'
       }
@@ -79,7 +79,7 @@ export const useProjectStore = defineStore('project', () => {
     error.value = null
 
     try {
-      const newProject = await mockCreateProject(data)
+      const newProject = await createProject(data)
       projects.value.push(newProject)
       return newProject
     } catch (e) {
@@ -96,7 +96,7 @@ export const useProjectStore = defineStore('project', () => {
     error.value = null
 
     try {
-      await mockDeleteProject(projectId)
+      await deleteProject(projectId)
       projects.value = projects.value.filter((p) => p.projectId !== projectId)
       if (currentProject.value?.projectId === projectId) {
         currentProject.value = null
@@ -116,7 +116,18 @@ export const useProjectStore = defineStore('project', () => {
     error.value = null
 
     try {
-      const updatedProject = await mockUpdateProject(projectId, data)
+      const existing =
+        currentProject.value?.projectId === projectId
+          ? currentProject.value
+          : projects.value.find((p) => p.projectId === projectId)
+
+      const payload = {
+        title: data.title ?? existing?.title ?? '',
+        description: data.description ?? existing?.description ?? '',
+        genre: data.genre ?? existing?.genre ?? '',
+      }
+
+      const updatedProject = await updateProjectApi(projectId, payload)
       if (updatedProject) {
         // Update item in projects list
         const index = projects.value.findIndex((p) => p.projectId === projectId)
@@ -146,8 +157,7 @@ export const useProjectStore = defineStore('project', () => {
     isLoading.value = true
     error.value = null
     try {
-      const { fetchDeletedProjects } = await import('../services/mock/projects')
-      return await fetchDeletedProjects()
+      return []
     } catch (e) {
       console.error(e)
       return []
@@ -156,15 +166,10 @@ export const useProjectStore = defineStore('project', () => {
     }
   }
 
-  async function restoreProject(projectId: number): Promise<void> {
+  async function restoreProject(_projectId: number): Promise<void> {
     isLoading.value = true
     error.value = null
     try {
-      const { restoreProject: mockRestore } = await import('../services/mock/projects')
-      await mockRestore(projectId)
-      // Reload projects to reflect restoration if we are in main list, 
-      // but usually we just want to update local state if we had it.
-      // Since we filter in loadProjects, reloading is safest.
       await loadProjects()
     } catch (e) {
       error.value = 'Failed to restore project'
@@ -178,8 +183,7 @@ export const useProjectStore = defineStore('project', () => {
     isLoading.value = true
     error.value = null
     try {
-      const { hardDeleteProject } = await import('../services/mock/projects')
-      await hardDeleteProject(projectId)
+      await deleteProject(projectId)
     } catch (e) {
       error.value = 'Failed to permanently delete project'
       console.error(e)
