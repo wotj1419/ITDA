@@ -8,10 +8,12 @@ import org.springframework.stereotype.Component;
 @Getter
 @Setter
 @Component
-@ConfigurationProperties(prefix = "spring.ai.vertex.ai.gemini")
-public class VertexAiGeminiProperties {
+@ConfigurationProperties(prefix = "ai.vertex")
+public class AiVertexProperties {
 
     private String projectId;
 
     private String location;
+
+    private String apiVersion = "v1";
 }
