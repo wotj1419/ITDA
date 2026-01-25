@@ -213,6 +213,14 @@ public class GeminiImageClient {
         if (geminiProperties.getSampleCount() > 0) {
             generationConfig.put("candidateCount", geminiProperties.getSampleCount());
         }
+        List<String> responseModalities = geminiProperties.getResponseModalities();
+        if (responseModalities != null && !responseModalities.isEmpty()) {
+            generationConfig.put("responseModalities", responseModalities);
+        }
+        String responseMimeType = safeTrim(geminiProperties.getResponseMimeType());
+        if (responseMimeType != null) {
+            generationConfig.put("responseMimeType", responseMimeType);
+        }
         if (!generationConfig.isEmpty()) {
             payload.put("generationConfig", generationConfig);
         }

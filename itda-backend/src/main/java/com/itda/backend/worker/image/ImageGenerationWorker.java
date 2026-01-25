@@ -67,8 +67,16 @@ public class ImageGenerationWorker {
 
         try {
             JsonNode node = objectMapper.readTree(trimmed);
-            if (node.isObject() && node.hasNonNull("prompt")) {
-                return node.get("prompt").asText();
+            if (node.isObject()) {
+                if (!node.has("prompt")) {
+                    return null;
+                }
+                JsonNode promptNode = node.get("prompt");
+                if (promptNode == null || promptNode.isNull()) {
+                    return null;
+                }
+                String prompt = promptNode.asText();
+                return (prompt != null && !prompt.isBlank()) ? prompt : null;
             }
             if (node.isTextual()) {
                 return node.asText();
@@ -78,6 +86,6 @@ public class ImageGenerationWorker {
             return trimmed;
         }
 
-        return trimmed;
+        return null;
     }
 }

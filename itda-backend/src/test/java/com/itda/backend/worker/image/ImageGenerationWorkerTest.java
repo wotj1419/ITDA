@@ -18,6 +18,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.lang.reflect.Field;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
@@ -84,5 +85,18 @@ class ImageGenerationWorkerTest {
         verify(geminiImageClient).generateImage("test prompt");
         verify(imageStorage).save(1L, 10L, imageBytes, "image/png");
         Mockito.verifyNoMoreInteractions(geminiImageClient, imageStorage, assetMapper);
+    }
+
+    @Test
+    void execute_ShouldFailWhenPromptMissing() {
+        Job job = Job.builder()
+                .id(11L)
+                .projectId(1L)
+                .requestJson("{\"foo\":\"bar\"}")
+                .build();
+
+        assertThatThrownBy(() -> imageGenerationWorker.execute(job))
+                .isInstanceOf(com.itda.backend.global.exception.BusinessException.class)
+                .hasMessageContaining("Prompt is required");
     }
 }

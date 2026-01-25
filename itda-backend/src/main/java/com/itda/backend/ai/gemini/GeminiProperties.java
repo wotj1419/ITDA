@@ -5,6 +5,8 @@ import lombok.Setter;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
 
+import java.util.List;
+
 @Getter
 @Setter
 @Component
@@ -42,4 +44,14 @@ public class GeminiProperties {
      * API timeout in milliseconds.
      */
     private long timeoutMs = 60000;
+
+    /**
+     * Preferred response mime type for image generation (Gemini generateContent).
+     */
+    private String responseMimeType;
+
+    /**
+     * Preferred response modalities (e.g. IMAGE) for Gemini generateContent.
+     */
+    private List<String> responseModalities = List.of("IMAGE");
 }
