@@ -18,7 +18,7 @@ export const apiAuthService: AuthService = {
     },
 
     logout() {
-        // Optional: Call logout endpoint if server requires it
+        // 선택 사항: 서버 로그아웃이 필요한 경우 호출
         // await apiClient.post('/auth/logout');
     }
 };

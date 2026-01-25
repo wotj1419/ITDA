@@ -1,14 +1,9 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import type { ObjectSheet, CreateObjectRequest } from '../types'
-import {
-  fetchCharactersByProjectId as mockFetchCharacters,
-  createCharacter as mockCreateCharacter,
-  updateCharacter as mockUpdateCharacter,
-  deleteCharacter as mockDeleteCharacter,
-  generateCharacterWithAI as mockGenerateCharacter,
-  type GenerateCharacterRequest,
-} from '../services/mock/characters'
+import { objectService } from '../services'
+// Keep type import if needed
+import type { GenerateCharacterRequest } from '../services/mock/characters'
 
 export const useCharacterStore = defineStore('character', () => {
   // State
@@ -28,7 +23,7 @@ export const useCharacterStore = defineStore('character', () => {
     currentProjectId.value = projectId
 
     try {
-      characters.value = await mockFetchCharacters(projectId)
+      characters.value = await objectService.fetchCharactersByProjectId(projectId)
     } catch (e) {
       error.value = 'Failed to load characters'
       console.error(e)
@@ -47,7 +42,7 @@ export const useCharacterStore = defineStore('character', () => {
     error.value = null
 
     try {
-      const newCharacter = await mockCreateCharacter(currentProjectId.value, data)
+      const newCharacter = await objectService.createCharacter(currentProjectId.value, data)
       characters.value.push(newCharacter)
       return newCharacter
     } catch (e) {
@@ -66,7 +61,7 @@ export const useCharacterStore = defineStore('character', () => {
     }
 
     try {
-      const updated = await mockUpdateCharacter(currentProjectId.value, characterId, data)
+      const updated = await objectService.updateCharacter(currentProjectId.value, characterId, data)
       if (updated) {
         const index = characters.value.findIndex((c) => c.objectId === characterId)
         if (index !== -1) {
@@ -92,7 +87,7 @@ export const useCharacterStore = defineStore('character', () => {
     error.value = null
 
     try {
-      const success = await mockDeleteCharacter(currentProjectId.value, characterId)
+      const success = await objectService.deleteCharacter(currentProjectId.value, characterId)
       if (success) {
         characters.value = characters.value.filter((c) => c.objectId !== characterId)
       }
@@ -116,7 +111,7 @@ export const useCharacterStore = defineStore('character', () => {
     error.value = null
 
     try {
-      const generated = await mockGenerateCharacter(currentProjectId.value, request)
+      const generated = await objectService.generateCharacterWithAI(currentProjectId.value, request)
       characters.value.push(generated)
       return generated
     } catch (e) {

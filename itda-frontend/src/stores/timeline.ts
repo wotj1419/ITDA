@@ -3,12 +3,7 @@ import { ref, computed } from 'vue'
 import type { TimelineClip } from '../types'
 import type { AnyNodeData, VideoNodeData } from '../types/node'
 import { NodeType } from '../types/node'
-import {
-    fetchTimelineClips as mockFetchClips,
-    reorderClips as mockReorderClips,
-    removeClip as mockRemoveClip,
-    mergeVideos as mockMergeVideos,
-} from '../services/mock/timeline'
+import { timelineService } from '../services'
 
 export type MergeStatus = 'idle' | 'merging' | 'done' | 'error'
 
@@ -165,7 +160,7 @@ export const useTimelineStore = defineStore('timeline', () => {
                 clips.value = buildClipsFromScene(sceneId)
                 return
             }
-            clips.value = await mockFetchClips(projectId)
+            clips.value = await timelineService.fetchTimelineClips(projectId)
         } catch (e) {
             error.value = 'Failed to load clips'
             console.error(e)
@@ -182,7 +177,7 @@ export const useTimelineStore = defineStore('timeline', () => {
                 clips.value = updateSceneTimelineOrder(currentSceneId.value, clipIds)
                 return true
             }
-            const reordered = await mockReorderClips(currentProjectId.value, clipIds)
+            const reordered = await timelineService.reorderClips(currentProjectId.value, clipIds)
             clips.value = reordered
             return true
         } catch (e) {
@@ -203,7 +198,7 @@ export const useTimelineStore = defineStore('timeline', () => {
                 }
                 return success
             }
-            const success = await mockRemoveClip(currentProjectId.value, clipId)
+            const success = await timelineService.removeClip(currentProjectId.value, clipId)
             if (success) {
                 clips.value = clips.value.filter((c) => c.clipId !== clipId)
                 clips.value.forEach((c, i) => (c.order = i + 1))
@@ -224,9 +219,9 @@ export const useTimelineStore = defineStore('timeline', () => {
         downloadUrl.value = null
 
         try {
-            const result = await mockMergeVideos(
+            const result = await timelineService.mergeVideos(
                 currentProjectId.value,
-                (percent, status) => {
+                (percent: number, status: string) => {
                     mergeProgress.value = percent
                     mergeStatusText.value = status
                 }
