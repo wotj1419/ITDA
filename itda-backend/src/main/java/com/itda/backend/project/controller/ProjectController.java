@@ -16,11 +16,15 @@ import com.itda.backend.project.controller.dto.response.ProjectTimelineResponse;
 import com.itda.backend.project.service.ProjectService;
 import com.itda.backend.project.service.ProjectMediaService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.Resource;
+import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -34,7 +38,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-@Tag(name = "Projects", description = "Project APIs")
+@Tag(name = "프로젝트", description = "프로젝트 생성/조회/수정/삭제 및 내보내기 API")
 @RestController
 @RequestMapping("/api/projects")
 @RequiredArgsConstructor
@@ -44,11 +48,24 @@ public class ProjectController {
     private final ProjectMediaService projectMediaService;
     private final MediaFileService mediaFileService;
 
-    @Operation(summary = "Create project", description = "Create a new project and assign the requester as owner.")
+    @Operation(
+            summary = "프로젝트 생성",
+            description = "새 프로젝트를 생성하고 요청자를 프로젝트 소유자로 지정합니다."
+    )
     @ApiResponses({
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", ref = "#/components/responses/ProjectCreateSuccess"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", ref = "#/components/responses/ValidationError"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", ref = "#/components/responses/Unauthorized")
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "201",
+                    description = "생성 성공",
+                    content = @Content(schema = @Schema(implementation = ProjectCreateResponse.class))
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "400",
+                    description = "입력 값 검증 실패"
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "401",
+                    description = "인증 필요"
+            )
     })
     @PostMapping
     public ResponseEntity<ApiResponse<ProjectCreateResponse>> createProject(
@@ -58,95 +75,264 @@ public class ProjectController {
         return ApiResponse.created(response);
     }
 
-    @Operation(summary = "List projects", description = "List projects the requester participates in.")
+    @Operation(
+            summary = "프로젝트 목록 조회",
+            description = "요청자가 참여 중인 프로젝트 목록을 페이징하여 조회합니다."
+    )
     @ApiResponses({
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", ref = "#/components/responses/ProjectListSuccess"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", ref = "#/components/responses/InvalidRequest"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", ref = "#/components/responses/Unauthorized")
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "200",
+                    description = "조회 성공",
+                    content = @Content(schema = @Schema(implementation = ProjectListResponse.class))
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "400",
+                    description = "요청 파라미터가 올바르지 않음"
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "401",
+                    description = "인증 필요"
+            )
     })
     @GetMapping
     public ResponseEntity<ApiResponse<ProjectListResponse>> listProjects(
             @AuthenticationPrincipal CustomUserDetails userDetails,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size) {
+            @Parameter(description = "페이지(0부터)") @RequestParam(defaultValue = "0") int page,
+            @Parameter(description = "페이지 크기") @RequestParam(defaultValue = "20") int size) {
         ProjectListResponse response = projectService.listProjects(userDetails.getUserId(), page, size);
         return ApiResponse.success(response);
     }
 
-    @Operation(summary = "Get project detail", description = "Get project details and metadata.")
+    @Operation(
+            summary = "프로젝트 상세 조회",
+            description = "프로젝트의 상세 정보 및 메타데이터를 조회합니다."
+    )
     @ApiResponses({
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", ref = "#/components/responses/ProjectDetailSuccess"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", ref = "#/components/responses/Unauthorized"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", ref = "#/components/responses/Forbidden"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", ref = "#/components/responses/ProjectNotFound")
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "200",
+                    description = "조회 성공",
+                    content = @Content(schema = @Schema(implementation = ProjectDetailResponse.class))
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "401",
+                    description = "인증 필요"
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "403",
+                    description = "프로젝트 접근 권한 없음"
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "404",
+                    description = "프로젝트를 찾을 수 없음"
+            )
     })
     @GetMapping("/{projectId}")
     public ResponseEntity<ApiResponse<ProjectDetailResponse>> getProjectDetail(
             @AuthenticationPrincipal CustomUserDetails userDetails,
-            @PathVariable Long projectId) {
+            @Parameter(description = "프로젝트 ID") @PathVariable Long projectId) {
         ProjectDetailResponse response = projectService.getProjectDetail(userDetails.getUserId(), projectId);
         return ApiResponse.success(response);
     }
 
-    @Operation(summary = "Update project", description = "Update project metadata (owner only).")
+    @Operation(
+            summary = "프로젝트 수정",
+            description = "프로젝트 메타데이터를 수정합니다. (권한 필요)"
+    )
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "200",
+                    description = "수정 성공",
+                    content = @Content(schema = @Schema(implementation = ProjectDetailResponse.class))
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "400",
+                    description = "입력 값 검증 실패"
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "401",
+                    description = "인증 필요"
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "403",
+                    description = "프로젝트 접근 권한 없음"
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "404",
+                    description = "프로젝트를 찾을 수 없음"
+            )
+    })
     @PutMapping("/{projectId}")
     public ResponseEntity<ApiResponse<ProjectDetailResponse>> updateProject(
             @AuthenticationPrincipal CustomUserDetails userDetails,
-            @PathVariable Long projectId,
+            @Parameter(description = "프로젝트 ID") @PathVariable Long projectId,
             @Valid @RequestBody UpdateProjectRequest request) {
         ProjectDetailResponse response = projectService.updateProject(
                 userDetails.getUserId(), projectId, request);
         return ApiResponse.success(response);
     }
 
-    @Operation(summary = "Delete project", description = "Delete a project (owner only).")
+    @Operation(
+            summary = "프로젝트 삭제",
+            description = "프로젝트를 삭제합니다. (권한 필요)"
+    )
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "200",
+                    description = "삭제 성공"
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "401",
+                    description = "인증 필요"
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "403",
+                    description = "프로젝트 접근 권한 없음"
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "404",
+                    description = "프로젝트를 찾을 수 없음"
+            )
+    })
     @DeleteMapping("/{projectId}")
     public ResponseEntity<ApiResponse<Void>> deleteProject(
             @AuthenticationPrincipal CustomUserDetails userDetails,
-            @PathVariable Long projectId) {
+            @Parameter(description = "프로젝트 ID") @PathVariable Long projectId) {
         projectService.deleteProject(userDetails.getUserId(), projectId);
         return ApiResponse.success();
     }
 
-    @Operation(summary = "Get project timeline", description = "Get confirmed video timeline for a project.")
+    @Operation(
+            summary = "프로젝트 타임라인 조회",
+            description = "확정된 비디오 노드 기반의 프로젝트 타임라인을 조회합니다."
+    )
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "200",
+                    description = "조회 성공",
+                    content = @Content(schema = @Schema(implementation = ProjectTimelineResponse.class))
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "401",
+                    description = "인증 필요"
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "403",
+                    description = "프로젝트 접근 권한 없음"
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "404",
+                    description = "프로젝트를 찾을 수 없음"
+            )
+    })
     @GetMapping("/{projectId}/timeline")
     public ResponseEntity<ApiResponse<ProjectTimelineResponse>> getTimeline(
             @AuthenticationPrincipal CustomUserDetails userDetails,
-            @PathVariable Long projectId) {
+            @Parameter(description = "프로젝트 ID") @PathVariable Long projectId) {
         ProjectTimelineResponse response = projectMediaService.getTimeline(userDetails.getUserId(), projectId);
         return ApiResponse.success(response);
     }
 
-    @Operation(summary = "Request project merge", description = "Create merge job for a project.")
+    @Operation(
+            summary = "프로젝트 병합 요청",
+            description = "프로젝트 병합 작업(Job)을 생성하고 큐에 등록합니다."
+    )
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "202",
+                    description = "요청 수락",
+                    content = @Content(schema = @Schema(implementation = JobAcceptedResponse.class))
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "401",
+                    description = "인증 필요"
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "403",
+                    description = "프로젝트 접근 권한 없음"
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "404",
+                    description = "프로젝트를 찾을 수 없음"
+            )
+    })
     @PostMapping("/{projectId}/merge")
     public ResponseEntity<ApiResponse<JobAcceptedResponse>> mergeProject(
             @AuthenticationPrincipal CustomUserDetails userDetails,
-            @PathVariable Long projectId) {
+            @Parameter(description = "프로젝트 ID") @PathVariable Long projectId) {
         Job job = projectMediaService.requestMerge(userDetails.getUserId(), projectId);
         return ApiResponse.accepted(JobAcceptedResponse.from(job));
     }
 
-    @Operation(summary = "Get project export", description = "Get export URL when merge is completed.")
+    @Operation(
+            summary = "프로젝트 내보내기 URL 조회",
+            description = "병합이 완료된 프로젝트의 내보내기 URL을 조회합니다."
+    )
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "200",
+                    description = "조회 성공",
+                    content = @Content(schema = @Schema(implementation = ProjectExportResponse.class))
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "401",
+                    description = "인증 필요"
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "403",
+                    description = "프로젝트 접근 권한 없음"
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "404",
+                    description = "프로젝트 또는 내보내기 파일을 찾을 수 없음"
+            )
+    })
     @GetMapping("/{projectId}/export")
     public ResponseEntity<ApiResponse<ProjectExportResponse>> getExport(
             @AuthenticationPrincipal CustomUserDetails userDetails,
-            @PathVariable Long projectId) {
+            @Parameter(description = "프로젝트 ID") @PathVariable Long projectId) {
         ProjectExportResponse response = projectMediaService.getExport(userDetails.getUserId(), projectId);
         return ApiResponse.success(response);
     }
 
-    @Operation(summary = "Download project export", description = "Download merged project file.")
+    @Operation(
+            summary = "프로젝트 내보내기 파일 다운로드",
+            description = "병합된 프로젝트 파일을 다운로드합니다. (실제 Content-Type은 서버에서 설정됩니다.)"
+    )
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "200",
+                    description = "다운로드 성공",
+                    content = @Content(
+                            mediaType = "application/octet-stream",
+                            schema = @Schema(type = "string", format = "binary")
+                    )
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "401",
+                    description = "인증 필요"
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "403",
+                    description = "프로젝트 접근 권한 없음"
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "404",
+                    description = "프로젝트 또는 파일을 찾을 수 없음"
+            )
+    })
     @GetMapping("/{projectId}/export/file")
     public ResponseEntity<Resource> downloadExport(
             @AuthenticationPrincipal CustomUserDetails userDetails,
-            @PathVariable Long projectId) {
+            @Parameter(description = "프로젝트 ID") @PathVariable Long projectId) {
         MediaFile mediaFile = mediaFileService.loadProjectExport(userDetails.getUserId(), projectId);
+        ContentDisposition contentDisposition = ContentDisposition.inline()
+                .filename(mediaFile.filename())
+                .build();
         return ResponseEntity.ok()
                 .contentType(mediaFile.mediaType())
                 .contentLength(mediaFile.contentLength())
                 .header(HttpHeaders.CONTENT_DISPOSITION,
-                        "inline; filename=\"" + mediaFile.filename() + "\"")
+                        contentDisposition.toString())
                 .body(mediaFile.resource());
     }
 }
-
