@@ -4,7 +4,7 @@
  */
 import { ref } from 'vue';
 import { RouterLink } from 'vue-router';
-import type { TimelineClip } from '../../types';
+import type { TimelineClip } from '../../types/ui';
 import { Star, ArrowRight, Play, X } from 'lucide-vue-next';
 
 // =============================================================================

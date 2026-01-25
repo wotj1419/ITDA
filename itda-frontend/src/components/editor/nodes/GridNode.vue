@@ -4,7 +4,7 @@
  * 2x2, 2x3, 3x3 레이아웃의 스토리보드 그리드
  */
 import { computed } from 'vue';
-import type { Node } from '../../../types';
+import type { Node } from '../../../types/api/nodes';
 import { Grid3X3, CheckCircle, Plus } from 'lucide-vue-next';
 
 // =============================================================================

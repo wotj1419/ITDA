@@ -4,7 +4,7 @@
  * 생성된 비디오를 표시하고 타임라인 확정 기능 제공
  */
 import { computed } from 'vue';
-import type { Node } from '../../../types';
+import type { Node } from '../../../types/api/nodes';
 import Button from '../../common/Button.vue';
 import { Video, RefreshCw, Star, CheckCircle, Clock } from 'lucide-vue-next';
 

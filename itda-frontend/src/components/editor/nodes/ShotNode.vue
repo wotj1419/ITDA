@@ -3,7 +3,7 @@
  * ShotNode - 샷 노드 컴포넌트
  * 개별 샷 이미지를 표시하고 비디오 생성 트리거
  */
-import type { Node } from '../../../types';
+import type { Node } from '../../../types/api/nodes';
 import Button from '../../common/Button.vue';
 import { Camera, RefreshCw, Play, CheckCircle } from 'lucide-vue-next';
 

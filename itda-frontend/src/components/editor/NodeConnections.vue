@@ -3,7 +3,7 @@
  * NodeConnections - 노드 간 연결선을 SVG로 렌더링
  */
 import { computed } from 'vue';
-import type { Node } from '../../types';
+import type { Node } from '../../types/api/nodes';
 
 // =============================================================================
 // Props

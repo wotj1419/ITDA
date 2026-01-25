@@ -4,7 +4,7 @@
  * 선택된 노드의 세부 설정을 편집
  */
 import { computed } from 'vue';
-import type { Node, CameraMotion } from '../../types';
+import type { Node, CameraMotion } from '../../types/api/nodes';
 import Button from '../common/Button.vue';
 import { Trash2, Wand2 } from 'lucide-vue-next';
 
