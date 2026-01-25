@@ -1,5 +1,14 @@
 ﻿# Image Worker 구현 계획서 (Gemini)
 
+Version: 1.2.0 (2026-01-25)
+
+변경 이력
+- Gemini generateContent 이미지 응답 설정(responseModalities/responseMimeType) 추가
+- request_json에 prompt가 없으면 실패 처리
+- 저장 파일 확장자를 contentType 기반으로 결정
+- response_mime_type 미지원 모델 대응 (optional)
+- S3 저장/프리사인 URL 반환 흐름 추가
+
 ## 목적
 
 IMAGE_GENERATION Job 처리 흐름과 구현 상세를 문서화하고,
@@ -71,7 +80,7 @@ IMAGE_GENERATION Job 처리 흐름과 구현 상세를 문서화하고,
 ### 처리 흐름 (계획)
 
 - [x] JobExecutor가 IMAGE_GENERATION Job을 ImageGenerationWorker에 위임
-- [x] request_json에서 prompt 추출 (JSON 파싱 실패 시 raw 텍스트 사용)
+- [x] request_json에서 prompt 추출 (JSON 파싱 실패 시 raw 텍스트 사용, prompt 없음 시 실패)
 - [x] GeminiImageClient가 이미지 생성
   - [x] `ai.gemini.stub=true`이면 스텁 PNG 반환
   - [x] Vertex AI REST `predict` 호출 (API Key 또는 ADC)
@@ -113,17 +122,22 @@ IMAGE_GENERATION Job 처리 흐름과 구현 상세를 문서화하고,
 출력:
 - assets 테이블에 IMAGE 에셋 생성
 - generation_jobs.result_asset_id 업데이트
+- (S3) JobResponse.resultUrl은 presigned URL로 반환
 
 ### 저장 규칙 (계획)
 
-- 저장 경로: `${file.upload-dir}/ai/image/{projectId}/job-{jobId}.png`
-- storage_provider: `LOCAL`
-- storage_key: 상대 경로 문자열 (예: `ai/image/12/job-101.png`)
-- content_type: `image/png`
+- 저장 경로(LOCAL): `${file.upload-dir}/ai/image/{projectId}/job-{jobId}.{ext}`
+- 저장 경로(S3): `ai/image/{projectId}/job-{jobId}.{ext}`
+- 확장자 규칙: contentType 기준 (`image/png` → `.png`, `image/jpeg` → `.jpg`, 그 외 기본 `.png`)
+- storage_provider: `LOCAL` 또는 `S3`
+- storage_key: 상대 경로 문자열 (예: `ai/image/12/job-101.png` 또는 `.jpg`)
+- content_type: 생성 결과 contentType
+- (S3) presigned URL 반환 시 storage_key 기준으로 생성
 
 ### 예외/로그 처리 (계획)
 
 - request_json 파싱 실패 시 경고 로그 후 raw 텍스트를 prompt로 사용
+- JSON 파싱 성공이지만 prompt가 없거나 공백이면 INVALID_REQUEST로 실패
 - 파일 저장 실패 시 예외 발생 → JobExecutor가 FAILED 처리
 - Gemini 클라이언트는 스텁 모드 시 경고 로그 출력
 - Streams 모드에서는 성공/실패 DB 반영 후 ACK, 실패 시 pending에 남아 재시도 대상
@@ -169,9 +183,11 @@ ai:
   gemini:
     stub: ${GEMINI_STUB:true}
     api-key: ${GEMINI_API_KEY:}
-    image-model: ${GEMINI_IMAGE_MODEL:imagen-3.0-generate-001}
+    image-model: ${GEMINI_IMAGE_MODEL:gemini-2.5-flash-image}
     sample-count: ${GEMINI_SAMPLE_COUNT:1}
     aspect-ratio: ${GEMINI_ASPECT_RATIO:}
+    response-mime-type: ${GEMINI_RESPONSE_MIME_TYPE:}
+    response-modalities: ${GEMINI_RESPONSE_MODALITIES:IMAGE}
     timeout-ms: ${GEMINI_TIMEOUT_MS:60000}
 ```
 
@@ -179,6 +195,17 @@ ai:
 spring.ai.vertex.ai.gemini:
   project-id: ${GCP_PROJECT_ID}
   location: ${GCP_LOCATION:us-central1}
+
+storage:
+  provider: ${STORAGE_PROVIDER:S3}
+  s3:
+    endpoint: ${S3_ENDPOINT:}
+    region: ${S3_REGION:ap-northeast-2}
+    access-key: ${S3_ACCESS_KEY:}
+    secret-key: ${S3_SECRET_KEY:}
+    bucket: ${S3_BUCKET:itda-local}
+    path-style: ${S3_PATH_STYLE:true}
+    presign-expire-seconds: ${S3_PRESIGN_EXPIRE_SECONDS:3600}
 ```
 
 ### 호출 방식
@@ -186,6 +213,7 @@ spring.ai.vertex.ai.gemini:
 - `ai.gemini.api-key` 설정 시 Query `?key=...` 로 인증
 - 미설정 시 ADC (`GOOGLE_APPLICATION_CREDENTIALS`)
 - 로컬 파일 저장 경로: `${file.upload-dir}/ai/image/{projectId}/job-{jobId}.png`
+- S3 저장 경로: `ai/image/{projectId}/job-{jobId}.{ext}`
 
 ## 다음 단계 계획 (구체화)
 

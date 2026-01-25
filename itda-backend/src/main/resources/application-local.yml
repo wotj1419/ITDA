@@ -20,8 +20,8 @@ spring.ai.vertex.ai.gemini:
 
 ai:
   gemini:
-    stub: false
-    api-key: ""
+    stub: ${GEMINI_STUB:true}
+    api-key: ${GEMINI_API_KEY:}
     image-model: gemini-2.5-flash-image
     sample-count: 1
     aspect-ratio:
@@ -36,6 +36,7 @@ logging:
     org.springframework.security: DEBUG
 
 storage:
+  provider: ${STORAGE_PROVIDER:S3}
   s3:
     endpoint: ${S3_ENDPOINT:}
     region: ${S3_REGION:ap-northeast-2}
@@ -43,3 +44,4 @@ storage:
     secret-key: ${S3_SECRET_KEY:}
     bucket: ${S3_BUCKET:itda-local}
     path-style: ${S3_PATH_STYLE:true}
+    presign-expire-seconds: ${S3_PRESIGN_EXPIRE_SECONDS:3600}
