@@ -6,23 +6,18 @@
  */
 import { defineStore } from 'pinia';
 import { ref, computed, watch } from 'vue';
-import type { Node, Edge } from '@vue-flow/core';
+import type { Edge } from '@vue-flow/core';
 import {
     NodeType,
     JobStatus,
-    PromptStatus,
-    VALID_CONNECTIONS,
-    NODE_HEIGHTS,
-    NODE_WIDTHS,
-    type BaseNodeData,
     type AnyNodeData,
     type SceneHeaderNodeData,
     type MasterImageNodeData,
     type StoryboardGridNodeData,
     type ShotNodeData,
     type VideoNodeData,
-} from '../types/node';
-import { generateMockSceneNodes, generateSimpleMockNodes } from '../services/mock/sceneNodes';
+} from '../../types/ui/sceneNodes';
+import { generateMockSceneNodes, generateSimpleMockNodes } from '../../services/mock/sceneNodes';
 import {
     fetchSceneNodes,
     createNode as apiCreateNode,
@@ -31,297 +26,31 @@ import {
     confirmNode as apiConfirmNode,
     unconfirmNode as apiUnconfirmNode,
     activateMaster as apiActivateMaster,
-    type NodeSummary,
-    type ApiNodeType,
-} from '../services/api/nodes';
+} from '../../services/api/nodes';
 import {
     subscribeProjectEvents,
     type ProjectEventMessage,
     type ProjectEventPayload,
-} from '../services/ws/projectEvents';
-import { useSceneStore } from './scene';
-
-// =============================================================================
-// Helper Functions
-// =============================================================================
-
-function createBaseNodeData(
-    id: string,
-    type: NodeType,
-    parentNodeId: string | null = null,
-    version: number = 1
-): BaseNodeData {
-    const now = new Date().toISOString();
-    return {
-        id,
-        type,
-        jobStatus: null,
-        promptStatus: PromptStatus.DRAFT,
-        createdAt: now,
-        updatedAt: now,
-        versionGroupId: id,
-        version,
-        parentNodeId,
-        isCollapsed: false,
-        childCount: 0,
-    };
-}
-
-function getDefaultNodeDimensions(type: NodeType): { width: number; height: number } {
-    return {
-        width: NODE_WIDTHS[type] ?? 200,
-        height: NODE_HEIGHTS[type] ?? 150,
-    };
-}
-
-const API_TO_UI_NODE_TYPE: Record<ApiNodeType, NodeType> = {
-    SCENE_HEADER: NodeType.SCENE_HEADER,
-    MASTER: NodeType.MASTER_IMAGE,
-    GRID: NodeType.STORYBOARD_GRID,
-    SHOT: NodeType.SHOT,
-    VIDEO: NodeType.VIDEO,
-};
-
-const UI_TO_API_NODE_TYPE: Record<NodeType, ApiNodeType> = {
-    [NodeType.SCENE_HEADER]: 'SCENE_HEADER',
-    [NodeType.MASTER_IMAGE]: 'MASTER',
-    [NodeType.STORYBOARD_GRID]: 'GRID',
-    [NodeType.SHOT]: 'SHOT',
-    [NodeType.VIDEO]: 'VIDEO',
-};
-
-function toJobStatus(status?: string | null): JobStatus | null {
-    if (!status) return null;
-    const normalized = status.toUpperCase();
-    switch (normalized) {
-        case 'PENDING':
-            return JobStatus.PENDING;
-        case 'RUNNING':
-            return JobStatus.RUNNING;
-        case 'SUCCEEDED':
-            return JobStatus.SUCCEEDED;
-        case 'FAILED':
-            return JobStatus.FAILED;
-        default:
-            return null;
-    }
-}
-
-function toFiniteNumber(value: string | number): number | null {
-    const numeric = typeof value === 'number' ? value : Number(value);
-    return Number.isFinite(numeric) ? numeric : null;
-}
-
-function buildNodeSettings(data: AnyNodeData): Record<string, unknown> {
-    switch (data.type) {
-        case NodeType.MASTER_IMAGE:
-            return {
-                style: data.style,
-                timeOfDay: data.timeOfDay,
-                mood: data.mood,
-                objectIds: data.objectIds,
-            };
-        case NodeType.STORYBOARD_GRID:
-            return {
-                layout: data.layout,
-                shotTypes: data.shotTypes,
-                compositionHint: data.compositionHint,
-            };
-        case NodeType.SHOT:
-            return {
-                gridCellIndex: data.gridCellIndex,
-                shotTypes: data.shotTypes,
-                shotType: data.shotType,
-                expression: data.expression,
-                additionalDetail: data.additionalDetail,
-            };
-        case NodeType.VIDEO:
-            return {
-                startShotId: data.startShotId,
-                endShotId: data.endShotId,
-                cameraMotion: data.cameraMotion,
-                motionDescription: data.motionDescription,
-                duration: data.duration,
-                timelineOrder: data.timelineOrder,
-            };
-        default:
-            return {};
-    }
-}
-
-type EdgeMeta = {
-    isTransition: boolean;
-    isConfirmed: boolean;
-};
-
-// =============================================================================
-// Type-safe node creation
-// =============================================================================
-
-type SceneNode = Node<AnyNodeData>;
-type NodePositionSnapshot = Array<{
-    id: string;
-    position: { x: number; y: number };
-    dimensions?: { width: number | string; height: number | string };
-}>;
+} from '../../services/ws/projectEvents';
+import { useSceneStore } from '../scene';
+import type { SceneNode, NodePositionSnapshot } from './types';
+import { buildPositionSnapshot, snapshotsEqual } from './history';
+import { buildEdge, deriveEdges, canConnect, syncEdgeMeta } from './edges';
+import {
+    applyNodeResultUrl,
+    buildNodeSettings,
+    createBaseNodeData,
+    createSceneNodeFromApi,
+    getDefaultNodeDimensions,
+    toFiniteNumber,
+    toJobStatus,
+    UI_TO_API_NODE_TYPE,
+} from './mappers';
+import { fetchProtectedBlobUrl } from '../../services/api/media';
+import { resolveApiUrl } from '../../services/api/urls';
+import { SHOT_FALLBACK_THUMBNAIL } from '../../utils/fallbacks';
 
 const MAX_POSITION_HISTORY = 20;
-
-function applyNodeResultUrl(node: SceneNode, url: string): void {
-    if (!node.data) return;
-    if (node.data.type === NodeType.VIDEO) {
-        const videoData = node.data as VideoNodeData;
-        videoData.videoUrl = url;
-        videoData.thumbnailUrl = url;
-    } else if (node.data.type === NodeType.MASTER_IMAGE) {
-        const masterData = node.data as MasterImageNodeData;
-        masterData.imageUrl = url;
-        masterData.thumbnailUrl = url;
-    } else if (node.data.type === NodeType.STORYBOARD_GRID) {
-        const gridData = node.data as StoryboardGridNodeData;
-        gridData.imageUrl = url;
-        gridData.thumbnailUrl = url;
-    } else if (node.data.type === NodeType.SHOT) {
-        const shotData = node.data as ShotNodeData;
-        shotData.imageUrl = url;
-        shotData.thumbnailUrl = url;
-    }
-}
-
-function createSceneNodeFromApi(
-    node: NodeSummary,
-    sceneId: string,
-    sceneInfo?: { title: string; description: string; order: number }
-): SceneNode {
-    const uiType = API_TO_UI_NODE_TYPE[node.type];
-    const id = String(node.nodeId);
-    const fallbackHeaderId = String(-Number(sceneId));
-    const resolvedParentId = node.parentNodeId
-        ? String(node.parentNodeId)
-        : uiType === NodeType.MASTER_IMAGE
-            ? fallbackHeaderId
-            : null;
-    const base = createBaseNodeData(id, uiType, resolvedParentId);
-    base.jobStatus = toJobStatus(node.status ?? null);
-    base.parentNodeId = resolvedParentId;
-
-    let data: AnyNodeData;
-    switch (uiType) {
-        case NodeType.SCENE_HEADER:
-            data = {
-                ...base,
-                type: NodeType.SCENE_HEADER,
-                sceneId,
-                title: node.title || sceneInfo?.title || '새 씬',
-                description: node.description || sceneInfo?.description || '',
-                sceneOrder: sceneInfo?.order || 1,
-            };
-            break;
-        case NodeType.MASTER_IMAGE:
-            data = {
-                ...base,
-                type: NodeType.MASTER_IMAGE,
-                sceneId,
-                isActive: !!node.isActive,
-                imageUrl: node.contentUrl || null,
-                thumbnailUrl: node.contentUrl || null,
-                prompt: '',
-                style: '',
-                timeOfDay: '',
-                mood: '',
-                objectIds: [],
-            };
-            break;
-        case NodeType.STORYBOARD_GRID:
-            data = {
-                ...base,
-                type: NodeType.STORYBOARD_GRID,
-                imageUrl: node.contentUrl || null,
-                thumbnailUrl: node.contentUrl || null,
-                prompt: '',
-                layout: '2x2',
-                shotTypes: [],
-                compositionHint: '',
-            };
-            break;
-        case NodeType.SHOT:
-            data = {
-                ...base,
-                type: NodeType.SHOT,
-                imageUrl: node.contentUrl || null,
-                thumbnailUrl: node.contentUrl || null,
-                prompt: '',
-                gridCellIndex: 0,
-                shotTypes: [],
-                shotType: '',
-                expression: '',
-                additionalDetail: '',
-            };
-            break;
-        case NodeType.VIDEO:
-        default:
-            data = {
-                ...base,
-                type: NodeType.VIDEO,
-                startShotId: base.parentNodeId || '',
-                endShotId: null,
-                videoUrl: node.contentUrl || null,
-                thumbnailUrl: node.contentUrl || null,
-                duration: 5,
-                isConfirmed: !!node.isConfirmed,
-                prompt: '',
-                cameraMotion: 'staticCamera',
-                motionDescription: '',
-                timelineOrder: undefined,
-            };
-            break;
-    }
-
-    const { width, height } = getDefaultNodeDimensions(uiType);
-    return {
-        id,
-        type: uiType,
-        position: {
-            x: node.position?.x ?? 0,
-            y: node.position?.y ?? 0,
-        },
-        width,
-        height,
-        data,
-    };
-}
-
-function buildPositionSnapshot(nodes: SceneNode[]): NodePositionSnapshot {
-    return nodes.map((node) => {
-        const style = typeof node.style === 'object' && node.style !== null ? node.style : {};
-        return {
-            id: node.id,
-            position: { x: node.position.x, y: node.position.y },
-            dimensions: {
-                width: ('width' in style ? style.width : '') ?? '',
-                height: ('height' in style ? style.height : '') ?? '',
-            },
-        };
-    });
-}
-
-function snapshotsEqual(
-    a: NodePositionSnapshot,
-    b: NodePositionSnapshot
-): boolean {
-    if (a.length !== b.length) return false;
-    const positions = new Map(a.map((item) => [item.id, item]));
-    return b.every((item) => {
-        const existing = positions.get(item.id);
-        return (
-            existing !== undefined &&
-            existing.position.x === item.position.x &&
-            existing.position.y === item.position.y &&
-            existing.dimensions?.width === item.dimensions?.width &&
-            existing.dimensions?.height === item.dimensions?.height
-        );
-    });
-}
 
 // =============================================================================
 // Store
@@ -339,14 +68,7 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
 
     async function ensureSceneInProgress() {
         if (isLoading.value) return; // 로딩 중에는 상태 변경 안 함
-
-        if (sceneId.value) {
-            // We need to find the scene object from the store
-            const scene = sceneStore.scenes.find(s => s.sceneId === Number(sceneId.value));
-            if (scene && scene.status === 'DRAFT') {
-                await sceneStore.updateScene(scene.sceneId, { status: 'IN_PROGRESS' });
-            }
-        }
+        // status 업데이트는 백엔드 지원 전까지 비활성화
     }
     const selectedNodeId = ref<string | null>(null);
     const positionHistory = ref<NodePositionSnapshot[]>([]);
@@ -425,8 +147,24 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
 
         targetNode.data.jobStatus = nextStatus;
 
+        if (nextStatus === JobStatus.FAILED && targetNode.data.type === NodeType.SHOT) {
+            const hasUrl = Boolean(
+                (targetNode.data as ShotNodeData).thumbnailUrl ||
+                (targetNode.data as ShotNodeData).imageUrl
+            );
+            if (!hasUrl) {
+                const shotData = targetNode.data as ShotNodeData;
+                shotData.imageUrl = SHOT_FALLBACK_THUMBNAIL;
+                shotData.thumbnailUrl = SHOT_FALLBACK_THUMBNAIL;
+            }
+        }
+
         if (message.event === 'job.done' || payload.status === 'SUCCEEDED') {
-            applyNodeResultUrl(targetNode, payload.resultUrl || '');
+            void (async () => {
+                const blobUrl = await fetchProtectedBlobUrl(payload.resultUrl).catch(() => null);
+                const resolvedUrl = blobUrl ?? resolveApiUrl(payload.resultUrl ?? null) ?? '';
+                applyNodeResultUrl(targetNode, resolvedUrl);
+            })();
         }
     };
 
@@ -499,13 +237,14 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
             nodes.value = apiNodes.map((node) =>
                 createSceneNodeFromApi(node, sceneIdParam, sceneInfo)
             );
+            await hydrateNodeMedia();
 
             if (!nodes.value.find((n) => n.data?.type === NodeType.SCENE_HEADER)) {
                 ensureSceneHeaderNode(sceneInfo);
             }
 
             await ensureActiveMasterNode();
-            edges.value = deriveEdges();
+            edges.value = deriveEdges(nodes.value);
             ensureTimelineOrder();
 
             const projectId = sceneStore.currentProjectId;
@@ -564,6 +303,38 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
                 await addMasterImageNode(headerNode.id, true);
             }
         }
+    }
+
+    async function hydrateNodeMedia(): Promise<void> {
+        const targets = nodes.value.filter(
+            (node) =>
+                node.data?.type !== NodeType.SCENE_HEADER &&
+                !!node.data &&
+                !!node.data.thumbnailUrl
+        );
+        await Promise.all(
+            targets.map(async (node) => {
+                const current = node.data?.thumbnailUrl || node.data?.imageUrl || node.data?.videoUrl;
+                if (!current || current.startsWith('blob:')) return;
+                const blobUrl = await fetchProtectedBlobUrl(current).catch(() => null);
+                if (!blobUrl || !node.data) return;
+                if (node.data.type === NodeType.VIDEO) {
+                    (node.data as VideoNodeData).videoUrl = blobUrl;
+                } else if (node.data.type === NodeType.MASTER_IMAGE) {
+                    const master = node.data as MasterImageNodeData;
+                    master.imageUrl = blobUrl;
+                    master.thumbnailUrl = blobUrl;
+                } else if (node.data.type === NodeType.STORYBOARD_GRID) {
+                    const grid = node.data as StoryboardGridNodeData;
+                    grid.imageUrl = blobUrl;
+                    grid.thumbnailUrl = blobUrl;
+                } else if (node.data.type === NodeType.SHOT) {
+                    const shot = node.data as ShotNodeData;
+                    shot.imageUrl = blobUrl;
+                    shot.thumbnailUrl = blobUrl;
+                }
+            })
+        );
     }
 
     // ==========================================================================
@@ -628,7 +399,7 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
     }
 
     async function addStoryboardGridNode(parentNodeId: string): Promise<SceneNode | null> {
-        if (!canConnect(parentNodeId, NodeType.STORYBOARD_GRID)) return null;
+        if (!canConnect(nodes.value, parentNodeId, NodeType.STORYBOARD_GRID)) return null;
 
         const gridCount = nodes.value.filter(
             (n) =>
@@ -679,7 +450,7 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
     }
 
     async function addShotNode(parentNodeId: string, gridCellIndex?: number): Promise<SceneNode | null> {
-        if (!canConnect(parentNodeId, NodeType.SHOT)) return null;
+        if (!canConnect(nodes.value, parentNodeId, NodeType.SHOT)) return null;
 
         const existingShots = nodes.value.filter(
             (n) =>
@@ -733,7 +504,7 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
     }
 
     async function addVideoNode(parentNodeId: string): Promise<SceneNode | null> {
-        if (!canConnect(parentNodeId, NodeType.VIDEO)) return null;
+        if (!canConnect(nodes.value, parentNodeId, NodeType.VIDEO)) return null;
 
         const videoCount = nodes.value.filter(
             (n) =>
@@ -751,6 +522,10 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
             apiNodeId = await apiCreateNode(sceneNumericId, {
                 nodeType: UI_TO_API_NODE_TYPE[NodeType.VIDEO],
                 parentNodeId: Number(parentNodeId),
+                settings: {
+                    startShotNodeId: Number(parentNodeId),
+                    endShotNodeId: null,
+                },
             });
         } catch (error) {
             console.error('Failed to create video node:', error);
@@ -915,51 +690,13 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
     // Actions - Edges
     // ==========================================================================
 
-    function getEdgeMeta(sourceId: string, targetId: string): EdgeMeta {
-        const targetNode = nodes.value.find((n) => n.id === targetId);
-        const isTransition =
-            targetNode?.data?.type === NodeType.VIDEO &&
-            (targetNode.data as VideoNodeData).endShotId === sourceId;
-        const isConfirmed =
-            targetNode?.data?.type === NodeType.VIDEO &&
-            (targetNode.data as VideoNodeData).isConfirmed;
-
-        return { isTransition, isConfirmed };
-    }
-
-    function getEdgeClass(meta: EdgeMeta): string | undefined {
-        const classes: string[] = [];
-        if (meta.isTransition) classes.push('transition');
-        if (meta.isConfirmed) classes.push('confirmed');
-        return classes.length ? classes.join(' ') : undefined;
-    }
-
-    function buildEdge(
-        sourceId: string,
-        targetId: string,
-        options: { sourceHandle?: string; targetHandle?: string } = {}
-    ): Edge {
-        const edgeId = `edge-${sourceId}-${targetId}`;
-        const meta = getEdgeMeta(sourceId, targetId);
-        return {
-            id: edgeId,
-            source: sourceId,
-            target: targetId,
-            type: 'smoothstep',
-            sourceHandle: options.sourceHandle,
-            targetHandle: options.targetHandle,
-            data: { isTransition: meta.isTransition, isConfirmed: meta.isConfirmed },
-            class: getEdgeClass(meta),
-        };
-    }
-
     function addEdge(
         sourceId: string,
         targetId: string,
         options: { sourceHandle?: string; targetHandle?: string } = {}
     ): void {
         const edgeId = `edge-${sourceId}-${targetId}`;
-        const nextEdge = buildEdge(sourceId, targetId, options);
+        const nextEdge = buildEdge(nodes.value, sourceId, targetId, options);
         const existingIndex = edges.value.findIndex((e) => e.id === edgeId);
         if (existingIndex >= 0) {
             edges.value[existingIndex] = { ...edges.value[existingIndex], ...nextEdge };
@@ -968,34 +705,12 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
         edges.value.push(nextEdge);
     }
 
-    function deriveEdges(): Edge[] {
-        const edgeMap = new Map<string, Edge>();
-
-        nodes.value
-            .filter((n) => n.data?.parentNodeId)
-            .forEach((n) => {
-                const edge = buildEdge(n.data!.parentNodeId as string, n.id);
-                edgeMap.set(edge.id, edge);
-            });
-
-        nodes.value
-            .filter((n) => n.data?.type === NodeType.VIDEO)
-            .forEach((n) => {
-                const videoData = n.data as VideoNodeData;
-                if (!videoData.endShotId) return;
-                const edge = buildEdge(videoData.endShotId, n.id, {
-                    targetHandle: 'end-shot',
-                });
-                edgeMap.set(edge.id, edge);
-            });
-
-        return Array.from(edgeMap.values());
+    function deriveEdgesSnapshot(): Edge[] {
+        return deriveEdges(nodes.value);
     }
 
-    function canConnect(sourceId: string, targetType: NodeType): boolean {
-        const sourceNode = nodes.value.find((n) => n.id === sourceId);
-        if (!sourceNode || !sourceNode.data) return false;
-        return VALID_CONNECTIONS[sourceNode.data.type]?.includes(targetType) ?? false;
+    function canConnectNode(sourceId: string, targetType: NodeType): boolean {
+        return canConnect(nodes.value, sourceId, targetType);
     }
 
     // ==========================================================================
@@ -1091,7 +806,7 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
                 }
             }
         }
-        syncEdgeMeta();
+        edges.value = syncEdgeMeta(nodes.value, edges.value);
     }
 
     function getNextTimelineOrder(): number {
@@ -1248,7 +963,7 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
 
         selectionMode.value = 'none';
         endShotTargetVideoId.value = null;
-        syncEdgeMeta();
+        edges.value = syncEdgeMeta(nodes.value, edges.value);
         ensureSceneInProgress();
     }
 
@@ -1268,26 +983,7 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
             (e) => !(e.source === videoData.endShotId && e.target === videoId)
         );
         videoData.endShotId = null;
-        syncEdgeMeta();
-    }
-
-    function syncEdgeMeta(): void {
-        edges.value = edges.value.map((edge) => {
-            const meta = getEdgeMeta(edge.source, edge.target);
-            const next: Edge = {
-                ...edge,
-                data: { ...(edge.data || {}), ...meta },
-                class: getEdgeClass(meta),
-            };
-
-            if (meta.isTransition) {
-                next.targetHandle = 'end-shot';
-            } else if (next.targetHandle === 'end-shot') {
-                delete (next as { targetHandle?: string }).targetHandle;
-            }
-
-            return next;
-        });
+        edges.value = syncEdgeMeta(nodes.value, edges.value);
     }
 
     // ==========================================================================
@@ -1372,8 +1068,8 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
 
         // Actions - Edges
         addEdge,
-        deriveEdges,
-        canConnect,
+        deriveEdges: deriveEdgesSnapshot,
+        canConnect: canConnectNode,
 
         // Actions - Selection
         selectNode,

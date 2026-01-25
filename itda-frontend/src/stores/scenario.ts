@@ -7,6 +7,7 @@ import {
     updateScenarioPrompt,
     updateScenarioPlot,
 } from '../services/api/scenario'
+import { useAsyncAction } from './helpers/useAsyncAction'
 
 // Types
 export interface ScenarioInput {
@@ -42,7 +43,7 @@ export const useScenarioStore = defineStore('scenario', () => {
     // State
     const isDrawerOpen = ref(false)
     const currentStep = ref<ScenarioStep>(1)
-    const isGenerating = ref(false)
+    const { isLoading: isGenerating, error, run } = useAsyncAction()
     const activeProjectId = ref<number | null>(null)
     const projectStates = ref<Record<number, {
         currentStep: ScenarioStep
@@ -177,12 +178,11 @@ export const useScenarioStore = defineStore('scenario', () => {
 
     const generatePrompt = async (): Promise<void> => {
         if (!activeProjectId.value) return
-        isGenerating.value = true
-        try {
+        await run(async () => {
             const keywords = input.value.keywords
                 ? input.value.keywords.split(',').map((k) => k.trim()).filter(Boolean)
                 : []
-            const promptData = await generateScenarioPrompt(activeProjectId.value, {
+            const promptData = await generateScenarioPrompt(activeProjectId.value as number, {
                 genre: input.value.genre,
                 mood: input.value.mood,
                 sceneCount: input.value.sceneCount,
@@ -198,35 +198,25 @@ export const useScenarioStore = defineStore('scenario', () => {
             }
 
             nextStep()
-        } catch (error) {
-            console.error('Failed to generate prompt:', error)
-        } finally {
-            isGenerating.value = false
-        }
+        }, { errorMessage: 'Failed to generate prompt' })
     }
 
     const approvePrompt = async () => {
         if (!activeProjectId.value) return
-        isGenerating.value = true
-        try {
-            await updateScenarioPrompt(activeProjectId.value, prompt.value.text, 'APPROVED')
+        await run(async () => {
+            await updateScenarioPrompt(activeProjectId.value as number, prompt.value.text, 'APPROVED')
             prompt.value.status = 'approved'
             await generatePlot()
-        } catch (error) {
-            console.error('Failed to approve prompt:', error)
-        } finally {
-            isGenerating.value = false
-        }
+        }, { errorMessage: 'Failed to approve prompt' })
     }
 
     const regeneratePrompt = async () => {
         if (!activeProjectId.value) return
-        isGenerating.value = true
-        try {
+        await run(async () => {
             const keywords = input.value.keywords
                 ? input.value.keywords.split(',').map((k) => k.trim()).filter(Boolean)
                 : []
-            const promptData = await generateScenarioPrompt(activeProjectId.value, {
+            const promptData = await generateScenarioPrompt(activeProjectId.value as number, {
                 genre: input.value.genre,
                 mood: input.value.mood,
                 sceneCount: input.value.sceneCount,
@@ -237,65 +227,43 @@ export const useScenarioStore = defineStore('scenario', () => {
             })
             prompt.value.text = promptData.text || ''
             prompt.value.status = toStatus(promptData.status)
-        } catch (error) {
-            console.error('Failed to regenerate prompt:', error)
-        } finally {
-            isGenerating.value = false
-        }
+        }, { errorMessage: 'Failed to regenerate prompt' })
     }
 
     const generatePlot = async (): Promise<void> => {
         if (!activeProjectId.value) return
-        isGenerating.value = true
-        try {
-            const plotData = await generateScenarioPlot(activeProjectId.value)
+        await run(async () => {
+            const plotData = await generateScenarioPlot(activeProjectId.value as number)
             plot.value = {
                 text: plotData.text || '',
                 status: toStatus(plotData.status),
             }
             nextStep()
-        } catch (error) {
-            console.error('Failed to generate plot:', error)
-        } finally {
-            isGenerating.value = false
-        }
+        }, { errorMessage: 'Failed to generate plot' })
     }
 
     const approvePlot = () => {
         if (!activeProjectId.value) return
-        isGenerating.value = true
-        updateScenarioPlot(activeProjectId.value, plot.value.text, 'APPROVED')
-            .then(() => {
-                plot.value.status = 'approved'
-                return generateScenes()
-            })
-            .catch((error) => {
-                console.error('Failed to approve plot:', error)
-            })
-            .finally(() => {
-                isGenerating.value = false
-            })
+        run(async () => {
+            await updateScenarioPlot(activeProjectId.value as number, plot.value.text, 'APPROVED')
+            plot.value.status = 'approved'
+            await generateScenes()
+        }, { errorMessage: 'Failed to approve plot' })
     }
 
     const regeneratePlot = async () => {
         if (!activeProjectId.value) return
-        isGenerating.value = true
-        try {
-            const plotData = await generateScenarioPlot(activeProjectId.value)
+        await run(async () => {
+            const plotData = await generateScenarioPlot(activeProjectId.value as number)
             plot.value.text = plotData.text || ''
             plot.value.status = toStatus(plotData.status)
-        } catch (error) {
-            console.error('Failed to regenerate plot:', error)
-        } finally {
-            isGenerating.value = false
-        }
+        }, { errorMessage: 'Failed to regenerate plot' })
     }
 
     const generateScenes = async (): Promise<void> => {
         if (!activeProjectId.value) return
-        isGenerating.value = true
-        try {
-            const response = await generateScenarioScenes(activeProjectId.value)
+        await run(async () => {
+            const response = await generateScenarioScenes(activeProjectId.value as number)
             scenes.value = response.scenes.map((scene) => ({
                 id: scene.sceneId,
                 order: scene.order,
@@ -303,11 +271,7 @@ export const useScenarioStore = defineStore('scenario', () => {
                 description: scene.description,
             }))
             nextStep()
-        } catch (error) {
-            console.error('Failed to generate scenes:', error)
-        } finally {
-            isGenerating.value = false
-        }
+        }, { errorMessage: 'Failed to generate scenes' })
     }
 
     const updateScene = (id: number, updates: Partial<Pick<ScenarioScene, 'title' | 'description'>>) => {
@@ -328,16 +292,15 @@ export const useScenarioStore = defineStore('scenario', () => {
     }
 
     const regenerateScene = async (id: number) => {
-        isGenerating.value = true
-        await new Promise(resolve => setTimeout(resolve, 1000))
+        await run(async () => {
+            await new Promise((resolve) => setTimeout(resolve, 1000))
 
-        const scene = scenes.value.find(s => s.id === id)
-        if (scene) {
-            scene.description += ' (새롭게 생성된 내용)'
-            saveCurrentState()
-        }
-
-        isGenerating.value = false
+            const scene = scenes.value.find(s => s.id === id)
+            if (scene) {
+                scene.description += ' (새롭게 생성된 내용)'
+                saveCurrentState()
+            }
+        }, { errorMessage: 'Failed to regenerate scene' })
     }
 
     const addScene = () => {
@@ -368,6 +331,7 @@ export const useScenarioStore = defineStore('scenario', () => {
         isDrawerOpen,
         currentStep,
         isGenerating,
+        error,
         activeProjectId,
         input,
         prompt,

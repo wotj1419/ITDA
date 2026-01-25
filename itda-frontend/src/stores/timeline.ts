@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import type { TimelineClip } from '../types'
+import type { TimelineClip } from '../types/ui'
 import {
     fetchProjectTimeline,
     requestProjectMerge,

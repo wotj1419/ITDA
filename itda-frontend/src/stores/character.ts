@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import type { ObjectSheet, CreateObjectRequest } from '../types'
+import type { ObjectSheet, CreateObjectRequest } from '../types/api/objects'
 import {
   fetchCharactersByProjectId as mockFetchCharacters,
   createCharacter as mockCreateCharacter,

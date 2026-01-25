@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import type { Toast } from '../types'
+import type { Toast } from '../types/ui'
 
 export const useUIStore = defineStore('ui', () => {
   // State

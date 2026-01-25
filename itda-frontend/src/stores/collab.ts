@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
-import type { CollabParticipant, CollabMessage, CollabStatus } from '../types';
+import type { CollabParticipant, CollabMessage, CollabStatus } from '../types/ui';
 
 /**
  * 협업 상태 관리 스토어
