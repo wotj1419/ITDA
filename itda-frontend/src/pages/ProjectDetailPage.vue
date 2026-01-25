@@ -72,6 +72,13 @@ const sceneStatusConfig: Record<SceneStatus, { label: string; variant: 'success'
   DRAFT: { label: '초안', variant: 'default' },
 }
 
+const resolveSceneStatusConfig = (status: unknown) => {
+  if (status === 'COMPLETED' || status === 'IN_PROGRESS' || status === 'DRAFT') {
+    return sceneStatusConfig[status]
+  }
+  return sceneStatusConfig.DRAFT
+}
+
 // Load data on mount
 onMounted(async () => {
   if (projectId.value) {
@@ -491,11 +498,11 @@ const handleDeleteCharacter = async (character: ObjectSheet) => {
                 <div class="preview-header">
                   <Badge variant="default" size="sm">SCENE {{ scene.order }}</Badge>
                   <Badge
-                    :variant="sceneStatusConfig[scene.status].variant"
+                    :variant="resolveSceneStatusConfig(scene.status).variant"
                     size="sm"
                     class="status-badge"
                   >
-                    {{ sceneStatusConfig[scene.status].label }}
+                    {{ resolveSceneStatusConfig(scene.status).label }}
                   </Badge>
                 </div>
                 <h4 class="preview-title">{{ scene.title }}</h4>

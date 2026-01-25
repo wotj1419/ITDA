@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import type { Scene, CreateSceneRequest } from '../types'
+import type { Scene, SceneStatus, CreateSceneRequest } from '../types'
 import {
   fetchScenes,
   createScene,
@@ -44,6 +44,15 @@ export const useSceneStore = defineStore('scene', () => {
       : 0,
   }))
 
+  const sceneStatusSet = new Set<SceneStatus>(['DRAFT', 'IN_PROGRESS', 'COMPLETED'])
+
+  const normalizeScene = (scene: Scene): Scene => {
+    const status = sceneStatusSet.has(scene.status as SceneStatus)
+      ? (scene.status as SceneStatus)
+      : 'DRAFT'
+    return { ...scene, status }
+  }
+
   // Actions
   async function loadScenes(projectId: number): Promise<void> {
     isLoading.value = true
@@ -51,7 +60,8 @@ export const useSceneStore = defineStore('scene', () => {
     currentProjectId.value = projectId
 
     try {
-      scenes.value = await fetchScenes(projectId)
+      const fetched = await fetchScenes(projectId)
+      scenes.value = fetched.map((scene) => normalizeScene(scene))
     } catch (e) {
       error.value = 'Failed to load scenes'
       console.error(e)
@@ -70,7 +80,7 @@ export const useSceneStore = defineStore('scene', () => {
     error.value = null
 
     try {
-      const newScene = await createScene(currentProjectId.value, data)
+      const newScene = normalizeScene(await createScene(currentProjectId.value, data))
       scenes.value.push(newScene)
       return newScene
     } catch (e) {
@@ -92,7 +102,8 @@ export const useSceneStore = defineStore('scene', () => {
     error.value = null
 
     try {
-      const newScenes = await createScenes(currentProjectId.value, dataList)
+      const newScenes = (await createScenes(currentProjectId.value, dataList))
+        .map((scene) => normalizeScene(scene))
       scenes.value.push(...newScenes)
       return newScenes
     } catch (e) {
@@ -113,9 +124,10 @@ export const useSceneStore = defineStore('scene', () => {
     try {
       const updated = await updateSceneApi(sceneId, data)
       if (updated) {
+        const normalized = normalizeScene(updated)
         const index = scenes.value.findIndex((s) => s.sceneId === sceneId)
         if (index !== -1) {
-          scenes.value[index] = updated
+          scenes.value[index] = normalized
         }
         return true
       }

@@ -24,7 +24,7 @@ const statusConfig = computed(() => {
     IN_PROGRESS: { label: '진행 중', variant: 'info', showIcon: true },
     DRAFT: { label: '초안', variant: 'default', showIcon: false },
   }
-  return configs[props.scene.status]
+  return configs[props.scene?.status] ?? configs.DRAFT
 })
 
 const editLink = computed(() => ({
