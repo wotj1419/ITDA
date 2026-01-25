@@ -1,4 +1,13 @@
-# Image Worker 구현 계획서 (Gemini)
+﻿# Image Worker 구현 계획서 (Gemini)
+
+Version: 1.2.0 (2026-01-25)
+
+변경 이력
+- Gemini generateContent 이미지 응답 설정(responseModalities/responseMimeType) 추가
+- request_json에 prompt가 없으면 실패 처리
+- 저장 파일 확장자를 contentType 기반으로 결정
+- response_mime_type 미지원 모델 대응 (optional)
+- S3 저장/프리사인 URL 반환 흐름 추가
 
 ## 목적
 
@@ -8,21 +17,97 @@ IMAGE_GENERATION Job 처리 흐름과 구현 상세를 문서화하고,
 ## 범위
 
 - IMAGE_GENERATION Job 처리
-- Gemini 이미지 생성 클라이언트 (현재 스텁)
+- Gemini 이미지 생성 클라이언트 (실연동)
 - 로컬 파일 저장 및 Asset 등록
 - JobExecutor 연결
+
+## 아키텍처 정합 (04 참고)
+
+- API Server는 Job 생성/검증 후 Dispatcher로 Queue에 넣고 `jobId`를 즉시 응답
+- Worker는 Redis Streams에서 Job을 가져와 실제 작업을 수행
+- 처리 완료 후 DB 상태 업데이트(`SUCCEEDED/FAILED`) 및 Streams ACK
+- 작업 완료 이벤트는 API Server가 `job.done`/`job.failed`로 WebSocket 발행
+- 결과 파일은 Storage에 저장, DB에는 메타데이터만 저장 (향후 S3 전환)
+
+## Redis Streams 계약 (07 참고)
+
+- Stream key: `ai:image`
+- Consumer group: `image-workers`
+- 최소 payload 필드: `jobId`, `projectId`, `type`, `createdAt`
+- 메시지는 key-value map 형태 (JSON 아님)
+- 처리 원칙:
+  - Job이 이미 `SUCCEEDED`이면 처리하지 않고 ACK
+  - `RUNNING`이 오래된 경우 pending reclaim 후 재처리
+  - 실패 시 `retry_count` 증가 및 재시도 한도 적용
+
+## Worker 공통 처리 순서 (07 참고)
+
+1) Streams에서 메시지 수신 (`XREADGROUP`)
+2) DB에서 Job 조회 → 실행 가능 여부 확인
+3) `RUNNING` 전환 (조건부 업데이트)
+4) 실제 작업 수행 (AI 호출/FFmpeg)
+5) 결과 저장 + DB 업데이트 (`SUCCEEDED`/`FAILED`)
+6) Streams ACK (`XACK`)  
+   - 성공/실패가 DB에 반영된 이후에만 ACK  
+   - 실패는 ACK하지 않고 pending에 남겨 재처리 가능
+
+## Worker 컨테이너/서비스 규칙 (04/07 참고)
+
+- 서비스명 예시: `worker-image`, `worker-video`, `worker-merge`
+- 소비자 이름 규칙: `{workerType}-{hostname}-{pid}` (예: `image-worker-app01-1234`)
+- 각 Worker는 자신 Stream만 구독 (image→`ai:image`, video→`ai:video`, merge→`media:merge`)
+
+## 로컬/Streams 이원화 운영 방침 (04 참고)
+
+- 로컬 개발: `LocalAsyncJobDispatcher`로 `@Async` 처리 (Redis Streams 없이 즉시 실행)
+- 운영/스테이징: `RedisStreamsJobDispatcher`로 Streams 기반 처리
+- 전환 원칙:
+  - Dispatcher 인터페이스 유지로 코드 변경 최소화
+  - Worker의 처리 순서(ACK 타이밍 포함)는 동일 규칙 준수
+  - 로컬은 단일 프로세스, 운영은 worker 컨테이너 분리
+
+## 프로파일/설정 최소 기준 (공통)
+
+- 로컬(Async): `spring.profiles.active=local` + `LocalAsyncJobDispatcher` 사용
+- 운영(Streams): `spring.profiles.active=redis-streams` + Streams 기반 Dispatcher 사용
+- 공통 환경 변수:
+  - `REDIS_HOST`, `REDIS_PORT`
+  - `GCP_PROJECT_ID`, `GCP_LOCATION` (AI Worker 공통)
+  - `GEMINI_STUB`, `GEMINI_IMAGE_MODEL` (이미지 Worker)
 
 ## 구현 계획 (진행 현황 포함)
 
 ### 처리 흐름 (계획)
 
 - [x] JobExecutor가 IMAGE_GENERATION Job을 ImageGenerationWorker에 위임
-- [x] request_json에서 prompt 추출 (JSON 파싱 실패 시 raw 텍스트 사용)
+- [x] request_json에서 prompt 추출 (JSON 파싱 실패 시 raw 텍스트 사용, prompt 없음 시 실패)
 - [x] GeminiImageClient가 이미지 생성
-  - [x] `ai.gemini.stub=true` 또는 API 키 미설정이면 스텁 PNG 반환
+  - [x] `ai.gemini.stub=true`이면 스텁 PNG 반환
+  - [x] Vertex AI REST `predict` 호출 (API Key 또는 ADC)
+  - [x] `predictions`에서 base64 이미지 추출
 - [x] LocalImageStorage가 이미지 파일 저장
 - [x] AssetMapper로 assets 테이블에 레코드 저장
 - [x] JobExecutor가 result_asset_id로 Job 성공 처리
+
+### 실연동 구현 계획 (Vertex AI REST)
+
+- [x] 호출 엔드포인트
+  - `https://{location}-aiplatform.googleapis.com/v1/projects/{projectId}/locations/{location}/publishers/google/models/{model}:predict`
+  - 또는 full resource name 사용 시 `projects/.../locations/.../publishers/.../models/...:predict`
+- [x] 인증
+  - `ai.gemini.api-key`가 있으면 Query `?key=...`
+  - 없으면 ADC(`GOOGLE_APPLICATION_CREDENTIALS`)로 Bearer 토큰 발급
+- [x] 요청 포맷
+  - `instances=[{prompt}]`
+  - `parameters.sampleCount`, `parameters.aspectRatio` (설정 값 있을 때만 포함)
+- [x] 응답 파싱
+  - `predictions[0]`에서 base64 bytes + mimeType 추출
+  - 미존재 시 오류 처리
+- [x] 오류/타임아웃 처리
+  - 401/403 → 인증 실패
+  - 429 → rate limited
+  - 408/504 → timeout
+  - 5xx → provider error
 
 ### 입력/출력 정의 (계획)
 
@@ -37,19 +122,25 @@ IMAGE_GENERATION Job 처리 흐름과 구현 상세를 문서화하고,
 출력:
 - assets 테이블에 IMAGE 에셋 생성
 - generation_jobs.result_asset_id 업데이트
+- (S3) JobResponse.resultUrl은 presigned URL로 반환
 
 ### 저장 규칙 (계획)
 
-- 저장 경로: `${file.upload-dir}/ai/image/{projectId}/job-{jobId}.png`
-- storage_provider: `LOCAL`
-- storage_key: 상대 경로 문자열 (예: `ai/image/12/job-101.png`)
-- content_type: `image/png`
+- 저장 경로(LOCAL): `${file.upload-dir}/ai/image/{projectId}/job-{jobId}.{ext}`
+- 저장 경로(S3): `ai/image/{projectId}/job-{jobId}.{ext}`
+- 확장자 규칙: contentType 기준 (`image/png` → `.png`, `image/jpeg` → `.jpg`, 그 외 기본 `.png`)
+- storage_provider: `LOCAL` 또는 `S3`
+- storage_key: 상대 경로 문자열 (예: `ai/image/12/job-101.png` 또는 `.jpg`)
+- content_type: 생성 결과 contentType
+- (S3) presigned URL 반환 시 storage_key 기준으로 생성
 
 ### 예외/로그 처리 (계획)
 
 - request_json 파싱 실패 시 경고 로그 후 raw 텍스트를 prompt로 사용
+- JSON 파싱 성공이지만 prompt가 없거나 공백이면 INVALID_REQUEST로 실패
 - 파일 저장 실패 시 예외 발생 → JobExecutor가 FAILED 처리
 - Gemini 클라이언트는 스텁 모드 시 경고 로그 출력
+- Streams 모드에서는 성공/실패 DB 반영 후 ACK, 실패 시 pending에 남아 재시도 대상
 
 ## 구현 상세 (계획)
 
@@ -79,22 +170,58 @@ IMAGE_GENERATION Job 처리 흐름과 구현 상세를 문서화하고,
 
 - GeminiImageClient.generateImage()
   - stub 모드면 1x1 PNG 반환
-  - 실제 호출은 TODO (다음 단계에서 구현)
+  - Vertex AI REST `predict` 호출 (ADC 또는 API Key)
+  - request payload: `instances=[{prompt}]`, `parameters`(sampleCount/aspectRatio)
+  - response: `predictions[0]`에서 base64 bytes/mimeType 추출
 
-## 설정 (현재)
+## 설정 (실제 연동)
 
-- `file.upload-dir` (기본값 `./uploads`)
-- `ai.gemini.api-key` (미설정 시 stub 모드)
-- `ai.gemini.stub` (기본 true 처리 가능)
+### 설정 정의
+
+```yaml
+ai:
+  gemini:
+    stub: ${GEMINI_STUB:true}
+    api-key: ${GEMINI_API_KEY:}
+    image-model: ${GEMINI_IMAGE_MODEL:gemini-2.5-flash-image}
+    sample-count: ${GEMINI_SAMPLE_COUNT:1}
+    aspect-ratio: ${GEMINI_ASPECT_RATIO:}
+    response-mime-type: ${GEMINI_RESPONSE_MIME_TYPE:}
+    response-modalities: ${GEMINI_RESPONSE_MODALITIES:IMAGE}
+    timeout-ms: ${GEMINI_TIMEOUT_MS:60000}
+```
+
+```yaml
+spring.ai.vertex.ai.gemini:
+  project-id: ${GCP_PROJECT_ID}
+  location: ${GCP_LOCATION:us-central1}
+
+storage:
+  provider: ${STORAGE_PROVIDER:S3}
+  s3:
+    endpoint: ${S3_ENDPOINT:}
+    region: ${S3_REGION:ap-northeast-2}
+    access-key: ${S3_ACCESS_KEY:}
+    secret-key: ${S3_SECRET_KEY:}
+    bucket: ${S3_BUCKET:itda-local}
+    path-style: ${S3_PATH_STYLE:true}
+    presign-expire-seconds: ${S3_PRESIGN_EXPIRE_SECONDS:3600}
+```
+
+### 호출 방식
+
+- `ai.gemini.api-key` 설정 시 Query `?key=...` 로 인증
+- 미설정 시 ADC (`GOOGLE_APPLICATION_CREDENTIALS`)
+- 로컬 파일 저장 경로: `${file.upload-dir}/ai/image/{projectId}/job-{jobId}.png`
+- S3 저장 경로: `ai/image/{projectId}/job-{jobId}.{ext}`
 
 ## 다음 단계 계획 (구체화)
 
-### 1) Gemini 실연동
+### 1) Gemini 실연동 고도화
 
-- API 스펙 확정 (모델, 입력 포맷, 응답 포맷)
-- `GeminiImageClient`에 실제 HTTP/SDK 호출 구현
-- 응답에서 bytes/contentType 추출
-- 실패 시 재시도 정책 정의 (429/5xx)
+- 모델 파라미터 확장 (negative prompt, seed 등)
+- 응답 스키마 변경 대응/회귀 테스트
+- 재시도/백오프 정책 고도화
 
 ### 2) 스토리지 확장 (S3)
 
@@ -121,9 +248,15 @@ IMAGE_GENERATION Job 처리 흐름과 구현 상세를 문서화하고,
 
 ## 체크리스트
 
-- [ ] IMAGE_GENERATION Job 실행 연결
-- [ ] 로컬 저장 및 Asset 등록
-- [ ] Gemini 스텁 이미지 반환
-- [ ] Gemini 실연동
+- [x] IMAGE_GENERATION Job 실행 연결
+- [x] 로컬 저장 및 Asset 등록
+- [x] Gemini 스텁 이미지 반환
+- [x] Gemini 실연동
 - [ ] S3 업로드
 - [ ] presigned URL 연동
+- [ ] consumer group 생성 (`image-workers`)
+- [ ] pending 모니터링/재처리 정책
+- [ ] ACK 정책 (성공/실패 시점)
+- [ ] retry 한도 및 backoff
+- [ ] job timeout/kill 정책
+

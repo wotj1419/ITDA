@@ -3,6 +3,7 @@ package com.itda.backend.job.service;
 import com.itda.backend.job.domain.Job;
 import com.itda.backend.job.domain.JobStatus;
 import com.itda.backend.job.repository.JobMapper;
+import com.itda.backend.worker.image.ImageGenerationWorker;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -27,6 +28,7 @@ public class JobExecutor {
     private final JobEventPublisher jobEventPublisher;
     private final TransactionTemplate transactionTemplate;
     private final JobExecutionProperties jobExecutionProperties;
+    private final ImageGenerationWorker imageWorker;
 
     // TODO: 팀원들이 Worker 구현 후 주입
     // private final ImageGenerationWorker imageWorker;   // 이용호
@@ -104,7 +106,7 @@ public class JobExecutor {
             case IMAGE_GENERATION -> {
                 // TODO: 이용호 구현 후 주석 해제
                 // return imageWorker.execute(job);
-                throw new UnsupportedOperationException("IMAGE_GENERATION worker not implemented");
+                return imageWorker.execute(job);
             }
             case VIDEO_GENERATION -> {
                 // TODO: 김은서 구현 후 주석 해제
