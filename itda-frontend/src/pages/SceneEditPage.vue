@@ -11,7 +11,7 @@ import { useSceneNodeStore } from '../stores/sceneNode';
 import { useUIStore } from '../stores/ui';
 import { useCollabStore } from '../stores/collab';
 import { TIMELINE_PLAYBACK_MODAL_ID } from '../constants/ui';
-import type { VideoNodeData } from '../types/node';
+import type { VideoNodeData } from '../types/ui/sceneNodes';
 
 import EditorLayout from '../layouts/EditorLayout.vue';
 import EditorHeader from '../components/editor/EditorHeader.vue';
