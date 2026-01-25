@@ -1,0 +1,302 @@
+package com.itda.backend.worker.merge;
+
+import com.itda.backend.global.config.FileStorageProperties;
+import com.itda.backend.job.domain.Job;
+import com.itda.backend.job.domain.JobType;
+import com.itda.backend.node.repository.NodeMapper;
+import com.itda.backend.node.repository.dto.TimelineNodeRow;
+import com.itda.backend.worker.ExecutionResult;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Component;
+
+import java.io.BufferedWriter;
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
+
+/**
+ * FFmpeg 병합 Worker (SCENE_MERGE / PROJECT_MERGE)
+ */
+@Slf4j
+@Component
+@RequiredArgsConstructor
+public class MergeWorker {
+
+    private static final Duration PROCESS_TIMEOUT = Duration.ofMinutes(10);
+    private static final String EXPORTS_DIR = "exports";
+    private static final String SCENE_EXPORTS_DIR = "scenes";
+    private static final String EXPORT_FILE_NAME = "final.mp4";
+    private static final String FILES_PREFIX = "/files/";
+
+    private final NodeMapper nodeMapper;
+    private final FileStorageProperties fileStorageProperties;
+
+    public ExecutionResult execute(Job job) {
+        if (job == null) {
+            throw new IllegalStateException("Job is required");
+        }
+        if (job.getType() == null) {
+            throw new IllegalStateException("Job missing type");
+        }
+
+        return switch (job.getType()) {
+            case PROJECT_MERGE -> mergeProject(job);
+            case SCENE_MERGE -> mergeScene(job);
+            default -> throw new IllegalStateException("Unsupported merge type: " + job.getType());
+        };
+    }
+
+    private ExecutionResult mergeProject(Job job) {
+        Long projectId = job.getProjectId();
+        if (projectId == null) {
+            throw new IllegalStateException("Project merge job missing projectId");
+        }
+
+        List<TimelineNodeRow> rows = nodeMapper.findConfirmedVideoNodesByProjectId(projectId);
+        if (rows.isEmpty()) {
+            throw new IllegalStateException("No confirmed video nodes to merge");
+        }
+
+        Path outputPath = resolveProjectExportPath(projectId);
+        mergeConfirmedVideos(rows, outputPath);
+        return new ExecutionResult(null, null);
+    }
+
+    private ExecutionResult mergeScene(Job job) {
+        Long sceneId = job.getSceneId();
+        if (sceneId == null) {
+            throw new IllegalStateException("Scene merge job missing sceneId");
+        }
+
+        List<TimelineNodeRow> rows = nodeMapper.findConfirmedVideoNodesBySceneId(sceneId);
+        if (rows.isEmpty()) {
+            throw new IllegalStateException("No confirmed video nodes to merge");
+        }
+
+        Path outputPath = resolveSceneExportPath(sceneId);
+        mergeConfirmedVideos(rows, outputPath);
+        return new ExecutionResult(null, null);
+    }
+
+    private void mergeConfirmedVideos(List<TimelineNodeRow> rows, Path outputPath) {
+        List<Path> inputPaths = resolveInputPaths(rows);
+        ensureParentDir(outputPath);
+
+        Path concatList = createConcatListFile(inputPaths, outputPath.getParent());
+        boolean keepAudio = allHaveAudio(inputPaths);
+        runFfmpeg(concatList, outputPath, keepAudio);
+        deleteQuietly(concatList);
+    }
+
+    private List<Path> resolveInputPaths(List<TimelineNodeRow> rows) {
+        List<Path> paths = new ArrayList<>();
+        for (TimelineNodeRow row : rows) {
+            Path path = resolveNodeVideoPath(row.getVideoNodeId(), row.getContentUrl());
+            if (!Files.exists(path)) {
+                throw new IllegalStateException("Video file missing: " + path);
+            }
+            paths.add(path);
+        }
+        return paths;
+    }
+
+    private Path resolveNodeVideoPath(Long nodeId, String contentUrl) {
+        String contentKey = normalizeContentKey(contentUrl);
+        if (contentKey == null) {
+            contentKey = defaultNodeContentKey(nodeId);
+        }
+        if (contentKey == null) {
+            throw new IllegalStateException("Node content missing: nodeId=" + nodeId);
+        }
+        return resolveUnderUploadRoot(contentKey);
+    }
+
+    private String normalizeContentKey(String contentUrl) {
+        if (contentUrl == null) {
+            return null;
+        }
+        String trimmed = contentUrl.trim();
+        if (trimmed.isEmpty()) {
+            return null;
+        }
+        if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
+            return null;
+        }
+        if (trimmed.startsWith(FILES_PREFIX)) {
+            return trimmed.substring(FILES_PREFIX.length());
+        }
+        if (trimmed.startsWith("/")) {
+            return trimmed.substring(1);
+        }
+        return trimmed;
+    }
+
+    private String defaultNodeContentKey(Long nodeId) {
+        if (nodeId == null) {
+            return null;
+        }
+        return "ai/videos/node-" + nodeId + ".mp4";
+    }
+
+    private Path resolveUnderUploadRoot(String relativePath) {
+        Path root = Path.of(fileStorageProperties.getUploadDir())
+                .toAbsolutePath()
+                .normalize();
+        Path target = root.resolve(relativePath).normalize();
+        if (!target.startsWith(root)) {
+            throw new IllegalStateException("Invalid content path");
+        }
+        return target;
+    }
+
+    private Path resolveProjectExportPath(Long projectId) {
+        return Path.of(
+                fileStorageProperties.getUploadDir(),
+                EXPORTS_DIR,
+                String.valueOf(projectId),
+                EXPORT_FILE_NAME
+        ).toAbsolutePath().normalize();
+    }
+
+    private Path resolveSceneExportPath(Long sceneId) {
+        return Path.of(
+                fileStorageProperties.getUploadDir(),
+                EXPORTS_DIR,
+                SCENE_EXPORTS_DIR,
+                String.valueOf(sceneId),
+                EXPORT_FILE_NAME
+        ).toAbsolutePath().normalize();
+    }
+
+    private void ensureParentDir(Path outputPath) {
+        try {
+            Files.createDirectories(outputPath.getParent());
+        } catch (IOException e) {
+            throw new IllegalStateException("Failed to create export directory", e);
+        }
+    }
+
+    private Path createConcatListFile(List<Path> inputPaths, Path dir) {
+        try {
+            Path listFile = Files.createTempFile(dir, "concat-", ".txt");
+            try (BufferedWriter writer = Files.newBufferedWriter(listFile)) {
+                for (Path path : inputPaths) {
+                    writer.write("file '" + escapePath(path.toAbsolutePath()) + "'");
+                    writer.newLine();
+                }
+            }
+            return listFile;
+        } catch (IOException e) {
+            throw new IllegalStateException("Failed to create concat list file", e);
+        }
+    }
+
+    private String escapePath(Path path) {
+        String raw = path.toString();
+        return raw.replace("'", "'\\''");
+    }
+
+    private boolean allHaveAudio(List<Path> inputPaths) {
+        for (Path path : inputPaths) {
+            if (!hasAudio(path)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private boolean hasAudio(Path path) {
+        List<String> command = List.of(
+                "ffprobe",
+                "-v", "error",
+                "-select_streams", "a",
+                "-show_entries", "stream=codec_type",
+                "-of", "csv=p=0",
+                path.toString()
+        );
+        try {
+            ProcessResult result = runProcess(command, Duration.ofSeconds(20));
+            return !result.output().trim().isEmpty();
+        } catch (Exception e) {
+            log.warn("[MergeWorker] ffprobe failed, treating as no-audio: file={}", path);
+            return false;
+        }
+    }
+
+    private void runFfmpeg(Path listFile, Path outputPath, boolean keepAudio) {
+        List<String> command = new ArrayList<>();
+        command.add("ffmpeg");
+        command.add("-y");
+        command.add("-f");
+        command.add("concat");
+        command.add("-safe");
+        command.add("0");
+        command.add("-i");
+        command.add(listFile.toString());
+        command.add("-vf");
+        command.add("scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2");
+        command.add("-c:v");
+        command.add("libx264");
+        command.add("-preset");
+        command.add("veryfast");
+        command.add("-pix_fmt");
+        command.add("yuv420p");
+        if (keepAudio) {
+            command.add("-c:a");
+            command.add("aac");
+            command.add("-b:a");
+            command.add("128k");
+        } else {
+            command.add("-an");
+        }
+        command.add("-movflags");
+        command.add("+faststart");
+        command.add(outputPath.toString());
+
+        ProcessResult result = runProcess(command, PROCESS_TIMEOUT);
+        if (result.exitCode() != 0) {
+            List<String> lines = result.output().lines().toList();
+            int start = Math.max(0, lines.size() - 10);
+            String summary = String.join("\n", lines.subList(start, lines.size()));
+            throw new IllegalStateException("FFmpeg merge failed: " + summary);
+        }
+    }
+
+    private ProcessResult runProcess(List<String> command, Duration timeout) {
+        try {
+            Process process = new ProcessBuilder(command).redirectErrorStream(true).start();
+            boolean finished = process.waitFor(timeout.toMillis(), java.util.concurrent.TimeUnit.MILLISECONDS);
+            if (!finished) {
+                process.destroyForcibly();
+                throw new IllegalStateException("Process timeout: " + String.join(" ", command));
+            }
+            String output = readAll(process.getInputStream());
+            return new ProcessResult(process.exitValue(), output);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("Process interrupted: " + String.join(" ", command), e);
+        } catch (IOException e) {
+            throw new IllegalStateException("Process failed: " + String.join(" ", command), e);
+        }
+    }
+
+    private String readAll(InputStream stream) throws IOException {
+        return new String(stream.readAllBytes());
+    }
+
+    private void deleteQuietly(Path path) {
+        try {
+            Files.deleteIfExists(path);
+        } catch (IOException ignored) {
+            // ignore
+        }
+    }
+
+    private record ProcessResult(int exitCode, String output) {
+    }
+}
