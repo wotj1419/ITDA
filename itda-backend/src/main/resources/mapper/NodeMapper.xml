@@ -201,4 +201,18 @@
         ORDER BY s.order_index ASC, n.order_index ASC, n.id ASC
     </select>
 
+    <!-- Timeline: confirmed VIDEO nodes by scene -->
+    <select id="findConfirmedVideoNodesBySceneId"
+            resultType="com.itda.backend.node.repository.dto.TimelineNodeRow">
+        SELECT n.id AS video_node_id,
+               n.scene_id AS scene_id,
+               NULL AS scene_order,
+               n.content_url AS content_url
+        FROM nodes n
+        WHERE n.scene_id = #{sceneId}
+          AND n.node_type = 'VIDEO'
+          AND n.is_confirmed = true
+        ORDER BY n.order_index ASC, n.id ASC
+    </select>
+
 </mapper>

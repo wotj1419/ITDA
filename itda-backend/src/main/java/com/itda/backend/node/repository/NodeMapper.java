@@ -51,4 +51,6 @@ public interface NodeMapper {
                                   @Param("contentUrl") String contentUrl);
 
     List<TimelineNodeRow> findConfirmedVideoNodesByProjectId(@Param("projectId") Long projectId);
+
+    List<TimelineNodeRow> findConfirmedVideoNodesBySceneId(@Param("sceneId") Long sceneId);
 }

@@ -471,7 +471,11 @@ public class NodeService {
     }
 
     private String resolveDataJson(UpdateNodeRequest request, Node node) {
-        return request.settings() != null ? serializeSettings(request.settings()) : node.getDataJson();
+        if (request.settings() == null) {
+            return node.getDataJson();
+        }
+        Map<String, Object> settings = normalizeMasterObjectIds(node, request.settings());
+        return serializeSettings(settings);
     }
 
     private JobType resolveJobType(NodeType nodeType) {
@@ -481,8 +485,9 @@ public class NodeService {
     private String buildGenerationRequestJson(UpdateNodeRequest request, Node node) {
         try {
             String resolvedPrompt = resolvePrompt(request, node);
-            Map<String, Object> resolvedSettings = request.settings() != null
-                    ? request.settings()
+            Map<String, Object> normalizedSettings = normalizeMasterObjectIds(node, request.settings());
+            Map<String, Object> resolvedSettings = normalizedSettings != null
+                    ? normalizedSettings
                     : deserializeSettings(node.getDataJson());
             Map<String, Object> payload = new java.util.LinkedHashMap<>();
             payload.put("prompt", resolvedPrompt);
@@ -572,5 +577,17 @@ public class NodeService {
             }
         }
         return null;
+    }
+
+    private Map<String, Object> normalizeMasterObjectIds(Node node, Map<String, Object> settings) {
+        if (node.getNodeType() != NodeType.MASTER || settings == null) {
+            return settings;
+        }
+        if (!settings.containsKey("objectIds") || settings.get("objectIds") != null) {
+            return settings;
+        }
+        Map<String, Object> normalized = new java.util.LinkedHashMap<>(settings);
+        normalized.put("objectIds", List.of());
+        return normalized;
     }
 }
