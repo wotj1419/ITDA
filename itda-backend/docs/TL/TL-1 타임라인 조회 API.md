@@ -77,8 +77,15 @@
 3. `Feat : Implement project timeline read (fallback empty if no merge data)`
 4. `Docs : Add TL-1 test notes`
 
-### 9) 1단계 진행 현황
+### 9) 1단계 진행 현황 (`Feat : Add timeline read DTO/mapper skeleton`)
 - 완료: `Feat : Add timeline read DTO/mapper skeleton`
 - DTO/Mapper 추가 완료 (scene/project timeline 응답 DTO + mapper DTO)
 - SQL 기준 확정: `timeline_items.order_index` 기준 정렬
 - project timeline은 `timeline_items.scene_video_id` -> `scene_videos` 조인 기준
+
+### 10) 2단계 진행 현황 (`Feat : Implement scene timeline read (confirmed VIDEO only)`)
+- 완료: `Feat : Implement scene timeline read (confirmed VIDEO only)`
+- Controller: `GET /api/scenes/{sceneId}/timeline`
+- Service: confirmed VIDEO만 조회 + totalDuration 합산
+- Mapper/SQL: `findSceneTimelineItems(sceneId)` 사용
+- 응답: `SceneTimelineResponse(items, totalDuration)`
