@@ -97,3 +97,21 @@
 - Mapper/SQL: `findProjectTimelineItems(projectId)` 사용
 - 응답: `ProjectTimelineResponse(items, totalDuration)`
 - 병합 결과가 없으면 `items = []`, `totalDuration = 0`
+
+### 12) 테스트 체크리스트 (Docs : Add TL-1 test notes)
+- 테스트 환경: (예: local / itda_local)
+- 테스트 대상 브랜치/커밋: (예: feat/TL-1-timeline-read / <commit>)
+- Swagger 테스트 결과
+  - `GET /api/scenes/{sceneId}/timeline`
+    - [ ] confirm된 VIDEO만 반환
+    - [ ] totalDuration 합산 정상
+  - `GET /api/projects/{projectId}/timeline`
+    - [ ] 병합 결과 없음 → `items = []`, `totalDuration = 0`
+    - [ ] 병합 결과 있음 → order_index 순서대로 반환
+
+### 13) 테스트 기록 (Docs : Add TL-1 test notes)
+- 테스트 환경: local / itda_local
+- 사전 조건: VIDEO confirm 완료, merge 결과 데이터 없음(작업 미완료)
+- GET /api/scenes/{sceneId}/timeline → items=[], totalDuration=0 확인
+- GET /api/projects/{projectId}/timeline → items=[], totalDuration=0 확인
+- 참고: 실제 clip 노출은 merge job 완료 후 contentUrl/sceneVideo 데이터가 있어야 함 (추후 재검증 예정)
