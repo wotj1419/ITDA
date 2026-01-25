@@ -1,16 +1,15 @@
 import axios from 'axios';
 
 // Create a configured axios instance
-// In Vite, use import.meta.env for environment variables
-// VITE_API_BASE_URL should be defined in .env files
-const baseURL = import.meta.env.VITE_API_BASE_URL || '/api';
+// Base URL for local backend
+const baseURL = 'http://localhost:8080/api';
 
 const apiClient = axios.create({
     baseURL,
     headers: {
         'Content-Type': 'application/json',
     },
-    timeout: 10000, // 10s timeout
+    timeout: 60000, // 60s timeout
 });
 
 // Request interceptor for API calls
@@ -36,11 +35,22 @@ apiClient.interceptors.response.use(
     async (error) => {
         const originalRequest = error.config;
 
+        const status = error.response?.status;
+
         // Handle 401 Unauthorized errors (token expired)
-        if (error.response?.status === 401 && !originalRequest._retry) {
-            // Logic for refreshing token could go here
-            // For now, simpler handling or logout redirect
-            // window.location.href = '/auth'; 
+        if (status === 401 && !originalRequest._retry) {
+            localStorage.removeItem('accessToken');
+            localStorage.removeItem('refreshToken');
+            // Avoid router import cycles here
+            window.location.assign('/auth');
+            return Promise.reject(error);
+        }
+
+        if (status === 403) {
+            const currentPath = `${window.location.pathname}${window.location.search}`;
+            const redirect = encodeURIComponent(currentPath);
+            window.location.assign(`/access-denied?redirect=${redirect}`);
+            return Promise.reject(error);
         }
 
         return Promise.reject(error);
