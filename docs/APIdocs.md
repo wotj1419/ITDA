@@ -1694,7 +1694,7 @@ API /api/ai/jobs/{jobId}/requeue
 `sceneVideoId` 흐름:
 1) VIDEO 노드 확정: `/api/nodes/{id}/confirm`
 2) 씬 타임라인 정렬: `PUT /api/scenes/{id}/timeline`
-3) 씬 병합 요청: `POST /api/scenes/{id}/merge` -> `jobId` 반환
+3) 씬 병합 요청: `POST /api/scenes/{id}/merge` -> `jobId`/`status` 반환
 4) 완료 이벤트 수신: 프로젝트 이벤트 WS (job.done)
 5) 조회: `GET /api/projects/{id}/timeline`에서 `sceneVideoId` 확인
 
@@ -1800,6 +1800,18 @@ API /api/scenes/{id}/merge
 ```
 ※ 씬 타임라인 순서를 기준으로 병합합니다.
 ※ 완료 시 `sceneVideoId`가 생성되며 프로젝트 타임라인에 사용됩니다.
+
+#### 2. Request
+```json
+{
+  "includeMusic": false // P1: 배경음악 포함 여부
+}
+```
+
+#### 요청 필드 설명
+| 필드 | 타입 | 필수 여부 | 설명 |
+| --- | --- | --- | --- |
+| includeMusic | Boolean | 선택 | 배경음악 포함 여부 (기본: false, P1 기능) |
 
 #### 3. Response
 ```json

@@ -46,6 +46,7 @@ public record ApiResponse<T>(
                 .body(body(StatusCode.ACCEPTED.name(), null, data, null));
     }
 
+
     public static ResponseEntity<ApiResponse<Void>> error(ErrorCode errorCode) {
         return ResponseEntity.status(HttpStatus.valueOf(errorCode.getStatus()))
                 .body(errorBody(errorCode, null, null));
