@@ -3,11 +3,14 @@ package com.itda.backend.node.controller;
 import com.itda.backend.global.response.ApiResponse;
 import com.itda.backend.global.security.CustomUserDetails;
 import com.itda.backend.node.controller.dto.request.CreateNodeRequest;
+import com.itda.backend.node.controller.dto.request.GenerateNodeJobRequest;
 import com.itda.backend.node.controller.dto.request.UpdateNodePositionsRequest;
 import com.itda.backend.node.controller.dto.request.UpdateNodeRequest;
 import com.itda.backend.node.controller.dto.response.NodeCreateResponse;
 import com.itda.backend.node.controller.dto.response.NodeDetailResponse;
 import com.itda.backend.node.controller.dto.response.NodeTreeResponse;
+import com.itda.backend.node.controller.dto.response.GenerateNodeJobResponse;
+import com.itda.backend.job.domain.Job;
 import com.itda.backend.node.service.NodeService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -111,5 +114,16 @@ public class NodeController {
             @Valid @RequestBody UpdateNodePositionsRequest request) {
         nodeService.updatePositions(userDetails.getUserId(), sceneId, request.positions());
         return ApiResponse.success(null);
+    }
+
+    @Operation(summary = "Generate node output", description = "Enqueue image/video generation job for the node")
+    @PostMapping("/nodes/{id}/generate")
+    public ResponseEntity<ApiResponse<GenerateNodeJobResponse>> generateNode(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @PathVariable Long id,
+            @RequestBody(required = false) GenerateNodeJobRequest request) {
+        Job job = nodeService.enqueueGenerateJob(userDetails.getUserId(), id, request);
+        GenerateNodeJobResponse response = GenerateNodeJobResponse.from(job, id);
+        return ApiResponse.accepted(response);
     }
 }

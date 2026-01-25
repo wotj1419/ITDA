@@ -4,7 +4,11 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.itda.backend.global.exception.BusinessException;
 import com.itda.backend.global.response.ErrorCode;
+import com.itda.backend.job.domain.Job;
+import com.itda.backend.job.domain.JobType;
+import com.itda.backend.job.service.JobService;
 import com.itda.backend.node.controller.dto.request.CreateNodeRequest;
+import com.itda.backend.node.controller.dto.request.GenerateNodeJobRequest;
 import com.itda.backend.node.controller.dto.request.NodePosition;
 import com.itda.backend.node.controller.dto.request.UpdateNodeRequest;
 import com.itda.backend.node.controller.dto.response.NodeCreateResponse;
@@ -24,6 +28,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -44,6 +49,7 @@ public class NodeService {
     private final SceneMapper sceneMapper;
     private final ProjectMemberMapper projectMemberMapper;
     private final ObjectMapper objectMapper;
+    private final JobService jobService;
 
     private record VideoShotIds(Long startShotNodeId, Long endShotNodeId) {}
 
@@ -208,6 +214,39 @@ public class NodeService {
         nodeMapper.clearConfirmedVideo(nodeId);
 
         log.debug("Unconfirmed video: nodeId={}", nodeId);
+    }
+
+    /**
+     * 노드 결과 생성 Job enqueue
+     */
+    @Transactional
+    public Job enqueueGenerateJob(Long userId, Long nodeId, GenerateNodeJobRequest request) {
+        Node node = getNodeOrThrow(nodeId);
+        Scene scene = getSceneAndEnsureMember(node.getSceneId(), userId);
+        assertNotSceneHeader(node.getNodeType());
+
+        String prompt = resolveGeneratePrompt(request, node);
+        if (prompt == null || prompt.isBlank()) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST, "Prompt is required");
+        }
+
+        JobType jobType = node.getNodeType() == NodeType.VIDEO
+                ? JobType.VIDEO_GENERATION
+                : JobType.IMAGE_GENERATION;
+
+        String requestJson = buildGenerateRequestJson(prompt, node, scene);
+        String idempotencyKey = request != null ? request.idempotencyKey() : null;
+        boolean requeueIfExisting = request != null && Boolean.TRUE.equals(request.requeueIfExisting());
+
+        return jobService.createAndEnqueue(
+                jobType,
+                scene.getProjectId(),
+                scene.getId(),
+                nodeId,
+                requestJson,
+                idempotencyKey,
+                requeueIfExisting
+        );
     }
 
     // ========== Private Helper Methods ==========
@@ -414,6 +453,33 @@ public class NodeService {
 
     private String resolveDataJson(UpdateNodeRequest request, Node node) {
         return request.settings() != null ? serializeSettings(request.settings()) : node.getDataJson();
+    }
+
+    private String resolveGeneratePrompt(GenerateNodeJobRequest request, Node node) {
+        if (request != null && request.prompt() != null && !request.prompt().isBlank()) {
+            return request.prompt();
+        }
+        return node.getPrompt();
+    }
+
+    private String buildGenerateRequestJson(String prompt, Node node, Scene scene) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("prompt", prompt);
+        payload.put("nodeId", node.getId());
+        payload.put("sceneId", node.getSceneId());
+        payload.put("projectId", scene.getProjectId());
+
+        Map<String, Object> settings = deserializeSettings(node.getDataJson());
+        if (settings != null && !settings.isEmpty()) {
+            payload.put("settings", settings);
+        }
+
+        try {
+            return objectMapper.writeValueAsString(payload);
+        } catch (JsonProcessingException e) {
+            log.error("Failed to serialize generate request", e);
+            throw new BusinessException(ErrorCode.INTERNAL_ERROR);
+        }
     }
 
     private List<NodePosition> filterSceneHeaderPositions(List<NodePosition> positions) {

@@ -14,6 +14,13 @@ spring.ai.vertex.ai.gemini:
   location: ${GCP_LOCATION}
 
 ai:
+  gemini:
+    stub: ${GEMINI_STUB:false}
+    api-key: ${GEMINI_API_KEY:}
+    image-model: ${GEMINI_IMAGE_MODEL:imagen-3.0-generate-001}
+    sample-count: ${GEMINI_SAMPLE_COUNT:1}
+    aspect-ratio: ${GEMINI_ASPECT_RATIO:}
+    timeout-ms: ${GEMINI_TIMEOUT_MS:60000}
   scenario:
     model-text: ${VERTEX_TEXT_MODEL}
     timeout-ms: ${VERTEX_TIMEOUT_MS:8000}
