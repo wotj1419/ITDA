@@ -42,6 +42,12 @@ public record ApiResponse<T>(
                 .body(body(StatusCode.SUCCESS.name(), "생성 완료", data, null));
     }
 
+    public static <T> ResponseEntity<ApiResponse<T>> accepted(T data) {
+        return ResponseEntity.status(HttpStatus.ACCEPTED)
+                .body(body(StatusCode.ACCEPTED.name(), null, data, null));
+    }
+
+
     public static ResponseEntity<ApiResponse<Void>> error(ErrorCode errorCode) {
         return ResponseEntity.status(HttpStatus.valueOf(errorCode.getStatus()))
                 .body(errorBody(errorCode, null, null));

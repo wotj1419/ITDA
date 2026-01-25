@@ -1,11 +1,18 @@
 package com.itda.backend.timeline.service;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.itda.backend.global.exception.BusinessException;
 import com.itda.backend.global.response.ErrorCode;
+import com.itda.backend.job.domain.Job;
+import com.itda.backend.job.domain.JobType;
+import com.itda.backend.job.service.JobService;
 import com.itda.backend.project.repository.ProjectMapper;
 import com.itda.backend.project.repository.ProjectMemberMapper;
 import com.itda.backend.scene.domain.Scene;
 import com.itda.backend.scene.repository.SceneMapper;
+import com.itda.backend.timeline.controller.dto.request.MergeRequest;
+import com.itda.backend.timeline.controller.dto.response.MergeResponse;
 import com.itda.backend.timeline.controller.dto.response.ProjectTimelineItemResponse;
 import com.itda.backend.timeline.controller.dto.response.ProjectTimelineResponse;
 import com.itda.backend.timeline.controller.dto.response.SceneTimelineItemResponse;
@@ -16,6 +23,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -25,6 +33,8 @@ public class TimelineService {
     private final SceneMapper sceneMapper;
     private final ProjectMemberMapper projectMemberMapper;
     private final ProjectMapper projectMapper;
+    private final JobService jobService;
+    private final ObjectMapper objectMapper;
 
     @Transactional(readOnly = true)
     public SceneTimelineResponse getSceneTimeline(Long userId, Long sceneId) {
@@ -52,6 +62,54 @@ public class TimelineService {
         return new ProjectTimelineResponse(items, totalDuration);
     }
 
+    @Transactional
+    public MergeResponse requestSceneMerge(Long userId, Long sceneId, MergeRequest request) {
+        Scene scene = requireScene(sceneId);
+        ensureMember(scene.getProjectId(), userId);
+
+        if (timelineMapper.findSceneTimelineItems(sceneId).isEmpty()) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST);
+        }
+
+        boolean includeMusic = request != null && request.includeMusicOrFalse();
+        String requestJson = serializePayload(Map.of("includeMusic", includeMusic));
+
+        Job job = jobService.createAndEnqueue(
+                JobType.SCENE_MERGE,
+                scene.getProjectId(),
+                sceneId,
+                null,
+                requestJson,
+                null
+        );
+
+        return MergeResponse.from(job);
+    }
+
+    @Transactional
+    public MergeResponse requestProjectMerge(Long userId, Long projectId, MergeRequest request) {
+        requireProject(projectId);
+        ensureMember(projectId, userId);
+
+        if (timelineMapper.findProjectTimelineItems(projectId).isEmpty()) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST);
+        }
+
+        boolean includeMusic = request != null && request.includeMusicOrFalse();
+        String requestJson = serializePayload(Map.of("includeMusic", includeMusic));
+
+        Job job = jobService.createAndEnqueue(
+                JobType.PROJECT_MERGE,
+                projectId,
+                null,
+                null,
+                requestJson,
+                null
+        );
+
+        return MergeResponse.from(job);
+    }
+
     private int sumDuration(List<SceneTimelineItemResponse> items) {
         return items.stream()
                 .map(SceneTimelineItemResponse::duration)
@@ -64,6 +122,14 @@ public class TimelineService {
                 .map(ProjectTimelineItemResponse::duration)
                 .mapToInt(value -> value != null ? value : 0)
                 .sum();
+    }
+
+    private String serializePayload(Object payload) {
+        try {
+            return objectMapper.writeValueAsString(payload);
+        } catch (JsonProcessingException e) {
+            throw new BusinessException(ErrorCode.INTERNAL_ERROR);
+        }
     }
 
     private void requireProject(Long projectId) {
