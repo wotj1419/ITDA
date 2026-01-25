@@ -51,6 +51,14 @@ public class MediaFileService {
         return toMediaFile(targetPath);
     }
 
+    public MediaFile loadSceneExport(Long userId, Long sceneId) {
+        Scene scene = sceneMapper.findById(sceneId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.SCENE_NOT_FOUND));
+        projectAccessService.ensureProjectAccessible(scene.getProjectId(), userId);
+        Path targetPath = resolveSceneExportPath(sceneId);
+        return toMediaFile(targetPath);
+    }
+
     private Path resolveNodeContentPath(Node node) {
         String contentKey = normalizeContentKey(node.getContentUrl());
         if (contentKey == null && node.getStatus() == NodeStatus.SUCCEEDED) {
@@ -65,6 +73,11 @@ public class MediaFileService {
 
     private Path resolveProjectExportPath(Long projectId) {
         String relativePath = "exports/" + projectId + "/final.mp4";
+        return resolveUnderUploadRoot(relativePath, ErrorCode.EXPORT_NOT_FOUND);
+    }
+
+    private Path resolveSceneExportPath(Long sceneId) {
+        String relativePath = "exports/scenes/" + sceneId + "/final.mp4";
         return resolveUnderUploadRoot(relativePath, ErrorCode.EXPORT_NOT_FOUND);
     }
 
