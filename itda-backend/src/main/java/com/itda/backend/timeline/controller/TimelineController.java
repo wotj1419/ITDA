@@ -2,6 +2,7 @@ package com.itda.backend.timeline.controller;
 
 import com.itda.backend.global.response.ApiResponse;
 import com.itda.backend.global.security.CustomUserDetails;
+import com.itda.backend.timeline.controller.dto.response.ProjectTimelineResponse;
 import com.itda.backend.timeline.controller.dto.response.SceneTimelineResponse;
 import com.itda.backend.timeline.service.TimelineService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -28,6 +29,15 @@ public class TimelineController {
             @AuthenticationPrincipal CustomUserDetails userDetails,
             @PathVariable Long sceneId) {
         SceneTimelineResponse response = timelineService.getSceneTimeline(userDetails.getUserId(), sceneId);
+        return ApiResponse.success(response);
+    }
+
+    @Operation(summary = "Get project timeline", description = "List merged scene clips in a project.")
+    @GetMapping("/projects/{projectId}/timeline")
+    public ResponseEntity<ApiResponse<ProjectTimelineResponse>> getProjectTimeline(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @PathVariable Long projectId) {
+        ProjectTimelineResponse response = timelineService.getProjectTimeline(userDetails.getUserId(), projectId);
         return ApiResponse.success(response);
     }
 }
