@@ -60,6 +60,11 @@ dependencies {
     // Vertex AI (Gemini)
     implementation("com.google.cloud:google-cloud-vertexai:1.0.0")
 
+    // AWS S3
+    implementation(platform("software.amazon.awssdk:bom:2.25.64"))
+    implementation("software.amazon.awssdk:s3")
+    implementation("software.amazon.awssdk:auth")
+
     // Test
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation("org.springframework.security:spring-security-test")
