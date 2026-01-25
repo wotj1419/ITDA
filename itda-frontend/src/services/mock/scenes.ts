@@ -1,4 +1,4 @@
-import type { Scene, SceneStatus, CreateSceneRequest } from '../../types'
+import type { Scene, SceneStatus, CreateSceneRequest } from '../../types/api/scenes'
 
 // Mock scenes data per project
 const mockScenesData: Record<number, Scene[]> = {

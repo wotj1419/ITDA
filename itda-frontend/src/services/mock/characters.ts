@@ -1,4 +1,4 @@
-import type { ObjectSheet, CreateObjectRequest } from '../../types'
+import type { ObjectSheet, CreateObjectRequest } from '../../types/api/objects'
 
 // Mock characters (ObjectSheet with type = 'CHARACTER') per project
 const mockCharactersData: Record<number, ObjectSheet[]> = {

@@ -1,5 +1,5 @@
 import type { AuthService } from '../auth.interface';
-import type { LoginRequest, SignupRequest } from '../../types';
+import type { LoginRequest, SignupRequest } from '../../types/api/auth';
 
 export const mockAuthService: AuthService = {
     async login(_credentials: LoginRequest) {

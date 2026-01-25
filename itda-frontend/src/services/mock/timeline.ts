@@ -1,4 +1,4 @@
-import type { TimelineClip } from '../../types'
+import type { TimelineClip } from '../../types/ui'
 
 import { fetchScenesByProjectId } from './scenes'
 import { fetchNodesBySceneId } from './nodes'

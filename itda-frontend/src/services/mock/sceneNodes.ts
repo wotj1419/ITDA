@@ -25,7 +25,7 @@ import {
     type ShotNodeData,
     type VideoNodeData,
     type AnyNodeData,
-} from '../../types/node';
+} from '../../types/ui/sceneNodes';
 
 // =============================================================================
 // Helper Functions
