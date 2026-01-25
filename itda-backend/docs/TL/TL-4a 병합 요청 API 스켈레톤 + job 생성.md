@@ -147,3 +147,16 @@
   - (Reason: Long-running Task 비동기 처리)
 - **Controller**: 씬/프로젝트 병합 요청 엔드포인트 추가, `202 Accepted` 응답
 - **Service**: JobService로 job 생성 + payload JSON 직렬화
+
+
+## 12) 테스트 기록
+
+- 테스트 환경: local / itda_local
+- 사전 조건:
+  - sceneId=1
+  - VIDEO 노드 6/7/8 confirm 완료
+  - timeline_items + scene_videos 더미 데이터 삽입
+- POST /api/scenes/1/merge -> 202 ACCEPTED, jobId/status 반환 확인
+- GET /api/scenes/1/timeline -> items 6/7/8, order 0/1/2 확인 (totalDuration=0)
+- POST /api/projects/1/merge -> 202 ACCEPTED, jobId/status 반환 확인
+- GET /api/projects/1/timeline -> sceneVideoId/thumbnail/duration/order 반환 확인
