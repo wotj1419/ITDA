@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { CollabParticipant } from '../../types';
+import type { CollabParticipant } from '../../types/ui';
 
 interface Props {
   participant: CollabParticipant;
