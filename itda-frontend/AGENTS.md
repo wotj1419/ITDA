@@ -41,5 +41,22 @@ Only proceed once requirements are clear.
 - If there are no automated tests, validate changes manually in dev mode.
 - Check responsive behavior for common breakpoints.
 
+## Local E2E Smoke (Playwright/MCP)
+- Ensure frontend dev server is running: `npm run dev -- --host` (default `http://localhost:5173`).
+- Backend API should be reachable at `http://localhost:8080` for real login flows.
+- If Playwright browsers are missing, install once: `npx playwright install chromium`.
+
+### Test Account (Local/Dev)
+- Email: `test@gmail.com`
+- Password: `qweqwe123`
+
+### Playwright MCP Notes (UI Exploration/Screenshots)
+- **Viewport matters:** Playwright MCP renders/captures based on the configured **viewport size**, not the OS browser "maximized" window. If the viewport is narrow (e.g. ~780px), responsive breakpoints may kick in and layouts can look different.
+  - Recommended: set viewport to `1440x900` (or demo target `1920x1080`) before capturing.
+- **Screenshot output path:** Depending on the environment, MCP may first save screenshots under `/tmp/playwright-mcp-output/<runId>/...`. You may need to copy them into your report folder.
+- **Browser/channel mismatch:** If MCP errors with `Chromium distribution 'chrome' is not found at /opt/google/chrome/chrome`, it may be configured to use the `chrome` channel and require a system Chrome (or Chrome for Testing).
+  - Recommended: install via Playwright (`npx playwright install chrome`) or install Chrome/Chromium via system packages and retry.
+  - Alternative: adjust MCP configuration to use Playwright-downloaded `chromium` instead of the `chrome` channel (if supported).
+
 ## Documentation
 - Update `docs/` if user flows or UI contracts change.

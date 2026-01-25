@@ -8,7 +8,7 @@ IMAGE_GENERATION Job 처리 흐름과 구현 상세를 문서화하고,
 ## 범위
 
 - IMAGE_GENERATION Job 처리
-- Gemini 이미지 생성 클라이언트 (현재 스텁)
+- Gemini 이미지 생성 클라이언트 (Vertex AI REST)
 - 로컬 파일 저장 및 Asset 등록
 - JobExecutor 연결
 
@@ -18,8 +18,7 @@ IMAGE_GENERATION Job 처리 흐름과 구현 상세를 문서화하고,
 
 - [x] JobExecutor가 IMAGE_GENERATION Job을 ImageGenerationWorker에 위임
 - [x] request_json에서 prompt 추출 (JSON 파싱 실패 시 raw 텍스트 사용)
-- [x] GeminiImageClient가 이미지 생성
-  - [x] `ai.gemini.stub=true` 또는 API 키 미설정이면 스텁 PNG 반환
+- [x] GeminiImageClient가 이미지 생성 (Vertex AI REST + ADC)
 - [x] LocalImageStorage가 이미지 파일 저장
 - [x] AssetMapper로 assets 테이블에 레코드 저장
 - [x] JobExecutor가 result_asset_id로 Job 성공 처리
@@ -49,19 +48,26 @@ IMAGE_GENERATION Job 처리 흐름과 구현 상세를 문서화하고,
 
 - request_json 파싱 실패 시 경고 로그 후 raw 텍스트를 prompt로 사용
 - 파일 저장 실패 시 예외 발생 → JobExecutor가 FAILED 처리
-- Gemini 클라이언트는 스텁 모드 시 경고 로그 출력
+- Gemini 클라이언트는 provider 오류 요약을 반환
+- JobExecutor는 provider 요약을 `error_message`에 기록 (길이 제한 적용)
 
 ## 구현 상세 (계획)
 
-### 파일/구성 (계획)
+### 파일/구성 (구현 반영)
 
 - Gemini 설정/클라이언트
-  - `src/main/java/com/itda/backend/ai/gemini/GeminiProperties.java`
+  - `src/main/java/com/itda/backend/ai/gemini/GeminiImageProperties.java`
   - `src/main/java/com/itda/backend/ai/gemini/GeminiImageClient.java`
   - `src/main/java/com/itda/backend/ai/gemini/GeminiImageResult.java`
+  - `src/main/java/com/itda/backend/ai/VertexAiAuthProvider.java`
+  - `src/main/java/com/itda/backend/ai/AiProviderException.java`
 - Image Worker
   - `src/main/java/com/itda/backend/worker/image/ImageGenerationWorker.java`
   - `src/main/java/com/itda/backend/worker/image/LocalImageStorage.java`
+  - `src/main/java/com/itda/backend/worker/JobRequestParser.java`
+  - `src/main/java/com/itda/backend/worker/ParsedJobRequest.java`
+  - `src/main/java/com/itda/backend/worker/StoredAsset.java`
+  - `src/main/java/com/itda/backend/worker/ExecutionResult.java`
 - Asset 저장
   - `src/main/java/com/itda/backend/asset/domain/Asset.java`
   - `src/main/java/com/itda/backend/asset/domain/AssetType.java`
@@ -69,6 +75,10 @@ IMAGE_GENERATION Job 처리 흐름과 구현 상세를 문서화하고,
   - `src/main/resources/mapper/AssetMapper.xml`
 - Job 연결
   - `src/main/java/com/itda/backend/job/service/JobExecutor.java`
+  - `src/main/resources/application-local.yml`
+  - `src/main/resources/application-dev.yml`
+  - `src/main/resources/application-prod.yml`
+  - `env`
 
 ### 주요 로직 요약 (계획)
 
@@ -78,23 +88,23 @@ IMAGE_GENERATION Job 처리 흐름과 구현 상세를 문서화하고,
   - asset.id 반환
 
 - GeminiImageClient.generateImage()
-  - stub 모드면 1x1 PNG 반환
-  - 실제 호출은 TODO (다음 단계에서 구현)
+  - Vertex AI REST 호출 (`:generateContent`)
+  - `responseModalities: ["TEXT","IMAGE"]`로 inlineData(base64) 수신
 
 ## 설정 (현재)
 
 - `file.upload-dir` (기본값 `./uploads`)
-- `ai.gemini.api-key` (미설정 시 stub 모드)
-- `ai.gemini.stub` (기본 true 처리 가능)
+- `spring.ai.vertex.ai.gemini.project-id`
+- `spring.ai.vertex.ai.gemini.location`
+- `ai.gemini.image-model` (기본 `gemini-2.5-flash-image`)
+- `ai.gemini.timeout-ms`
+- 인증: `GOOGLE_APPLICATION_CREDENTIALS` (ADC)
 
 ## 다음 단계 계획 (구체화)
 
 ### 1) Gemini 실연동
 
-- API 스펙 확정 (모델, 입력 포맷, 응답 포맷)
-- `GeminiImageClient`에 실제 HTTP/SDK 호출 구현
-- 응답에서 bytes/contentType 추출
-- 실패 시 재시도 정책 정의 (429/5xx)
+- 완료 (REST + ADC 기반 실제 호출)
 
 ### 2) 스토리지 확장 (S3)
 
@@ -121,9 +131,8 @@ IMAGE_GENERATION Job 처리 흐름과 구현 상세를 문서화하고,
 
 ## 체크리스트
 
-- [ ] IMAGE_GENERATION Job 실행 연결
-- [ ] 로컬 저장 및 Asset 등록
-- [ ] Gemini 스텁 이미지 반환
-- [ ] Gemini 실연동
+- [x] IMAGE_GENERATION Job 실행 연결
+- [x] 로컬 저장 및 Asset 등록
+- [x] Gemini 실연동 (REST + ADC)
 - [ ] S3 업로드
 - [ ] presigned URL 연동

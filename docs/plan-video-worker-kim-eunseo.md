@@ -11,37 +11,29 @@ VIDEO_GENERATION Job 처리 흐름과 구현 상세를 문서화하고,
 ## 범위
 
 - VIDEO_GENERATION Job 처리
-- Veo 영상 생성 클라이언트 (초기 Mock 포함)
+- Veo 영상 생성 클라이언트 (Vertex AI REST)
 - 로컬 파일 저장 및 결과 연결
 - JobExecutor 연결
 - WS 이벤트 발행 확인
 
-## 선행/의존 사항 (필수 공백)
+## 선행/의존 사항 (현 상태)
 
-아래 항목이 비어 있으면 본 계획대로 구현이 불가능함.
-
-1. **Generate API 입구 미구현**
-   - `POST /api/nodes/{id}/generate` 및 `/regenerate`는 APIdocs에만 존재
-2. **Worker 패키지 부재**
-   - `com.itda.backend.worker` 패키지가 현재 없음
-3. **JobExecutor는 resultAssetId 필수**
-   - `resultAssetId == null`이면 예외 발생
-4. **Node 상태/URL 업데이트 경로 없음**
-   - VIDEO 노드 `status`/`content_url` 갱신 메서드가 없음
-5. **Veo Client/설정 미존재**
-   - `ai/veo` 패키지와 `ai.veo.*` 설정 없음
+- Generate API 입구는 기존대로 사용
+- `com.itda.backend.worker` 패키지 신규 추가됨
+- `JobExecutor`는 `resultAssetId` 필수
+- VIDEO 노드 `status`/`content_url` 갱신 로직은 `JobExecutor`에서 처리
+- Veo Client/설정 추가됨
 
 ## 구현 계획 (진행 현황 포함)
 
-### 처리 흐름 (계획)
+### 처리 흐름 (구현 반영)
 
-- [ ] JobExecutor가 VIDEO_GENERATION Job을 VideoGenerationWorker에 위임
-- [ ] request_json에서 prompt/settings 추출 (파싱 실패 시 raw 텍스트 사용)
-- [ ] VeoClient가 영상 생성
-  - [ ] `ai.veo.stub=true` 또는 키 미설정이면 스텁 mp4 반환
-- [ ] LocalVideoStorage가 영상 파일 저장
-- [ ] 결과 연결 (Asset 최소 구현 또는 JobExecutor 로직 수정)
-- [ ] JobExecutor가 성공 처리 + WS 이벤트 발행
+- [x] JobExecutor가 VIDEO_GENERATION Job을 VideoGenerationWorker에 위임
+- [x] request_json에서 prompt/settings 추출 (파싱 실패 시 raw 텍스트 사용)
+- [x] VeoClient가 영상 생성 (Vertex AI REST + ADC, LongRunning 폴링)
+- [x] LocalVideoStorage가 영상 파일 저장
+- [x] Asset 저장 + result_asset_id 업데이트
+- [x] JobExecutor가 성공 처리 + WS 이벤트 발행
 
 ### 입력/출력 정의 (계획)
 
@@ -79,55 +71,66 @@ VIDEO_GENERATION Job 처리 흐름과 구현 상세를 문서화하고,
 - request_json 파싱 실패 시 경고 로그 후 raw 텍스트 사용
 - Veo 호출 실패 시 FAILED 처리 + error_message 기록
 - 파일 저장 실패 시 예외 발생 → JobExecutor가 FAILED 처리
-- Mock 모드일 때 경고 로그 출력
+- provider 응답 요약을 `error_message`에 기록 (길이 제한 적용)
+
+### settings 매핑 (구현 반영)
+
+- `duration` → `durationSeconds`
+- `cameraMotion`, `motionDescription` → 프롬프트 문장으로 합성
+- `provider` → 모델 ID 매핑 (`VEO_3_1`, `VEO_3_1_FAST`, `VEO_3_0`, `VEO_2_0`)
+- `aspectRatio` 없으면 기본 `16:9`
 
 ## 구현 상세 (계획)
 
-### 파일/구성 (계획)
+### 파일/구성 (구현 반영)
 
 - Veo 설정/클라이언트
-  - `src/main/java/com/itda/backend/ai/veo/VeoProperties.java` (추가)
-  - `src/main/java/com/itda/backend/ai/veo/VeoClient.java`
-  - `src/main/java/com/itda/backend/ai/veo/VeoResult.java`
+  - `itda-backend/src/main/java/com/itda/backend/ai/veo/VeoProperties.java`
+  - `itda-backend/src/main/java/com/itda/backend/ai/veo/VeoClient.java`
+  - `itda-backend/src/main/java/com/itda/backend/ai/veo/VeoResult.java`
+  - `itda-backend/src/main/java/com/itda/backend/ai/veo/VeoRequest.java`
+  - `itda-backend/src/main/java/com/itda/backend/ai/VertexAiAuthProvider.java`
+  - `itda-backend/src/main/java/com/itda/backend/ai/AiProviderException.java`
 - Video Worker
-  - `src/main/java/com/itda/backend/worker/video/VideoGenerationWorker.java`
-  - `src/main/java/com/itda/backend/worker/video/LocalVideoStorage.java`
+  - `itda-backend/src/main/java/com/itda/backend/worker/video/VideoGenerationWorker.java`
+  - `itda-backend/src/main/java/com/itda/backend/worker/video/LocalVideoStorage.java`
+  - `itda-backend/src/main/java/com/itda/backend/worker/JobRequestParser.java`
+  - `itda-backend/src/main/java/com/itda/backend/worker/ParsedJobRequest.java`
+  - `itda-backend/src/main/java/com/itda/backend/worker/StoredAsset.java`
+  - `itda-backend/src/main/java/com/itda/backend/worker/ExecutionResult.java`
 - Job 연결
-  - `src/main/java/com/itda/backend/job/service/JobExecutor.java`
-- Node/Asset 연결 (선택)
-  - (A) `asset` 도메인/mapper 추가
-  - (B) Node 상태/URL 업데이트 로직 추가
+  - `itda-backend/src/main/java/com/itda/backend/job/service/JobExecutor.java`
+  - `itda-backend/src/main/resources/application-local.yml`
+  - `itda-backend/src/main/resources/application-dev.yml`
+  - `itda-backend/src/main/resources/application-prod.yml`
+  - `itda-backend/env`
 
-### 주요 로직 요약 (계획)
+### 주요 로직 요약 (구현 반영)
 
 - VideoGenerationWorker.execute()
   - request_json 파싱 → VeoClient 호출 → LocalVideoStorage 저장
-  - 결과 연결(Asset 또는 Node 업데이트)
-  - resultAssetId 반환 또는 성공 처리
+  - Asset 저장 + resultAssetId 반환
 
 - VeoClient.generateVideo()
-  - stub 모드면 짧은 mp4 반환
-  - 실제 호출은 TODO (다음 단계)
+  - Vertex AI REST 호출 (`:predictLongRunning`)
+  - Operation 폴링 → base64 영상 디코딩
 
 ## 설정 (현재)
 
 - `file.upload-dir` (기본값 `./uploads`)
 - `job.execution.max-retry-count`
-
-추가 필요:
 - `ai.veo.project-id`
 - `ai.veo.location`
-- `ai.veo.api-key`
-- `ai.veo.stub` (기본 true 권장)
+- `ai.veo.model`
 - `ai.veo.timeout-ms`
+- `ai.veo.poll-interval-ms`
+- 인증: `GOOGLE_APPLICATION_CREDENTIALS` (ADC)
 
 ## 다음 단계 계획 (구체화)
 
 ### 1) Veo 실연동
 
-- API 스펙 확정 (모델, 입력 포맷, 응답 포맷)
-- VeoClient 실제 HTTP/SDK 호출 구현
-- 실패 시 재시도 정책 정의 (429/5xx)
+- 완료 (REST + ADC, LongRunning 폴링)
 
 ### 2) 스토리지 확장 (S3)
 
@@ -154,10 +157,9 @@ VIDEO_GENERATION Job 처리 흐름과 구현 상세를 문서화하고,
 
 ## 체크리스트
 
-- [ ] `POST /api/nodes/{id}/generate` 구현/연결 확인
-- [ ] VideoGenerationWorker 기본 구현
-- [ ] request_json 파싱 로직 확정
-- [ ] Mock mp4 생성/저장 로직 구현
-- [ ] JobExecutor VIDEO 분기 연결
-- [ ] Job 상태/WS 이벤트 확인
-- [ ] 결과 파일/URL 확인
+- [x] `POST /api/nodes/{id}/generate` 구현/연결 확인
+- [x] VideoGenerationWorker 기본 구현
+- [x] request_json 파싱 로직 확정
+- [x] JobExecutor VIDEO 분기 연결
+- [x] Job 상태/WS 이벤트 확인
+- [x] 결과 파일/URL 확인
