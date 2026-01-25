@@ -4,12 +4,11 @@
  */
 import { ref, computed, watch } from 'vue';
 import type { Node } from '@vue-flow/core';
-import type { ShotNodeData, StoryboardGridNodeData } from '../../../types/node';
-import { NodeType, PromptStatus, JobStatus } from '../../../types/node';
+import type { MasterImageNodeData, ShotNodeData, StoryboardGridNodeData } from '../../../types/ui/sceneNodes';
+import { NodeType, PromptStatus } from '../../../types/ui/sceneNodes';
 import BasePanel from './BasePanel.vue';
 import { useSceneNodeStore } from '../../../stores/sceneNode';
-import { useGenerationToast } from '../../../composables/useGenerationToast';
-import { aiService } from '../../../services';
+import { useNodeGeneration } from '../../../composables/useNodeGeneration';
 import { Camera, Smile, PenLine, FileText, Sparkles, Check, RefreshCw, LayoutGrid } from 'lucide-vue-next';
 
 interface Props {
@@ -18,12 +17,6 @@ interface Props {
 
 const props = defineProps<Props>();
 const nodeStore = useSceneNodeStore();
-const { startGenerationToast, finishGenerationToast } = useGenerationToast();
-
-// 로딩 상태
-const isGeneratingPrompt = ref(false);
-const isGeneratingShot = ref(false);
-const errorMessage = ref<string | null>(null);
 
 const form = ref({
   shotTypes: [] as string[],
@@ -39,7 +32,6 @@ const data = computed(() => props.node.data as ShotNodeData | undefined);
 const shotLabel = computed(() => String.fromCharCode(65 + (data.value?.gridCellIndex || 0)));
 const isPromptGenerated = computed(() => data.value?.promptStatus !== PromptStatus.DRAFT);
 const isPromptApproved = computed(() => data.value?.promptStatus === PromptStatus.APPROVED);
-const canGenerate = computed(() => isPromptApproved.value && !isGeneratingShot.value);
 const parentGridNode = computed(() =>
   nodeStore.nodes.find(
     (node) => node.id === data.value?.parentNodeId && node.data?.type === NodeType.STORYBOARD_GRID
@@ -56,6 +48,64 @@ const gridCellOptions = computed(() =>
   Array.from({ length: gridCellCount.value }, (_, index) => index)
 );
 const selectedGridCell = computed(() => data.value?.gridCellIndex ?? 0);
+const sceneHeaderData = computed(() =>
+  nodeStore.nodes.find((node) => node.data?.type === NodeType.SCENE_HEADER)?.data
+);
+const activeMasterData = computed(() => {
+  const active = nodeStore.nodes.find(
+    (node) => node.data?.type === NodeType.MASTER_IMAGE && (node.data as MasterImageNodeData).isActive
+  );
+  if (active?.data) return active.data as MasterImageNodeData;
+  const fallback = nodeStore.nodes.find((node) => node.data?.type === NodeType.MASTER_IMAGE);
+  return fallback?.data as MasterImageNodeData | undefined;
+});
+
+const {
+  isGeneratingJob: isGeneratingShot,
+  clearError,
+  generatePrompt,
+  approvePrompt,
+  runGeneration: generateShot,
+} = useNodeGeneration({
+  nodeId: props.node.id,
+  nodeType: 'SHOT',
+  toastType: 'shot',
+  getPrompt: () => form.value.prompt,
+  getPromptPayload: () => ({
+    nodeType: 'SHOT',
+    sceneOneLine: buildSceneOneLine(),
+    style: activeMasterData.value?.style,
+    timeOfDay: activeMasterData.value?.timeOfDay,
+    mood: activeMasterData.value?.mood,
+    objectIds: activeMasterData.value?.objectIds,
+    shotType: buildShotTypeValue(form.value.shotTypes),
+    expression: form.value.expression,
+    additionalDetail: form.value.additionalDetail,
+  }),
+  getPromptUpdate: (prompt) => ({
+    shotType: buildShotTypeValue(form.value.shotTypes),
+    shotTypes: [...form.value.shotTypes],
+    expression: form.value.expression,
+    additionalDetail: form.value.additionalDetail,
+    prompt,
+  }),
+  getApprovedUpdate: () => ({ prompt: form.value.prompt }),
+  getJobSettings: () => ({
+    gridCellIndex: data.value?.gridCellIndex ?? 0,
+    shotType: buildShotTypeValue(form.value.shotTypes),
+    expression: form.value.expression,
+    additionalDetail: form.value.additionalDetail,
+  }),
+  getJobSuccessUpdate: ({ resultUrl, thumbnailUrl }) => ({
+    imageUrl: resultUrl || null,
+    thumbnailUrl: thumbnailUrl || resultUrl || null,
+  }),
+  messages: {
+    jobError: '샷 생성에 실패했습니다. 다시 시도해주세요.',
+  },
+});
+
+const canGenerate = computed(() => isPromptApproved.value && !isGeneratingShot.value);
 
 function normalizeShotTypes(value?: string | null): string[] {
   if (!value) return [];
@@ -67,6 +117,26 @@ function normalizeShotTypes(value?: string | null): string[] {
 
 function buildShotTypeValue(types: string[]): string {
   return types.map((item) => item.trim()).filter(Boolean).join(', ');
+}
+
+function buildSceneOneLine(): string {
+  const parts: string[] = [];
+  const header = sceneHeaderData.value as { title?: string; description?: string } | undefined;
+  if (header?.title) parts.push(`scene: ${header.title}`);
+  if (header?.description) parts.push(`description: ${header.description}`);
+  if (parentGridData.value?.layout) parts.push(`layout: ${parentGridData.value.layout}`);
+  if (parentGridData.value?.shotTypes?.length) {
+    parts.push(`grid shotTypes: ${parentGridData.value.shotTypes.join(', ')}`);
+  }
+  if (parentGridData.value?.compositionHint) {
+    parts.push(`composition: ${parentGridData.value.compositionHint}`);
+  }
+  if (form.value.shotTypes.length) {
+    parts.push(`shotType: ${buildShotTypeValue(form.value.shotTypes)}`);
+  }
+  if (form.value.expression) parts.push(`expression: ${form.value.expression}`);
+  if (form.value.additionalDetail) parts.push(`detail: ${form.value.additionalDetail}`);
+  return parts.join(', ');
 }
 
 function toggleShotType(type: string): void {
@@ -90,89 +160,18 @@ watch(() => props.node.id, () => {
     additionalDetail: data.value.additionalDetail || '',
     prompt: data.value.prompt || '',
   };
-  errorMessage.value = null;
+  clearError();
 }, { immediate: true });
 
-async function generatePrompt(): Promise<void> {
-  isGeneratingPrompt.value = true;
-  errorMessage.value = null;
-
-  try {
-    const shotTypeValue = buildShotTypeValue(form.value.shotTypes);
-    const prompt = await aiService.generatePrompt({
-      nodeType: 'SHOT',
-      shotType: shotTypeValue,
-      expression: form.value.expression,
-      additionalDetail: form.value.additionalDetail,
-    });
-
-    form.value.prompt = prompt;
-    nodeStore.updateNode(props.node.id, {
-      shotType: shotTypeValue,
-      shotTypes: [...form.value.shotTypes],
-      expression: form.value.expression,
-      additionalDetail: form.value.additionalDetail,
-      prompt: form.value.prompt,
-      promptStatus: PromptStatus.GENERATED,
-    });
-  } catch (error) {
-    console.error('Failed to generate prompt:', error);
-    errorMessage.value = '프롬프트 생성에 실패했습니다. 다시 시도해주세요.';
-  } finally {
-    isGeneratingPrompt.value = false;
-  }
-}
-
-function approvePrompt(): void {
-  nodeStore.updateNode(props.node.id, { prompt: form.value.prompt, promptStatus: PromptStatus.APPROVED });
-}
-
-async function generateShot(): Promise<void> {
-  if (!form.value.prompt) return;
-
-  isGeneratingShot.value = true;
-  errorMessage.value = null;
-  const toastId = startGenerationToast('shot');
-
-  try {
-    const shotTypeValue = buildShotTypeValue(form.value.shotTypes);
-    nodeStore.updateNode(props.node.id, { jobStatus: JobStatus.RUNNING });
-
-    const jobId = await aiService.generateNode(props.node.id, form.value.prompt, {
-      nodeType: 'SHOT',
-      settings: {
-        gridCellIndex: data.value?.gridCellIndex ?? 0,
-        shotType: shotTypeValue,
-        expression: form.value.expression,
-        additionalDetail: form.value.additionalDetail,
-      },
-    });
-    console.log('Shot generation job started:', jobId);
-
-    const result = await aiService.pollJobUntilComplete(jobId, (status) => {
-      console.log('Job status:', status.status);
-    });
-
-    if (result.status === 'SUCCEEDED') {
-      nodeStore.updateNode(props.node.id, {
-        jobStatus: JobStatus.SUCCEEDED,
-        imageUrl: result.resultUrl,
-        thumbnailUrl: result.thumbnailUrl,
-      });
-      finishGenerationToast(toastId, 'shot', 'success');
-    } else {
-      throw new Error(result.error?.message || 'Shot generation failed');
+watch(
+  () => data.value?.prompt,
+  (nextPrompt) => {
+    const normalized = nextPrompt ?? '';
+    if (normalized !== form.value.prompt) {
+      form.value.prompt = normalized;
     }
-  } catch (error) {
-    console.error('Failed to generate shot:', error);
-    errorMessage.value = '샷 생성에 실패했습니다. 다시 시도해주세요.';
-    nodeStore.updateNode(props.node.id, { jobStatus: JobStatus.FAILED });
-    const reason = error instanceof Error ? error.message : '알 수 없는 오류';
-    finishGenerationToast(toastId, 'shot', 'error', { reason });
-  } finally {
-    isGeneratingShot.value = false;
   }
-}
+);
 
 function selectGridCell(index: number): void {
   nodeStore.updateNode(props.node.id, { gridCellIndex: index });

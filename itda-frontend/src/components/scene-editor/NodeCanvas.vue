@@ -11,8 +11,8 @@ import { Controls } from '@vue-flow/controls';
 import { nodeTypes } from './nodes';
 import { useSceneNodeStore } from '../../stores/sceneNode';
 import { useAutoLayout } from '../../composables/useAutoLayout';
-import { NodeType } from '../../types/node';
-import type { AnyNodeData } from '../../types/node';
+import { NodeType } from '../../types/ui/sceneNodes';
+import type { AnyNodeData } from '../../types/ui/sceneNodes';
 
 // Vue Flow 스타일 import
 import '@vue-flow/core/dist/style.css';

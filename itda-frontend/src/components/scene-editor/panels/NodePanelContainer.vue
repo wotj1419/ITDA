@@ -7,7 +7,7 @@
 import { computed } from 'vue';
 import { panelRegistry } from './index';
 import { useSceneNodeStore } from '../../../stores/sceneNode';
-import type { AnyNodeData } from '../../../types/node';
+import type { AnyNodeData } from '../../../types/ui/sceneNodes';
 import { X } from 'lucide-vue-next';
 
 // =============================================================================

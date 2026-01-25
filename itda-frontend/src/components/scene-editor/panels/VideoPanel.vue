@@ -5,12 +5,11 @@
  */
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 import type { Node as VueFlowNode } from '@vue-flow/core';
-import type { VideoNodeData, CameraMotion } from '../../../types/node';
-import { PromptStatus, JobStatus } from '../../../types/node';
+import type { VideoNodeData, CameraMotion, ShotNodeData } from '../../../types/ui/sceneNodes';
+import { PromptStatus, JobStatus } from '../../../types/ui/sceneNodes';
 import BasePanel from './BasePanel.vue';
 import { useSceneNodeStore } from '../../../stores/sceneNode';
-import { useGenerationToast } from '../../../composables/useGenerationToast';
-import { aiService } from '../../../services';
+import { useNodeGeneration } from '../../../composables/useNodeGeneration';
 import { Video, Repeat, Move, Timer, Text, FileText, Sparkles, Check, RefreshCw, Target, ZoomIn, ZoomOut, ArrowRight, ArrowUp, Circle } from 'lucide-vue-next';
 
 interface Props {
@@ -21,17 +20,11 @@ const props = defineProps<Props>();
 const nodeStore = useSceneNodeStore();
 const cameraMotionHelpRef = ref<HTMLElement | null>(null);
 const isCameraMotionHelpOpen = ref(false);
-const { startGenerationToast, finishGenerationToast } = useGenerationToast();
-
-// 로딩 상태
-const isGeneratingPrompt = ref(false);
-const isGeneratingVideo = ref(false);
-const errorMessage = ref<string | null>(null);
 
 const form = ref({
   isTransition: false,
   cameraMotion: 'staticCamera' as CameraMotion,
-  duration: 5,
+  duration: 4,
   motionDescription: '',
   prompt: '',
 });
@@ -66,15 +59,67 @@ const cameraMotionHelpItems = [
   },
 ];
 
-const durationOptions = [3, 5, 8, 10];
+const durationOptions = [4, 6, 8];
 
 const data = computed(() => props.node.data as VideoNodeData | undefined);
 const hasEndShot = computed(() => !!data.value?.endShotId);
+const startShotData = computed(() => {
+  const startId = data.value?.startShotId;
+  if (!startId) return undefined;
+  const node = nodeStore.nodes.find((n) => n.id === startId);
+  return node?.data as ShotNodeData | undefined;
+});
 const isPromptGenerated = computed(() => data.value?.promptStatus !== PromptStatus.DRAFT);
 const isPromptApproved = computed(() => data.value?.promptStatus === PromptStatus.APPROVED);
-const canGenerate = computed(() => isPromptApproved.value && (!form.value.isTransition || hasEndShot.value) && !isGeneratingVideo.value);
 const isSucceeded = computed(() => data.value?.jobStatus === JobStatus.SUCCEEDED);
 const isConfirmed = computed(() => data.value?.isConfirmed ?? false);
+
+const {
+  isGeneratingJob: isGeneratingVideo,
+  clearError,
+  generatePrompt,
+  approvePrompt,
+  runGeneration: generateVideo,
+} = useNodeGeneration({
+  nodeId: props.node.id,
+  nodeType: 'VIDEO',
+  toastType: 'video',
+  getPrompt: () => form.value.prompt,
+  getPromptPayload: () => ({
+    nodeType: 'VIDEO',
+    sceneOneLine: buildVideoSceneOneLine(),
+    cameraMotion: form.value.cameraMotion,
+    duration: form.value.duration,
+    motionDescription: form.value.motionDescription,
+  }),
+  getPromptUpdate: (prompt) => ({
+    cameraMotion: form.value.cameraMotion,
+    duration: form.value.duration,
+    motionDescription: form.value.motionDescription,
+    prompt,
+  }),
+  getApprovedUpdate: () => ({ prompt: form.value.prompt }),
+  getJobSettings: () => ({
+    cameraMotion: form.value.cameraMotion,
+    motionDescription: form.value.motionDescription,
+    duration: form.value.duration,
+    startShotNodeId: data.value?.startShotId,
+    endShotNodeId: data.value?.endShotId,
+  }),
+  getJobSuccessUpdate: ({ resultUrl, thumbnailUrl }) => ({
+    videoUrl: resultUrl || null,
+    thumbnailUrl: thumbnailUrl || null,
+  }),
+  messages: {
+    jobError: '영상 생성에 실패했습니다. 다시 시도해주세요.',
+  },
+});
+
+const canGenerate = computed(() =>
+  isPromptApproved.value &&
+  (!form.value.isTransition || hasEndShot.value) &&
+  !isGeneratingVideo.value
+);
 
 function normalizeCameraMotion(value?: CameraMotion | string | null): CameraMotion {
   if (!value) return 'staticCamera';
@@ -91,6 +136,25 @@ function normalizeCameraMotion(value?: CameraMotion | string | null): CameraMoti
     static: 'staticCamera',
   };
   return fallbackMap[value] ?? 'staticCamera';
+}
+
+function buildVideoSceneOneLine(): string {
+  const parts: string[] = [];
+  if (startShotData.value?.shotType) {
+    parts.push(`shotType: ${startShotData.value.shotType}`);
+  } else if (startShotData.value?.shotTypes?.length) {
+    parts.push(`shotTypes: ${startShotData.value.shotTypes.join(', ')}`);
+  }
+  if (startShotData.value?.expression) {
+    parts.push(`expression: ${startShotData.value.expression}`);
+  }
+  if (startShotData.value?.additionalDetail) {
+    parts.push(`detail: ${startShotData.value.additionalDetail}`);
+  }
+  if (startShotData.value?.prompt) {
+    parts.push(`shotPrompt: ${startShotData.value.prompt}`);
+  }
+  return parts.join(', ');
 }
 
 function toggleCameraMotionHelp(event: MouseEvent): void {
@@ -136,8 +200,18 @@ watch(() => props.node.id, () => {
     motionDescription: data.value.motionDescription || '',
     prompt: data.value.prompt || '',
   };
-  errorMessage.value = null;
+  clearError();
 }, { immediate: true });
+
+watch(
+  () => data.value?.prompt,
+  (nextPrompt) => {
+    const normalized = nextPrompt ?? '';
+    if (normalized !== form.value.prompt) {
+      form.value.prompt = normalized;
+    }
+  }
+);
 
 watch(
   () => form.value.isTransition,
@@ -150,85 +224,6 @@ watch(
 
 function startSelectEndShot(): void {
   nodeStore.startSelectEndShot(props.node.id);
-}
-
-async function generatePrompt(): Promise<void> {
-  isGeneratingPrompt.value = true;
-  errorMessage.value = null;
-
-  try {
-    const prompt = await aiService.generatePrompt({
-      nodeType: 'VIDEO',
-      cameraMotion: form.value.cameraMotion,
-      duration: form.value.duration,
-      motionDescription: form.value.motionDescription,
-    });
-
-    form.value.prompt = prompt;
-    nodeStore.updateNode(props.node.id, { 
-      cameraMotion: form.value.cameraMotion,
-      duration: form.value.duration,
-      motionDescription: form.value.motionDescription,
-      prompt: form.value.prompt,
-      promptStatus: PromptStatus.GENERATED,
-    });
-  } catch (error) {
-    console.error('Failed to generate prompt:', error);
-    errorMessage.value = '프롬프트 생성에 실패했습니다. 다시 시도해주세요.';
-  } finally {
-    isGeneratingPrompt.value = false;
-  }
-}
-
-function approvePrompt(): void {
-  nodeStore.updateNode(props.node.id, { prompt: form.value.prompt, promptStatus: PromptStatus.APPROVED });
-}
-
-async function generateVideo(): Promise<void> {
-  if (!form.value.prompt) return;
-
-  isGeneratingVideo.value = true;
-  errorMessage.value = null;
-  const toastId = startGenerationToast('video');
-
-  try {
-    nodeStore.updateNode(props.node.id, { jobStatus: JobStatus.RUNNING });
-
-    const jobId = await aiService.generateNode(props.node.id, form.value.prompt, {
-      nodeType: 'VIDEO',
-      settings: {
-        cameraMotion: form.value.cameraMotion,
-        motionDescription: form.value.motionDescription,
-        duration: form.value.duration,
-        startShotId: data.value?.startShotId,
-        endShotId: data.value?.endShotId,
-      },
-    });
-    console.log('Video generation job started:', jobId);
-
-    const result = await aiService.pollJobUntilComplete(jobId, (status) => {
-      console.log('Job status:', status.status);
-    });
-
-    if (result.status === 'SUCCEEDED') {
-      nodeStore.updateNode(props.node.id, {
-        jobStatus: JobStatus.SUCCEEDED,
-        videoUrl: result.resultUrl,
-        thumbnailUrl: result.thumbnailUrl,
-      });
-      finishGenerationToast(toastId, 'video', 'success');
-    } else {
-      throw new Error(result.error?.message || 'Video generation failed');
-    }
-  } catch (error) {
-    console.error('Failed to generate video:', error);
-    errorMessage.value = '영상 생성에 실패했습니다. 다시 시도해주세요.';
-    nodeStore.updateNode(props.node.id, { jobStatus: JobStatus.FAILED });
-    const reason = error instanceof Error ? error.message : '알 수 없는 오류';
-    finishGenerationToast(toastId, 'video', 'error', { reason });
-  } finally {
-    isGeneratingVideo.value = false;
-  }
 }
 
 function toggleConfirm(): void {

@@ -5,7 +5,7 @@
  */
 import { ref, computed } from 'vue';
 import type { Node } from '@vue-flow/core';
-import type { SceneHeaderNodeData } from '../../../types/node';
+import type { SceneHeaderNodeData } from '../../../types/ui/sceneNodes';
 import BasePanel from './BasePanel.vue';
 import { useSceneNodeStore } from '../../../stores/sceneNode';
 import { BookOpen, Hash, Type, Text, Edit2, ExternalLink } from 'lucide-vue-next';

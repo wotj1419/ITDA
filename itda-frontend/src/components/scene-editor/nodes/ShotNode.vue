@@ -9,8 +9,8 @@ import { computed } from 'vue';
 import { Handle, Position } from '@vue-flow/core';
 import { NodeResizer } from '@vue-flow/node-resizer';
 import { useSceneNodeStore } from '../../../stores/sceneNode';
-import { JobStatus, NODE_HEIGHTS, NODE_WIDTHS } from '../../../types/node';
-import type { ShotNodeData } from '../../../types/node';
+import { JobStatus, NODE_HEIGHTS, NODE_WIDTHS } from '../../../types/ui/sceneNodes';
+import type { ShotNodeData } from '../../../types/ui/sceneNodes';
 import { 
   Camera, 
   Loader2, 

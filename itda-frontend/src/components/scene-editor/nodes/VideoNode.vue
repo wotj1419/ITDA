@@ -5,12 +5,12 @@
  * 
  * 설계 문서: docs/vue-flow-node-workflow-design.md Section 3.7
  */
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import { Handle, Position } from '@vue-flow/core';
 import { NodeResizer } from '@vue-flow/node-resizer';
 import { useSceneNodeStore } from '../../../stores/sceneNode';
-import { JobStatus, NODE_HEIGHTS, NODE_WIDTHS } from '../../../types/node';
-import type { VideoNodeData } from '../../../types/node';
+import { JobStatus, NODE_HEIGHTS, NODE_WIDTHS } from '../../../types/ui/sceneNodes';
+import type { VideoNodeData } from '../../../types/ui/sceneNodes';
 import { 
   Video, 
   Star, 
@@ -33,6 +33,7 @@ interface Props {
 
 const props = defineProps<Props>();
 const store = useSceneNodeStore();
+const videoRef = ref<HTMLVideoElement | null>(null);
 
 const nodeStyle = { '--node-resizer-color': 'var(--rose-500, #FF85A1)' } as Record<string, string>;
 
@@ -121,6 +122,16 @@ function handleConfirm(event: Event): void {
   event.stopPropagation();
   emit('confirm');
 }
+
+function handleThumbnailClick(event: MouseEvent): void {
+  if (!props.data.videoUrl || !videoRef.value) return;
+  event.stopPropagation();
+  if (videoRef.value.paused) {
+    void videoRef.value.play().catch(() => {});
+  } else {
+    videoRef.value.pause();
+  }
+}
 </script>
 
 <template>
@@ -178,18 +189,27 @@ function handleConfirm(event: Event): void {
 
     <!-- Body -->
     <div class="node-glass__body">
-      <div class="node-glass__thumbnail node-glass__thumbnail--video">
-        <img 
-          v-if="data.thumbnailUrl" 
-          :src="data.thumbnailUrl" 
-          alt="영상 썸네일" 
+      <div class="node-glass__thumbnail node-glass__thumbnail--video" @click="handleThumbnailClick">
+        <video
+          v-if="data.videoUrl"
+          :src="data.videoUrl"
+          ref="videoRef"
+          class="node-glass__thumbnail-video"
+          preload="metadata"
+          muted
+          playsinline
+        />
+        <img
+          v-else-if="data.thumbnailUrl"
+          :src="data.thumbnailUrl"
+          alt="영상 썸네일"
           class="node-glass__thumbnail-img"
         />
         <span v-else class="node-glass__thumbnail-placeholder">
           영상 썸네일
         </span>
         <!-- Play overlay on hover -->
-        <div v-if="data.thumbnailUrl" class="node-glass__play-overlay">
+        <div v-if="data.videoUrl || data.thumbnailUrl" class="node-glass__play-overlay">
           <Play class="node-glass__play-icon" />
         </div>
       </div>

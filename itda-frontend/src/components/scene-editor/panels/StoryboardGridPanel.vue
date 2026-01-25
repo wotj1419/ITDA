@@ -4,12 +4,10 @@
  */
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 import type { Node as VueFlowNode } from '@vue-flow/core';
-import type { StoryboardGridNodeData, GridLayout } from '../../../types/node';
-import { PromptStatus, JobStatus } from '../../../types/node';
+import type { StoryboardGridNodeData, GridLayout } from '../../../types/ui/sceneNodes';
+import { PromptStatus } from '../../../types/ui/sceneNodes';
 import BasePanel from './BasePanel.vue';
-import { useSceneNodeStore } from '../../../stores/sceneNode';
-import { useGenerationToast } from '../../../composables/useGenerationToast';
-import { aiService } from '../../../services';
+import { useNodeGeneration } from '../../../composables/useNodeGeneration';
 import { LayoutGrid, Camera, Target, FileText, Sparkles, Check, RefreshCw } from 'lucide-vue-next';
 
 interface Props {
@@ -17,21 +15,52 @@ interface Props {
 }
 
 const props = defineProps<Props>();
-const nodeStore = useSceneNodeStore();
 const shotTypeHelpRef = ref<HTMLElement | null>(null);
 const isShotTypeHelpOpen = ref(false);
-const { startGenerationToast, finishGenerationToast } = useGenerationToast();
-
-// 로딩 상태
-const isGeneratingPrompt = ref(false);
-const isGeneratingGrid = ref(false);
-const errorMessage = ref<string | null>(null);
 
 const form = ref({
   layout: '2x3' as GridLayout,
   shotTypes: [] as string[],
   compositionHint: '',
   prompt: '',
+});
+
+const {
+  isGeneratingJob: isGeneratingGrid,
+  clearError,
+  generatePrompt,
+  approvePrompt,
+  runGeneration: generateGrid,
+} = useNodeGeneration({
+  nodeId: props.node.id,
+  nodeType: 'GRID',
+  toastType: 'grid',
+  getPrompt: () => form.value.prompt,
+  getPromptPayload: () => ({
+    nodeType: 'GRID',
+    layout: form.value.layout,
+    shotTypes: form.value.shotTypes,
+    compositionHint: form.value.compositionHint,
+  }),
+  getPromptUpdate: (prompt) => ({
+    layout: form.value.layout,
+    shotTypes: form.value.shotTypes,
+    compositionHint: form.value.compositionHint,
+    prompt,
+  }),
+  getApprovedUpdate: () => ({ prompt: form.value.prompt }),
+  getJobSettings: () => ({
+    layout: form.value.layout,
+    shotTypes: form.value.shotTypes,
+    compositionHint: form.value.compositionHint,
+  }),
+  getJobSuccessUpdate: ({ resultUrl, thumbnailUrl }) => ({
+    imageUrl: resultUrl || null,
+    thumbnailUrl: thumbnailUrl || resultUrl || null,
+  }),
+  messages: {
+    jobError: '그리드 생성에 실패했습니다. 다시 시도해주세요.',
+  },
 });
 
 const layoutOptions: GridLayout[] = ['2x2', '2x3', '3x3'];
@@ -76,8 +105,18 @@ watch(() => props.node.id, () => {
     compositionHint: data.value.compositionHint || '',
     prompt: data.value.prompt || '',
   };
-  errorMessage.value = null;
+  clearError();
 }, { immediate: true });
+
+watch(
+  () => data.value?.prompt,
+  (nextPrompt) => {
+    const normalized = nextPrompt ?? '';
+    if (normalized !== form.value.prompt) {
+      form.value.prompt = normalized;
+    }
+  }
+);
 
 function toggleShotType(type: string): void {
   const idx = form.value.shotTypes.indexOf(type);
@@ -122,76 +161,6 @@ onUnmounted(() => {
   document.removeEventListener('keydown', handleDocumentKeydown);
 });
 
-async function generatePrompt(): Promise<void> {
-  isGeneratingPrompt.value = true;
-  errorMessage.value = null;
-
-  try {
-    const prompt = await aiService.generatePrompt({
-      nodeType: 'GRID',
-      layout: form.value.layout,
-      shotTypes: form.value.shotTypes,
-      compositionHint: form.value.compositionHint,
-    });
-
-    form.value.prompt = prompt;
-    nodeStore.updateNode(props.node.id, { ...form.value, promptStatus: PromptStatus.GENERATED });
-  } catch (error) {
-    console.error('Failed to generate prompt:', error);
-    errorMessage.value = '프롬프트 생성에 실패했습니다. 다시 시도해주세요.';
-  } finally {
-    isGeneratingPrompt.value = false;
-  }
-}
-
-function approvePrompt(): void {
-  nodeStore.updateNode(props.node.id, { prompt: form.value.prompt, promptStatus: PromptStatus.APPROVED });
-}
-
-async function generateGrid(): Promise<void> {
-  if (!form.value.prompt) return;
-
-  isGeneratingGrid.value = true;
-  errorMessage.value = null;
-  const toastId = startGenerationToast('grid');
-
-  try {
-    nodeStore.updateNode(props.node.id, { jobStatus: JobStatus.RUNNING });
-
-    const jobId = await aiService.generateNode(props.node.id, form.value.prompt, {
-      nodeType: 'GRID',
-      settings: {
-        layout: form.value.layout,
-        shotTypes: form.value.shotTypes,
-        compositionHint: form.value.compositionHint,
-      },
-    });
-    console.log('Grid generation job started:', jobId);
-
-    const result = await aiService.pollJobUntilComplete(jobId, (status) => {
-      console.log('Job status:', status.status);
-    });
-
-    if (result.status === 'SUCCEEDED') {
-      nodeStore.updateNode(props.node.id, {
-        jobStatus: JobStatus.SUCCEEDED,
-        imageUrl: result.resultUrl,
-        thumbnailUrl: result.thumbnailUrl,
-      });
-      finishGenerationToast(toastId, 'grid', 'success');
-    } else {
-      throw new Error(result.error?.message || 'Grid generation failed');
-    }
-  } catch (error) {
-    console.error('Failed to generate grid:', error);
-    errorMessage.value = '그리드 생성에 실패했습니다. 다시 시도해주세요.';
-    nodeStore.updateNode(props.node.id, { jobStatus: JobStatus.FAILED });
-    const reason = error instanceof Error ? error.message : '알 수 없는 오류';
-    finishGenerationToast(toastId, 'grid', 'error', { reason });
-  } finally {
-    isGeneratingGrid.value = false;
-  }
-}
 </script>
 
 <template>

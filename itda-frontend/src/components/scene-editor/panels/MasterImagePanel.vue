@@ -6,12 +6,11 @@
  */
 import { ref, computed, watch } from 'vue';
 import type { Node } from '@vue-flow/core';
-import type { MasterImageNodeData } from '../../../types/node';
-import { PromptStatus, JobStatus } from '../../../types/node';
+import type { MasterImageNodeData } from '../../../types/ui/sceneNodes';
+import { PromptStatus } from '../../../types/ui/sceneNodes';
 import BasePanel from './BasePanel.vue';
 import { useSceneNodeStore } from '../../../stores/sceneNode';
-import { useGenerationToast } from '../../../composables/useGenerationToast';
-import { aiService } from '../../../services';
+import { useNodeGeneration } from '../../../composables/useNodeGeneration';
 import { Film, Palette, Sun, Smile, Sparkles, FileText, Image, Check, RefreshCw, Star, Users, Loader2 } from 'lucide-vue-next';
 
 interface Props {
@@ -20,13 +19,6 @@ interface Props {
 
 const props = defineProps<Props>();
 const nodeStore = useSceneNodeStore();
-const { startGenerationToast, finishGenerationToast } = useGenerationToast();
-
-// 로딩 상태
-const isGeneratingPrompt = ref(false);
-const isGeneratingImage = ref(false);
-const errorMessage = ref<string | null>(null);
-
 // 폼 상태 - objectIds는 배열로 관리 (다중 선택)
 const form = ref({
   style: '',
@@ -34,6 +26,49 @@ const form = ref({
   mood: '',
   objectIds: [] as string[],  // 등장 오브젝트 IDs (캐릭터 포함)
   prompt: '',
+});
+
+const {
+  isGeneratingPrompt,
+  isGeneratingJob: isGeneratingImage,
+  errorMessage,
+  clearError,
+  generatePrompt,
+  approvePrompt,
+  runGeneration: generateImage,
+} = useNodeGeneration({
+  nodeId: props.node.id,
+  nodeType: 'MASTER',
+  toastType: 'image',
+  getPrompt: () => form.value.prompt,
+  getPromptPayload: () => ({
+    nodeType: 'MASTER',
+    style: form.value.style,
+    timeOfDay: form.value.timeOfDay,
+    mood: form.value.mood,
+    objectIds: form.value.objectIds,
+  }),
+  getPromptUpdate: (prompt) => ({
+    style: form.value.style,
+    timeOfDay: form.value.timeOfDay,
+    mood: form.value.mood,
+    objectIds: form.value.objectIds,
+    prompt,
+  }),
+  getApprovedUpdate: () => ({ prompt: form.value.prompt }),
+  getJobSettings: () => ({
+    style: form.value.style,
+    timeOfDay: form.value.timeOfDay,
+    mood: form.value.mood,
+    objectIds: form.value.objectIds,
+  }),
+  getJobSuccessUpdate: ({ resultUrl, thumbnailUrl }) => ({
+    imageUrl: resultUrl || null,
+    thumbnailUrl: thumbnailUrl || resultUrl || null,
+  }),
+  messages: {
+    jobError: '이미지 생성에 실패했습니다. 다시 시도해주세요.',
+  },
 });
 
 const styleOptions = ['실사', '애니메이션', '픽사', '수채화', '유화'];
@@ -64,8 +99,18 @@ watch(() => props.node.id, () => {
     objectIds: data.value.objectIds || [],
     prompt: data.value.prompt || '',
   };
-  errorMessage.value = null;
+  clearError();
 }, { immediate: true });
+
+watch(
+  () => data.value?.prompt,
+  (nextPrompt) => {
+    const normalized = nextPrompt ?? '';
+    if (normalized !== form.value.prompt) {
+      form.value.prompt = normalized;
+    }
+  }
+);
 
 // 오브젝트 선택 토글
 function toggleObject(objectId: string): void {
@@ -78,94 +123,6 @@ function toggleObject(objectId: string): void {
 }
 
 
-
-async function generatePrompt(): Promise<void> {
-  isGeneratingPrompt.value = true;
-  errorMessage.value = null;
-
-  try {
-    // AI API 호출
-    const prompt = await aiService.generatePrompt({
-      nodeType: 'MASTER',
-      style: form.value.style,
-      timeOfDay: form.value.timeOfDay,
-      mood: form.value.mood,
-      objectIds: form.value.objectIds,
-    });
-
-    form.value.prompt = prompt;
-    
-    nodeStore.updateNode(props.node.id, {
-      style: form.value.style,
-      timeOfDay: form.value.timeOfDay,
-      mood: form.value.mood,
-      objectIds: form.value.objectIds,
-      prompt: form.value.prompt,
-      promptStatus: PromptStatus.GENERATED,
-    });
-  } catch (error) {
-    console.error('Failed to generate prompt:', error);
-    errorMessage.value = '프롬프트 생성에 실패했습니다. 다시 시도해주세요.';
-  } finally {
-    isGeneratingPrompt.value = false;
-  }
-}
-
-function approvePrompt(): void {
-  nodeStore.updateNode(props.node.id, {
-    prompt: form.value.prompt,
-    promptStatus: PromptStatus.APPROVED,
-  });
-}
-
-async function generateImage(): Promise<void> {
-  if (!form.value.prompt) return;
-
-  isGeneratingImage.value = true;
-  errorMessage.value = null;
-  const toastId = startGenerationToast('image');
-
-  try {
-    // 노드 상태를 RUNNING으로 업데이트
-    nodeStore.updateNode(props.node.id, { jobStatus: JobStatus.RUNNING });
-
-    // 이미지 생성 요청
-    const jobId = await aiService.generateNode(props.node.id, form.value.prompt, {
-      nodeType: 'MASTER',
-      settings: {
-        style: form.value.style,
-        timeOfDay: form.value.timeOfDay,
-        mood: form.value.mood,
-        objectIds: form.value.objectIds,
-      },
-    });
-    console.log('Image generation job started:', jobId);
-
-    // 폴링으로 완료 대기
-    const result = await aiService.pollJobUntilComplete(jobId, (status) => {
-      console.log('Job status:', status.status);
-    });
-
-    if (result.status === 'SUCCEEDED') {
-      nodeStore.updateNode(props.node.id, {
-        jobStatus: JobStatus.SUCCEEDED,
-        imageUrl: result.resultUrl,
-        thumbnailUrl: result.thumbnailUrl,
-      });
-      finishGenerationToast(toastId, 'image', 'success');
-    } else {
-      throw new Error(result.error?.message || 'Image generation failed');
-    }
-  } catch (error) {
-    console.error('Failed to generate image:', error);
-    errorMessage.value = '이미지 생성에 실패했습니다. 다시 시도해주세요.';
-    nodeStore.updateNode(props.node.id, { jobStatus: JobStatus.FAILED });
-    const reason = error instanceof Error ? error.message : '알 수 없는 오류';
-    finishGenerationToast(toastId, 'image', 'error', { reason });
-  } finally {
-    isGeneratingImage.value = false;
-  }
-}
 
 function setActive(): void {
   nodeStore.setActiveMaster(props.node.id);
