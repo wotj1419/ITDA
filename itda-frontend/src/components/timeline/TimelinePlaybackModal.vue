@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch, nextTick } from 'vue';
 import { Play, Pause, SkipBack, SkipForward } from 'lucide-vue-next';
-import type { TimelineClip } from '../../types';
+import type { TimelineClip } from '../../types/ui';
 import { useUIStore } from '../../stores/ui';
 import { TIMELINE_PLAYBACK_MODAL_ID } from '../../constants/ui';
 import ModalBase from '../common/ModalBase.vue';
