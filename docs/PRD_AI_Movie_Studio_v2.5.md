@@ -94,12 +94,12 @@
 | Backend | Spring Boot 3.x |
 | 실시간 통신 | W3: STOMP 프로젝트 이벤트 WS(Job 완료/실패) / W5: Raw WS 기반 WebRTC·Chat·Presence |
 | 실시간 동기화 | Yjs / CRDT (P1, 피그마 스타일 협업) |
-| AI 이미지 생성 | Google Gemini API (Gemini 2.5 Pro Image) |
+| AI 이미지 생성 | Google Gemini API (Gemini 2.5 Flash Image, 기본값/환경설정 변경 가능) |
 | AI 영상 생성 | Google Veo 3.1 API (P0), 오픈소스 모델 (P1: Stable Video Diffusion 등) |
 | 음악/효과음 | 외부 파일 업로드/보관 (편집/믹싱은 향후 검토) |
 | 영상 편집/병합 | Server-side FFmpeg (Worker 비동기 Job) |
 | 데이터베이스 | MySQL (MVP 기준) |
-| 파일 저장소 | AWS S3 (MVP 기준, 로컬 개발 시 MinIO 대체 가능) |
+| 파일 저장소 | 로컬 파일 저장(`uploads`) → S3/MinIO 전환 예정 |
 | 메시지 큐 | Redis Streams (비동기 작업 처리) |
 | 캐싱 | Redis (세션, API 응답 캐싱) |
 | 웹서버/리버스 프록시 | Nginx |
@@ -290,7 +290,7 @@
 - Gemini API 호출 시 오브젝트 시트 이미지를 레퍼런스로 함께 전송
 - AI가 레퍼런스를 참고하여 일관된 오브젝트 생성
 
-💡 Gemini 2.5 Pro Image (나노바나나) 모델의 'Identity Preservation' 기능 활용
+💡 Gemini 2.5 Flash Image (기본값, 환경설정으로 변경 가능) 모델 활용
 ```
 
 #### 4.2.4 AI 시나리오 생성 (단계별 생성 플로우)
@@ -1320,10 +1320,11 @@ P2 (향후 검토):
   └─ HTTPS → Nginx → Spring API
                          ├─ DB (MySQL)
                          ├─ Redis (Streams + Cache)
-                         └─ S3/MinIO (파일 저장)
+                         └─ Local uploads (MVP) / S3·MinIO (전환 예정)
 
 [Worker]
-  └─ Redis Streams 소비 → AI API 호출/FFmpeg 병합 → S3 저장 → DB 업데이트
+  └─ (현재) **API 서버 내부 컨슈머**가 Redis Streams 소비 → AI API 호출/FFmpeg 병합 → 파일 저장 → DB 업데이트
+  └─ (추후) 워커 프로세스 분리 가능
 
 [DevOps / Infra]
   ├─ Jenkins (CI/CD)
@@ -1344,7 +1345,7 @@ P2 (향후 검토):
     ↓
 API 서버 (요청 접수 → Redis Streams)
     ↓
-Worker (Streams 소비 → AI API 호출 → 결과 저장)
+API 서버 내부 컨슈머 (Streams 소비 → AI API 호출 → 결과 저장)
     ↓
 상태 업데이트 (DB 업데이트)
     ↓
@@ -1702,6 +1703,10 @@ POST /api/projects/{id}/merge
 
 GET  /api/projects/{id}/export
   - response: { exportUrl }
+  - exportUrl: /api/projects/{id}/export/file (다운로드 엔드포인트)
+
+GET  /api/projects/{id}/export/file
+  - response: binary (mp4)
 ```
 
 ### 8.9 WebRTC 시그널링 (Raw WS, W5)
@@ -1725,8 +1730,10 @@ GET  /api/projects/{id}/export
   - authorize : projectId 기준, **프로젝트 멤버만** 구독 가능
 
 이벤트(예시):
-  - job.done   : { jobId, target: { type: "NODE|PROJECT", id }, resultUrl }
-  - job.failed : { jobId, target: { type: "NODE|PROJECT", id }, error }
+  - job.done:
+    { event: "job.done", data: { jobId, type, status, target: { type: "NODE|SCENE|PROJECT", id }, resultUrl } }
+  - job.failed:
+    { event: "job.failed", data: { jobId, type, status, target: { type: "NODE|SCENE|PROJECT", id }, error } }
 
 💡 W3 범위: AI Job 완료/실패 알림만 제공(진행률 푸시는 미제공)
 💡 W5 확장: Raw WS `/ws/projects/{projectId}` 별도 구현

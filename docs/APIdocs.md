@@ -1630,11 +1630,11 @@ API /api/ai/jobs/{jobId}
 | 필드 | 타입 | 필수 여부 | 설명 |
 | --- | --- | --- | --- |
 | jobId | Long | 필수 | Job ID |
-| type | String | 필수 | `IMAGE_GENERATION` \| `VIDEO_GENERATION` \| `PROJECT_MERGE` |
+| type | String | 필수 | `IMAGE_GENERATION` \| `VIDEO_GENERATION` \| `SCENE_MERGE` \| `PROJECT_MERGE` |
 | status | String | 필수 | `PENDING` \| `RUNNING` \| `SUCCEEDED` \| `FAILED` |
 | progress | Integer | 선택 | 진행률(%). MVP는 null |
 | target | Object | 필수 | 요청 대상 (입력 기준) |
-| target.type | String | 필수 | `NODE` \| `PROJECT` |
+| target.type | String | 필수 | `NODE` \| `SCENE` \| `PROJECT` |
 | target.id | Long | 필수 | 대상 ID |
 | resultUrl | String | 선택 | 성공 시 결과 파일 URL |
 | error | Object | 선택 | 실패 시 오류 |
@@ -1746,10 +1746,27 @@ API /api/projects/{id}/export
 {
   "code": "SUCCESS",
   "data": {
-    "exportUrl": "https://..."
+    "exportUrl": "/api/projects/{id}/export/file"
   }
 }
 ```
+
+> `exportUrl`은 서버 다운로드 엔드포인트(`/api/projects/{id}/export/file`)를 반환합니다.
+
+---
+
+# 최종 영상 다운로드 (파일)
+```
+API /api/projects/{id}/export/file
+메서드 GET
+보안 Bearer Token
+상태 완료
+설명 최종 병합된 영상 파일을 다운로드합니다.
+```
+
+#### 3. Response
+- `Content-Type: video/mp4`
+- Binary stream
 
 ---
 
@@ -1908,24 +1925,28 @@ Subscribe /topic/projects/{projectId}
 #### 이벤트 예시
 ```json
 {
-  "type": "job.done",
+  "event": "job.done",
   "data": {
     "jobId": 123,
+    "type": "VIDEO_GENERATION",
+    "status": "SUCCEEDED",
     "target": { "type": "NODE", "id": 301 },
-    "resultUrl": "https://..."
+    "resultUrl": "/api/nodes/301/content"
   }
 }
 ```
 
 ```json
 {
-  "type": "job.failed",
+  "event": "job.failed",
   "data": {
     "jobId": 2001,
+    "type": "PROJECT_MERGE",
+    "status": "FAILED",
     "target": { "type": "PROJECT", "id": 101 },
     "error": {
       "code": "MERGE_FAILED",
-      "message": "Project merge failed."
+      "message": "병합에 실패했습니다. 잠시 후 다시 시도해주세요."
     }
   }
 }
