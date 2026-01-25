@@ -1,11 +1,12 @@
 import axios from 'axios';
+import { API_BASE_URL } from './constants';
+import { getAccessToken, clearAuthTokens } from './authTokens';
+import { redirectToAccessDenied, redirectToAuth } from './redirects';
 
 // Create a configured axios instance
-// Base URL for local backend
-const baseURL = 'http://localhost:8080/api';
 
 const apiClient = axios.create({
-    baseURL,
+    baseURL: API_BASE_URL,
     headers: {
         'Content-Type': 'application/json',
     },
@@ -15,7 +16,7 @@ const apiClient = axios.create({
 // Request interceptor for API calls
 apiClient.interceptors.request.use(
     (config) => {
-        const token = localStorage.getItem('accessToken');
+        const token = getAccessToken();
         if (token) {
             config.headers = config.headers || {};
             config.headers.Authorization = `Bearer ${token}`;
@@ -39,17 +40,13 @@ apiClient.interceptors.response.use(
 
         // Handle 401 Unauthorized errors (token expired)
         if (status === 401 && !originalRequest._retry) {
-            localStorage.removeItem('accessToken');
-            localStorage.removeItem('refreshToken');
-            // Avoid router import cycles here
-            window.location.assign('/auth');
+            clearAuthTokens();
+            redirectToAuth();
             return Promise.reject(error);
         }
 
         if (status === 403) {
-            const currentPath = `${window.location.pathname}${window.location.search}`;
-            const redirect = encodeURIComponent(currentPath);
-            window.location.assign(`/access-denied?redirect=${redirect}`);
+            redirectToAccessDenied();
             return Promise.reject(error);
         }
 

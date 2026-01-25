@@ -1,4 +1,4 @@
-import type { LoginRequest, SignupRequest, User, LoginResponse } from '../types';
+import type { LoginRequest, SignupRequest, User, LoginResponse } from '../types/api/auth';
 
 export interface AuthService {
     login(credentials: LoginRequest): Promise<LoginResponse>;

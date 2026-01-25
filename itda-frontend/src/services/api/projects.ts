@@ -1,5 +1,6 @@
 import apiClient from './client'
-import type { Project, ProjectDetail, CreateProjectRequest, ApiResponse } from '../../types'
+import type { ApiResponse } from '../../types/api/common'
+import type { Project, ProjectDetail, CreateProjectRequest } from '../../types/api/projects'
 
 type ProjectListResponse = {
     items: Project[];

@@ -1,12 +1,8 @@
 import apiClient from './client'
-import type { ApiResponse } from '../../types'
+import type { ApiResponse } from '../../types/api/common'
+import type { NodeType as ApiNodeTypeValue, NodePosition } from '../../types/api/nodes'
 
-export type ApiNodeType = 'SCENE_HEADER' | 'MASTER' | 'GRID' | 'SHOT' | 'VIDEO'
-
-export interface NodePosition {
-    x: number
-    y: number
-}
+export type ApiNodeType = ApiNodeTypeValue
 
 export interface NodeSummary {
     nodeId: number

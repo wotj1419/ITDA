@@ -1,5 +1,6 @@
 import apiClient from './client'
-import type { ApiResponse, Scene, CreateSceneRequest } from '../../types'
+import type { ApiResponse } from '../../types/api/common'
+import type { Scene, CreateSceneRequest } from '../../types/api/scenes'
 
 interface CreateSceneApiRequest extends CreateSceneRequest {
     sceneOrder?: number

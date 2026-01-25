@@ -1,6 +1,7 @@
 import apiClient from './client';
 import type { AuthService } from '../auth.interface';
-import type { LoginRequest, SignupRequest, User, ApiResponse, LoginResponse } from '../../types';
+import type { ApiResponse } from '../../types/api/common';
+import type { LoginRequest, SignupRequest, User, LoginResponse } from '../../types/api/auth';
 
 export const apiAuthService: AuthService = {
     async login(credentials: LoginRequest) {
