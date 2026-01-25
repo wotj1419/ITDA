@@ -2,7 +2,7 @@
 import { computed } from 'vue'
 import { RouterLink } from 'vue-router'
 import { GripVertical, Image, Pencil, Check, Loader2 } from 'lucide-vue-next'
-import type { Scene, SceneStatus } from '../../types'
+import type { Scene, SceneStatus } from '../../types/api/scenes'
 import Badge from '../common/Badge.vue'
 import Button from '../common/Button.vue'
 

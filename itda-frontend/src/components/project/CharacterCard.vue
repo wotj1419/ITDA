@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { ObjectSheet } from '../../types'
+import type { ObjectSheet } from '../../types/api/objects'
 import Button from '../common/Button.vue'
 import Card from '../common/Card.vue'
 
