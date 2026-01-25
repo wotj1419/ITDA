@@ -1,5 +1,6 @@
 package com.itda.backend.node.controller.dto.request;
 
+import com.itda.backend.node.domain.NodeType;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.util.Map;
@@ -13,8 +14,17 @@ public record GenerateNodeRequest(
         @Schema(description = "AI prompt", example = "화성 기지의 아침 식사 장면")
         String prompt,
 
+        @Schema(description = "Node type (optional; server resolves from nodeId if omitted)", example = "MASTER")
+        NodeType nodeType,
+
         @Schema(description = "Node settings (style, ratio, etc.)")
         Map<String, Object> settings,
+
+        @Schema(description = "Idempotency key (optional). If provided, same key will return existing job.", example = "node-generate-001")
+        String idempotencyKey,
+
+        @Schema(description = "Requeue if existing job is pending/failed (optional).", example = "false")
+        Boolean requeueIfExisting,
 
         @Schema(description = "Force regenerate even if same request", defaultValue = "false")
         boolean force

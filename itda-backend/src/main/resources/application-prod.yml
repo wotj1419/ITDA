@@ -15,9 +15,14 @@ ai:
     location: ${GCP_LOCATION}
     api-version: ${AI_VERTEX_API_VERSION:v1}
   gemini:
-    stub: ${AI_GEMINI_STUB:false}
-    image-model: ${VERTEX_IMAGE_MODEL:gemini-2.5-flash-image}
-    timeout-ms: ${VERTEX_IMAGE_TIMEOUT_MS:60000}
+    api-key: ${GEMINI_API_KEY:}
+    stub: ${GEMINI_STUB:${AI_GEMINI_STUB:false}}
+    image-model: ${GEMINI_IMAGE_MODEL:${VERTEX_IMAGE_MODEL:gemini-2.5-flash-image}}
+    sample-count: ${GEMINI_SAMPLE_COUNT:1}
+    aspect-ratio: ${GEMINI_ASPECT_RATIO:}
+    response-mime-type: ${GEMINI_RESPONSE_MIME_TYPE:}
+    response-modalities: ${GEMINI_RESPONSE_MODALITIES:IMAGE}
+    timeout-ms: ${GEMINI_TIMEOUT_MS:${VERTEX_IMAGE_TIMEOUT_MS:60000}}
   scenario:
     model-text: ${VERTEX_TEXT_MODEL}
     timeout-ms: ${VERTEX_TIMEOUT_MS:60000}

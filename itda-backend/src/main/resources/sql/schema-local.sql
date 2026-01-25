@@ -9,6 +9,7 @@ DROP TABLE IF EXISTS timeline_items;
 DROP TABLE IF EXISTS generation_jobs;
 DROP TABLE IF EXISTS video_clips;
 DROP TABLE IF EXISTS nodes;
+DROP TABLE IF EXISTS scene_videos;
 DROP TABLE IF EXISTS scenes;
 DROP TABLE IF EXISTS project_scenarios;
 DROP TABLE IF EXISTS project_members;
@@ -202,6 +203,20 @@ CREATE TABLE video_clips (
     CONSTRAINT fk_video_asset FOREIGN KEY (asset_id) REFERENCES assets(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE scene_videos (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    scene_id BIGINT NOT NULL,
+    asset_id BIGINT,
+    status VARCHAR(20) NOT NULL DEFAULT 'QUEUED',  -- QUEUED, GENERATING, COMPLETED, FAILED
+    duration_ms INT,
+    thumbnail_url VARCHAR(500),
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    KEY idx_scene_videos_scene (scene_id),
+    CONSTRAINT fk_scene_videos_scene FOREIGN KEY (scene_id) REFERENCES scenes(id) ON DELETE CASCADE,
+    CONSTRAINT fk_scene_videos_asset FOREIGN KEY (asset_id) REFERENCES assets(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- ============================================
 -- 8. 생성 작업 (Generation Jobs) - Worker용
 -- ============================================
@@ -241,15 +256,18 @@ CREATE TABLE generation_jobs (
 CREATE TABLE timeline_items (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,
     project_id BIGINT NOT NULL,
-    scene_id BIGINT,  -- 추가: 씬 레벨 타임라인 지원
-    video_clip_id BIGINT NOT NULL,
+    scene_id BIGINT NOT NULL,
+    video_node_id BIGINT,
+    scene_video_id BIGINT,
     order_index INT NOT NULL DEFAULT 0,
     created_by BIGINT,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     KEY idx_timeline_project_order (project_id, order_index),
+    KEY idx_timeline_scene_order (scene_id, order_index),
     CONSTRAINT fk_timeline_project FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
     CONSTRAINT fk_timeline_scene FOREIGN KEY (scene_id) REFERENCES scenes(id) ON DELETE CASCADE,
-    CONSTRAINT fk_timeline_video FOREIGN KEY (video_clip_id) REFERENCES video_clips(id) ON DELETE CASCADE,
+    CONSTRAINT fk_timeline_video_node FOREIGN KEY (video_node_id) REFERENCES nodes(id) ON DELETE CASCADE,
+    CONSTRAINT fk_timeline_scene_video FOREIGN KEY (scene_video_id) REFERENCES scene_videos(id) ON DELETE CASCADE,
     CONSTRAINT fk_timeline_user FOREIGN KEY (created_by) REFERENCES users(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 

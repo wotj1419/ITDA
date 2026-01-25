@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.itda.backend.timeline.repository.TimelineMapper">
+
+    <resultMap id="SceneTimelineItemMap" type="com.itda.backend.timeline.repository.dto.SceneTimelineItem">
+        <id property="videoNodeId" column="video_node_id"/>
+        <result property="sceneId" column="scene_id"/>
+        <result property="thumbnailUrl" column="thumbnail_url"/>
+        <result property="duration" column="duration"/>
+        <result property="orderIndex" column="order_index"/>
+    </resultMap>
+
+    <resultMap id="ProjectTimelineItemMap" type="com.itda.backend.timeline.repository.dto.ProjectTimelineItem">
+        <id property="sceneVideoId" column="scene_video_id"/>
+        <result property="sceneId" column="scene_id"/>
+        <result property="sceneTitle" column="scene_title"/>
+        <result property="thumbnailUrl" column="thumbnail_url"/>
+        <result property="duration" column="duration"/>
+        <result property="orderIndex" column="order_index"/>
+    </resultMap>
+
+    <select id="findSceneTimelineItems" resultMap="SceneTimelineItemMap">
+        SELECT ti.video_node_id,
+               ti.scene_id,
+               n.content_url AS thumbnail_url,
+               NULL AS duration,
+               ti.order_index
+        FROM timeline_items ti
+        JOIN nodes n ON n.id = ti.video_node_id
+        WHERE ti.scene_id = #{sceneId}
+          AND n.node_type = 'VIDEO'
+          AND n.is_confirmed = 1
+        ORDER BY ti.order_index ASC, ti.id ASC
+    </select>
+
+    <select id="findProjectTimelineItems" resultMap="ProjectTimelineItemMap">
+        SELECT sv.id AS scene_video_id,
+               ti.scene_id,
+               s.title AS scene_title,
+               sv.thumbnail_url AS thumbnail_url,
+               sv.duration_ms AS duration,
+               ti.order_index
+        FROM timeline_items ti
+        JOIN scenes s ON s.id = ti.scene_id
+        JOIN scene_videos sv ON sv.id = ti.scene_video_id
+        WHERE ti.project_id = #{projectId}
+        ORDER BY ti.order_index ASC, ti.id ASC
+    </select>
+
+</mapper>

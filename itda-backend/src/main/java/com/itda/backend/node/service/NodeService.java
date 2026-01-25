@@ -29,6 +29,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -234,14 +235,20 @@ public class NodeService {
 
         JobType jobType = resolveJobType(node.getNodeType());
         String requestJson = buildGenerationRequestJson(updateRequest, node);
-        String idempotencyKey = request.force() ? UUID.randomUUID().toString() : null;
+        String idempotencyKey = request.force()
+                ? UUID.randomUUID().toString()
+                : request.idempotencyKey();
+        boolean requeueIfExisting = !request.force()
+                && Boolean.TRUE.equals(request.requeueIfExisting());
+
         Job job = jobService.createAndEnqueue(
                 jobType,
                 scene.getProjectId(),
                 scene.getId(),
                 node.getId(),
                 requestJson,
-                idempotencyKey
+                idempotencyKey,
+                requeueIfExisting
         );
 
         if (job.isInProgress()) {

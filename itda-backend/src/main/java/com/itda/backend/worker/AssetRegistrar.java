@@ -2,6 +2,7 @@ package com.itda.backend.worker;
 
 import com.itda.backend.asset.domain.Asset;
 import com.itda.backend.asset.domain.AssetType;
+import com.itda.backend.asset.domain.StorageProvider;
 import com.itda.backend.asset.repository.AssetMapper;
 import com.itda.backend.job.domain.Job;
 import com.itda.backend.node.domain.Node;
@@ -15,8 +16,6 @@ import java.util.Objects;
 @RequiredArgsConstructor
 public class AssetRegistrar {
 
-    private static final String STORAGE_PROVIDER_LOCAL = "LOCAL";
-
     private final AssetMapper assetMapper;
     private final NodeMapper nodeMapper;
 
@@ -29,7 +28,7 @@ public class AssetRegistrar {
                 .ownerId(resolveOwnerId(job))
                 .projectId(job.getProjectId())
                 .assetType(assetType)
-                .storageProvider(STORAGE_PROVIDER_LOCAL)
+                .storageProvider(StorageProvider.LOCAL)
                 .storageKey(storedAsset.storageKey())
                 .contentType(contentType)
                 .sizeBytes(storedAsset.sizeBytes())

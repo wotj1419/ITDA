@@ -11,7 +11,8 @@
         <result property="projectId" column="project_id"/>
         <result property="assetType" column="asset_type"
                 javaType="com.itda.backend.asset.domain.AssetType"/>
-        <result property="storageProvider" column="storage_provider"/>
+        <result property="storageProvider" column="storage_provider"
+                javaType="com.itda.backend.asset.domain.StorageProvider"/>
         <result property="storageKey" column="storage_key"/>
         <result property="contentType" column="content_type"/>
         <result property="sizeBytes" column="size_bytes"/>
@@ -19,25 +20,26 @@
         <result property="deletedAt" column="deleted_at"/>
     </resultMap>
 
+    <sql id="assetColumns">
+        id, owner_id, project_id, asset_type, storage_provider,
+        storage_key, content_type, size_bytes, created_at, deleted_at
+    </sql>
+
     <insert id="insert" parameterType="com.itda.backend.asset.domain.Asset"
             useGeneratedKeys="true" keyProperty="id" keyColumn="id">
         INSERT INTO assets (
-            owner_id,
-            project_id,
-            asset_type,
-            storage_provider,
-            storage_key,
-            content_type,
-            size_bytes
+            owner_id, project_id, asset_type, storage_provider,
+            storage_key, content_type, size_bytes
         ) VALUES (
-            #{ownerId},
-            #{projectId},
-            #{assetType},
-            #{storageProvider},
-            #{storageKey},
-            #{contentType},
-            #{sizeBytes}
+            #{ownerId}, #{projectId}, #{assetType}, #{storageProvider},
+            #{storageKey}, #{contentType}, #{sizeBytes}
         )
     </insert>
+
+    <select id="findById" resultMap="AssetResultMap">
+        SELECT <include refid="assetColumns"/>
+        FROM assets
+        WHERE id = #{id}
+    </select>
 
 </mapper>

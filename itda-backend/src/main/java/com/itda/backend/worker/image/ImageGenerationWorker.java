@@ -11,7 +11,6 @@ import com.itda.backend.worker.ParsedJobRequest;
 import com.itda.backend.worker.StoredAsset;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
-
 @Component
 @RequiredArgsConstructor
 public class ImageGenerationWorker {

@@ -7,9 +7,6 @@ import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
 
-/**
- * Asset 도메인 모델
- */
 @Getter
 @Builder
 @NoArgsConstructor
@@ -20,7 +17,7 @@ public class Asset {
     private Long ownerId;
     private Long projectId;
     private AssetType assetType;
-    private String storageProvider;
+    private StorageProvider storageProvider;
     private String storageKey;
     private String contentType;
     private Long sizeBytes;

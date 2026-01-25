@@ -60,10 +60,15 @@ dependencies {
     // Google Gen AI SDK (Vertex AI)
     implementation("com.google.genai:google-genai:1.36.0")
 
-	    // Test
-	    testImplementation("org.springframework.boot:spring-boot-starter-test")
-	    testImplementation("org.springframework.security:spring-security-test")
-	}
+    // AWS S3
+    implementation(platform("software.amazon.awssdk:bom:2.25.64"))
+    implementation("software.amazon.awssdk:s3")
+    implementation("software.amazon.awssdk:auth")
+
+    // Test
+    testImplementation("org.springframework.boot:spring-boot-starter-test")
+    testImplementation("org.springframework.security:spring-security-test")
+}
 
 tasks.withType<Test> {
     useJUnitPlatform()
