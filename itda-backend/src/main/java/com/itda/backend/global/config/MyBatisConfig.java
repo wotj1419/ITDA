@@ -26,7 +26,19 @@ public class MyBatisConfig {
         sessionFactory.setMapperLocations(resolver.getResources("classpath:mapper/**/*.xml"));
 
         // Type Aliases 패키지 설정
-        sessionFactory.setTypeAliasesPackage("com.itda.backend");
+        sessionFactory.setTypeAliasesPackage(String.join(
+                ",",
+                "com.itda.backend.auth.domain",
+                "com.itda.backend.asset.domain",
+                "com.itda.backend.job.domain",
+                "com.itda.backend.node.domain",
+                "com.itda.backend.project.domain",
+                "com.itda.backend.scene.domain",
+                "com.itda.backend.node.repository.dto",
+                "com.itda.backend.project.repository.dto",
+                "com.itda.backend.scenario.repository.dto",
+                "com.itda.backend.timeline.repository.dto"
+        ));
 
         // MyBatis 설정
         org.apache.ibatis.session.Configuration configuration = new org.apache.ibatis.session.Configuration();

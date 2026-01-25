@@ -10,7 +10,7 @@ server:
 
 mybatis:
   mapper-locations: classpath:mapper/**/*.xml
-  type-aliases-package: com.itda.backend
+  type-aliases-package: com.itda.backend.auth.domain,com.itda.backend.asset.domain,com.itda.backend.job.domain,com.itda.backend.node.domain,com.itda.backend.project.domain,com.itda.backend.scene.domain,com.itda.backend.node.repository.dto,com.itda.backend.project.repository.dto,com.itda.backend.scenario.repository.dto,com.itda.backend.timeline.repository.dto
   configuration:
     map-underscore-to-camel-case: true
 
