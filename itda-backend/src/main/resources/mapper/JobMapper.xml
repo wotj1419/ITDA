@@ -94,9 +94,9 @@
                 #{s}
             </foreach>
           AND (
-              #{maxRetryCount} <= 0
+              #{maxRetryCount} &lt;= 0
               OR status != 'FAILED'
-              OR retry_count < #{maxRetryCount}
+              OR retry_count &lt; #{maxRetryCount}
           )
     </update>
 

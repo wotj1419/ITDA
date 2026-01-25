@@ -16,8 +16,7 @@ import java.nio.file.Path;
 /**
  * Job 결과 URL 해석기
  * <p>
- * Job 결과(Asset ID)를 presigned URL로 변환.
- * 현재는 스텁 구현이며, AssetService 연동 시 실제 구현 필요.
+ * 현재는 로컬 파일 기반 URL을 반환하며, S3 presigned URL 연동은 추후 구현.
  */
 @Component
 @RequiredArgsConstructor
@@ -43,6 +42,9 @@ public class JobResultResolver {
 
         if (job.getType() == JobType.IMAGE_GENERATION || job.getType() == JobType.VIDEO_GENERATION) {
             return resolveNodeContentUrl(job);
+        }
+        if (job.getType() == JobType.SCENE_MERGE) {
+            return resolveSceneExportUrl(job.getSceneId());
         }
         if (job.getType() == JobType.PROJECT_MERGE) {
             return resolveExportUrl(job.getProjectId());
@@ -70,5 +72,16 @@ public class JobResultResolver {
             return null;
         }
         return mediaUrlResolver.projectExportUrl(projectId);
+    }
+
+    private String resolveSceneExportUrl(Long sceneId) {
+        if (sceneId == null) {
+            return null;
+        }
+        Path exportPath = Path.of(fileStorageProperties.getUploadDir(), "exports", "scenes", String.valueOf(sceneId), "final.mp4");
+        if (!Files.exists(exportPath)) {
+            return null;
+        }
+        return mediaUrlResolver.sceneExportUrl(sceneId);
     }
 }

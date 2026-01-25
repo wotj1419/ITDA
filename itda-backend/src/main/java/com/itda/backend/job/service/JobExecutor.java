@@ -1,22 +1,23 @@
 package com.itda.backend.job.service;
 
-import com.itda.backend.global.config.FileStorageProperties;
 import com.itda.backend.job.domain.Job;
 import com.itda.backend.job.domain.JobStatus;
 import com.itda.backend.job.domain.JobType;
 import com.itda.backend.job.repository.JobMapper;
 import com.itda.backend.node.domain.NodeStatus;
 import com.itda.backend.node.repository.NodeMapper;
+import com.itda.backend.worker.ExecutionResult;
+import com.itda.backend.worker.image.ImageGenerationWorker;
+import com.itda.backend.worker.merge.MergeWorker;
+import com.itda.backend.worker.video.VideoGenerationWorker;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
+import java.util.Arrays;
 import java.util.List;
-import java.util.concurrent.ThreadLocalRandom;
 
 /**
  * Job 실행 진입점
@@ -36,12 +37,10 @@ public class JobExecutor {
     private final JobEventPublisher jobEventPublisher;
     private final TransactionTemplate transactionTemplate;
     private final JobExecutionProperties jobExecutionProperties;
-    private final FileStorageProperties fileStorageProperties;
-
-    // TODO: 팀원들이 Worker 구현 후 주입
-    // private final ImageGenerationWorker imageWorker;   // 이용호
-    // private final VideoGenerationWorker videoWorker;   // 김은서
-    // private final MergeWorker mergeWorker;             // 장현준
+    private final ImageGenerationWorker imageWorker;
+    private final VideoGenerationWorker videoWorker;
+    private final MergeWorker mergeWorker;
+    private final Environment environment;
 
     /**
      * Job 실행
@@ -54,31 +53,21 @@ public class JobExecutor {
      * @param jobId 실행할 Job ID
      */
     public void execute(Long jobId) {
-        Job job = jobMapper.findById(jobId).orElse(null);
+        if (jobId == null) {
+            log.warn("[JobExecutor] Skip execute: jobId is null");
+            return;
+        }
+
+        Job job = findJobOrSkip(jobId);
         if (job == null) {
-            log.error("[JobExecutor] Job not found: id={}", jobId);
             return;
         }
-
-        // 이미 완료된 경우 스킵 (중복 실행 방지)
-        if (job.isSucceeded()) {
-            log.info("[JobExecutor] Job already succeeded, skipping: id={}", jobId);
-            return;
-        }
-
-        // 실행 가능 상태 확인 (PENDING 또는 재시도 가능한 FAILED)
         int maxRetryCount = jobExecutionProperties.getMaxRetryCount();
-        if (!job.isExecutable(maxRetryCount)) {
-            log.info("[JobExecutor] Job not executable, skipping: id={}, status={}, retryCount={}",
-                    jobId, job.getStatus(), job.getRetryCount());
+
+        if (shouldSkip(job, maxRetryCount)) {
             return;
         }
-
-        // RUNNING 전환 (낙관적 락 - 기대 상태 체크)
-        boolean started = markRunning(jobId, maxRetryCount);
-        
-        if (!started) {
-            log.info("[JobExecutor] Job not eligible to run (status changed), skipping: id={}", jobId);
+        if (!tryMarkRunningOrSkip(jobId, maxRetryCount)) {
             return;
         }
 
@@ -86,15 +75,10 @@ public class JobExecutor {
 
         try {
             updateNodeStatusIfApplicable(job, NodeStatus.RUNNING, null);
-            ExecutionResult result = executeByType(job);
-            if (result == null) {
-                throw new IllegalStateException("Worker returned null result");
-            }
-            if (requiresResultAssetId(job) && result.resultAssetId() == null) {
-                throw new IllegalStateException("Worker returned null resultAssetId");
-            }
 
-            // 성공 처리
+            ExecutionResult result = executeByType(job);
+            validateExecutionResult(job, result);
+
             boolean succeeded = markSucceeded(jobId, result.resultAssetId());
             if (!succeeded) {
                 log.warn("[JobExecutor] Job success ignored (status changed): id={}", jobId);
@@ -110,23 +94,46 @@ public class JobExecutor {
         }
     }
 
+    private Job findJobOrSkip(Long jobId) {
+        Job job = jobMapper.findById(jobId).orElse(null);
+        if (job == null) {
+            log.error("[JobExecutor] Job not found: id={}", jobId);
+        }
+        return job;
+    }
+
+    private boolean shouldSkip(Job job, int maxRetryCount) {
+        if (job.isSucceeded()) {
+            log.info("[JobExecutor] Job already succeeded, skipping: id={}", job.getId());
+            return true;
+        }
+
+        if (!job.isExecutable(maxRetryCount)) {
+            log.info("[JobExecutor] Job not executable, skipping: id={}, status={}, retryCount={}",
+                    job.getId(), job.getStatus(), job.getRetryCount());
+            return true;
+        }
+
+        return false;
+    }
+
+    private boolean tryMarkRunningOrSkip(Long jobId, int maxRetryCount) {
+        boolean started = markRunning(jobId, maxRetryCount);
+        if (!started) {
+            log.info("[JobExecutor] Job not eligible to run (status changed), skipping: id={}", jobId);
+        }
+        return started;
+    }
+
     /**
      * 타입별 Worker 호출
      */
     private ExecutionResult executeByType(Job job) {
-        simulateDelay();
-        switch (job.getType()) {
-            case IMAGE_GENERATION -> {
-                return executeImageGeneration(job);
-            }
-            case VIDEO_GENERATION -> {
-                return executeVideoGeneration(job);
-            }
-            case SCENE_MERGE, PROJECT_MERGE -> {
-                return executeProjectMerge(job);
-            }
-        }
-        throw new IllegalStateException("Unsupported job type: " + job.getType());
+        return switch (job.getType()) {
+            case IMAGE_GENERATION -> executeImageGeneration(job);
+            case VIDEO_GENERATION -> executeVideoGeneration(job);
+            case SCENE_MERGE, PROJECT_MERGE -> executeMergeJob(job);
+        };
     }
 
     /**
@@ -134,8 +141,22 @@ public class JobExecutor {
      */
     private void handleFailure(Job job, Exception e) {
         Long jobId = job.getId();
-        String errorMessage = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
-        log.error("[JobExecutor] Job failed: id={}, error={}", jobId, errorMessage, e);
+        log.error(
+                "[JobExecutor] Job failed: id={}, type={}, projectId={}, sceneId={}, nodeId={}",
+                jobId,
+                job.getType(),
+                job.getProjectId(),
+                job.getSceneId(),
+                job.getNodeId(),
+                e
+        );
+        String errorMessage = resolveUserErrorMessage(job.getType());
+        if (isLocalProfile()) {
+            String debugMessage = resolveDebugMessage(e);
+            if (debugMessage != null && !debugMessage.isBlank()) {
+                errorMessage = debugMessage;
+            }
+        }
 
         boolean failed = markFailed(jobId, truncateErrorMessage(errorMessage));
         if (!failed) {
@@ -147,38 +168,18 @@ public class JobExecutor {
         publishFailedSafely(jobId);
     }
 
-    private void simulateDelay() {
-        int delayMs = ThreadLocalRandom.current().nextInt(1000, 2001);
-        try {
-            Thread.sleep(delayMs);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new IllegalStateException("Job execution interrupted", e);
-        }
-    }
-
     private ExecutionResult executeImageGeneration(Job job) {
-        Long nodeId = requireNodeId(job);
-        String relativePath = "ai/images/node-" + nodeId + ".png";
-        String contentKey = createMockAsset(relativePath, MockAssetType.PNG);
-        return new ExecutionResult(nodeId, contentKey);
+        requireNodeId(job);
+        return imageWorker.execute(job);
     }
 
     private ExecutionResult executeVideoGeneration(Job job) {
-        Long nodeId = requireNodeId(job);
-        String relativePath = "ai/videos/node-" + nodeId + ".mp4";
-        String contentKey = createMockAsset(relativePath, MockAssetType.MP4);
-        return new ExecutionResult(nodeId, contentKey);
+        requireNodeId(job);
+        return videoWorker.execute(job);
     }
 
-    private ExecutionResult executeProjectMerge(Job job) {
-        Long projectId = job.getProjectId();
-        if (projectId == null) {
-            throw new IllegalStateException("Project merge job missing projectId");
-        }
-        String relativePath = "exports/" + projectId + "/final.mp4";
-        createMockAsset(relativePath, MockAssetType.MP4);
-        return new ExecutionResult(null, null);
+    private ExecutionResult executeMergeJob(Job job) {
+        return mergeWorker.execute(job);
     }
 
     private Long requireNodeId(Job job) {
@@ -188,7 +189,7 @@ public class JobExecutor {
         return job.getNodeId();
     }
 
-    private void updateNodeStatusIfApplicable(Job job, NodeStatus status, String contentUrl) {
+    private void updateNodeStatusIfApplicable(Job job, NodeStatus status, String nodeContentKey) {
         if (job.getNodeId() == null) {
             return;
         }
@@ -197,63 +198,15 @@ public class JobExecutor {
             return;
         }
         int updated;
-        if (contentUrl == null) {
+        if (nodeContentKey == null) {
             updated = nodeMapper.updateStatus(job.getNodeId(), status);
         } else {
-            updated = nodeMapper.updateStatusAndContentUrl(job.getNodeId(), status, contentUrl);
+            // NOTE: DB 컬럼명이 content_url 이지만, 로컬 저장소 기준으로는 storageKey가 들어갈 수 있음.
+            updated = nodeMapper.updateStatusAndContentUrl(job.getNodeId(), status, nodeContentKey);
         }
         if (updated == 0) {
-            log.warn("[JobExecutor] Node status update ignored: jobId={}, nodeId={}, status={}, contentUrlPresent={}",
-                    job.getId(), job.getNodeId(), status, contentUrl != null);
-        }
-    }
-
-    private String createMockAsset(String relativePath, MockAssetType assetType) {
-        Path targetPath = resolveUploadPath(relativePath);
-        try {
-            Files.createDirectories(targetPath.getParent());
-            if (!Files.exists(targetPath)) {
-                Files.write(targetPath, assetType.bytes());
-            }
-        } catch (IOException e) {
-            throw new IllegalStateException("Failed to create mock asset", e);
-        }
-        return normalizeRelativePath(relativePath);
-    }
-
-    private Path resolveUploadPath(String relativePath) {
-        return Path.of(fileStorageProperties.getUploadDir()).resolve(relativePath);
-    }
-
-    private String normalizeRelativePath(String relativePath) {
-        return relativePath.replace("\\", "/");
-    }
-
-    private record ExecutionResult(Long resultAssetId, String nodeContentKey) {
-    }
-
-    private enum MockAssetType {
-        PNG(new byte[] {
-                (byte) 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
-                0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52,
-                0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
-                0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, (byte) 0xC4,
-                (byte) 0x89, 0x00, 0x00, 0x00, 0x0A, 0x49, 0x44, 0x41,
-                0x54, 0x78, (byte) 0x9C, 0x63, 0x00, 0x01, 0x00, 0x00,
-                0x05, 0x00, 0x01, 0x0D, 0x0A, 0x2D, (byte) 0xB4, 0x00,
-                0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, (byte) 0xAE,
-                0x42, 0x60, (byte) 0x82
-        }),
-        MP4("ITDA MOCK VIDEO".getBytes());
-
-        private final byte[] bytes;
-
-        MockAssetType(byte[] bytes) {
-            this.bytes = bytes;
-        }
-
-        public byte[] bytes() {
-            return bytes;
+            log.warn("[JobExecutor] Node status update ignored: jobId={}, nodeId={}, status={}, contentKeyPresent={}",
+                    job.getId(), job.getNodeId(), status, nodeContentKey != null);
         }
     }
 
@@ -261,10 +214,13 @@ public class JobExecutor {
      * 에러 메시지 길이 제한 (DB 컬럼 사이즈 고려)
      */
     private String truncateErrorMessage(String message) {
-        if (message == null) return null;
-        return message.length() > MAX_ERROR_MESSAGE_LENGTH
-                ? message.substring(0, MAX_ERROR_MESSAGE_LENGTH)
-                : message;
+        if (message == null) {
+            return null;
+        }
+        if (message.length() <= MAX_ERROR_MESSAGE_LENGTH) {
+            return message;
+        }
+        return message.substring(0, MAX_ERROR_MESSAGE_LENGTH);
     }
 
     private boolean markRunning(Long jobId, int maxRetryCount) {
@@ -280,8 +236,17 @@ public class JobExecutor {
     }
 
     private boolean requiresResultAssetId(Job job) {
-        return job.getType() == JobType.IMAGE_GENERATION
-                || job.getType() == JobType.VIDEO_GENERATION;
+        JobType type = job.getType();
+        return type == JobType.IMAGE_GENERATION || type == JobType.VIDEO_GENERATION;
+    }
+
+    private void validateExecutionResult(Job job, ExecutionResult result) {
+        if (result == null) {
+            throw new IllegalStateException("Worker returned null result");
+        }
+        if (requiresResultAssetId(job) && result.resultAssetId() == null) {
+            throw new IllegalStateException("Worker returned null resultAssetId");
+        }
     }
 
     private boolean markSucceeded(Long jobId, Long resultAssetId) {
@@ -310,5 +275,34 @@ public class JobExecutor {
         } catch (Exception e) {
             log.warn("[JobExecutor] Failed to publish failed event: id={}", jobId, e);
         }
+    }
+
+    private String resolveUserErrorMessage(JobType type) {
+        if (type == null) {
+            return "작업 처리에 실패했습니다. 잠시 후 다시 시도해주세요.";
+        }
+        return switch (type) {
+            case IMAGE_GENERATION -> "이미지 생성에 실패했습니다. 잠시 후 다시 시도해주세요.";
+            case VIDEO_GENERATION -> "영상 생성에 실패했습니다. 잠시 후 다시 시도해주세요.";
+            case SCENE_MERGE, PROJECT_MERGE -> "병합에 실패했습니다. 잠시 후 다시 시도해주세요.";
+        };
+    }
+
+    private boolean isLocalProfile() {
+        String[] profiles = environment.getActiveProfiles();
+        return Arrays.stream(profiles).anyMatch("local"::equalsIgnoreCase);
+    }
+
+    private String resolveDebugMessage(Exception e) {
+        if (e == null) return null;
+        Throwable cursor = e;
+        while (cursor.getCause() != null) {
+            cursor = cursor.getCause();
+        }
+        String message = cursor.getMessage();
+        if (message == null || message.isBlank()) {
+            return cursor.getClass().getSimpleName();
+        }
+        return message.trim();
     }
 }
