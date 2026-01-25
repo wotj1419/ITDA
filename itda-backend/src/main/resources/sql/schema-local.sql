@@ -35,6 +35,16 @@ CREATE TABLE users (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- Local seed user (email: test@gmail.com, password: qweqwe123)
+INSERT INTO users (email, password_hash, name, profile_image_url, role)
+VALUES (
+    'test@gmail.com',
+    '$2a$10$wOct./8vg0zB5Fy.KtrPleexXvWS4FXul34r3c.m.dg.WiH5vr.Eu',
+    'Test User',
+    NULL,
+    'USER'
+);
+
 -- ============================================
 -- 2. 프로젝트 (Projects)
 -- ============================================
