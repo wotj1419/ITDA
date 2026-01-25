@@ -1,6 +1,7 @@
 spring:
   profiles:
     active: local
+    include: redis-streams
   application:
     name: itda-backend
 
@@ -32,3 +33,12 @@ file:
 job:
   execution:
     max-retry-count: 0  # 0 이하: 제한 없음 (수동 재시도 정책)
+  streams:
+    image-stream-key: ai:image
+    video-stream-key: ai:video
+    merge-stream-key: media:merge
+    image-group: cg:ai-image
+    video-group: cg:ai-video
+    merge-group: cg:media-merge
+    consumer-prefix: api-worker
+    poll-timeout-ms: 1000
