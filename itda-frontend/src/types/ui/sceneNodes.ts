@@ -1,6 +1,6 @@
 /**
  * Node Types for Vue Flow based Scene Editor
- * @module types/node
+ * @module types/ui/sceneNodes
  * 
  * 설계 문서: docs/vue-flow-node-workflow-design.md Section 3
  */
