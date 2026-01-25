@@ -9,14 +9,23 @@ spring:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
 
-spring.ai.vertex.ai.gemini:
-  project-id: ${GCP_PROJECT_ID:}
-  location: ${GCP_LOCATION:us-central1}
-
 ai:
+  vertex:
+    project-id: ${GCP_PROJECT_ID:}
+    location: ${GCP_LOCATION:us-central1}
+    api-version: ${AI_VERTEX_API_VERSION:v1}
+  gemini:
+    stub: ${AI_GEMINI_STUB:true}
+    image-model: ${VERTEX_IMAGE_MODEL:gemini-2.5-flash-image}
+    timeout-ms: ${VERTEX_IMAGE_TIMEOUT_MS:60000}
   scenario:
     model-text: ${VERTEX_TEXT_MODEL:}
-    timeout-ms: ${VERTEX_TIMEOUT_MS:8000}
+    timeout-ms: ${VERTEX_TIMEOUT_MS:60000}
+  veo:
+    stub: ${AI_VEO_STUB:true}
+    model: ${VEO_MODEL:veo-3.1-generate-001}
+    timeout-ms: ${VEO_TIMEOUT_MS:180000}
+    poll-interval-ms: ${VEO_POLL_INTERVAL_MS:2000}
 
 logging:
   level:

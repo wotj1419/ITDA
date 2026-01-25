@@ -1,13 +1,11 @@
 spring:
-  profiles:
-    active: test
   application:
     name: itda-backend
   datasource:
-    url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
-    username: sa
-    password:
-    driver-class-name: org.h2.Driver
+    url: ${TEST_DB_URL:jdbc:mysql://localhost:3306/itda_test?useSSL=false&serverTimezone=Asia/Seoul&allowPublicKeyRetrieval=true}
+    username: ${TEST_DB_USERNAME:root}
+    password: ${TEST_DB_PASSWORD:}
+    driver-class-name: com.mysql.cj.jdbc.Driver
   data:
     redis:
       host: localhost
