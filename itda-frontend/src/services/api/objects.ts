@@ -1,5 +1,6 @@
 import apiClient from './client'
-import type { ObjectSheet, CreateObjectRequest, ApiResponse } from '../../types'
+import type { ApiResponse } from '../../types/api/common'
+import type { CreateObjectRequest, ObjectSheet } from '../../types/api/objects'
 
 const BASE_URL = '/projects'
 const OBJECT_URL = '/objects'

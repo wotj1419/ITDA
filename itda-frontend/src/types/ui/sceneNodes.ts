@@ -63,6 +63,11 @@ export interface BaseNodeData {
     createdAt: string;
     updatedAt: string;
 
+    // Optional media URLs (not all node types have media)
+    imageUrl?: string | null;
+    thumbnailUrl?: string | null;
+    videoUrl?: string | null;
+
     // 버전 관리
     versionGroupId: string;
     version: number;
