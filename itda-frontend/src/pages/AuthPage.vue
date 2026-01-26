@@ -27,6 +27,8 @@ const registerForm = ref({
   agreeTerms: false,
 })
 
+const loginError = ref('')
+
 // Password visibility
 const showLoginPassword = ref(false)
 const showRegisterPassword = ref(false)
@@ -39,10 +41,28 @@ const passwordsMatch = computed(() => {
   return registerForm.value.password === registerForm.value.passwordConfirm
 })
 
+const nameErrorMessage = computed(() => {
+  if (!registerForm.value.name) return ''
+  if (registerForm.value.name.length < 2) return '이름은 2글자 이상이어야 합니다.'
+  if (!/^[가-힣a-zA-Z]+$/.test(registerForm.value.name)) return '이름을 정확히 입력하세요.'
+  return ''
+})
+
+const isNameValid = computed(() => !nameErrorMessage.value)
+
+const isEmailValid = computed(() => {
+  if (!registerForm.value.email) return true
+  // User logic: Allow .kr (2 chars) OR other TLDs with 3+ chars (e.g., .com, .net)
+  // Rejects 2-char TLDs that are not .kr (e.g., .io, .us) based on user request
+  const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+(\.kr|\.[a-zA-Z]{3,})$/
+  return emailRegex.test(registerForm.value.email)
+})
+
 async function handleLogin() {
   if (isLoading.value) return
 
   isLoading.value = true
+  loginError.value = '' // Reset error
   try {
     await authStore.login({
       email: loginForm.value.email,
@@ -54,35 +74,42 @@ async function handleLogin() {
       message: '환영합니다.',
     })
     router.push('/dashboard')
-  } catch (error) {
-    uiStore.showToast({
-      type: 'error',
-      title: '로그인 실패',
-      message: '이메일 또는 비밀번호를 확인해주세요.',
-    })
+  } catch (error: any) {
+    // User requested specific message
+    loginError.value = '아이디 또는 비밀번호가 잘못 되었습니다. 아이디와 비밀번호를 정확히 입력해 주세요.'
   } finally {
     isLoading.value = false
   }
 }
 
+const registerError = ref('')
+const termsError = ref(false)
+
+// ...
+
 async function handleRegister() {
   if (isLoading.value) return
 
+  // Reset errors
+  registerError.value = ''
+  termsError.value = false
+
+  if (registerForm.value.name && !isNameValid.value) {
+    // Already showing inline error via (registerForm.name && !isNameValid)
+    return
+  }
+
+  if (registerForm.value.email && !isEmailValid.value) {
+    return
+  }
+
   if (!passwordsMatch.value) {
-    uiStore.showToast({
-      type: 'error',
-      title: '오류',
-      message: '비밀번호가 일치하지 않습니다.',
-    })
+    // Already showing inline error via (registerForm.passwordConfirm && !passwordsMatch)
     return
   }
 
   if (!registerForm.value.agreeTerms) {
-    uiStore.showToast({
-      type: 'error',
-      title: '오류',
-      message: '이용약관에 동의해주세요.',
-    })
+    termsError.value = true
     return
   }
 
@@ -99,12 +126,13 @@ async function handleRegister() {
       message: '로그인 해주세요.',
     })
     activeTab.value = 'login'
-  } catch (error) {
-    uiStore.showToast({
-      type: 'error',
-      title: '회원가입 실패',
-      message: '회원가입에 실패했습니다.',
-    })
+  } catch (error: any) {
+    if (error.response?.status === 409) {
+      registerError.value = '이미 가입된 이메일입니다.'
+    } else {
+      const errorMessage = error.response?.data?.message || '회원가입에 실패했습니다.'
+      registerError.value = errorMessage
+    }
   } finally {
     isLoading.value = false
   }
@@ -171,8 +199,10 @@ async function handleRegister() {
                 v-model="loginForm.password"
                 :type="showLoginPassword ? 'text' : 'password'"
                 class="form-input with-icon with-right-icon"
+                :class="{ 'input-error': loginError }"
                 placeholder="비밀번호"
                 required
+                @input="loginError = ''"
               />
               <button
                 type="button"
@@ -182,6 +212,10 @@ async function handleRegister() {
                 <component :is="showLoginPassword ? EyeOff : Eye" class="w-5 h-5" />
               </button>
             </div>
+          </div>
+
+          <div v-if="loginError" class="form-error mb-4" style="text-align: center;">
+            {{ loginError }}
           </div>
 
           <div class="flex items-center justify-between mb-6">
@@ -211,9 +245,13 @@ async function handleRegister() {
               v-model="registerForm.name"
               type="text"
               class="form-input"
+              :class="{ 'input-error': registerForm.name && !isNameValid }"
               placeholder="이름을 입력하세요"
               required
             />
+            <div v-if="registerForm.name && !isNameValid" class="form-error">
+              {{ nameErrorMessage }}
+            </div>
           </div>
 
           <div class="form-group">
@@ -224,9 +262,13 @@ async function handleRegister() {
                 v-model="registerForm.email"
                 type="email"
                 class="form-input with-icon"
+                :class="{ 'input-error': registerForm.email && !isEmailValid }"
                 placeholder="your@email.com"
                 required
               />
+            </div>
+            <div v-if="registerForm.email && !isEmailValid" class="form-error">
+              이메일을 올바르게 입력해주세요.
             </div>
           </div>
 
@@ -270,12 +312,19 @@ async function handleRegister() {
 
           <div class="form-group mb-6">
             <label class="form-check">
-              <input v-model="registerForm.agreeTerms" type="checkbox" class="form-checkbox" />
+              <input v-model="registerForm.agreeTerms" type="checkbox" class="form-checkbox" @change="termsError = false" />
               <span class="form-check-label">
                 <a href="#" class="link">이용약관</a> 및
                 <a href="#" class="link">개인정보처리방침</a>에 동의합니다
               </span>
             </label>
+            <div v-if="termsError" class="form-error">
+              약관에 동의해주세요.
+            </div>
+          </div>
+
+          <div v-if="registerError" class="form-error mb-4" style="text-align: center;">
+            {{ registerError }}
           </div>
 
           <button
