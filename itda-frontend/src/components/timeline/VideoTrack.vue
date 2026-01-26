@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import type { TimelineClip } from '../../types'
+import type { TimelineClip } from '../../types/ui'
 import ClipItem from './ClipItem.vue'
 
 interface Props {

@@ -2,7 +2,7 @@
  * Mock API for Node data
  * @module services/mock/nodes
  */
-import type { Node, NodeStatus, NodeSettings } from '../../types';
+import type { Node, NodeStatus, NodeSettings } from '../../types/api/nodes';
 
 // =============================================================================
 // Mock Data

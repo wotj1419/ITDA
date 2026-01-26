@@ -9,8 +9,8 @@ import { computed } from 'vue';
 import { Handle, Position } from '@vue-flow/core';
 import { NodeResizer } from '@vue-flow/node-resizer';
 import { useSceneNodeStore } from '../../../stores/sceneNode';
-import { JobStatus, NODE_HEIGHTS, NODE_WIDTHS } from '../../../types/node';
-import type { StoryboardGridNodeData } from '../../../types/node';
+import { JobStatus, NODE_HEIGHTS, NODE_WIDTHS } from '../../../types/ui/sceneNodes';
+import type { StoryboardGridNodeData } from '../../../types/ui/sceneNodes';
 import { 
   LayoutGrid, 
   Loader2, 

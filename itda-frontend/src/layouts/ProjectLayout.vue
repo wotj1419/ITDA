@@ -5,7 +5,7 @@ import { RouterLink, useRoute, useRouter } from 'vue-router'
 import type { RouteLocationRaw } from 'vue-router'
 import { useUIStore } from '../stores/ui'
 import { useSidebarShortcut } from '../composables/useSidebarShortcut'
-import type { ProjectDetail } from '../types'
+import type { ProjectDetail } from '../types/api/projects'
 import Badge from '../components/common/Badge.vue'
 import AvatarGroup from '../components/common/AvatarGroup.vue'
 import Button from '../components/common/Button.vue'
@@ -13,6 +13,7 @@ import {
   BookOpen,
   Clapperboard,
   User,
+  Users,
   Layers,
   Settings,
   Phone,

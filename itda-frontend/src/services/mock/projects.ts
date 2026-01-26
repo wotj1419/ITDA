@@ -1,4 +1,4 @@
-import type { Project, ProjectDetail, ProjectMember } from '../../types'
+import type { Project, ProjectDetail, ProjectMember } from '../../types/api/projects'
 
 // 1. Mock 데이터 정의 (기존과 동일)
 const mockMembers: Record<number, ProjectMember[]> = {

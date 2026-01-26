@@ -8,8 +8,8 @@
 import { computed } from 'vue';
 import { Handle, Position } from '@vue-flow/core';
 import { NodeResizer } from '@vue-flow/node-resizer';
-import { NODE_HEIGHTS, NODE_WIDTHS } from '../../../types/node';
-import type { SceneHeaderNodeData } from '../../../types/node';
+import { NODE_HEIGHTS, NODE_WIDTHS } from '../../../types/ui/sceneNodes';
+import type { SceneHeaderNodeData } from '../../../types/ui/sceneNodes';
 import { BookOpen, Plus } from 'lucide-vue-next';
 import { useSceneNodeStore } from '../../../stores/sceneNode';
 

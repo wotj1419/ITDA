@@ -57,8 +57,8 @@ dependencies {
     // Dotenv (.env 파일 자동 로딩)
     implementation("me.paulschwarz:spring-dotenv:4.0.0")
 
-    // Vertex AI (Gemini)
-    implementation("com.google.cloud:google-cloud-vertexai:1.0.0")
+    // Google Gen AI SDK (Vertex AI)
+    implementation("com.google.genai:google-genai:1.36.0")
 
     // AWS S3
     implementation(platform("software.amazon.awssdk:bom:2.25.64"))

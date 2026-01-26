@@ -13,6 +13,12 @@ const routes: RouteRecordRaw[] = [
     component: () => import('../pages/AuthPage.vue'),
   },
   {
+    path: '/access-denied',
+    name: 'access-denied',
+    component: () => import('../pages/AccessDeniedPage.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
     path: '/dashboard',
     name: 'dashboard',
     component: () => import('../pages/DashboardPage.vue'),
@@ -78,15 +84,33 @@ const router = createRouter({
   routes,
 })
 
+const getAccessToken = (): string | null => {
+  const token = localStorage.getItem('accessToken')
+  if (!token || token === 'null' || token === 'undefined') {
+    return null
+  }
+  const parts = token.split('.')
+  if (parts.length !== 3) {
+    return null
+  }
+  return token
+}
+
 // Navigation guard for auth
 router.beforeEach((to, _from, next) => {
-  const isAuthenticated = localStorage.getItem('accessToken')
+  const isAuthenticated = !!getAccessToken()
 
   if (to.meta.requiresAuth && !isAuthenticated) {
-    next({ name: 'auth' })
-  } else {
-    next()
+    next({ name: 'auth', query: { redirect: to.fullPath } })
+    return
   }
+
+  if (to.name === 'auth' && isAuthenticated) {
+    next({ name: 'dashboard' })
+    return
+  }
+
+  next()
 })
 
 export default router

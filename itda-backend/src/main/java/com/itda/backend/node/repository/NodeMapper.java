@@ -2,6 +2,8 @@ package com.itda.backend.node.repository;
 
 import com.itda.backend.node.controller.dto.request.NodePosition;
 import com.itda.backend.node.domain.Node;
+import com.itda.backend.node.domain.NodeStatus;
+import com.itda.backend.node.repository.dto.TimelineNodeRow;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
@@ -40,4 +42,15 @@ public interface NodeMapper {
     int setConfirmedVideo(@Param("nodeId") Long nodeId);
 
     int clearConfirmedVideo(@Param("nodeId") Long nodeId);
+
+    int updateStatus(@Param("nodeId") Long nodeId,
+                     @Param("status") NodeStatus status);
+
+    int updateStatusAndContentUrl(@Param("nodeId") Long nodeId,
+                                  @Param("status") NodeStatus status,
+                                  @Param("contentUrl") String contentUrl);
+
+    List<TimelineNodeRow> findConfirmedVideoNodesByProjectId(@Param("projectId") Long projectId);
+
+    List<TimelineNodeRow> findConfirmedVideoNodesBySceneId(@Param("sceneId") Long sceneId);
 }

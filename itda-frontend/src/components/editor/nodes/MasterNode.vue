@@ -3,7 +3,7 @@
  * MasterNode - 마스터 이미지 노드 컴포넌트
  * 씬의 기준이 되는 마스터 이미지를 표시
  */
-import type { Node } from '../../../types';
+import type { Node } from '../../../types/api/nodes';
 import Button from '../../common/Button.vue';
 import { Film, RefreshCw, Plus, CheckCircle } from 'lucide-vue-next';
 

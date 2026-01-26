@@ -1,10 +1,21 @@
 import apiClient from './client'
-import type { Project, ProjectDetail, CreateProjectRequest, ApiResponse } from '../../types'
+import type { ApiResponse } from '../../types/api/common'
+import type { Project, ProjectDetail, CreateProjectRequest } from '../../types/api/projects'
+
+type ProjectListResponse = {
+    items: Project[];
+    page: number;
+    size: number;
+    total: number;
+};
 
 // 프로젝트 목록 조회
 export async function fetchProjects(): Promise<Project[]> {
-    const response = await apiClient.get<ApiResponse<Project[]>>('/projects')
-    return response.data.data || []
+    const response = await apiClient.get<ApiResponse<Project[] | ProjectListResponse>>('/projects')
+    const data = response.data.data
+    if (!data) return []
+    if (Array.isArray(data)) return data
+    return data.items || []
 }
 
 // 프로젝트 상세 조회
@@ -29,7 +40,7 @@ export async function deleteProject(projectId: number): Promise<void> {
 
 // 프로젝트 수정
 export async function updateProject(projectId: number, data: Partial<Project>): Promise<Project | null> {
-    const response = await apiClient.patch<ApiResponse<Project>>(`/projects/${projectId}`, data)
+    const response = await apiClient.put<ApiResponse<Project>>(`/projects/${projectId}`, data)
     return response.data.data || null
 }
 

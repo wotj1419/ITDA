@@ -1,11 +1,15 @@
 import apiClient from './client';
 import type { AuthService } from '../auth.interface';
-import type { LoginRequest, SignupRequest, User, ApiResponse } from '../../types';
+import type { ApiResponse } from '../../types/api/common';
+import type { LoginRequest, SignupRequest, User, LoginResponse } from '../../types/api/auth';
 
 export const apiAuthService: AuthService = {
     async login(credentials: LoginRequest) {
-        const response = await apiClient.post<{ user: User; token: string }>('/auth/login', credentials);
-        return response.data;
+        const response = await apiClient.post<ApiResponse<LoginResponse>>('/auth/login', credentials);
+        if (!response.data.data) {
+            throw new Error('Failed to login');
+        }
+        return response.data.data;
     },
 
     async signup(data: SignupRequest) {

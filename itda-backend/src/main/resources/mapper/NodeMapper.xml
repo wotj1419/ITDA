@@ -171,4 +171,48 @@
           AND node_type = 'VIDEO'
     </update>
 
+    <!-- Update node status -->
+    <update id="updateStatus">
+        UPDATE nodes
+        SET status = #{status}
+        WHERE id = #{nodeId}
+    </update>
+
+    <!-- Update node status + content URL -->
+    <update id="updateStatusAndContentUrl">
+        UPDATE nodes
+        SET status = #{status},
+            content_url = #{contentUrl}
+        WHERE id = #{nodeId}
+    </update>
+
+    <!-- Timeline: confirmed VIDEO nodes by project -->
+    <select id="findConfirmedVideoNodesByProjectId"
+            resultType="com.itda.backend.node.repository.dto.TimelineNodeRow">
+        SELECT n.id AS video_node_id,
+               n.scene_id AS scene_id,
+               s.order_index AS scene_order,
+               n.content_url AS content_url
+        FROM nodes n
+        INNER JOIN scenes s ON n.scene_id = s.id
+        WHERE s.project_id = #{projectId}
+          AND n.node_type = 'VIDEO'
+          AND n.is_confirmed = true
+        ORDER BY s.order_index ASC, n.order_index ASC, n.id ASC
+    </select>
+
+    <!-- Timeline: confirmed VIDEO nodes by scene -->
+    <select id="findConfirmedVideoNodesBySceneId"
+            resultType="com.itda.backend.node.repository.dto.TimelineNodeRow">
+        SELECT n.id AS video_node_id,
+               n.scene_id AS scene_id,
+               NULL AS scene_order,
+               n.content_url AS content_url
+        FROM nodes n
+        WHERE n.scene_id = #{sceneId}
+          AND n.node_type = 'VIDEO'
+          AND n.is_confirmed = true
+        ORDER BY n.order_index ASC, n.id ASC
+    </select>
+
 </mapper>

@@ -72,4 +72,3 @@ public record ApiResponse<T>(
         return message != null ? message : errorCode.getMessage();
     }
 }
-

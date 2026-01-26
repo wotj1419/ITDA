@@ -10,7 +10,8 @@ import java.util.concurrent.Executor;
 /**
  * 비동기 처리 설정
  * <p>
- * LocalAsyncJobDispatcher에서 사용하는 스레드풀 정의.
+ * Job 실행용 스레드풀 정의.
+ * (LocalAsyncJobDispatcher / Redis Streams 컨슈머에서 공용 사용)
  */
 @Configuration
 @EnableAsync

@@ -40,7 +40,7 @@ public record NodeDetailResponse(
         @Schema(description = "Is confirmed (for VIDEO)", example = "false")
         Boolean isConfirmed,
 
-        @Schema(description = "Content URL", example = "https://...")
+        @Schema(description = "Content URL", example = "/api/nodes/301/content")
         String contentUrl,
 
         @Schema(description = "Position X", example = "100.5")
@@ -49,7 +49,7 @@ public record NodeDetailResponse(
         @Schema(description = "Position Y", example = "200.5")
         Float positionY
 ) {
-    public static NodeDetailResponse from(Node node, Map<String, Object> settings) {
+    public static NodeDetailResponse from(Node node, Map<String, Object> settings, String contentUrl) {
         return new NodeDetailResponse(
                 node.getId(),
                 node.getSceneId(),
@@ -60,7 +60,7 @@ public record NodeDetailResponse(
                 node.getStatus(),
                 node.getIsActive(),
                 node.getIsConfirmed(),
-                node.getContentUrl(),
+                contentUrl,
                 node.getPositionX(),
                 node.getPositionY()
         );

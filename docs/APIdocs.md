@@ -2,68 +2,64 @@
 
 > **프로젝트**: AI Movie Studio  
 > **버전**: v1.0  
-> **날짜**: 2026-01-15  
+> **날짜**: 2026-01-24  
+
+> **W3 Contract Freeze (2026-01-24)**: `docs/w3-mvp-implementation-plan.md` Section 2 기준.  
+> W3 WS는 **STOMP `/ws` + `/topic/projects/{projectId}`**, W5에 Raw WS(`/ws/room/{roomId}`, `/ws/projects/{projectId}`) 확장.
 
 ---
 
-## 0. API 요약 (핵심 엔드포인트)
+## 0. API 요약 (W3 기준)
 
-### 인증 (8)
+### 인증 (3)
 - 회원가입: `POST /api/auth/signup`
 - 로그인: `POST /api/auth/login`
 - 내 정보 조회: `GET /api/auth/me`
 
-### 프로젝트 (10)
+### 프로젝트 (5)
 - 프로젝트 생성: `POST /api/projects`
 - 프로젝트 목록: `GET /api/projects`
 - 프로젝트 상세: `GET /api/projects/{id}`
+- 프로젝트 수정: `PUT /api/projects/{id}`
+- 프로젝트 삭제: `DELETE /api/projects/{id}`
 
-### 멤버 (3)
-- 멤버 목록: `GET /api/projects/{id}/members`
-- 멤버 초대: `POST /api/projects/{id}/members`
-- 권한 변경: `PATCH /api/projects/{id}/members/{memberId}`
-
-### 오브젝트 시트 (5)
-- 오브젝트 생성: `POST /api/projects/{id}/objects`
-- 오브젝트 목록: `GET /api/projects/{id}/objects`
-- 오브젝트 상세: `GET /api/objects/{id}`
-
-### 씬 (6)
+### 씬 (4)
 - 씬 생성: `POST /api/projects/{id}/scenes`
 - 씬 목록: `GET /api/projects/{id}/scenes`
 - 씬 상세: `GET /api/scenes/{id}`
+- 씬 순서 변경: `PUT /api/projects/{id}/scenes/order`
 
-### 노드/캔버스 (12)
-- 노드 생성: `POST /api/scenes/{sceneId}/nodes`
-- 결과 생성: `POST /api/nodes/{id}/generate`
-- 영상 확정: `POST /api/nodes/{id}/confirm`
-
-### 시나리오 (10)
+### 시나리오 (4)
 - 시나리오 조회: `GET /api/projects/{id}/scenario`
 - 프롬프트 생성: `POST /api/projects/{id}/scenario/prompt/generate`
-- 씬 스토리 생성: `POST /api/projects/{id}/scenario/scenes/generate`
+- 플롯 생성: `POST /api/projects/{id}/scenario/plot/generate`
+- 씬 생성: `POST /api/projects/{id}/scenario/scenes/generate`
 
-### AI/프롬프트/작업 (5)
+### 노드/캔버스 (6)
+- 노드 생성: `POST /api/scenes/{sceneId}/nodes`
+- 노드 목록: `GET /api/scenes/{sceneId}/nodes`
+- 노드 수정: `PUT /api/nodes/{id}`
+- 영상 확정: `POST /api/nodes/{id}/confirm`
+- 확정 취소: `DELETE /api/nodes/{id}/confirm`
+- 결과 생성: `POST /api/nodes/{id}/generate`
+
+### AI/프롬프트/작업 (3)
 - 프롬프트 생성: `POST /api/ai/prompts/generate`
 - 프롬프트 개선: `POST /api/ai/prompts/improve`
 - 작업 상태 조회: `GET /api/ai/jobs/{jobId}`
-- 작업 재큐잉: `POST /api/ai/jobs/{jobId}/requeue`
 
-### 타임라인/병합 (7)
-- 씬 타임라인 조회: `GET /api/scenes/{id}/timeline`
+### 타임라인/병합/내보내기 (3)
 - 프로젝트 타임라인 조회: `GET /api/projects/{id}/timeline`
 - 최종 병합 요청: `POST /api/projects/{id}/merge`
+- 내보내기 URL 조회: `GET /api/projects/{id}/export`
 
-### 파일 (5)
-- 업로드 URL 발급: `POST /api/files/presign` (P1)
-- 업로드 완료 등록: `POST /api/files/complete` (P1)
-- 파일 정보 조회: `GET /api/files/{id}` (P1)
+### WebSocket (W3)
+- STOMP `/ws` + `/topic/projects/{projectId}`
 
-### WebSocket (2)
-- WebRTC 시그널링: `WS /ws/room/{roomId}?token=<JWT>`
-- 프로젝트 이벤트: `WS /ws/projects/{projectId}?token=<JWT>`
+### W4~W5 예정 (범위 외)
+- 멤버/권한, 오브젝트 시트, 파일 업로드
+- 협업(WebRTC/Chat/Presence) 및 Raw WS `/ws/room/{roomId}`, `/ws/projects/{projectId}`
 
-괄호의 개수는 카테고리별 전체 엔드포인트 수입니다.
 상세 엔드포인트는 각 섹션에서 확인합니다.
 
 ## 1. 개요
@@ -126,7 +122,7 @@
 | NODE_NOT_FOUND | 노드 없음 |
 | JOB_NOT_FOUND | 작업 없음 |
 | INVALID_REQUEST | 요청 파라미터 오류 |
-| MERGE_FAILED | 씬 병합 실패 |
+| MERGE_FAILED | 프로젝트 병합 실패 |
 
 ### 1.3 비동기 AI 작업 응답 규칙
 AI 생성 작업(이미지/영상)은 비동기로 처리됩니다.
@@ -198,9 +194,11 @@ API 경로 : /api/auth/signup
   "code": "SUCCESS",
   "message": "User registered successfully",
   "data": {
-    "userId": 1,
+    "id": 1,
     "email": "user@example.com",
-    "name": "John Doe"
+    "name": "John Doe",
+    "profileImageUrl": null,
+    "role": "USER"
   }
 }
 ```
@@ -232,7 +230,7 @@ API /api/auth/login
 ```
 API 경로 : /api/auth/login
 메서드 : POST
-설명 : 로그인 성공 시 액세스 토큰(JWT)과 사용자 정보를 반환합니다.
+설명 : 로그인 성공 시 액세스 토큰(JWT)과 갱신 토큰을 반환합니다.
 ```
 
 #### 2. Request
@@ -260,14 +258,8 @@ API 경로 : /api/auth/login
   "message": "Login successful",
   "data": {
     "accessToken": "eyJhbGciOiJIUzI1Ni...",
-    "tokenType": "Bearer",
     "expiresIn": 3600,
-    "user": {
-        "userId": 1,
-        "email": "user@example.com",
-        "name": "John Doe",
-        "profileImage": "https://..."
-    }
+    "refreshToken": "eyJhbGciOiJIUzI1Ni..."
   }
 }
 ```
@@ -313,10 +305,11 @@ API 경로 : /api/auth/me
 {
   "code": "SUCCESS",
   "data": {
-    "userId": 1,
+    "id": 1,
     "email": "user@example.com",
     "name": "John Doe",
-    "profileImage": "https://s3.aws.com/..."
+    "profileImageUrl": "https://s3.aws.com/...",
+    "role": "USER"
   }
 }
 ```
@@ -1480,7 +1473,7 @@ API /api/projects/{id}/scenario/scenes/{scenarioSceneId}
 ```
 ※ sceneId 매핑 변경은 전체 저장 API에서 처리합니다.
 
-# AI 시나리오 생성
+# AI 시나리오 생성 (Legacy, W3 제외)
 ```
 API /api/ai/scenario
 메서드 POST
@@ -1488,6 +1481,7 @@ API /api/ai/scenario
 상태 완료
 설명 입력된 키워드와 장르를 바탕으로 시나리오, 줄거리, 씬 구성을 생성합니다.
 ```
+※ W3 범위에서는 사용하지 않습니다. W3는 `/api/projects/{projectId}/scenario/*` 엔드포인트를 사용합니다.
 ※ 프로젝트에 저장/재조회가 필요하면 2.6.1 프로젝트 시나리오 API를 사용합니다.
 
 #### 2. Request
@@ -1550,7 +1544,8 @@ API /api/ai/prompts/generate
   "sceneOneLine": "화성 기지의 식당",
   "style": "CINEMATIC",
   "timeOfDay": "MORNING",
-  "mood": "PEACEFUL"
+  "mood": "PEACEFUL",
+  "objects": ["우주복", "테이블"]
 }
 ```
 
@@ -1562,15 +1557,14 @@ API /api/ai/prompts/generate
 | style | String | 필수 | 아트 스타일 (CINEMATIC, ANIME, PIXAR 등) |
 | timeOfDay | String | 필수 | 시간대 (MORNING, DAY, EVENING, NIGHT) |
 | mood | String | 필수 | 분위기 (PEACEFUL, LONELY, TENSE 등) |
-| objectIds | List<Long> | 선택 | 등장 오브젝트 ID 목록 (레퍼런스 연결) |
+| objects | List<String> | 선택 | 등장 오브젝트 텍스트 목록 |
 
 #### 3. Response
 ```json
 {
   "code": "SUCCESS",
   "data": {
-    "prompt": "Cinematic wide shot of a futuristic Mars base cafeteria...",
-    "negativePrompt": "blurry, low quality"
+    "prompt": "Cinematic wide shot of a futuristic Mars base cafeteria..."
   }
 }
 ```
@@ -1592,8 +1586,7 @@ API /api/ai/prompts/improve
 {
   "nodeType": "MASTER",
   "prompt": "existing prompt...",
-  "instruction": "Make it more cinematic and darker",
-  "context": "Sci-Fi Horror movie"
+  "instruction": "Make it more cinematic and darker"
 }
 ```
 
@@ -1603,7 +1596,6 @@ API /api/ai/prompts/improve
 | nodeType | String | 필수 | 노드 타입 |
 | prompt | String | 필수 | 기존 프롬프트 |
 | instruction | String | 선택 | 개선 요청 사항 (미입력 시 기본 지침 적용) |
-| context | String | 선택 | 컨텍스트/배경 정보 |
 
 ---
 
@@ -1651,11 +1643,11 @@ API /api/ai/jobs/{jobId}
 | createdAt | String | 선택 | 생성 시각 |
 | finishedAt | String | 선택 | 완료 시각 |
 
-> `target`은 요청 기준 대상입니다. (예: 노드 생성은 NODE, 씬 병합은 SCENE)
+> `target`은 요청 기준 대상입니다. (예: 노드 생성은 NODE, 프로젝트 병합은 PROJECT)
 
 ---
 
-# AI 작업 재큐잉
+# AI 작업 재큐잉 (W4~W5)
 ```
 API /api/ai/jobs/{jobId}/requeue
 메서드 POST
@@ -1682,12 +1674,11 @@ API /api/ai/jobs/{jobId}/requeue
 }
 ```
 
-> 노드 생성 실패 재시도는 일반적으로 `/api/nodes/{id}/regenerate`를 사용합니다.  
-> `requeue`는 동일 jobId 재실행이 필요한 경우에 사용합니다.
+> W3 범위에서는 `requeue`/`regenerate`를 사용하지 않습니다. (W4~W5 확장)
 
 ---
 
-### 2.7 타임라인 & 편집 API (Timeline)
+### 2.7 타임라인 & 병합 API (W3)
 정의:
 - `videoNodeId`: 씬 내 확정된 VIDEO 노드 ID (씬 타임라인)
 - `sceneVideoId`: 씬 병합 결과로 생성된 씬 영상 ID (프로젝트 타임라인)
@@ -2029,12 +2020,12 @@ API /api/files/complete
 
 ---
 
-### 2.9 WebRTC 시그널링 (WebSocket)
+### 2.9 WebRTC 시그널링 (Raw WS, W5)
 
 # WebRTC 시그널링
 ```
-WS /ws/room/{roomId}?token=<JWT>
-설명 화상통화 및 화면공유를 위한 P2P 연결 시그널링을 처리합니다.
+WS /ws/room/{roomId}
+설명 화상통화 및 화면공유를 위한 P2P 연결 시그널링을 처리합니다. (W5 범위)
 (보안: 연결 시 `Authorization` 헤더 또는 연결 직후 인증 메시지 전송 권장)
 ```
 ※ 인증 방식: 쿼리 파라미터 `token` 또는 `Authorization` 헤더 중 하나를 지원합니다.
@@ -2050,49 +2041,42 @@ WS /ws/room/{roomId}?token=<JWT>
 
 ---
 
-### 2.10 프로젝트 이벤트 (WebSocket)
+### 2.10 프로젝트 이벤트 (STOMP, W3)
 
 # 프로젝트 알림
 ```
-WS /ws/projects/{projectId}?token=<JWT>
+STOMP /ws (SockJS)
+Subscribe /topic/projects/{projectId}
 설명 비동기 작업(AI 생성, 병합) 완료/실패 알림을 실시간으로 수신합니다.
-(보안: 연결 시 `Authorization` 헤더 또는 연결 직후 인증 메시지 전송 권장)
 ```
-※ 인증 방식: 쿼리 파라미터 `token` 또는 `Authorization` 헤더 중 하나를 지원합니다.
+※ 인증 방식: `Authorization: Bearer <JWT>` 헤더 사용
 ※ projectId 기준 프로젝트 멤버만 구독 가능합니다.
 
 #### 이벤트 예시
 ```json
 {
-  "type": "job.done",
+  "event": "job.done",
   "data": {
     "jobId": 123,
+    "type": "VIDEO_GENERATION",
+    "status": "SUCCEEDED",
     "target": { "type": "NODE", "id": 301 },
-    "resultUrl": "https://..."
+    "resultUrl": "/api/nodes/301/content"
   }
 }
 ```
 
 ```json
 {
-  "type": "job.done",
+  "event": "job.failed",
   "data": {
-    "jobId": 1001,
-    "target": { "type": "SCENE", "id": 201 },
-    "resultUrl": "https://..."
-  }
-}
-```
-
-```json
-{
-  "type": "job.failed",
-  "data": {
-    "jobId": 1001,
-    "target": { "type": "SCENE", "id": 201 },
+    "jobId": 2001,
+    "type": "PROJECT_MERGE",
+    "status": "FAILED",
+    "target": { "type": "PROJECT", "id": 101 },
     "error": {
       "code": "MERGE_FAILED",
-      "message": "Scene merge failed."
+      "message": "병합에 실패했습니다. 잠시 후 다시 시도해주세요."
     }
   }
 }

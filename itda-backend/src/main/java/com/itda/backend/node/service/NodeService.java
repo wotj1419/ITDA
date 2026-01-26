@@ -7,8 +7,9 @@ import com.itda.backend.global.response.ErrorCode;
 import com.itda.backend.job.domain.Job;
 import com.itda.backend.job.domain.JobType;
 import com.itda.backend.job.service.JobService;
+import com.itda.backend.media.MediaUrlResolver;
 import com.itda.backend.node.controller.dto.request.CreateNodeRequest;
-import com.itda.backend.node.controller.dto.request.GenerateNodeJobRequest;
+import com.itda.backend.node.controller.dto.request.GenerateNodeRequest;
 import com.itda.backend.node.controller.dto.request.NodePosition;
 import com.itda.backend.node.controller.dto.request.UpdateNodeRequest;
 import com.itda.backend.node.controller.dto.response.NodeCreateResponse;
@@ -31,6 +32,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 /**
  * Node 서비스
@@ -50,6 +52,7 @@ public class NodeService {
     private final ProjectMemberMapper projectMemberMapper;
     private final ObjectMapper objectMapper;
     private final JobService jobService;
+    private final MediaUrlResolver mediaUrlResolver;
 
     private record VideoShotIds(Long startShotNodeId, Long endShotNodeId) {}
 
@@ -90,7 +93,8 @@ public class NodeService {
 
         // 실제 노드들 변환
         for (Node node : nodes) {
-            responses.add(NodeSummaryResponse.from(node));
+            String contentUrl = mediaUrlResolver.nodeContentUrl(node);
+            responses.add(NodeSummaryResponse.from(node, contentUrl));
         }
 
         return new NodeTreeResponse(responses);
@@ -105,7 +109,8 @@ public class NodeService {
         Scene scene = getSceneAndEnsureMember(node.getSceneId(), userId);
 
         Map<String, Object> settings = deserializeSettings(node.getDataJson());
-        return NodeDetailResponse.from(node, settings);
+        String contentUrl = mediaUrlResolver.nodeContentUrl(node);
+        return NodeDetailResponse.from(node, settings, contentUrl);
     }
 
     /**
@@ -217,36 +222,43 @@ public class NodeService {
     }
 
     /**
-     * 노드 결과 생성 Job enqueue
+     * 노드 AI 생성 요청
      */
     @Transactional
-    public Job enqueueGenerateJob(Long userId, Long nodeId, GenerateNodeJobRequest request) {
+    public Job generateNode(Long userId, Long nodeId, GenerateNodeRequest request) {
         Node node = getNodeOrThrow(nodeId);
-        Scene scene = getSceneAndEnsureMember(node.getSceneId(), userId);
+        Scene scene = getSceneAndEnsureMemberForUpdate(node.getSceneId(), userId);
         assertNotSceneHeader(node.getNodeType());
 
-        String prompt = resolveGeneratePrompt(request, node);
-        if (prompt == null || prompt.isBlank()) {
-            throw new BusinessException(ErrorCode.INVALID_REQUEST, "Prompt is required");
-        }
+        UpdateNodeRequest updateRequest = new UpdateNodeRequest(request.prompt(), request.settings());
+        VideoShotIds shotIds = resolveUpdatedVideoShotIds(node, updateRequest);
 
-        JobType jobType = node.getNodeType() == NodeType.VIDEO
-                ? JobType.VIDEO_GENERATION
-                : JobType.IMAGE_GENERATION;
+        JobType jobType = resolveJobType(node.getNodeType());
+        String requestJson = buildGenerationRequestJson(updateRequest, node);
+        String idempotencyKey = request.force()
+                ? UUID.randomUUID().toString()
+                : request.idempotencyKey();
+        boolean requeueIfExisting = !request.force()
+                && Boolean.TRUE.equals(request.requeueIfExisting());
 
-        String requestJson = buildGenerateRequestJson(prompt, node, scene);
-        String idempotencyKey = request != null ? request.idempotencyKey() : null;
-        boolean requeueIfExisting = request != null && Boolean.TRUE.equals(request.requeueIfExisting());
-
-        return jobService.createAndEnqueue(
+        Job job = jobService.createAndEnqueue(
                 jobType,
                 scene.getProjectId(),
                 scene.getId(),
-                nodeId,
+                node.getId(),
                 requestJson,
                 idempotencyKey,
                 requeueIfExisting
         );
+
+        if (job.isInProgress()) {
+            NodeStatus targetStatus = job.isRunning()
+                    ? NodeStatus.RUNNING
+                    : NodeStatus.PENDING;
+            Node updatedNode = buildGenerationNode(nodeId, node, updateRequest, shotIds, targetStatus);
+            nodeMapper.updateNode(updatedNode);
+        }
+        return job;
     }
 
     // ========== Private Helper Methods ==========
@@ -447,37 +459,48 @@ public class NodeService {
                 .build();
     }
 
+    private Node buildGenerationNode(Long nodeId, Node node, UpdateNodeRequest request, VideoShotIds shotIds, NodeStatus status) {
+        return Node.builder()
+                .id(nodeId)
+                .prompt(resolvePrompt(request, node))
+                .dataJson(resolveDataJson(request, node))
+                .status(status)
+                .isActive(node.getIsActive())
+                .isConfirmed(node.getIsConfirmed())
+                .contentUrl(null)
+                .startShotNodeId(shotIds.startShotNodeId())
+                .endShotNodeId(shotIds.endShotNodeId())
+                .build();
+    }
+
     private String resolvePrompt(UpdateNodeRequest request, Node node) {
         return request.prompt() != null ? request.prompt() : node.getPrompt();
     }
 
     private String resolveDataJson(UpdateNodeRequest request, Node node) {
-        return request.settings() != null ? serializeSettings(request.settings()) : node.getDataJson();
+        if (request.settings() == null) {
+            return node.getDataJson();
+        }
+        Map<String, Object> settings = normalizeMasterObjectIds(node, request.settings());
+        return serializeSettings(settings);
     }
 
-    private String resolveGeneratePrompt(GenerateNodeJobRequest request, Node node) {
-        if (request != null && request.prompt() != null && !request.prompt().isBlank()) {
-            return request.prompt();
-        }
-        return node.getPrompt();
+    private JobType resolveJobType(NodeType nodeType) {
+        return nodeType == NodeType.VIDEO ? JobType.VIDEO_GENERATION : JobType.IMAGE_GENERATION;
     }
 
-    private String buildGenerateRequestJson(String prompt, Node node, Scene scene) {
-        Map<String, Object> payload = new LinkedHashMap<>();
-        payload.put("prompt", prompt);
-        payload.put("nodeId", node.getId());
-        payload.put("sceneId", node.getSceneId());
-        payload.put("projectId", scene.getProjectId());
-
-        Map<String, Object> settings = deserializeSettings(node.getDataJson());
-        if (settings != null && !settings.isEmpty()) {
-            payload.put("settings", settings);
-        }
-
+    private String buildGenerationRequestJson(UpdateNodeRequest request, Node node) {
         try {
+            String resolvedPrompt = resolvePrompt(request, node);
+            Map<String, Object> normalizedSettings = normalizeMasterObjectIds(node, request.settings());
+            Map<String, Object> resolvedSettings = normalizedSettings != null
+                    ? normalizedSettings
+                    : deserializeSettings(node.getDataJson());
+            Map<String, Object> payload = new java.util.LinkedHashMap<>();
+            payload.put("prompt", resolvedPrompt);
+            payload.put("settings", resolvedSettings);
             return objectMapper.writeValueAsString(payload);
         } catch (JsonProcessingException e) {
-            log.error("Failed to serialize generate request", e);
             throw new BusinessException(ErrorCode.INTERNAL_ERROR);
         }
     }
@@ -561,5 +584,17 @@ public class NodeService {
             }
         }
         return null;
+    }
+
+    private Map<String, Object> normalizeMasterObjectIds(Node node, Map<String, Object> settings) {
+        if (node.getNodeType() != NodeType.MASTER || settings == null) {
+            return settings;
+        }
+        if (!settings.containsKey("objectIds") || settings.get("objectIds") != null) {
+            return settings;
+        }
+        Map<String, Object> normalized = new java.util.LinkedHashMap<>(settings);
+        normalized.put("objectIds", List.of());
+        return normalized;
     }
 }

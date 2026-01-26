@@ -11,6 +11,7 @@ import com.itda.backend.scenario.controller.dto.response.ScenarioResponse;
 import com.itda.backend.scenario.controller.dto.response.ScenarioScenesResponse;
 import com.itda.backend.scenario.service.ScenarioService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
@@ -27,7 +28,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-@Tag(name = "Scenario", description = "시나리오 생성/수정 API")
+@Tag(name = "시나리오", description = "시나리오 생성/수정 API")
 @RestController
 @RequestMapping("/api")
 @RequiredArgsConstructor
@@ -61,7 +62,7 @@ public class ScenarioController {
     @GetMapping("/projects/{projectId}/scenario")
     public ResponseEntity<ApiResponse<ScenarioResponse>> getScenario(
             @AuthenticationPrincipal CustomUserDetails userDetails,
-            @PathVariable Long projectId) {
+            @Parameter(description = "프로젝트 ID") @PathVariable Long projectId) {
         ScenarioResponse response = scenarioService.getScenario(userDetails.getUserId(), projectId);
         return ApiResponse.success(response);
     }
@@ -100,7 +101,7 @@ public class ScenarioController {
     @PostMapping("/projects/{projectId}/scenario/prompt/generate")
     public ResponseEntity<ApiResponse<ScenarioPromptResponse>> generatePrompt(
             @AuthenticationPrincipal CustomUserDetails userDetails,
-            @PathVariable Long projectId,
+            @Parameter(description = "프로젝트 ID") @PathVariable Long projectId,
             @Valid @RequestBody GeneratePromptRequest request) {
         ScenarioPromptResponse response = scenarioService.generatePrompt(userDetails.getUserId(), projectId, request);
         return ApiResponse.success(response);
@@ -143,7 +144,7 @@ public class ScenarioController {
     @PutMapping("/projects/{projectId}/scenario/prompt")
     public ResponseEntity<ApiResponse<Void>> updatePrompt(
             @AuthenticationPrincipal CustomUserDetails userDetails,
-            @PathVariable Long projectId,
+            @Parameter(description = "프로젝트 ID") @PathVariable Long projectId,
             @Valid @RequestBody UpdatePromptRequest request) {
         scenarioService.updatePrompt(userDetails.getUserId(), projectId, request);
         return ApiResponse.success();
@@ -183,7 +184,7 @@ public class ScenarioController {
     @PostMapping("/projects/{projectId}/scenario/plot/generate")
     public ResponseEntity<ApiResponse<ScenarioPlotResponse>> generatePlot(
             @AuthenticationPrincipal CustomUserDetails userDetails,
-            @PathVariable Long projectId) {
+            @Parameter(description = "프로젝트 ID") @PathVariable Long projectId) {
         ScenarioPlotResponse response = scenarioService.generatePlot(userDetails.getUserId(), projectId);
         return ApiResponse.success(response);
     }
@@ -225,7 +226,7 @@ public class ScenarioController {
     @PutMapping("/projects/{projectId}/scenario/plot")
     public ResponseEntity<ApiResponse<Void>> updatePlot(
             @AuthenticationPrincipal CustomUserDetails userDetails,
-            @PathVariable Long projectId,
+            @Parameter(description = "프로젝트 ID") @PathVariable Long projectId,
             @Valid @RequestBody UpdatePlotRequest request) {
         scenarioService.updatePlot(userDetails.getUserId(), projectId, request);
         return ApiResponse.success();
@@ -265,7 +266,7 @@ public class ScenarioController {
     @PostMapping("/projects/{projectId}/scenario/scenes/generate")
     public ResponseEntity<ApiResponse<ScenarioScenesResponse>> generateScenes(
             @AuthenticationPrincipal CustomUserDetails userDetails,
-            @PathVariable Long projectId) {
+            @Parameter(description = "프로젝트 ID") @PathVariable Long projectId) {
         ScenarioScenesResponse response = scenarioService.generateScenes(userDetails.getUserId(), projectId);
         return ApiResponse.success(response);
     }

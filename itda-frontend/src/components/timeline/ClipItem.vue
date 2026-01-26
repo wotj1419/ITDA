@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { TimelineClip } from '../../types'
+import type { TimelineClip } from '../../types/ui'
 import { X } from 'lucide-vue-next'
 
 interface Props {

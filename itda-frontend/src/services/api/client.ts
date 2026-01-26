@@ -1,22 +1,22 @@
 import axios from 'axios';
+import { API_BASE_URL } from './constants';
+import { getAccessToken, clearAuthTokens } from './authTokens';
+import { redirectToAccessDenied, redirectToAuth } from './redirects';
 
 // Create a configured axios instance
-// In Vite, use import.meta.env for environment variables
-// VITE_API_BASE_URL should be defined in .env files
-const baseURL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api/v1';
 
 const apiClient = axios.create({
-    baseURL,
+    baseURL: API_BASE_URL,
     headers: {
         'Content-Type': 'application/json',
     },
-    timeout: 10000, // 10s timeout
+    timeout: 60000, // 60s timeout
 });
 
 // Request interceptor for API calls
 apiClient.interceptors.request.use(
     (config) => {
-        const token = localStorage.getItem('accessToken');
+        const token = getAccessToken();
         if (token) {
             config.headers = config.headers || {};
             config.headers.Authorization = `Bearer ${token}`;
@@ -36,11 +36,18 @@ apiClient.interceptors.response.use(
     async (error) => {
         const originalRequest = error.config;
 
+        const status = error.response?.status;
+
         // Handle 401 Unauthorized errors (token expired)
-        if (error.response?.status === 401 && !originalRequest._retry) {
-            // Logic for refreshing token could go here
-            // For now, simpler handling or logout redirect
-            // window.location.href = '/auth'; 
+        if (status === 401 && !originalRequest._retry) {
+            clearAuthTokens();
+            redirectToAuth();
+            return Promise.reject(error);
+        }
+
+        if (status === 403) {
+            redirectToAccessDenied();
+            return Promise.reject(error);
         }
 
         return Promise.reject(error);

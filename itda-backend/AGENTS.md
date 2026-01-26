@@ -46,5 +46,24 @@ Only proceed once requirements are clear.
 - Add or update unit/integration tests when behavior changes.
 - Prefer `@SpringBootTest` or slice tests consistent with existing tests.
 
+## Local Services (DB/Redis/S3)
+- Default compose file: `docker-compose.s3.yml` (repo root).
+- Default ports:
+  - MySQL `3307` → container `3306`
+  - Redis `6379`
+  - LocalStack S3 `4566`
+- Backend `local` profile expects MySQL on `localhost:3306`. If using compose defaults, override:
+  - `SPRING_DATASOURCE_URL=jdbc:mysql://localhost:3307/itda_local?...`
+  - `DB_USERNAME` / `DB_PASSWORD` as needed (see `itda-backend/env`).
+
+## Test Account (Local Seed)
+- Local schema seed inserts a test user (see `itda-backend/src/main/resources/sql/schema-local.sql`).
+- Email: `test@gmail.com`
+- Password: `qweqwe123`
+
+## Playwright/MCP UI Smoke Notes
+- The frontend targets `http://localhost:8080/api` by default. For UI exploration/screenshots, the backend must be running so that login/project creation and other core flows work.
+- AI integrations (e.g. prompt generation / scenario generation) may fail locally without GCP configuration/credentials, so when doing UI demos/reviews you should also validate **error/loading/empty states**.
+
 ## Documentation
 - Update `docs/` if endpoints or contracts change.

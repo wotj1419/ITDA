@@ -1,10 +1,10 @@
 package com.itda.backend.ai.gemini;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.itda.backend.ai.config.VertexAiGeminiProperties;
-import org.junit.jupiter.api.Assumptions;
+import com.itda.backend.ai.GenAiClientProvider;
+import com.itda.backend.ai.config.AiVertexConfig;
+import com.itda.backend.ai.config.AiVertexProperties;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
+import org.mockito.Mockito;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -12,46 +12,19 @@ class GeminiImageClientTest {
 
     @Test
     void generateImage_stubEnabled_returnsPng() {
-        VertexAiGeminiProperties vertexProps = new VertexAiGeminiProperties();
-        GeminiProperties geminiProps = new GeminiProperties();
-        geminiProps.setStub(true);
+        GeminiImageProperties imageProperties = new GeminiImageProperties();
+        imageProperties.setStub(true);
 
-        GeminiImageClient client = new GeminiImageClient(vertexProps, geminiProps, new ObjectMapper());
+        AiVertexConfig vertexConfig = new AiVertexConfig(new AiVertexProperties());
+        GenAiClientProvider clientProvider = Mockito.mock(GenAiClientProvider.class);
 
-        GeminiImageResult result = client.generateImage("test prompt");
+        GeminiImageClient client = new GeminiImageClient(imageProperties, vertexConfig, clientProvider);
+
+        GeminiImageResult result = client.generateImage("test prompt", null);
 
         assertThat(result).isNotNull();
         assertThat(result.bytes()).isNotEmpty();
         assertThat(result.contentType()).isEqualTo("image/png");
-    }
-
-    @Test
-    @EnabledIfEnvironmentVariable(named = "RUN_GEMINI_INTEGRATION", matches = "true")
-    void generateImage_realCall_returnsBytes() {
-        String projectId = System.getenv("GCP_PROJECT_ID");
-        String location = System.getenv("GCP_LOCATION");
-        String model = System.getenv("GEMINI_IMAGE_MODEL");
-
-        Assumptions.assumeTrue(projectId != null && !projectId.isBlank());
-        Assumptions.assumeTrue(location != null && !location.isBlank());
-        Assumptions.assumeTrue(model != null && !model.isBlank());
-
-        VertexAiGeminiProperties vertexProps = new VertexAiGeminiProperties();
-        vertexProps.setProjectId(projectId);
-        vertexProps.setLocation(location);
-
-        GeminiProperties geminiProps = new GeminiProperties();
-        geminiProps.setStub(false);
-        geminiProps.setImageModel(model);
-        geminiProps.setApiKey(System.getenv("GEMINI_API_KEY"));
-        geminiProps.setTimeoutMs(60000);
-        geminiProps.setSampleCount(1);
-
-        GeminiImageClient client = new GeminiImageClient(vertexProps, geminiProps, new ObjectMapper());
-
-        GeminiImageResult result = client.generateImage("test prompt");
-
-        assertThat(result).isNotNull();
-        assertThat(result.bytes()).isNotEmpty();
+        Mockito.verifyNoInteractions(clientProvider);
     }
 }

@@ -103,6 +103,10 @@ public class Job {
         return this.status == JobStatus.PENDING;
     }
 
+    public boolean isInProgress() {
+        return isPending() || isRunning();
+    }
+
     /**
      * 재시도 가능 여부 확인
      * @param maxRetryCount 최대 재시도 횟수

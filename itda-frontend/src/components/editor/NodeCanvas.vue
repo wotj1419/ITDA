@@ -3,7 +3,7 @@
  * NodeCanvas - 메인 캔버스 컨테이너
  * 노드들을 세로로 배치하고 연결선을 표시
  */
-import type { Node } from '../../types';
+import type { Node } from '../../types/api/nodes';
 import NodeConnections from './NodeConnections.vue';
 import MasterNode from './nodes/MasterNode.vue';
 import GridNode from './nodes/GridNode.vue';

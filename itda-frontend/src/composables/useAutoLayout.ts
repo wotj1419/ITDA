@@ -6,7 +6,7 @@
  */
 import dagre from 'dagre';
 import type { Node, Edge } from '@vue-flow/core';
-import { NODE_WIDTHS, NODE_HEIGHTS, NodeType } from '../types/node';
+import { NODE_WIDTHS, NODE_HEIGHTS, NodeType } from '../types/ui/sceneNodes';
 
 export interface LayoutOptions {
     direction: 'TB' | 'LR';

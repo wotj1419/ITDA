@@ -364,6 +364,12 @@
     object-fit: cover;
 }
 
+.node-glass__thumbnail-video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
 .node-glass__thumbnail-placeholder {
     font-size: 0.6875rem;
     color: var(--gray-400, #9CA3AF);

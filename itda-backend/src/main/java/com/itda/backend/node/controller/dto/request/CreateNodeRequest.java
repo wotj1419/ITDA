@@ -16,7 +16,11 @@ public record CreateNodeRequest(
         @NotNull(message = "nodeType is required")
         NodeType nodeType,
 
-        @Schema(description = "Parent node ID (null for root nodes)", example = "301")
+        @Schema(
+                description = "Parent node ID (MASTER는 null, GRID는 MASTER id, SHOT은 GRID id, VIDEO는 SHOT id)",
+                example = "null",
+                nullable = true
+        )
         Long parentNodeId,
 
         @Schema(description = "AI prompt", example = "화성 기지에서의 아침 식사 풍경")

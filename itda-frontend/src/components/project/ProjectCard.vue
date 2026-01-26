@@ -2,7 +2,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { RouterLink } from 'vue-router'
 import { Star, MoreVertical, Trash2, Pencil, Share2 } from 'lucide-vue-next'
-import type { Project } from '../../types'
+import type { Project } from '../../types/api/projects'
 import Badge from '../common/Badge.vue'
 import AvatarGroup from '../common/AvatarGroup.vue'
 import TimeAgo from '../common/TimeAgo.vue'

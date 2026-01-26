@@ -9,6 +9,7 @@ import type {
     ApiResponse,
     GeneratePromptRequest,
     GeneratePromptResponse,
+    GenerateNodeRequest,
     GenerateJobResponse,
     JobStatusResponse,
 } from '../../types/api';
@@ -24,14 +25,56 @@ import type {
 export async function generatePrompt(
     request: GeneratePromptRequest
 ): Promise<string> {
+    const payload = mapGeneratePromptPayload(request);
     const response = await apiClient.post<ApiResponse<GeneratePromptResponse>>(
         '/ai/prompts/generate',
-        request
+        payload
     );
     if (!response.data.data?.prompt) {
         throw new Error('Failed to generate prompt');
     }
     return response.data.data.prompt;
+}
+
+function mapGeneratePromptPayload(request: GeneratePromptRequest): {
+    nodeType: GeneratePromptRequest['nodeType'];
+    sceneOneLine?: string;
+    style?: string;
+    timeOfDay?: string;
+    mood?: string;
+    objects?: string[];
+} {
+    const objects =
+        request.objects && request.objects.length
+            ? request.objects
+            : request.objectIds && request.objectIds.length
+                ? request.objectIds
+                : undefined;
+
+    const derivedSceneOneLine = [
+        request.shotType ? `shotType: ${request.shotType}` : null,
+        request.expression ? `expression: ${request.expression}` : null,
+        request.additionalDetail ? `detail: ${request.additionalDetail}` : null,
+        request.layout ? `layout: ${request.layout}` : null,
+        request.shotTypes && request.shotTypes.length
+            ? `shotTypes: ${request.shotTypes.join(', ')}`
+            : null,
+        request.compositionHint ? `composition: ${request.compositionHint}` : null,
+        request.cameraMotion ? `cameraMotion: ${request.cameraMotion}` : null,
+        typeof request.duration === 'number' ? `duration: ${request.duration}` : null,
+        request.motionDescription ? `motion: ${request.motionDescription}` : null,
+    ]
+        .filter(Boolean)
+        .join(', ');
+
+    return {
+        nodeType: request.nodeType,
+        sceneOneLine: request.sceneOneLine || derivedSceneOneLine || undefined,
+        style: request.style,
+        timeOfDay: request.timeOfDay,
+        mood: request.mood,
+        objects,
+    };
 }
 
 /**
@@ -40,11 +83,12 @@ export async function generatePrompt(
  */
 export async function improvePrompt(
     currentPrompt: string,
-    userFeedback: string
+    userFeedback: string,
+    nodeType?: GeneratePromptRequest['nodeType']
 ): Promise<string> {
     const response = await apiClient.post<ApiResponse<GeneratePromptResponse>>(
         '/ai/prompts/improve',
-        { prompt: currentPrompt, feedback: userFeedback }
+        { nodeType, prompt: currentPrompt, instruction: userFeedback }
     );
     if (!response.data.data?.prompt) {
         throw new Error('Failed to improve prompt');
@@ -63,11 +107,12 @@ export async function improvePrompt(
  */
 export async function generateNode(
     nodeId: string | number,
-    prompt: string
+    prompt: string,
+    options?: { nodeType?: GenerateNodeRequest['nodeType']; settings?: Record<string, unknown> }
 ): Promise<number> {
     const response = await apiClient.post<ApiResponse<GenerateJobResponse>>(
         `/nodes/${nodeId}/generate`,
-        { prompt }
+        { prompt, nodeType: options?.nodeType, settings: options?.settings }
     );
     if (!response.data.data?.jobId) {
         throw new Error('Failed to start generation job');

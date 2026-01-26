@@ -1,118 +1,32 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import type { TimelineClip } from '../types'
-import type { AnyNodeData, VideoNodeData } from '../types/node'
-import { NodeType } from '../types/node'
-import { timelineService } from '../services'
+import type { TimelineClip } from '../types/ui'
+import {
+    fetchProjectTimeline,
+    requestProjectMerge,
+    fetchProjectExport,
+    type TimelineItem,
+} from '../services/api/timeline'
+import { unconfirmNode } from '../services/api/nodes'
+import {
+    subscribeProjectEvents,
+    type ProjectEventMessage,
+    type ProjectEventPayload,
+} from '../services/ws/projectEvents'
 
 export type MergeStatus = 'idle' | 'merging' | 'done' | 'error'
 
-type StoredSceneNode = {
-    id: string
-    data?: AnyNodeData
-}
-
-type StoredSceneData = {
-    nodes: StoredSceneNode[]
-    edges?: unknown[]
-    updatedAt?: string
-}
-
-function getStorageKey(sceneId: number | string): string {
-    return `scene-nodes-${sceneId}`
-}
-
-function readSceneData(sceneId: number | string): StoredSceneData | null {
-    const saved = localStorage.getItem(getStorageKey(sceneId))
-    if (!saved) return null
-    try {
-        const parsed = JSON.parse(saved)
-        if (Array.isArray(parsed.nodes)) {
-            return parsed as StoredSceneData
-        }
-    } catch (e) {
-        console.error('Failed to parse scene nodes:', e)
-    }
-    return null
-}
-
-function writeSceneData(sceneId: number | string, data: StoredSceneData): void {
-    localStorage.setItem(
-        getStorageKey(sceneId),
-        JSON.stringify({ ...data, updatedAt: new Date().toISOString() })
-    )
-}
-
-function buildClipsFromScene(sceneId: number | string): TimelineClip[] {
-    const data = readSceneData(sceneId)
-    if (!data) return []
-
-    const confirmed = data.nodes
-        .filter(
-            (node) =>
-                node.data?.type === NodeType.VIDEO &&
-                (node.data as VideoNodeData).isConfirmed
-        )
-        .sort((a, b) => {
-            const orderA = (a.data as VideoNodeData).timelineOrder ?? Number.MAX_SAFE_INTEGER
-            const orderB = (b.data as VideoNodeData).timelineOrder ?? Number.MAX_SAFE_INTEGER
-            if (orderA !== orderB) return orderA - orderB
-            const createdA = a.data?.createdAt ?? ''
-            const createdB = b.data?.createdAt ?? ''
-            return createdA.localeCompare(createdB)
-        })
-
-    return confirmed.map((node, index) => {
-        const videoData = node.data as VideoNodeData
-        return {
-            clipId: node.id,
-            nodeId: node.id,
-            sceneId: Number(sceneId) || undefined,
-            sourceNodeId: node.id,
-            thumbnailUrl: videoData.thumbnailUrl || '',
-            videoUrl: videoData.videoUrl || undefined,
-            duration: videoData.duration || 5,
-            order: index + 1,
-            label: `영상 ${videoData.version || 1}`,
-        }
-    })
-}
-
-function updateSceneTimelineOrder(
-    sceneId: number | string,
-    clipIds: string[]
-): TimelineClip[] {
-    const data = readSceneData(sceneId)
-    if (!data) return []
-
-    const orderMap = new Map(clipIds.map((id, index) => [id, index + 1]))
-    data.nodes.forEach((node) => {
-        if (node.data?.type !== NodeType.VIDEO) return
-        const videoData = node.data as VideoNodeData
-        if (!videoData.isConfirmed) return
-        const nextOrder = orderMap.get(node.id)
-        videoData.timelineOrder = nextOrder
-        videoData.updatedAt = new Date().toISOString()
-    })
-
-    writeSceneData(sceneId, data)
-    return buildClipsFromScene(sceneId)
-}
-
-function unconfirmSceneClip(sceneId: number | string, clipId: string): boolean {
-    const data = readSceneData(sceneId)
-    if (!data) return false
-
-    const target = data.nodes.find((node) => node.id === clipId)
-    if (!target?.data || target.data.type !== NodeType.VIDEO) return false
-
-    const videoData = target.data as VideoNodeData
-    videoData.isConfirmed = false
-    videoData.timelineOrder = undefined
-    videoData.updatedAt = new Date().toISOString()
-
-    writeSceneData(sceneId, data)
-    return true
+function mapTimelineItemsToClips(items: TimelineItem[]): TimelineClip[] {
+    return items.map((item) => ({
+        clipId: `node-${item.videoNodeId}`,
+        nodeId: item.videoNodeId,
+        sceneId: item.sceneId,
+        thumbnailUrl: item.url || '',
+        videoUrl: item.url || undefined,
+        duration: 5,
+        order: item.order,
+        label: `영상 ${item.order}`,
+    }))
 }
 
 export const useTimelineStore = defineStore('timeline', () => {
@@ -128,6 +42,9 @@ export const useTimelineStore = defineStore('timeline', () => {
     const mergeProgress = ref(0)
     const mergeStatusText = ref('')
     const downloadUrl = ref<string | null>(null)
+    const mergeJobId = ref<number | null>(null)
+
+    let unsubscribeProjectEvents: (() => void) | null = null
 
     // Getters
     const orderedClips = computed(() =>
@@ -145,8 +62,44 @@ export const useTimelineStore = defineStore('timeline', () => {
     )
 
     const canDownload = computed(() =>
-        mergeStatus.value === 'done' && downloadUrl.value
+        mergeStatus.value === 'done' && !!downloadUrl.value
     )
+
+    // Internal
+    const handleProjectEvent = async (event: ProjectEventMessage) => {
+        const eventType = event.event
+        const payload = event.data as ProjectEventPayload
+
+        if (!payload?.type) return
+
+        if (payload.type === 'PROJECT_MERGE') {
+            const targetId = payload.target?.id
+            if (currentProjectId.value && targetId && targetId !== currentProjectId.value) return
+
+            if (eventType === 'job.failed' || payload.status === 'FAILED') {
+                mergeStatus.value = 'error'
+                mergeStatusText.value = '병합 실패'
+                return
+            }
+
+            if (eventType === 'job.done' || payload.status === 'SUCCEEDED') {
+                mergeStatus.value = 'done'
+                mergeProgress.value = 100
+                mergeStatusText.value = '병합 완료'
+                if (currentProjectId.value) {
+                    downloadUrl.value = await fetchProjectExport(currentProjectId.value)
+                }
+            }
+        }
+    }
+
+    const ensureProjectSubscription = (projectId: number) => {
+        if (unsubscribeProjectEvents) {
+            unsubscribeProjectEvents()
+            unsubscribeProjectEvents = null
+        }
+        unsubscribeProjectEvents = subscribeProjectEvents(projectId, handleProjectEvent)
+    }
 
     // Actions
     async function loadClips(projectId: number, sceneId?: number): Promise<void> {
@@ -156,11 +109,13 @@ export const useTimelineStore = defineStore('timeline', () => {
         currentSceneId.value = sceneId ?? null
 
         try {
+            ensureProjectSubscription(projectId)
+            const response = await fetchProjectTimeline(projectId)
+            let nextClips = mapTimelineItemsToClips(response.items)
             if (sceneId) {
-                clips.value = buildClipsFromScene(sceneId)
-                return
+                nextClips = nextClips.filter((clip) => clip.sceneId === sceneId)
             }
-            clips.value = await timelineService.fetchTimelineClips(projectId)
+            clips.value = nextClips
         } catch (e) {
             error.value = 'Failed to load clips'
             console.error(e)
@@ -171,14 +126,12 @@ export const useTimelineStore = defineStore('timeline', () => {
 
     async function reorderClips(clipIds: string[]): Promise<boolean> {
         if (!currentProjectId.value) return false
-
         try {
-            if (currentSceneId.value) {
-                clips.value = updateSceneTimelineOrder(currentSceneId.value, clipIds)
-                return true
-            }
-            const reordered = await timelineService.reorderClips(currentProjectId.value, clipIds)
-            clips.value = reordered
+            const orderMap = new Map(clipIds.map((id, index) => [id, index + 1]))
+            clips.value = clips.value.map((clip) => ({
+                ...clip,
+                order: orderMap.get(clip.clipId) ?? clip.order,
+            }))
             return true
         } catch (e) {
             console.error(e)
@@ -190,20 +143,13 @@ export const useTimelineStore = defineStore('timeline', () => {
         if (!currentProjectId.value) return false
 
         try {
-            if (currentSceneId.value) {
-                const success = unconfirmSceneClip(currentSceneId.value, clipId)
-                if (success) {
-                    clips.value = clips.value.filter((c) => c.clipId !== clipId)
-                    clips.value.forEach((c, i) => (c.order = i + 1))
-                }
-                return success
+            const target = clips.value.find((c) => c.clipId === clipId)
+            if (target && typeof target.nodeId === 'number') {
+                await unconfirmNode(target.nodeId)
             }
-            const success = await timelineService.removeClip(currentProjectId.value, clipId)
-            if (success) {
-                clips.value = clips.value.filter((c) => c.clipId !== clipId)
-                clips.value.forEach((c, i) => (c.order = i + 1))
-            }
-            return success
+            clips.value = clips.value.filter((c) => c.clipId !== clipId)
+            clips.value.forEach((c, i) => (c.order = i + 1))
+            return true
         } catch (e) {
             console.error(e)
             return false
@@ -215,26 +161,14 @@ export const useTimelineStore = defineStore('timeline', () => {
 
         mergeStatus.value = 'merging'
         mergeProgress.value = 0
-        mergeStatusText.value = ''
+        mergeStatusText.value = '병합 시작'
         downloadUrl.value = null
 
         try {
-            const result = await timelineService.mergeVideos(
-                currentProjectId.value,
-                (percent: number, status: string) => {
-                    mergeProgress.value = percent
-                    mergeStatusText.value = status
-                }
-            )
-
-            if (result.success) {
-                mergeStatus.value = 'done'
-                downloadUrl.value = result.downloadUrl || null
-                return true
-            } else {
-                mergeStatus.value = 'error'
-                return false
-            }
+            const result = await requestProjectMerge(currentProjectId.value)
+            mergeJobId.value = result.jobId
+            mergeStatusText.value = '병합 진행 중'
+            return true
         } catch (e) {
             mergeStatus.value = 'error'
             console.error(e)
@@ -247,6 +181,7 @@ export const useTimelineStore = defineStore('timeline', () => {
         mergeProgress.value = 0
         mergeStatusText.value = ''
         downloadUrl.value = null
+        mergeJobId.value = null
     }
 
     function clearTimeline(): void {
@@ -255,6 +190,10 @@ export const useTimelineStore = defineStore('timeline', () => {
         currentSceneId.value = null
         error.value = null
         resetMerge()
+        if (unsubscribeProjectEvents) {
+            unsubscribeProjectEvents()
+            unsubscribeProjectEvents = null
+        }
     }
 
     return {

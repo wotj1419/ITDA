@@ -1,4 +1,4 @@
-# API Minimum Contract (MVP)
+# API Minimum Contract (W3 MVP)
 
 > 목적: FE가 mock 없이 바로 붙을 수 있는 **최소 계약**만 고정합니다.  
 > 기준 문서: `docs/APIdocs.md`, `docs/ai-movie-studio-md-pack-v3/ai-movie-studio-md-pack/06-api-and-events.md`
@@ -37,7 +37,7 @@ Response
 ```json
 {
   "code": "SUCCESS",
-  "data": { "userId": 1, "accessToken": "jwt", "refreshToken": "jwt" }
+  "data": { "id": 1, "email": "String", "name": "String", "profileImageUrl": null, "role": "USER" }
 }
 ```
 
@@ -53,23 +53,18 @@ Response
 ```json
 {
   "code": "SUCCESS",
-  "data": { "userId": 1, "accessToken": "jwt", "refreshToken": "jwt" }
+  "data": { "accessToken": "jwt", "refreshToken": "jwt", "expiresIn": 3600 }
 }
 ```
 
-### 토큰 갱신
-`POST /api/auth/refresh`
-
-Request
-```json
-{ "refreshToken": "jwt" }
-```
+### 내 정보 조회
+`GET /api/auth/me`
 
 Response
 ```json
 {
   "code": "SUCCESS",
-  "data": { "accessToken": "jwt", "refreshToken": "jwt" }
+  "data": { "id": 1, "email": "String", "name": "String", "profileImageUrl": null, "role": "USER" }
 }
 ```
 
@@ -116,7 +111,7 @@ Response (최소)
 ```json
 {
   "code": "SUCCESS",
-  "data": { "projectId": 101, "title": "String", "description": "String?" }
+  "data": { "projectId": 101, "title": "String", "description": "String?", "genre": "String?", "myRole": "OWNER" }
 }
 ```
 
@@ -129,7 +124,7 @@ Response (최소)
 
 Request
 ```json
-{ "title": "String", "description": "String?" }
+{ "title": "String", "description": "String?", "sceneOrder": 1 }
 ```
 
 Response
@@ -145,7 +140,7 @@ Response
 {
   "code": "SUCCESS",
   "data": [
-    { "sceneId": 201, "title": "String", "order": 1, "status": "COMPLETED?" }
+    { "sceneId": 201, "title": "String", "order": 1, "status": null }
   ]
 }
 ```
@@ -165,7 +160,36 @@ Response
 
 ---
 
-## 4) Nodes
+## 4) Scenario
+
+### 조회
+`GET /api/projects/{projectId}/scenario`
+
+### 프롬프트 생성
+`POST /api/projects/{projectId}/scenario/prompt/generate`
+
+Request
+```json
+{
+  "genre": "String",
+  "mood": "String",
+  "sceneCount": 5,
+  "keywords": ["String"],
+  "characterHints": "String?",
+  "backgroundHints": "String?",
+  "referenceStyle": "String?"
+}
+```
+
+### 플롯 생성
+`POST /api/projects/{projectId}/scenario/plot/generate`
+
+### 씬 생성
+`POST /api/projects/{projectId}/scenario/scenes/generate`
+
+---
+
+## 5) Nodes
 
 ### 생성
 `POST /api/scenes/{sceneId}/nodes`
@@ -173,7 +197,7 @@ Response
 Request (최소)
 ```json
 {
-  "type": "MASTER | GRID | SHOT | VIDEO",
+  "nodeType": "MASTER | GRID | SHOT | VIDEO",
   "parentNodeId": 123,
   "prompt": "String?",
   "settings": {}
@@ -194,7 +218,7 @@ Response (최소)
   "code": "SUCCESS",
   "data": {
     "nodes": [
-      { "nodeId": 301, "type": "MASTER", "status": "SUCCEEDED?", "contentUrl": "https://..." }
+      { "nodeId": 301, "type": "MASTER", "parentNodeId": null, "status": "SUCCEEDED?", "contentUrl": "https://..." }
     ]
   }
 }
@@ -213,6 +237,10 @@ Response
 { "code": "SUCCESS" }
 ```
 
+### 확정/확정 취소
+`POST /api/nodes/{nodeId}/confirm`  
+`DELETE /api/nodes/{nodeId}/confirm`
+
 ### 생성 작업 요청 (AI Job 생성)
 `POST /api/nodes/{nodeId}/generate`
 
@@ -223,7 +251,37 @@ Response (202)
 
 ---
 
-## 5) AI Jobs
+## 6) AI Prompt (W3 유지)
+
+### 프롬프트 생성
+`POST /api/ai/prompts/generate`
+
+Request
+```json
+{ "nodeType": "MASTER|GRID|SHOT|VIDEO", "sceneOneLine": "String", "style": "String", "timeOfDay": "String", "mood": "String", "objects": ["String"] }
+```
+
+Response
+```json
+{ "code": "SUCCESS", "data": { "prompt": "String" } }
+```
+
+### 프롬프트 개선
+`POST /api/ai/prompts/improve`
+
+Request
+```json
+{ "nodeType": "MASTER|GRID|SHOT|VIDEO", "prompt": "String", "instruction": "String?" }
+```
+
+Response
+```json
+{ "code": "SUCCESS", "data": { "prompt": "String" } }
+```
+
+---
+
+## 7) AI Jobs
 
 ### 상태 조회 (폴링 fallback)
 `GET /api/ai/jobs/{jobId}`
@@ -234,7 +292,7 @@ Response (최소)
   "code": "SUCCESS",
   "data": {
     "jobId": 123,
-    "type": "IMAGE_GENERATION | VIDEO_GENERATION | SCENE_MERGE | PROJECT_MERGE",
+    "type": "IMAGE_GENERATION | VIDEO_GENERATION | PROJECT_MERGE",
     "status": "PENDING | RUNNING | SUCCEEDED | FAILED",
     "resultUrl": "https://...",
     "error": { "code": "ERROR_CODE", "message": "String" }
@@ -242,20 +300,30 @@ Response (최소)
 }
 ```
 
-> 작업 생성 API는 `/api/nodes/{nodeId}/generate`, `/api/scenes/{sceneId}/merge`,
-> `/api/projects/{projectId}/merge` 에서 `202 + jobId` 형태로 반환합니다.
+> 작업 생성 API는 `/api/nodes/{nodeId}/generate`, `/api/projects/{projectId}/merge` 에서 `202 + jobId` 형태로 반환합니다.
 
 ---
 
-## 6) Merge
+## 8) Timeline
 
-### 씬 병합 요청
-`POST /api/scenes/{sceneId}/merge`
+### 프로젝트 타임라인
+`GET /api/projects/{projectId}/timeline`
 
-Response (202)
+Response (최소)
 ```json
-{ "code": "ACCEPTED", "data": { "jobId": 1001, "status": "PENDING" } }
+{
+  "code": "SUCCESS",
+  "data": {
+    "items": [
+      { "videoNodeId": 301, "sceneId": 201, "order": 1, "url": "https://..." }
+    ]
+  }
+}
 ```
+
+---
+
+## 9) Merge
 
 ### 프로젝트 병합 요청
 `POST /api/projects/{projectId}/merge`
@@ -275,7 +343,7 @@ Response
 
 ---
 
-## 7) Files (S3 Presign)
+## 10) Files (W4~W5 범위)
 
 ### 업로드 URL 발급
 `POST /api/files/presign`

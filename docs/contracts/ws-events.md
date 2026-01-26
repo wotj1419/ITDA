@@ -5,11 +5,14 @@
 
 ---
 
-## 1) WS Endpoint / Channel 규칙
+## 1) WS Endpoint / Channel 규칙 (W3)
 
-- `WS /ws/projects/{projectId}?token=<JWT>`
+- **STOMP + SockJS**: `/ws`
+- Subscribe: `/topic/projects/{projectId}`
 - **채널 단위 = projectId**  
   프로젝트 멤버만 구독 가능
+
+> W5 확장: Raw WS `/ws/room/{roomId}`(협업/채팅) 및 `/ws/projects/{projectId}`(프로젝트 이벤트) 별도 구현
 
 ---
 
@@ -31,13 +34,13 @@
   "type": "job.done",
   "data": {
     "jobId": 123,
-    "target": { "type": "NODE | SCENE | PROJECT", "id": 301 },
+    "target": { "type": "NODE | PROJECT", "id": 301 },
     "resultUrl": "https://..."
   }
 }
 ```
 
-- `sceneId`는 **씬 병합**일 때만 포함 (필요 시 추가)
+- W3 범위에서는 `NODE` 또는 `PROJECT` 기준으로 전달됩니다.
 
 ---
 
@@ -48,7 +51,7 @@
   "type": "job.failed",
   "data": {
     "jobId": 123,
-    "target": { "type": "NODE | SCENE | PROJECT", "id": 301 },
+    "target": { "type": "NODE | PROJECT", "id": 301 },
     "error": { "code": "ERROR_CODE", "message": "String" }
   }
 }

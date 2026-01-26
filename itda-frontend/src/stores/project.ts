@@ -1,14 +1,20 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import type { Project, ProjectDetail, CreateProjectRequest } from '../types'
-import { projectService } from '../services'
+import type { Project, ProjectDetail, CreateProjectRequest } from '../types/api/projects'
+import {
+  fetchProjects,
+  fetchProjectById,
+  createProject,
+  deleteProject,
+  updateProject as updateProjectApi,
+} from '../services/api/projects'
+import { useAsyncAction } from './helpers/useAsyncAction'
 
 export const useProjectStore = defineStore('project', () => {
   // State
   const projects = ref<Project[]>([])
   const currentProject = ref<ProjectDetail | null>(null)
-  const isLoading = ref(false)
-  const error = ref<string | null>(null)
+  const { isLoading, error, run } = useAsyncAction()
   const favoriteIds = ref<Set<number>>(new Set([1, 2])) // Mock default favorites
 
   // Getters
@@ -38,148 +44,85 @@ export const useProjectStore = defineStore('project', () => {
   }
 
   async function loadProjects(): Promise<void> {
-    isLoading.value = true
-    error.value = null
-
-    try {
-      projects.value = await projectService.fetchProjects()
-    } catch (e) {
-      error.value = 'Failed to load projects'
-      console.error(e)
-    } finally {
-      isLoading.value = false
-    }
+    await run(async () => {
+      projects.value = await fetchProjects()
+    }, { errorMessage: 'Failed to load projects' })
   }
 
   async function loadProject(projectId: number): Promise<void> {
-    isLoading.value = true
-    error.value = null
-
-    try {
-      currentProject.value = await projectService.fetchProjectById(projectId)
-      if (!currentProject.value) {
-        error.value = 'Project not found'
-      }
-    } catch (e) {
-      error.value = 'Failed to load project'
-      console.error(e)
-    } finally {
-      isLoading.value = false
+    const result = await run(() => fetchProjectById(projectId), {
+      errorMessage: 'Failed to load project',
+    })
+    currentProject.value = result
+    if (!result && !error.value) {
+      error.value = 'Project not found'
     }
   }
 
   async function addProject(data: CreateProjectRequest): Promise<Project | null> {
-    isLoading.value = true
-    error.value = null
-
-    try {
-      const newProject = await projectService.createProject(data)
-      projects.value.unshift(newProject)
-      return newProject
-    } catch (e) {
-      error.value = 'Failed to create project'
-      console.error(e)
-      return null
-    } finally {
-      isLoading.value = false
+    const newProject = await run(() => createProject(data), {
+      errorMessage: 'Failed to create project',
+    })
+    if (newProject) {
+      projects.value.push(newProject)
     }
+    return newProject
   }
 
   async function moveToTrash(projectId: number): Promise<boolean> {
-    isLoading.value = true
-    error.value = null
-
-    try {
-      await projectService.deleteProject(projectId)
+    const result = await run(async () => {
+      await deleteProject(projectId)
       projects.value = projects.value.filter((p) => p.projectId !== projectId)
       if (currentProject.value?.projectId === projectId) {
         currentProject.value = null
       }
       return true
-    } catch (e) {
-      error.value = 'Failed to move project to trash'
-      console.error(e)
-      return false
-    } finally {
-      isLoading.value = false
-    }
+    }, { errorMessage: 'Failed to move project to trash' })
+    return Boolean(result)
   }
 
   async function updateProject(projectId: number, data: Partial<Project>): Promise<Project | null> {
-    isLoading.value = true
-    error.value = null
+    const existing =
+      currentProject.value?.projectId === projectId
+        ? currentProject.value
+        : projects.value.find((p) => p.projectId === projectId)
 
-    try {
-      const updatedProject = await projectService.updateProject(projectId, data)
-      if (updatedProject) {
-        // Update item in projects list
-        const index = projects.value.findIndex((p) => p.projectId === projectId)
-        if (index > -1) {
-          projects.value[index] = updatedProject
-        }
+    const payload = {
+      title: data.title ?? existing?.title ?? '',
+      description: data.description ?? existing?.description ?? '',
+      genre: data.genre ?? existing?.genre ?? '',
+    }
 
-        // Update currentProject if relevant
-        if (currentProject.value?.projectId === projectId) {
-          currentProject.value = {
-            ...currentProject.value,
-            ...updatedProject
-          }
+    const updatedProject = await run(() => updateProjectApi(projectId, payload), {
+      errorMessage: 'Failed to update project',
+    })
+    if (updatedProject) {
+      const index = projects.value.findIndex((p) => p.projectId === projectId)
+      if (index > -1) {
+        projects.value[index] = updatedProject
+      }
+
+      if (currentProject.value?.projectId === projectId) {
+        currentProject.value = {
+          ...currentProject.value,
+          ...updatedProject,
         }
       }
-      return updatedProject
-    } catch (e) {
-      error.value = 'Failed to update project'
-      console.error(e)
-      return null
-    } finally {
-      isLoading.value = false
     }
+    return updatedProject
   }
 
   async function getDeletedProjects(): Promise<Project[]> {
-    isLoading.value = true
-    error.value = null
-    try {
-      const { fetchDeletedProjects } = await import('../services/mock/projects')
-      return await fetchDeletedProjects()
-    } catch (e) {
-      console.error(e)
-      return []
-    } finally {
-      isLoading.value = false
-    }
+    const result = await run(async () => [], { errorMessage: 'Failed to load deleted projects' })
+    return result ?? []
   }
 
-  async function restoreProject(projectId: number): Promise<void> {
-    isLoading.value = true
-    error.value = null
-    try {
-      const { restoreProject: mockRestore } = await import('../services/mock/projects')
-      await mockRestore(projectId)
-      // Reload projects to reflect restoration if we are in main list, 
-      // but usually we just want to update local state if we had it.
-      // Since we filter in loadProjects, reloading is safest.
-      await loadProjects()
-    } catch (e) {
-      error.value = 'Failed to restore project'
-      console.error(e)
-    } finally {
-      isLoading.value = false
-    }
+  async function restoreProject(_projectId: number): Promise<void> {
+    await loadProjects()
   }
 
   async function permanentDeleteProject(projectId: number): Promise<void> {
-    isLoading.value = true
-    error.value = null
-    try {
-      const { hardDeleteProject } = await import('../services/mock/projects')
-      await hardDeleteProject(projectId)
-    } catch (e) {
-      error.value = 'Failed to permanently delete project'
-      console.error(e)
-    } finally {
-      isLoading.value = false
-    }
+    await run(() => deleteProject(projectId), { errorMessage: 'Failed to permanently delete project' })
   }
 
   function clearCurrentProject(): void {

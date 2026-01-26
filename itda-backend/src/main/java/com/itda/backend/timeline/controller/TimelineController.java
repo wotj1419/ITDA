@@ -37,7 +37,7 @@ public class TimelineController {
     }
 
     @Operation(summary = "Get project timeline", description = "List merged scene clips in a project.")
-    @GetMapping("/projects/{projectId}/timeline")
+    @GetMapping("/timeline/projects/{projectId}")
     public ResponseEntity<ApiResponse<ProjectTimelineResponse>> getProjectTimeline(
             @AuthenticationPrincipal CustomUserDetails userDetails,
             @PathVariable Long projectId) {

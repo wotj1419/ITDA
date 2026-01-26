@@ -4,7 +4,8 @@
  */
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
-import type { Node, NodeSettings, TimelineClip } from '../types';
+import type { Node, NodeSettings } from '../types/api/nodes';
+import type { TimelineClip } from '../types/ui';
 import {
     fetchNodesBySceneId as mockFetchNodes,
     updateNodeSettings as mockUpdateSettings,

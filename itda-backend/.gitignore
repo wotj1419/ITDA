@@ -2,6 +2,8 @@
 .gradle/
 build/
 !gradle/wrapper/gradle-wrapper.jar
+gradle/wrapper/gradle-cli.jar
+gradle/wrapper/gradle-files.jar
 
 # IDE
 .idea/

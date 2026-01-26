@@ -31,6 +31,8 @@ public enum ErrorCode {
     SCENARIO_NOT_FOUND(404, "시나리오를 찾을 수 없습니다"),
     NODE_NOT_FOUND(404, "노드를 찾을 수 없습니다"),
     JOB_NOT_FOUND(404, "작업을 찾을 수 없습니다"),
+    EXPORT_NOT_FOUND(404, "내보낼 파일을 찾을 수 없습니다"),
+    CONTENT_NOT_FOUND(404, "콘텐츠를 찾을 수 없습니다"),
 
     // ===== 409 Conflict =====
     JOB_ALREADY_RUNNING(409, "이미 실행 중인 작업입니다"),
