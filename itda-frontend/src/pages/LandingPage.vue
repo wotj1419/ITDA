@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { RouterLink } from 'vue-router'
 import {
-  ArrowRight,
-  PlayCircle,
-  Play,
+  // ArrowRight,
+  // PlayCircle,
+  // Play,
   Pencil,
   Palette,
   Film,
@@ -58,18 +58,145 @@ const workflowSteps = [
   { number: 4, title: '편집 & 완성', description: '타임라인 편집 및\n최종 병합' },
 ]
 
-function scrollToDemo() {
-  document.querySelector('.demo-video')?.scrollIntoView({ behavior: 'smooth' })
-}
+// function scrollToDemo() {
+//   document.querySelector('.demo-video')?.scrollIntoView({ behavior: 'smooth' })
+// }
+
+// GSAP Animation
+import { onMounted, onUnmounted, ref } from 'vue'
+import { gsap } from 'gsap'
+import { ScrollTrigger } from 'gsap/ScrollTrigger'
+
+gsap.registerPlugin(ScrollTrigger)
+
+const mainContainer = ref<HTMLElement | null>(null)
+const heroSection = ref<HTMLElement | null>(null)
+const heroTitle = ref<HTMLElement | null>(null)
+// const heroDesc = ref<HTMLElement | null>(null)
+const heroVideo = ref<HTMLElement | null>(null)
+const heroVideoElement = ref<HTMLVideoElement | null>(null)
+const featuresSection = ref<HTMLElement | null>(null)
+const workflowSection = ref<HTMLElement | null>(null)
+
+let ctx: gsap.Context
+
+onMounted(() => {
+  ctx = gsap.context(() => {
+    const navBarHeight =
+      document.querySelector('.landing-header')?.getBoundingClientRect().height ?? 64
+
+    // 1. Hero Section Animation (Pin logic & Scale)
+    const tlHero = gsap.timeline({
+      scrollTrigger: {
+        trigger: heroSection.value,
+        start: 'top top',
+        end: '+=150%',
+        scrub: 1,
+        pin: true,
+        onUpdate: (self) => {
+          const videoEl = heroVideoElement.value
+          const videoWrap = heroVideo.value
+          if (!videoEl || !videoWrap) return
+
+          const videoTop = videoWrap.getBoundingClientRect().top
+          const shouldPlay = videoTop <= navBarHeight + 1
+
+          if (shouldPlay) {
+            if (videoEl.paused && !videoEl.ended) {
+              void videoEl.play().catch(() => {})
+            }
+            return
+          }
+
+          if (!videoEl.paused) {
+            videoEl.pause()
+          }
+        },
+        onLeave: () => {
+          const videoEl = heroVideoElement.value
+          if (!videoEl || videoEl.paused) return
+          videoEl.pause()
+        },
+      },
+    })
+
+    // Init state for video
+    // Fix: Set explicit height instead of auto for smoother interpolation
+    gsap.set(heroVideo.value, { 
+      width: '20vw', 
+      height: '11.25vw', // 16:9 of 20vw
+      aspectRatio: '16/9',
+      borderRadius: '20px',
+      y: 50, 
+      opacity: 1,
+      maxWidth: '900px'
+    })
+
+    // Animation sequences
+    tlHero
+      .to(
+        [heroTitle.value, '.hero-badge'],
+        { y: -100, opacity: 0, duration: 1 }, 
+        0,
+      )
+      .to(
+        heroVideo.value,
+        {
+          width: '100vw',
+          height: '100vh',
+          maxWidth: '100vw',
+          aspectRatio: 'auto', // Reset aspect ratio
+          borderRadius: '0px',
+          scale: 1,
+          opacity: 1,
+          duration: 2.5,
+          y: 0,
+        },
+        '<',
+      )
+
+    // 2. Features Section (Stagger)
+    gsap.from('.feature-card', {
+      scrollTrigger: {
+        trigger: featuresSection.value,
+        start: 'top 80%',
+        toggleActions: 'play none none reverse',
+      },
+      y: 50,
+      opacity: 0,
+      duration: 0.8,
+      stagger: 0.1,
+      ease: 'power2.out',
+    })
+
+    // 3. Workflow Section (Stagger)
+    gsap.from('.workflow-step', {
+      scrollTrigger: {
+        trigger: workflowSection.value,
+        start: 'top 80%',
+        toggleActions: 'play none none reverse',
+      },
+      y: 30,
+      opacity: 0,
+      duration: 0.8,
+      stagger: 0.2,
+      ease: 'back.out(1.7)',
+    })
+  }, mainContainer.value as Element) // Scope
+})
+
+onUnmounted(() => {
+  ctx.revert() // Cleanup
+})
 </script>
 
 <template>
-  <div class="landing">
+  <div class="landing" ref="mainContainer">
     <!-- Header -->
     <header class="landing-header">
       <RouterLink to="/" class="landing-logo">
-        <div class="logo-icon"></div>
-        <span class="logo-text">AI Movie Studio</span>
+        <img src="/icon.png" alt="Logo" class="logo-icon" />
+        <span class="logo-text">잇다</span>
       </RouterLink>
       <nav class="landing-nav">
         <RouterLink to="/auth" class="nav-link">로그인</RouterLink>
@@ -78,42 +205,28 @@ function scrollToDemo() {
     </header>
 
     <!-- Hero Section -->
-    <section class="hero-section">
+    <section class="hero-section" ref="heroSection">
       <!-- Decorative Background -->
       <div class="hero-bg-blob hero-bg-blob-1"></div>
       <div class="hero-bg-blob hero-bg-blob-2"></div>
 
-      <div class="badge badge-rose hero-badge">🎬 v2.7 Rose - Now Available</div>
+      <div class="badge badge-rose hero-badge">C205</div>
 
-      <h1 class="hero-title">
-        Turn your ideas into<br />AI-generated films
+      <h1 class="hero-title" ref="heroTitle">
+        끊어지는 맥락은 잊다,<br />영상의 흐름을 <span class="outline">잇다</span>
       </h1>
 
-      <p class="hero-description">
-        From script to screen — create stunning short films with the power of AI.
-        No filming. No editing skills required.
-      </p>
-
-      <div class="cta-group">
-        <RouterLink to="/auth" class="btn btn-primary btn-lg">
-          무료로 시작하기
-          <ArrowRight class="w-5 h-5" />
-        </RouterLink>
-        <button class="btn btn-secondary btn-lg" @click="scrollToDemo">
-          <PlayCircle class="w-5 h-5" />
-          데모 보기
-        </button>
-      </div>
+      <!-- Description, CTA removed as requested -->
 
       <!-- Demo Video -->
-      <div class="demo-video">
-        <img
-          src="https://images.unsplash.com/photo-1626814026160-2237a95fc5a0?w=1200&auto=format"
-          alt="Demo"
-        />
-        <div class="demo-play-btn">
-          <Play class="w-8 h-8 play-icon" />
-        </div>
+      <div class="demo-video" ref="heroVideo">
+        <video 
+          class="hero-video-content"
+          src="/web.firstpage.video.mp4" 
+          muted 
+          playsinline
+          ref="heroVideoElement"
+        ></video>
       </div>
 
       <!-- Social Proof -->
@@ -126,7 +239,7 @@ function scrollToDemo() {
     </section>
 
     <!-- Features Section -->
-    <section class="features-section">
+    <section class="features-section" ref="featuresSection">
       <div class="section-header">
         <h2 class="h1">All-in-One AI Filmmaking</h2>
         <p class="text-muted section-subtitle">기획부터 완성까지, 하나의 플랫폼에서</p>
@@ -144,7 +257,7 @@ function scrollToDemo() {
     </section>
 
     <!-- Workflow Section -->
-    <section class="workflow-section">
+    <section class="workflow-section" ref="workflowSection">
       <h2 class="h1">Simple 4-Step Workflow</h2>
       <p class="text-muted section-subtitle">아이디어에서 영화까지, 단 4단계</p>
 
@@ -213,8 +326,7 @@ function scrollToDemo() {
 .logo-icon {
   width: 32px;
   height: 32px;
-  background: linear-gradient(135deg, var(--rose-400), var(--rose-500));
-  border-radius: 8px;
+  object-fit: contain;
 }
 
 .logo-text {
@@ -281,67 +393,49 @@ function scrollToDemo() {
 }
 
 .hero-title {
-  font-size: 3.5rem;
-  font-weight: 700;
+  font-size: 4rem;
+  font-weight: 800;
   line-height: 1.1;
-  margin-bottom: 1.5rem;
+  margin-bottom: 2.5rem;
   background: linear-gradient(135deg, var(--gray-900), var(--rose-500));
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
+  word-break: keep-all;
+}
+
+.hero-title .outline {
+  color: transparent;
+  -webkit-text-stroke: 2px var(--rose-500);
+  font-weight: 900;
 }
 
 .hero-description {
-  font-size: 1.25rem;
+  font-size: 1.5rem;
   color: var(--gray-500);
-  max-width: 600px;
-  margin-bottom: 2.5rem;
+  max-width: 800px;
+  margin-bottom: 4rem;
+  line-height: 1.6;
 }
 
 .cta-group {
   display: flex;
   gap: 1rem;
-  margin-bottom: 3rem;
+  margin-bottom: 5rem; /* Reduced from 15rem to close gap */
 }
 
 /* Demo Video */
 .demo-video {
   max-width: 900px;
   width: 100%;
-  aspect-ratio: 16/9;
-  background: var(--gray-900);
-  border-radius: var(--radius-2xl);
-  box-shadow: var(--shadow-xl);
-  overflow: hidden;
-  position: relative;
+  aspect-ratio: auto;
+  background: black; /* Video bg */
 }
 
-.demo-video img {
+.hero-video-content {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  opacity: 0.8;
-}
-
-.demo-play-btn {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  width: 80px;
-  height: 80px;
-  background: white;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: var(--shadow-lg);
-  cursor: pointer;
-  transition: all 0.3s;
-}
-
-.demo-play-btn:hover {
-  transform: translate(-50%, -50%) scale(1.1);
 }
 
 .play-icon {

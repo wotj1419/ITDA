@@ -42,21 +42,11 @@ const handleSearch = () => {
     <div class="header-left">
       <!-- Logo -->
       <RouterLink to="/dashboard" class="header-logo">
-        <div class="logo-icon"></div>
-        <span class="logo-text">AI Movie Studio</span>
+        <img src="/icon.png" alt="Logo" class="logo-icon" />
+        <span class="logo-text">잇다</span>
       </RouterLink>
 
       <div class="divider"></div>
-
-      <!-- Collaborator Avatars -->
-      <AvatarGroup
-        v-if="showCollaborators"
-        :avatars="collaborators"
-        :max="3"
-        size="sm"
-      />
-
-      <div v-if="showCollaborators && showShareButton" class="divider"></div>
 
       <button v-if="showShareButton" class="btn btn-ghost" @click="emit('share')">
         <Share2 class="icon-sm" />
@@ -65,6 +55,14 @@ const handleSearch = () => {
     </div>
 
     <div class="header-center">
+      <!-- Collaborator Avatars -->
+      <AvatarGroup
+        v-if="showCollaborators"
+        :avatars="collaborators"
+        :max="3"
+        size="sm"
+      />
+      <div v-if="showCollaborators" class="divider"></div>
       <div class="search-wrapper">
         <Search class="search-icon" />
         <input
@@ -111,19 +109,22 @@ const handleSearch = () => {
 .header-logo {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: 0.5rem;
   text-decoration: none;
   color: var(--gray-900);
   margin-right: 0.5rem;
 }
 
 .logo-icon {
+  margin-top: -2px;
   width: 24px;
   height: 24px;
-  background: linear-gradient(135deg, var(--rose-400), var(--rose-500));
   border-radius: 6px;
+  object-fit: contain; /* 투명 배경이면 contain 추천 */
+  background: transparent;
   flex-shrink: 0;
 }
+
 
 .logo-text {
   font-weight: 700;
@@ -137,6 +138,9 @@ const handleSearch = () => {
   margin: 0 auto;
   min-width: 0;
   transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
 }
 
 .divider {
@@ -148,7 +152,7 @@ const handleSearch = () => {
 /* Search */
 .search-wrapper {
   position: relative;
-  width: 100%;
+  width: 50%;
 }
 
 .search-icon {
@@ -207,7 +211,8 @@ const handleSearch = () => {
 @media (max-width: 768px) {
   /* Reuse mobile/tablet logic */
   .header-left .divider,
-  .header-left :deep(.avatar-group) {
+  .header-center .divider,
+  .header-center :deep(.avatar-group) {
     display: none;
   }
 }
