@@ -56,7 +56,7 @@ public class TimelineController {
     }
 
     @Operation(summary = "Request project merge", description = "Create a merge job for project timeline clips.")
-    @PostMapping("/projects/{projectId}/merge")
+    @PostMapping("/timeline/projects/{projectId}/merge")
     public ResponseEntity<ApiResponse<MergeResponse>> requestProjectMerge(
             @AuthenticationPrincipal CustomUserDetails userDetails,
             @PathVariable Long projectId,
