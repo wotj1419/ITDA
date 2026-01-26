@@ -11,10 +11,20 @@ import com.itda.backend.project.service.ProjectAccessService;
 import com.itda.backend.scene.domain.Scene;
 import com.itda.backend.scene.repository.SceneMapper;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.core.io.Resource;
+import org.springframework.core.io.InputStreamResource;
 import org.springframework.core.io.UrlResource;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
+import software.amazon.awssdk.core.ResponseInputStream;
+import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.GetObjectRequest;
+import software.amazon.awssdk.services.s3.model.GetObjectResponse;
+import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
+import software.amazon.awssdk.services.s3.model.HeadObjectResponse;
+import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
+import software.amazon.awssdk.services.s3.model.S3Exception;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -33,6 +43,8 @@ public class MediaFileService {
     private final SceneMapper sceneMapper;
     private final ProjectAccessService projectAccessService;
     private final FileStorageProperties fileStorageProperties;
+    private final ObjectProvider<S3Client> s3ClientProvider;
+    private final com.itda.backend.asset.config.S3StorageProperties s3Properties;
 
     public MediaFile loadNodeContent(Long userId, Long nodeId) {
         Node node = nodeMapper.findById(nodeId)
@@ -41,7 +53,18 @@ public class MediaFileService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.SCENE_NOT_FOUND));
         projectAccessService.ensureProjectAccessible(scene.getProjectId(), userId);
 
-        Path targetPath = resolveNodeContentPath(node);
+        String rawContentUrl = node.getContentUrl();
+        if (isAbsoluteUrl(rawContentUrl)) {
+            return toRemoteMediaFile(rawContentUrl);
+        }
+
+        String contentKey = resolveNodeContentKey(node);
+        MediaFile s3MediaFile = tryLoadFromS3(contentKey);
+        if (s3MediaFile != null) {
+            return s3MediaFile;
+        }
+
+        Path targetPath = resolveUnderUploadRoot(contentKey, ErrorCode.CONTENT_NOT_FOUND);
         return toMediaFile(targetPath);
     }
 
@@ -59,7 +82,7 @@ public class MediaFileService {
         return toMediaFile(targetPath);
     }
 
-    private Path resolveNodeContentPath(Node node) {
+    private String resolveNodeContentKey(Node node) {
         String contentKey = normalizeContentKey(node.getContentUrl());
         if (contentKey == null && node.getStatus() == NodeStatus.SUCCEEDED) {
             contentKey = defaultNodeContentKey(node);
@@ -67,8 +90,7 @@ public class MediaFileService {
         if (contentKey == null) {
             throw new BusinessException(ErrorCode.CONTENT_NOT_FOUND);
         }
-
-        return resolveUnderUploadRoot(contentKey, ErrorCode.CONTENT_NOT_FOUND);
+        return contentKey;
     }
 
     private Path resolveProjectExportPath(Long projectId) {
@@ -137,6 +159,49 @@ public class MediaFileService {
         }
     }
 
+    private MediaFile toRemoteMediaFile(String url) {
+        try {
+            Resource resource = new UrlResource(url);
+            return new MediaFile(resource, MediaType.APPLICATION_OCTET_STREAM, -1L, resolveFilename(url));
+        } catch (Exception e) {
+            throw new BusinessException(ErrorCode.INTERNAL_ERROR, e);
+        }
+    }
+
+    private MediaFile tryLoadFromS3(String contentKey) {
+        S3Client s3Client = s3ClientProvider.getIfAvailable();
+        if (s3Client == null || !hasText(s3Properties.getBucket())) {
+            return null;
+        }
+
+        String bucket = s3Properties.getBucket().trim();
+        try {
+            HeadObjectResponse head = s3Client.headObject(HeadObjectRequest.builder()
+                    .bucket(bucket)
+                    .key(contentKey)
+                    .build());
+
+            ResponseInputStream<GetObjectResponse> stream = s3Client.getObject(
+                    GetObjectRequest.builder()
+                            .bucket(bucket)
+                            .key(contentKey)
+                            .build()
+            );
+
+            MediaType mediaType = resolveMediaTypeFromContentType(head.contentType());
+            long contentLength = head.contentLength();
+            String filename = resolveFilename(contentKey);
+            return new MediaFile(new InputStreamResource(stream), mediaType, contentLength, filename);
+        } catch (NoSuchKeyException e) {
+            throw new BusinessException(ErrorCode.CONTENT_NOT_FOUND);
+        } catch (S3Exception e) {
+            if (e.statusCode() == 404) {
+                throw new BusinessException(ErrorCode.CONTENT_NOT_FOUND);
+            }
+            throw new BusinessException(ErrorCode.INTERNAL_ERROR, e);
+        }
+    }
+
     private MediaType resolveMediaType(Path path) {
         try {
             String contentType = Files.probeContentType(path);
@@ -147,5 +212,40 @@ public class MediaFileService {
         } catch (IOException e) {
             return MediaType.APPLICATION_OCTET_STREAM;
         }
+    }
+
+    private MediaType resolveMediaTypeFromContentType(String contentType) {
+        if (contentType == null || contentType.isBlank()) {
+            return MediaType.APPLICATION_OCTET_STREAM;
+        }
+        try {
+            return MediaType.parseMediaType(contentType);
+        } catch (Exception e) {
+            return MediaType.APPLICATION_OCTET_STREAM;
+        }
+    }
+
+    private boolean isAbsoluteUrl(String contentUrl) {
+        if (contentUrl == null) {
+            return false;
+        }
+        return contentUrl.startsWith("http://") || contentUrl.startsWith("https://");
+    }
+
+    private String resolveFilename(String pathOrUrl) {
+        if (pathOrUrl == null || pathOrUrl.isBlank()) {
+            return "content";
+        }
+        String normalized = pathOrUrl;
+        int queryIndex = normalized.indexOf('?');
+        if (queryIndex >= 0) {
+            normalized = normalized.substring(0, queryIndex);
+        }
+        int slash = normalized.lastIndexOf('/');
+        return slash >= 0 ? normalized.substring(slash + 1) : normalized;
+    }
+
+    private boolean hasText(String value) {
+        return value != null && !value.trim().isEmpty();
     }
 }
