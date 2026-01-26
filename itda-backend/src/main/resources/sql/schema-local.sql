@@ -4,6 +4,7 @@ USE itda_local;
 -- ============================================
 -- Drop order (FK-safe)
 -- ============================================
+
 SET FOREIGN_KEY_CHECKS = 0;
 DROP TABLE IF EXISTS timeline_items;
 DROP TABLE IF EXISTS generation_jobs;

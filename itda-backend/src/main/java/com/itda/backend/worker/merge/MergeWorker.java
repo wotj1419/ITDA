@@ -12,7 +12,7 @@ import org.springframework.stereotype.Component;
 
 import java.io.BufferedWriter;
 import java.io.IOException;
-import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
@@ -159,8 +159,7 @@ public class MergeWorker {
                 fileStorageProperties.getUploadDir(),
                 EXPORTS_DIR,
                 String.valueOf(projectId),
-                EXPORT_FILE_NAME
-        ).toAbsolutePath().normalize();
+                EXPORT_FILE_NAME).toAbsolutePath().normalize();
     }
 
     private Path resolveSceneExportPath(Long sceneId) {
@@ -169,8 +168,7 @@ public class MergeWorker {
                 EXPORTS_DIR,
                 SCENE_EXPORTS_DIR,
                 String.valueOf(sceneId),
-                EXPORT_FILE_NAME
-        ).toAbsolutePath().normalize();
+                EXPORT_FILE_NAME).toAbsolutePath().normalize();
     }
 
     private void ensureParentDir(Path outputPath) {
@@ -184,11 +182,18 @@ public class MergeWorker {
     private Path createConcatListFile(List<Path> inputPaths, Path dir) {
         try {
             Path listFile = Files.createTempFile(dir, "concat-", ".txt");
-            try (BufferedWriter writer = Files.newBufferedWriter(listFile)) {
+            try (BufferedWriter writer = Files.newBufferedWriter(listFile, StandardCharsets.UTF_8)) {
                 for (Path path : inputPaths) {
-                    writer.write("file '" + escapePath(path.toAbsolutePath()) + "'");
+                    // Log the path being written to concat file
+                    String escapedPath = escapePath(path.toAbsolutePath());
+                    writer.write("file '" + escapedPath + "'");
                     writer.newLine();
                 }
+            }
+            // Debug log: content of list file
+            log.info("[MergeWorker] Created concat list file: {}", listFile);
+            if (log.isDebugEnabled()) {
+                log.debug("[MergeWorker] Concat file content:\n{}", Files.readString(listFile));
             }
             return listFile;
         } catch (IOException e) {
@@ -197,7 +202,7 @@ public class MergeWorker {
     }
 
     private String escapePath(Path path) {
-        String raw = path.toString();
+        String raw = path.toString().replace("\\", "/");
         return raw.replace("'", "'\\''");
     }
 
@@ -217,8 +222,7 @@ public class MergeWorker {
                 "-select_streams", "a",
                 "-show_entries", "stream=codec_type",
                 "-of", "csv=p=0",
-                path.toString()
-        );
+                path.toString());
         try {
             ProcessResult result = runProcess(command, Duration.ofSeconds(20));
             return !result.output().trim().isEmpty();
@@ -243,7 +247,7 @@ public class MergeWorker {
         command.add("-c:v");
         command.add("libx264");
         command.add("-preset");
-        command.add("veryfast");
+        command.add("ultrafast");
         command.add("-pix_fmt");
         command.add("yuv420p");
         if (keepAudio) {
@@ -252,42 +256,65 @@ public class MergeWorker {
             command.add("-b:a");
             command.add("128k");
         } else {
-            command.add("-an");
+            command.add("-an"); // Audio disable
         }
         command.add("-movflags");
         command.add("+faststart");
         command.add(outputPath.toString());
 
+        log.info("[MergeWorker] FFmpeg command: {}", String.join(" ", command));
+
         ProcessResult result = runProcess(command, PROCESS_TIMEOUT);
+
+        // Log output for debugging (verify what ffmpeg said)
+        if (!result.output().isBlank()) {
+            log.debug("[MergeWorker] FFmpeg output:\n{}", result.output());
+        }
+
         if (result.exitCode() != 0) {
             List<String> lines = result.output().lines().toList();
-            int start = Math.max(0, lines.size() - 10);
+            int start = Math.max(0, lines.size() - 20); // Show more lines
             String summary = String.join("\n", lines.subList(start, lines.size()));
+            log.error("[MergeWorker] FFmpeg failed with exitCode={}. Summary:\n{}", result.exitCode(), summary);
             throw new IllegalStateException("FFmpeg merge failed: " + summary);
+        } else {
+            log.info("[MergeWorker] FFmpeg merge success. Output: {}", outputPath);
         }
     }
 
     private ProcessResult runProcess(List<String> command, Duration timeout) {
+        Path logFile = null;
         try {
-            Process process = new ProcessBuilder(command).redirectErrorStream(true).start();
+            // Deadlock 방지: 출력 스트림이 꽉 차면 프로세스가 멈추므로 파일로 리다이렉트
+            logFile = Files.createTempFile("ffmpeg-output-", ".log");
+            Process process = new ProcessBuilder(command)
+                    .redirectErrorStream(true)
+                    .redirectOutput(logFile.toFile())
+                    .start();
+
             boolean finished = process.waitFor(timeout.toMillis(), java.util.concurrent.TimeUnit.MILLISECONDS);
+
             if (!finished) {
                 process.destroyForcibly();
                 throw new IllegalStateException("Process timeout: " + String.join(" ", command));
             }
-            String output = readAll(process.getInputStream());
+
+            String output = Files.exists(logFile) ? Files.readString(logFile, StandardCharsets.UTF_8) : "";
             return new ProcessResult(process.exitValue(), output);
+
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new IllegalStateException("Process interrupted: " + String.join(" ", command), e);
         } catch (IOException e) {
             throw new IllegalStateException("Process failed: " + String.join(" ", command), e);
+        } finally {
+            if (logFile != null) {
+                deleteQuietly(logFile);
+            }
         }
     }
 
-    private String readAll(InputStream stream) throws IOException {
-        return new String(stream.readAllBytes());
-    }
+    // private String readAll(InputStream stream) removed as it is no longer used
 
     private void deleteQuietly(Path path) {
         try {

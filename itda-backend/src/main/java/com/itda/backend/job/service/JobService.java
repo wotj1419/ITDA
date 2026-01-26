@@ -52,15 +52,14 @@ public class JobService {
      */
     @Transactional
     public Job createAndEnqueue(JobType type,
-                                Long projectId,
-                                Long sceneId,
-                                Long nodeId,
-                                String requestJson,
-                                String idempotencyKey) {
+            Long projectId,
+            Long sceneId,
+            Long nodeId,
+            String requestJson,
+            String idempotencyKey) {
         return createAndEnqueue(
                 new JobCreateRequest(type, projectId, sceneId, nodeId, requestJson, idempotencyKey),
-                false
-        );
+                true);
     }
 
     /**
@@ -70,16 +69,15 @@ public class JobService {
      */
     @Transactional
     public Job createAndEnqueue(JobType type,
-                                Long projectId,
-                                Long sceneId,
-                                Long nodeId,
-                                String requestJson,
-                                String idempotencyKey,
-                                boolean requeueIfExisting) {
+            Long projectId,
+            Long sceneId,
+            Long nodeId,
+            String requestJson,
+            String idempotencyKey,
+            boolean requeueIfExisting) {
         return createAndEnqueue(
                 new JobCreateRequest(type, projectId, sceneId, nodeId, requestJson, idempotencyKey),
-                requeueIfExisting
-        );
+                requeueIfExisting);
     }
 
     /**
@@ -102,8 +100,7 @@ public class JobService {
                     request.sceneId(),
                     request.nodeId(),
                     request.requestJson(),
-                    finalKey
-            );
+                    finalKey);
         } catch (DuplicateKeyException e) {
             Job raced = findByIdempotencyKeyReadCommitted(finalKey);
             if (raced == null) {
@@ -140,11 +137,11 @@ public class JobService {
      * Job 생성 및 이벤트 발행 (내부용)
      */
     private Job createAndDispatch(JobType type,
-                                  Long projectId,
-                                  Long sceneId,
-                                  Long nodeId,
-                                  String requestJson,
-                                  String idempotencyKey) {
+            Long projectId,
+            Long sceneId,
+            Long nodeId,
+            String requestJson,
+            String idempotencyKey) {
         Job job = Job.builder()
                 .type(type)
                 .projectId(projectId)
@@ -157,7 +154,7 @@ public class JobService {
                 .build();
 
         jobMapper.insert(job);
-        log.info("[JobService] Job created: id={}, type={}, idempotencyKey={}", 
+        log.info("[JobService] Job created: id={}, type={}, idempotencyKey={}",
                 job.getId(), type, idempotencyKey);
 
         // 커밋 이후에 Dispatcher가 enqueue하도록 이벤트 발행
@@ -175,8 +172,7 @@ public class JobService {
                         request.type(),
                         request.nodeId(),
                         request.sceneId(),
-                        request.requestJson()
-                );
+                        request.requestJson());
         validateIdempotencyKeyLength(finalKey);
         return finalKey;
     }
@@ -216,7 +212,7 @@ public class JobService {
             } else if (job.isPending()) {
                 requeued = true;
             }
-            log.info("[JobService] Requeue existing job: id={}, status={}", 
+            log.info("[JobService] Requeue existing job: id={}, status={}",
                     job.getId(), job.getStatus());
             jobCreatedEventPublisher.publish(job.getId());
             return requeued;

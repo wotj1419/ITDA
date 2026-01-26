@@ -27,3 +27,6 @@ build/
 # AI Tools
 .serena/
 /.metadata/
+
+# Ignore uploads directory
+uploads/
