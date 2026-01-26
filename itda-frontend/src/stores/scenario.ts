@@ -8,6 +8,7 @@ import {
     updateScenarioPlot,
 } from '../services/api/scenario'
 import { useAsyncAction } from './helpers/useAsyncAction'
+import { useGenerationToast } from '../composables/useGenerationToast'
 
 // Types
 export interface ScenarioInput {
@@ -178,6 +179,9 @@ export const useScenarioStore = defineStore('scenario', () => {
 
     const generatePrompt = async (): Promise<void> => {
         if (!activeProjectId.value) return
+        const { startGenerationToast, finishGenerationToast } = useGenerationToast()
+        const toastId = startGenerationToast('scenario_prompt')
+
         await run(async () => {
             const keywords = input.value.keywords
                 ? input.value.keywords.split(',').map((k) => k.trim()).filter(Boolean)
@@ -198,20 +202,54 @@ export const useScenarioStore = defineStore('scenario', () => {
             }
 
             nextStep()
-        }, { errorMessage: 'Failed to generate prompt' })
+            finishGenerationToast(toastId, 'scenario_prompt', 'success')
+        }, {
+            errorMessage: 'Failed to generate prompt',
+            onError: (err) => {
+                const message = err instanceof Error ? err.message : '알 수 없는 오류'
+                finishGenerationToast(toastId, 'scenario_prompt', 'error', { reason: message })
+                return message
+            }
+        })
     }
 
     const approvePrompt = async () => {
         if (!activeProjectId.value) return
+        // approvePrompt triggers plot generation
         await run(async () => {
             await updateScenarioPrompt(activeProjectId.value as number, prompt.value.text, 'APPROVED')
             prompt.value.status = 'approved'
+
+            // Calls generatePlot internally, but we want to track it here or let generatePlot handle it?
+            // Original code: await generatePlot()
+            // To avoid double toasts if generatePlot also had toasts, we should be careful.
+            // But generatePlot is exposed as an action too.
+            // Let's modify generatePlot instead to handle its own toast, and just await it here?
+            // Actually, existing generatePlot is just an action.
+            // If we modify generatePlot to have toast, then calling it here will show toast.
+            // BUT: approvePrompt does MORE than just generatePlot (it updates prompt status first).
+            // Users perceives this as "Approved and Next" which generates plot.
+            // So toast for 'plot' generation is appropriate here if we wrap the whole flow or just the generation part.
+            // Let's rely on generatePlot having its own toast if we modify it, 
+            // OR we wrap the whole thing here.
+            // The request says "approve and next button... also shows popup".
+            // Since generatePlot is called, let's add toast INSIDE generatePlot, 
+            // and maybe a separate small toast or just relying on generatePlot is enough?
+            // Wait, approvePrompt calls generatePlot. if generatePlot has toast, it will show.
+            // Let's just modify generatePlot and generateScenes to have toasts.
+            // And generatePrompt.
+
             await generatePlot()
         }, { errorMessage: 'Failed to approve prompt' })
+        // Note: if generatePlot fails, run catches it. 
+        // We will implement toast inside generatePlot so we don't duplicate logic.
     }
 
     const regeneratePrompt = async () => {
         if (!activeProjectId.value) return
+        const { startGenerationToast, finishGenerationToast } = useGenerationToast()
+        const toastId = startGenerationToast('scenario_prompt')
+
         await run(async () => {
             const keywords = input.value.keywords
                 ? input.value.keywords.split(',').map((k) => k.trim()).filter(Boolean)
@@ -227,11 +265,22 @@ export const useScenarioStore = defineStore('scenario', () => {
             })
             prompt.value.text = promptData.text || ''
             prompt.value.status = toStatus(promptData.status)
-        }, { errorMessage: 'Failed to regenerate prompt' })
+            finishGenerationToast(toastId, 'scenario_prompt', 'success')
+        }, {
+            errorMessage: 'Failed to regenerate prompt',
+            onError: (err) => {
+                const message = err instanceof Error ? err.message : '알 수 없는 오류'
+                finishGenerationToast(toastId, 'scenario_prompt', 'error', { reason: message })
+                return message
+            }
+        })
     }
 
     const generatePlot = async (): Promise<void> => {
         if (!activeProjectId.value) return
+        const { startGenerationToast, finishGenerationToast } = useGenerationToast()
+        const toastId = startGenerationToast('plot')
+
         await run(async () => {
             const plotData = await generateScenarioPlot(activeProjectId.value as number)
             plot.value = {
@@ -239,11 +288,20 @@ export const useScenarioStore = defineStore('scenario', () => {
                 status: toStatus(plotData.status),
             }
             nextStep()
-        }, { errorMessage: 'Failed to generate plot' })
+            finishGenerationToast(toastId, 'plot', 'success')
+        }, {
+            errorMessage: 'Failed to generate plot',
+            onError: (err) => {
+                const message = err instanceof Error ? err.message : '알 수 없는 오류'
+                finishGenerationToast(toastId, 'plot', 'error', { reason: message })
+                return message
+            }
+        })
     }
 
     const approvePlot = () => {
         if (!activeProjectId.value) return
+        // approvePlot calls generateScenes
         run(async () => {
             await updateScenarioPlot(activeProjectId.value as number, plot.value.text, 'APPROVED')
             plot.value.status = 'approved'
@@ -253,15 +311,29 @@ export const useScenarioStore = defineStore('scenario', () => {
 
     const regeneratePlot = async () => {
         if (!activeProjectId.value) return
+        const { startGenerationToast, finishGenerationToast } = useGenerationToast()
+        const toastId = startGenerationToast('plot')
+
         await run(async () => {
             const plotData = await generateScenarioPlot(activeProjectId.value as number)
             plot.value.text = plotData.text || ''
             plot.value.status = toStatus(plotData.status)
-        }, { errorMessage: 'Failed to regenerate plot' })
+            finishGenerationToast(toastId, 'plot', 'success')
+        }, {
+            errorMessage: 'Failed to regenerate plot',
+            onError: (err) => {
+                const message = err instanceof Error ? err.message : '알 수 없는 오류'
+                finishGenerationToast(toastId, 'plot', 'error', { reason: message })
+                return message
+            }
+        })
     }
 
     const generateScenes = async (): Promise<void> => {
         if (!activeProjectId.value) return
+        const { startGenerationToast, finishGenerationToast } = useGenerationToast()
+        const toastId = startGenerationToast('scenes')
+
         await run(async () => {
             const response = await generateScenarioScenes(activeProjectId.value as number)
             scenes.value = response.scenes.map((scene) => ({
@@ -271,7 +343,15 @@ export const useScenarioStore = defineStore('scenario', () => {
                 description: scene.description,
             }))
             nextStep()
-        }, { errorMessage: 'Failed to generate scenes' })
+            finishGenerationToast(toastId, 'scenes', 'success')
+        }, {
+            errorMessage: 'Failed to generate scenes',
+            onError: (err) => {
+                const message = err instanceof Error ? err.message : '알 수 없는 오류'
+                finishGenerationToast(toastId, 'scenes', 'error', { reason: message })
+                return message
+            }
+        })
     }
 
     const updateScene = (id: number, updates: Partial<Pick<ScenarioScene, 'title' | 'description'>>) => {
