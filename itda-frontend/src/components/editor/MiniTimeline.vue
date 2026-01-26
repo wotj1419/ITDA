@@ -92,6 +92,29 @@ const progressPercent = Math.min(
   (props.totalDuration / props.maxDuration) * 100,
   100
 );
+
+function isVideo(url?: string): boolean {
+  if (!url) return false;
+  const lower = url.toLowerCase();
+  return lower.endsWith('.mp4') || lower.endsWith('.webm') || lower.endsWith('.mov');
+}
+
+function handleVideoEnter(event: MouseEvent) {
+  const video = event.target as HTMLVideoElement;
+  if (video && video.paused) {
+    video.play().catch(() => {
+      // Auto-play might be blocked or interrupted
+    });
+  }
+}
+
+function handleVideoLeave(event: MouseEvent) {
+  const video = event.target as HTMLVideoElement;
+  if (video) {
+    video.pause();
+    video.currentTime = 0; // Reset to start
+  }
+}
 </script>
 
 <template>
@@ -120,7 +143,23 @@ const progressPercent = Math.min(
         <button class="clip-remove" @click.stop="handleRemove(clip.clipId)">
           <X class="remove-icon" />
         </button>
-        <img :src="clip.thumbnailUrl" :alt="clip.label || '확정 클립'" />
+        <video
+          v-if="clip.videoUrl || isVideo(clip.thumbnailUrl)"
+          :src="clip.videoUrl || clip.thumbnailUrl"
+          class="clip-content clip-video"
+          preload="metadata"
+          muted
+          playsinline
+          @mouseenter="handleVideoEnter"
+          @mouseleave="handleVideoLeave"
+        />
+        <img
+          v-else
+          :src="clip.thumbnailUrl"
+          :alt="clip.label || '확정 클립'"
+          class="clip-content clip-img"
+        />
+        <span class="clip-duration">{{ clip.duration }}s</span>
         <span class="clip-duration">{{ clip.duration }}s</span>
       </div>
 
@@ -222,10 +261,15 @@ const progressPercent = Math.min(
   transform: scale(1.05);
 }
 
-.timeline-clip img {
+.timeline-clip:hover {
+  transform: scale(1.05);
+}
+
+.clip-content {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  display: block;
 }
 
 .clip-duration {

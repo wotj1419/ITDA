@@ -184,13 +184,13 @@ public class MergeWorker {
             Path listFile = Files.createTempFile(dir, "concat-", ".txt");
             try (BufferedWriter writer = Files.newBufferedWriter(listFile, StandardCharsets.UTF_8)) {
                 for (Path path : inputPaths) {
-                    // Log the path being written to concat file
+                    // concat 파일에 기록되는 경로 로그 출력
                     String escapedPath = escapePath(path.toAbsolutePath());
                     writer.write("file '" + escapedPath + "'");
                     writer.newLine();
                 }
             }
-            // Debug log: content of list file
+            // 디버그 로그: 생성된 리스트 파일 내용 확인
             log.info("[MergeWorker] Created concat list file: {}", listFile);
             if (log.isDebugEnabled()) {
                 log.debug("[MergeWorker] Concat file content:\n{}", Files.readString(listFile));
@@ -256,7 +256,7 @@ public class MergeWorker {
             command.add("-b:a");
             command.add("128k");
         } else {
-            command.add("-an"); // Audio disable
+            command.add("-an"); // Audio 비활성화
         }
         command.add("-movflags");
         command.add("+faststart");
@@ -266,14 +266,14 @@ public class MergeWorker {
 
         ProcessResult result = runProcess(command, PROCESS_TIMEOUT);
 
-        // Log output for debugging (verify what ffmpeg said)
+        // 디버깅을 위한 출력 로그 (FFmpeg 실행 결과 확인)
         if (!result.output().isBlank()) {
             log.debug("[MergeWorker] FFmpeg output:\n{}", result.output());
         }
 
         if (result.exitCode() != 0) {
             List<String> lines = result.output().lines().toList();
-            int start = Math.max(0, lines.size() - 20); // Show more lines
+            int start = Math.max(0, lines.size() - 20); // 더 많은 라인 표시 (최근 20줄)
             String summary = String.join("\n", lines.subList(start, lines.size()));
             log.error("[MergeWorker] FFmpeg failed with exitCode={}. Summary:\n{}", result.exitCode(), summary);
             throw new IllegalStateException("FFmpeg merge failed: " + summary);
