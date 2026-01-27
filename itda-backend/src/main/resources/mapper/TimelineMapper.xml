@@ -8,7 +8,8 @@
     <resultMap id="SceneTimelineItemMap" type="com.itda.backend.timeline.repository.dto.SceneTimelineItem">
         <id property="videoNodeId" column="video_node_id"/>
         <result property="sceneId" column="scene_id"/>
-        <result property="thumbnailUrl" column="thumbnail_url"/>
+        <result property="assetId" column="asset_id"/>
+        <result property="fallbackUrl" column="fallback_url"/>
         <result property="duration" column="duration"/>
         <result property="orderIndex" column="order_index"/>
     </resultMap>
@@ -17,7 +18,8 @@
         <id property="sceneVideoId" column="scene_video_id"/>
         <result property="sceneId" column="scene_id"/>
         <result property="sceneTitle" column="scene_title"/>
-        <result property="thumbnailUrl" column="thumbnail_url"/>
+        <result property="assetId" column="asset_id"/>
+        <result property="fallbackUrl" column="fallback_url"/>
         <result property="duration" column="duration"/>
         <result property="orderIndex" column="order_index"/>
     </resultMap>
@@ -25,7 +27,8 @@
     <select id="findSceneTimelineItems" resultMap="SceneTimelineItemMap">
         SELECT ti.video_node_id,
                ti.scene_id,
-               n.content_url AS thumbnail_url,
+               n.asset_id AS asset_id,
+               n.content_url AS fallback_url,
                NULL AS duration,
                ti.order_index
         FROM timeline_items ti
@@ -40,7 +43,8 @@
         SELECT sv.id AS scene_video_id,
                ti.scene_id,
                s.title AS scene_title,
-               sv.thumbnail_url AS thumbnail_url,
+               sv.asset_id AS asset_id,
+               sv.thumbnail_url AS fallback_url,
                sv.duration_ms AS duration,
                ti.order_index
         FROM timeline_items ti

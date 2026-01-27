@@ -12,7 +12,8 @@ public class ProjectTimelineItem {
     private Long sceneVideoId;
     private Long sceneId;
     private String sceneTitle;
-    private String thumbnailUrl;
+    private Long assetId;
+    private String fallbackUrl;
     private Integer duration;
     private Integer orderIndex;
 }

@@ -19,11 +19,15 @@ public record ProjectTimelineItemResponse(
 
         @Schema(description = "Order index", example = "1") Integer order) {
     public static ProjectTimelineItemResponse from(ProjectTimelineItem item) {
+        return from(item, item.getFallbackUrl());
+    }
+
+    public static ProjectTimelineItemResponse from(ProjectTimelineItem item, String resolvedUrl) {
         return new ProjectTimelineItemResponse(
                 item.getSceneVideoId(),
                 item.getSceneId(),
                 item.getSceneTitle(),
-                item.getThumbnailUrl(),
+                resolvedUrl,
                 item.getDuration(),
                 item.getOrderIndex());
     }

@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.itda.backend.global.exception.BusinessException;
 import com.itda.backend.global.response.ErrorCode;
+import com.itda.backend.asset.service.AssetUrlResolver;
 import com.itda.backend.job.domain.Job;
 import com.itda.backend.job.domain.JobType;
 import com.itda.backend.job.service.JobService;
@@ -35,6 +36,7 @@ public class TimelineService {
     private final ProjectMapper projectMapper;
     private final JobService jobService;
     private final ObjectMapper objectMapper;
+    private final AssetUrlResolver assetUrlResolver;
 
     @Transactional(readOnly = true)
     public SceneTimelineResponse getSceneTimeline(Long userId, Long sceneId) {
@@ -42,7 +44,10 @@ public class TimelineService {
         ensureMember(scene.getProjectId(), userId);
 
         List<SceneTimelineItemResponse> items = timelineMapper.findSceneTimelineItems(sceneId).stream()
-                .map(SceneTimelineItemResponse::from)
+                .map(item -> SceneTimelineItemResponse.from(
+                        item,
+                        assetUrlResolver.resolveNodeUrl(item.getAssetId(), item.getVideoNodeId(), item.getFallbackUrl())
+                ))
                 .toList();
         int totalDuration = sumDuration(items);
 
@@ -55,7 +60,10 @@ public class TimelineService {
         ensureMember(projectId, userId);
 
         List<ProjectTimelineItemResponse> items = timelineMapper.findProjectTimelineItems(projectId).stream()
-                .map(ProjectTimelineItemResponse::from)
+                .map(item -> ProjectTimelineItemResponse.from(
+                        item,
+                        assetUrlResolver.resolveUrl(item.getAssetId(), item.getFallbackUrl())
+                ))
                 .toList();
         int totalDuration = sumProjectDuration(items);
 
