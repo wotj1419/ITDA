@@ -29,11 +29,13 @@ interface Props {
   activeTab: 'story' | 'scenes' | 'objects' | 'timeline' | 'settings'
   sceneCount?: number
   progress?: { completed: number; total: number }
+  hideScenes?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
   sceneCount: 0,
   progress: () => ({ completed: 0, total: 0 }),
+  hideScenes: false,
 })
 
 const emit = defineEmits<{
@@ -58,13 +60,16 @@ interface NavItem {
   to: RouteLocationRaw | null
 }
 
-const navItems = computed<NavItem[]>(() => [
-  { key: 'story', icon: BookOpen, label: 'Story', to: null },
-  { key: 'scenes', icon: Clapperboard, label: 'Scenes', badge: props.sceneCount, to: null },
-  { key: 'objects', icon: User, label: 'Objects', to: null },
-  { key: 'timeline', icon: Layers, label: 'Full Timeline', to: { name: 'timeline', params: { id: projectId.value } } },
-  { key: 'settings', icon: Settings, label: 'Settings', to: null },
-])
+const navItems = computed<NavItem[]>(() => {
+  const items: NavItem[] = [
+    { key: 'story', icon: BookOpen, label: 'Story', to: null },
+    { key: 'scenes', icon: Clapperboard, label: 'Scenes', badge: props.sceneCount, to: null },
+    { key: 'objects', icon: User, label: 'Objects', to: null },
+    { key: 'timeline', icon: Layers, label: 'Full Timeline', to: { name: 'timeline', params: { id: projectId.value } } },
+    { key: 'settings', icon: Settings, label: 'Settings', to: null },
+  ]
+  return props.hideScenes ? items.filter((item) => item.key !== 'scenes') : items
+})
 
 const memberBadges = computed(() =>
   (props.project?.members || []).slice(0, 3).map((member) => ({

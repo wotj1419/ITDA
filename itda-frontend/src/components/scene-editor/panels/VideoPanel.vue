@@ -60,6 +60,12 @@ const cameraMotionHelpItems = [
 ];
 
 const durationOptions = [4, 6, 8];
+const defaultDuration = durationOptions[0];
+
+function normalizeDuration(value?: number | null): number {
+  if (value == null) return defaultDuration;
+  return durationOptions.includes(value) ? value : defaultDuration;
+}
 
 const data = computed(() => props.node.data as VideoNodeData | undefined);
 const hasEndShot = computed(() => !!data.value?.endShotId);
@@ -89,12 +95,12 @@ const {
     nodeType: 'VIDEO',
     sceneOneLine: buildVideoSceneOneLine(),
     cameraMotion: form.value.cameraMotion,
-    duration: form.value.duration,
+    duration: normalizeDuration(form.value.duration),
     motionDescription: form.value.motionDescription,
   }),
   getPromptUpdate: (prompt) => ({
     cameraMotion: form.value.cameraMotion,
-    duration: form.value.duration,
+    duration: normalizeDuration(form.value.duration),
     motionDescription: form.value.motionDescription,
     prompt,
   }),
@@ -102,7 +108,7 @@ const {
   getJobSettings: () => ({
     cameraMotion: form.value.cameraMotion,
     motionDescription: form.value.motionDescription,
-    duration: form.value.duration,
+    duration: normalizeDuration(form.value.duration),
     startShotNodeId: data.value?.startShotId,
     endShotNodeId: data.value?.endShotId,
   }),
@@ -196,7 +202,7 @@ watch(() => props.node.id, () => {
   form.value = {
     isTransition: !!data.value.endShotId,
     cameraMotion: normalizeCameraMotion(data.value.cameraMotion),
-    duration: data.value.duration || 5,
+    duration: normalizeDuration(data.value.duration),
     motionDescription: data.value.motionDescription || '',
     prompt: data.value.prompt || '',
   };

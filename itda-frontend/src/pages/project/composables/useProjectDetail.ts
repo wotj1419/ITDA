@@ -1,5 +1,5 @@
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
-import { useRoute } from 'vue-router';
+import { useRoute, onBeforeRouteLeave } from 'vue-router';
 import { useProjectStore } from '../../../stores/project';
 import { useSceneStore } from '../../../stores/scene';
 import { useCharacterStore } from '../../../stores/character';
@@ -8,7 +8,7 @@ import { useCollabStore } from '../../../stores/collab';
 import { useScenarioStore } from '../../../stores/scenario';
 import type { Scene, SceneStatus } from '../../../types/api/scenes';
 import type { ObjectSheet } from '../../../types/api/objects';
-import { fetchSceneNodes } from '../../../services/api/nodes';
+import { fetchProjectTimeline, type TimelineItem } from '../../../services/api/timeline';
 
 export type ProjectTab = 'story' | 'scenes' | 'objects' | 'timeline' | 'settings';
 
@@ -56,6 +56,15 @@ export function useProjectDetail() {
   const isGeneratingCharacter = computed(() => characterStore.isGenerating);
   const sceneProgress = computed(() => sceneStore.progress);
 
+  const isUntouchedProject = computed(() => {
+    if (!project.value) return false;
+    const isDefaultTitle = project.value.title?.trim() === '새 프로젝트';
+    const isEmptyDescription = !(project.value.description && project.value.description.trim());
+    const isEmptyGenre = !(project.value.genre && project.value.genre.trim());
+    const hasNoScenes = scenes.value.length === 0;
+    return isDefaultTitle && isEmptyDescription && isEmptyGenre && hasNoScenes;
+  });
+
   const sceneStatusConfig: Record<SceneStatus, { label: string; variant: 'success' | 'info' | 'default' }> = {
     COMPLETED: { label: '완료', variant: 'success' },
     IN_PROGRESS: { label: '진행 중', variant: 'info' },
@@ -85,6 +94,13 @@ export function useProjectDetail() {
       // collabStore.joinRoom(projectId.value);
       // collabStore.updateLocation('프로젝트 상세 페이지');
     }
+  });
+
+  onBeforeRouteLeave(async () => {
+    if (project.value && isUntouchedProject.value) {
+      await projectStore.moveToTrash(project.value.projectId);
+    }
+    projectStore.clearCurrentProject();
   });
 
   onUnmounted(() => {
@@ -129,19 +145,24 @@ export function useProjectDetail() {
   const isPreviewLoading = (sceneId: number): boolean =>
     Boolean(previewLoadingMap.value[sceneId]);
 
-  const buildScenePreview = async (sceneId: number): Promise<ScenePreview> => {
-    if (!projectId.value) return { clips: [], totalDuration: 0 };
-    const nodes = await fetchSceneNodes(sceneId);
-    const clips = nodes
-      .filter((node) => node.type === 'VIDEO' && node.isConfirmed)
-      .map((node) => ({
-        thumbnailUrl: node.contentUrl || '',
+  const buildScenePreviewFromTimeline = (sceneId: number, items: TimelineItem[]): ScenePreview => {
+    const clips = items
+      .filter((item) => item.sceneId === sceneId)
+      .sort((a, b) => a.order - b.order)
+      .map((item) => ({
+        thumbnailUrl: item.url || '',
         duration: 4,
-        label: node.title || '',
-        contentUrl: node.contentUrl || '',
+        label: `Video ${item.order}`,
+        contentUrl: item.url || '',
       }));
     const totalDuration = clips.reduce((sum, clip) => sum + clip.duration, 0);
     return { clips, totalDuration };
+  };
+
+  const buildScenePreview = async (sceneId: number): Promise<ScenePreview> => {
+    if (!projectId.value) return { clips: [], totalDuration: 0 };
+    const timeline = await fetchProjectTimeline(projectId.value);
+    return buildScenePreviewFromTimeline(sceneId, timeline.items);
   };
 
   const loadScenePreviews = async () => {
@@ -151,10 +172,11 @@ export function useProjectDetail() {
     }
 
     const previews: Record<number, ScenePreview> = { ...scenePreviewMap.value };
+    const timeline = await fetchProjectTimeline(projectId.value);
     await Promise.all(
       scenes.value.map(async (scene) => {
         previewLoadingMap.value[scene.sceneId] = true;
-        previews[scene.sceneId] = await buildScenePreview(scene.sceneId);
+        previews[scene.sceneId] = buildScenePreviewFromTimeline(scene.sceneId, timeline.items);
         previewLoadingMap.value[scene.sceneId] = false;
       })
     );

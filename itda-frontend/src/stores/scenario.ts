@@ -1,5 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
+import { useProjectStore } from './project'
+import { useUIStore } from './ui'
 import {
     generateScenarioPrompt,
     generateScenarioPlot,
@@ -45,6 +47,8 @@ export const useScenarioStore = defineStore('scenario', () => {
     const isDrawerOpen = ref(false)
     const currentStep = ref<ScenarioStep>(1)
     const { isLoading: isGenerating, error, run } = useAsyncAction()
+    const projectStore = useProjectStore()
+    const uiStore = useUIStore()
     const activeProjectId = ref<number | null>(null)
     const projectStates = ref<Record<number, {
         currentStep: ScenarioStep
@@ -53,6 +57,8 @@ export const useScenarioStore = defineStore('scenario', () => {
         plot: ScenarioPlot
         scenes: ScenarioScene[]
     }>>({})
+
+    const pendingProjectInfo = ref<Record<number, { title: string; description: string }>>({})
 
     const input = ref<ScenarioInput>({
         genre: '',
@@ -406,6 +412,36 @@ export const useScenarioStore = defineStore('scenario', () => {
         }
     }
 
+    
+    const setPendingProjectInfo = (projectId: number, title: string, description: string) => {
+        pendingProjectInfo.value[projectId] = { title, description }
+    }
+
+    const clearPendingProjectInfo = (projectId: number) => {
+        delete pendingProjectInfo.value[projectId]
+    }
+
+    const setGenre = async (genre: string) => {
+        input.value.genre = genre
+        if (!activeProjectId.value) return
+        const pending = pendingProjectInfo.value[activeProjectId.value]
+        if (!pending) return
+        const updated = await projectStore.updateProject(activeProjectId.value, {
+            title: pending.title,
+            description: pending.description,
+            genre,
+        })
+        if (updated) {
+            clearPendingProjectInfo(activeProjectId.value)
+        } else {
+            uiStore.showToast({
+                type: 'error',
+                title: '프로젝트 저장 실패',
+                message: '잠시 후 다시 시도해주세요.',
+            })
+        }
+    }
+
     return {
         // State
         isDrawerOpen,
@@ -440,6 +476,9 @@ export const useScenarioStore = defineStore('scenario', () => {
         regenerateScene,
         addScene,
         removeScene,
+        setPendingProjectInfo,
+        clearPendingProjectInfo,
+        setGenre,
     }
 })
 

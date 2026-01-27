@@ -88,7 +88,7 @@ const mockNodesData: Record<string, Node[]> = {
             position: { x: 0, y: 0 },
             title: 'Walking Sequence',
             isConfirmed: true,
-            settings: { duration: 5 },
+            settings: { duration: 4 },
         },
     ],
     '1-3': [

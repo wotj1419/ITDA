@@ -621,7 +621,7 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
             endShotId: null,
             videoUrl: null,
             thumbnailUrl: null,
-            duration: 5,
+            duration: 4,
             isConfirmed: false,
             prompt: '',
             cameraMotion: 'staticCamera',

@@ -227,7 +227,7 @@ export function createSceneNodeFromApi(
         endShotId: null,
         videoUrl: resolvedContentUrl,
         thumbnailUrl: resolvedContentUrl,
-        duration: 5,
+        duration: 4,
         isConfirmed: !!node.isConfirmed,
         prompt: '',
         cameraMotion: 'staticCamera',
