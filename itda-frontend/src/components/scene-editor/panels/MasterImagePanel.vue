@@ -28,6 +28,33 @@ const form = ref({
   prompt: '',
 });
 
+const STYLE_KEY_MAP: Record<string, string> = {
+  '실사': 'PHOTO_REAL',
+  '애니메이션': 'ANIME_2D',
+  '픽사': 'STYLIZED_3D',
+  '수채화': 'WATERCOLOR_ILLUSTRATION',
+  '유화': 'OIL_PAINT_ILLUSTRATION',
+};
+
+const TIME_OF_DAY_KEY_MAP: Record<string, string> = {
+  '아침': 'DAWN',
+  '낮': 'DAY',
+  '저녁': 'DUSK',
+  '밤': 'NIGHT',
+};
+
+const MOOD_KEY_MAP: Record<string, string> = {
+  '편안': 'COZY',
+  '고독': 'LONELY',
+  '긴장': 'TENSE',
+  '행복': 'HOPEFUL',
+  '우울': 'DARK',
+};
+
+const resolveStyleKey = (label: string): string | undefined => STYLE_KEY_MAP[label];
+const resolveTimeOfDayKey = (label: string): string | undefined => TIME_OF_DAY_KEY_MAP[label];
+const resolveMoodKey = (label: string): string => MOOD_KEY_MAP[label] ?? 'NEUTRAL';
+
 const {
   isGeneratingPrompt,
   isGeneratingJob: isGeneratingImage,
@@ -57,9 +84,9 @@ const {
   }),
   getApprovedUpdate: () => ({ prompt: form.value.prompt }),
   getJobSettings: () => ({
-    style: form.value.style,
-    timeOfDay: form.value.timeOfDay,
-    mood: form.value.mood,
+    styleKey: resolveStyleKey(form.value.style),
+    timeOfDayKey: resolveTimeOfDayKey(form.value.timeOfDay),
+    moodKey: resolveMoodKey(form.value.mood),
     objectIds: form.value.objectIds,
   }),
   getJobSuccessUpdate: ({ resultUrl, thumbnailUrl }) => ({
