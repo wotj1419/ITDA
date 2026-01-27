@@ -30,6 +30,7 @@ public enum ErrorCode {
     SCENE_NOT_FOUND(404, "씬을 찾을 수 없습니다"),
     SCENARIO_NOT_FOUND(404, "시나리오를 찾을 수 없습니다"),
     NODE_NOT_FOUND(404, "노드를 찾을 수 없습니다"),
+    OBJECT_NOT_FOUND(404, "오브젝트를 찾을 수 없습니다"),
     JOB_NOT_FOUND(404, "작업을 찾을 수 없습니다"),
     EXPORT_NOT_FOUND(404, "내보낼 파일을 찾을 수 없습니다"),
     CONTENT_NOT_FOUND(404, "콘텐츠를 찾을 수 없습니다"),
