@@ -166,10 +166,11 @@ const progressPercent = Math.min(
 .mini-timeline {
   display: flex;
   align-items: center;
-  gap: 1rem;
-  padding: 0.75rem 1.5rem;
+  gap: 1.5rem;
+  height: 40px;
+  padding: 0 1.5rem;
   background: white;
-  border-top: 1px solid var(--rose-100);
+  border-top: 1px solid var(--gray-100);
 }
 
 /* ==========================================================================
@@ -180,15 +181,18 @@ const progressPercent = Math.min(
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  font-size: 0.75rem;
-  font-weight: 600;
+  font-size: 10px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
   color: var(--rose-500);
   white-space: nowrap;
 }
 
 .label-icon {
-  width: 16px;
-  height: 16px;
+  width: 14px;
+  height: 14px;
+  fill: currentColor;
 }
 
 /* ==========================================================================
@@ -272,9 +276,8 @@ const progressPercent = Math.min(
 }
 
 .timeline-empty {
-  font-size: 0.75rem;
-  color: var(--gray-400);
-  font-style: italic;
+  font-size: 10px;
+  color: var(--gray-300);
 }
 
 /* ==========================================================================

@@ -68,7 +68,9 @@ function addMasterImage(event: Event) {
     <!-- Header -->
     <div class="node-glass__header">
       <div class="node-glass__header-left">
-        <BookOpen class="node-glass__icon" />
+        <div class="node-glass__icon-box node-glass__icon-box--header">
+          <BookOpen class="node-glass__icon" />
+        </div>
         <div class="node-glass__title-group">
           <span class="node-glass__title">
             씬 {{ data.sceneOrder }}: {{ data.title }}

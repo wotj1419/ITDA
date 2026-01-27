@@ -12,6 +12,7 @@ import { useUIStore } from '../stores/ui';
 import { useCollabStore } from '../stores/collab';
 import { TIMELINE_PLAYBACK_MODAL_ID } from '../constants/ui';
 import type { VideoNodeData } from '../types/ui/sceneNodes';
+import type { ProjectDetail } from '../types/api/projects';
 
 import EditorLayout from '../layouts/EditorLayout.vue';
 import EditorHeader from '../components/editor/EditorHeader.vue';
@@ -42,6 +43,7 @@ const NODE_DELETE_MODAL_ID = 'node-delete-confirm';
  * 오른쪽 속성 패널 표시 여부
  */
 const isPanelOpen = computed(() => !!nodeStore.selectedNodeId);
+const isMockMode = computed(() => import.meta.env.DEV && String(route.query.mock ?? '') === 'true');
 
 // =============================================================================
 // Route Parameters
@@ -106,19 +108,59 @@ const layoutButtonBottom = computed(() => {
 onMounted(async () => {
   window.addEventListener('keydown', handleEditorKeydown);
   if (projectId.value && sceneId.value) {
-    await Promise.all([
-      projectStore.loadProject(projectId.value),
-      sceneStore.loadScenes(projectId.value),
-    ]);
-    
+    if (isMockMode.value) {
+      const now = new Date().toISOString();
+
+      if (!projectStore.currentProject) {
+        projectStore.currentProject = {
+          projectId: projectId.value,
+          title: '해커톤 데모 프로젝트 1440',
+          description: 'Mock Project (DEV)',
+          genre: 'Mock',
+          thumbnailUrl: '',
+          role: 'OWNER',
+          myRole: 'OWNER',
+          memberCount: 1,
+          sceneCount: 1,
+          updatedAt: now,
+          createdAt: now,
+          ownerId: 0,
+          members: [],
+          isDeleted: false,
+        } satisfies ProjectDetail;
+      }
+
+      sceneStore.currentProjectId = projectId.value;
+      sceneStore.scenes = [
+        {
+          sceneId: Number(sceneId.value) || 1,
+          title: 'New Scene 1',
+          description: '설명 없음',
+          order: 1,
+          status: 'IN_PROGRESS',
+          thumbnailUrl: '',
+        },
+      ];
+
+      nodeStore.loadMockSceneNodes(sceneId.value, true);
+      return;
+    }
+
+    await Promise.all([projectStore.loadProject(projectId.value), sceneStore.loadScenes(projectId.value)]);
+
     // Vue Flow 노드 로드 (씬 정보 함께 전달)
     const scene = currentScene.value;
-    await nodeStore.loadSceneNodes(sceneId.value, scene ? {
-      title: scene.title,
-      description: scene.description || '',
-      order: scene.order,
-    } : undefined);
-    
+    await nodeStore.loadSceneNodes(
+      sceneId.value,
+      scene
+        ? {
+            title: scene.title,
+            description: scene.description || '',
+            order: scene.order,
+          }
+        : undefined
+    );
+
     // 협업 방 입장
     collabStore.joinRoom(projectId.value);
     collabStore.updateLocation(sceneTitle.value);
@@ -135,6 +177,10 @@ onUnmounted(() => {
 // Route 변경 시 노드 다시 로드
 watch([projectId, sceneId], async ([, newSceneId]) => {
   if (newSceneId) {
+    if (isMockMode.value) {
+      nodeStore.loadMockSceneNodes(newSceneId as string, true);
+      return;
+    }
     const scene = sceneStore.scenes.find((s) => s.sceneId === Number(newSceneId));
     await nodeStore.loadSceneNodes(newSceneId as string, scene ? {
       title: scene.title,

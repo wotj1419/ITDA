@@ -200,8 +200,8 @@ export const VALID_CONNECTIONS: Record<NodeType, NodeType[]> = {
 
 /** 노드 타입별 너비 */
 export const NODE_WIDTHS: Record<NodeType, number> = {
-    [NodeType.SCENE_HEADER]: 280,
-    [NodeType.MASTER_IMAGE]: 200,
+    [NodeType.SCENE_HEADER]: 420,
+    [NodeType.MASTER_IMAGE]: 460,
     [NodeType.STORYBOARD_GRID]: 200,
     [NodeType.SHOT]: 200,
     [NodeType.VIDEO]: 200,
@@ -209,8 +209,8 @@ export const NODE_WIDTHS: Record<NodeType, number> = {
 
 /** 노드 타입별 높이 */
 export const NODE_HEIGHTS: Record<NodeType, number> = {
-    [NodeType.SCENE_HEADER]: 120,
-    [NodeType.MASTER_IMAGE]: 200,
+    [NodeType.SCENE_HEADER]: 160,
+    [NodeType.MASTER_IMAGE]: 420,
     [NodeType.STORYBOARD_GRID]: 250,
     [NodeType.SHOT]: 250,
     [NodeType.VIDEO]: 180,

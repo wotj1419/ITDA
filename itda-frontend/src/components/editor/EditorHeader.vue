@@ -59,13 +59,13 @@ defineProps<Props>();
           params: { id: projectId },
           query: sceneId ? { sceneId } : undefined,
         }"
-        class="btn btn-secondary btn-sm"
+        class="header-action"
       >
         <Layers class="icon-sm" />
         Scene Timeline
       </RouterLink>
 
-      <Button variant="primary">Export Scene</Button>
+      <Button variant="primary" size="sm" class="export-btn">Export Scene</Button>
     </div>
   </header>
 </template>
@@ -80,9 +80,9 @@ defineProps<Props>();
   align-items: center;
   justify-content: space-between;
   padding: 0 1.5rem;
-  height: 64px; /* Align with sidebar header */
+  height: 56px; /* Match reference header height */
   background: white;
-  border-bottom: 1px solid var(--rose-100);
+  border-bottom: 1px solid var(--gray-100);
 }
 
 /* ==========================================================================
@@ -107,7 +107,7 @@ defineProps<Props>();
 }
 
 .back-btn:hover {
-  background: var(--gray-100);
+  background: var(--gray-50);
   color: var(--gray-900);
 }
 
@@ -152,12 +152,14 @@ defineProps<Props>();
 }
 
 .zoom-indicator {
-  font-size: 0.75rem;
-  font-family: 'JetBrains Mono', monospace;
-  background: var(--gray-100);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  background: var(--gray-50);
+  border: 1px solid var(--gray-100);
   padding: 0.25rem 0.5rem;
-  border-radius: 0.25rem;
-  color: var(--gray-600);
+  border-radius: 0.5rem;
+  color: var(--gray-400);
 }
 
 .icon {
@@ -165,5 +167,25 @@ defineProps<Props>();
   height: 20px;
 }
 
-/* Uses global .icon-sm and button styles from base.css */
+.header-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.375rem 0.75rem;
+  border-radius: 0.75rem;
+  color: var(--gray-600);
+  text-decoration: none;
+  font-size: 0.75rem;
+  font-weight: 700;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.header-action:hover {
+  background: var(--gray-50);
+  color: var(--gray-900);
+}
+
+.export-btn {
+  box-shadow: var(--shadow-lg);
+}
 </style>
