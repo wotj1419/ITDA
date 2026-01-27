@@ -1,10 +1,13 @@
 package com.itda.backend.worker.merge;
 
+import com.itda.backend.asset.domain.Asset;
+import com.itda.backend.asset.repository.AssetMapper;
 import com.itda.backend.global.config.FileStorageProperties;
 import com.itda.backend.job.domain.Job;
 import com.itda.backend.job.domain.JobType;
-import com.itda.backend.node.repository.NodeMapper;
-import com.itda.backend.node.repository.dto.TimelineNodeRow;
+import com.itda.backend.timeline.repository.TimelineMapper;
+import com.itda.backend.timeline.repository.dto.ProjectTimelineItem;
+import com.itda.backend.timeline.repository.dto.SceneTimelineItem;
 import com.itda.backend.worker.ExecutionResult;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -20,6 +23,7 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * FFmpeg 병합 Worker (SCENE_MERGE / PROJECT_MERGE)
@@ -35,7 +39,8 @@ public class MergeWorker {
     private static final String EXPORT_FILE_NAME = "final.mp4";
     private static final String FILES_PREFIX = "/files/";
 
-    private final NodeMapper nodeMapper;
+    private final TimelineMapper timelineMapper;
+    private final AssetMapper assetMapper;
     private final FileStorageProperties fileStorageProperties;
 
     public ExecutionResult execute(Job job) {
@@ -59,13 +64,13 @@ public class MergeWorker {
             throw new IllegalStateException("Project merge job missing projectId");
         }
 
-        List<TimelineNodeRow> rows = nodeMapper.findConfirmedVideoNodesByProjectId(projectId);
-        if (rows.isEmpty()) {
-            throw new IllegalStateException("No confirmed video nodes to merge");
+        List<ProjectTimelineItem> items = timelineMapper.findProjectTimelineItems(projectId);
+        if (items.isEmpty()) {
+            throw new IllegalStateException("No project timeline items to merge");
         }
 
         Path outputPath = resolveProjectExportPath(projectId);
-        mergeConfirmedVideos(rows, outputPath);
+        mergeTimelineItems(resolveProjectInputPaths(items), outputPath);
         return new ExecutionResult(null, resolveRelativeContentKey(outputPath));
     }
 
@@ -75,18 +80,17 @@ public class MergeWorker {
             throw new IllegalStateException("Scene merge job missing sceneId");
         }
 
-        List<TimelineNodeRow> rows = nodeMapper.findConfirmedVideoNodesBySceneId(sceneId);
-        if (rows.isEmpty()) {
-            throw new IllegalStateException("No confirmed video nodes to merge");
+        List<SceneTimelineItem> items = timelineMapper.findSceneTimelineItems(sceneId);
+        if (items.isEmpty()) {
+            throw new IllegalStateException("No scene timeline items to merge");
         }
 
         Path outputPath = resolveSceneExportPath(sceneId);
-        mergeConfirmedVideos(rows, outputPath);
+        mergeTimelineItems(resolveSceneInputPaths(items), outputPath);
         return new ExecutionResult(null, resolveRelativeContentKey(outputPath));
     }
 
-    private void mergeConfirmedVideos(List<TimelineNodeRow> rows, Path outputPath) {
-        List<Path> inputPaths = resolveInputPaths(rows);
+    private void mergeTimelineItems(List<Path> inputPaths, Path outputPath) {
         ensureParentDir(outputPath);
 
         Path concatList = createConcatListFile(inputPaths, outputPath.getParent());
@@ -98,28 +102,54 @@ public class MergeWorker {
         }
     }
 
-    private List<Path> resolveInputPaths(List<TimelineNodeRow> rows) {
+    private List<Path> resolveSceneInputPaths(List<SceneTimelineItem> items) {
         List<Path> paths = new ArrayList<>();
-        for (TimelineNodeRow row : rows) {
-            Path path = resolveNodeVideoPath(row.getVideoNodeId(), row.getContentUrl());
-            if (!Files.exists(path)) {
-                throw new IllegalStateException(
-                        "Video file missing: nodeId=" + row.getVideoNodeId() + ", path=" + path);
-            }
+        for (SceneTimelineItem item : items) {
+            String context = "sceneId=" + item.getSceneId() + ", videoNodeId=" + item.getVideoNodeId();
+            Path path = resolveVideoPath(item.getAssetId(), item.getFallbackUrl(), context);
             paths.add(path);
         }
         return paths;
     }
 
-    private Path resolveNodeVideoPath(Long nodeId, String contentUrl) {
-        String contentKey = normalizeContentKey(contentUrl);
+    private List<Path> resolveProjectInputPaths(List<ProjectTimelineItem> items) {
+        List<Path> paths = new ArrayList<>();
+        for (ProjectTimelineItem item : items) {
+            String context = "sceneId=" + item.getSceneId() + ", sceneVideoId=" + item.getSceneVideoId();
+            Path path = resolveVideoPath(item.getAssetId(), null, context);
+            paths.add(path);
+        }
+        return paths;
+    }
+
+    private Path resolveVideoPath(Long assetId, String fallbackUrl, String context) {
+        String contentKey = resolveAssetStorageKey(assetId);
         if (contentKey == null) {
-            contentKey = defaultNodeContentKey(nodeId);
+            contentKey = normalizeContentKey(fallbackUrl);
         }
         if (contentKey == null) {
-            throw new IllegalStateException("Node content missing: nodeId=" + nodeId);
+            throw new IllegalStateException("Video content missing: " + context);
         }
-        return resolveUnderUploadRoot(contentKey);
+        Path path = resolveUnderUploadRoot(contentKey);
+        if (!Files.exists(path)) {
+            throw new IllegalStateException("Video file missing: " + context + ", path=" + path);
+        }
+        return path;
+    }
+
+    private String resolveAssetStorageKey(Long assetId) {
+        if (assetId == null) {
+            return null;
+        }
+        Optional<Asset> asset = assetMapper.findById(assetId);
+        if (asset.isEmpty()) {
+            throw new IllegalStateException("Asset not found: assetId=" + assetId);
+        }
+        String key = asset.get().getStorageKey();
+        if (key == null || key.isBlank()) {
+            throw new IllegalStateException("Asset storageKey missing: assetId=" + assetId);
+        }
+        return key;
     }
 
     private String normalizeContentKey(String contentUrl) {
@@ -150,13 +180,6 @@ public class MergeWorker {
             return trimmed.substring(1);
         }
         return trimmed;
-    }
-
-    private String defaultNodeContentKey(Long nodeId) {
-        if (nodeId == null) {
-            return null;
-        }
-        return "ai/videos/node-" + nodeId + ".mp4";
     }
 
     private Path resolveUnderUploadRoot(String relativePath) {

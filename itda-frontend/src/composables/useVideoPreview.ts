@@ -1,6 +1,4 @@
 
-import { ref } from 'vue'
-
 export function useVideoPreview() {
   function isVideo(url?: string): boolean {
     if (!url) return false
