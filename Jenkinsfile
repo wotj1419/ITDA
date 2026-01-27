@@ -6,6 +6,10 @@ def sendMMNotify(boolean success, Map info) {
                                 : "## :angry_jenkins: ${action} 실패 ❌"
 
         def lines = []
+        if (info.mergeTarget) {
+            def mergeSource = info.mergeSource ?: info.branch ?: "unknown"
+            lines << "**머지**: ${mergeSource} -> ${info.mergeTarget}"
+        }
         if (info.mention) lines << "**알림**: ${info.mention}"
         if (info.branch)  lines << "**브랜치**: ${info.branch}"
 
@@ -50,6 +54,13 @@ set -o pipefail
 """)
 }
 
+def normalizeBranchName(String raw) {
+    if (!raw) {
+        return "unknown"
+    }
+    return raw.replaceFirst(/^origin\//, "").replaceFirst(/^refs\/heads\//, "")
+}
+
 pipeline {
     agent any
     tools {
@@ -67,7 +78,10 @@ pipeline {
             steps {
                 sh 'rm -f "$WORKSPACE/$LOG_FILE"; touch "$WORKSPACE/$LOG_FILE"'
                 script {
-                    env.BUILD_BRANCH = env.BRANCH_NAME
+                    def rawBranch = env.BRANCH_NAME ?: env.CHANGE_BRANCH ?: env.GIT_LOCAL_BRANCH ?: env.GIT_BRANCH
+                    env.BUILD_BRANCH = normalizeBranchName(rawBranch)
+                    env.MERGE_TARGET = env.CHANGE_TARGET
+                    env.MERGE_SOURCE = env.CHANGE_BRANCH
                     env.REPO_URL = env.GIT_URL
                     env.COMMIT_SHA = env.GIT_COMMIT
                     env.COMMIT_MSG = sh(script: "git log -1 --pretty=%s", returnStdout: true).trim()
@@ -155,7 +169,9 @@ pipeline {
                 def action = env.DID_DEPLOY == 'true' ? 'Deploy' : (env.DID_TEST == 'true' ? 'Test' : 'Build')
                 sendMMNotify(true, [
                     mention : "@here",
-                    branch  : env.BRANCH_NAME,
+                    branch  : env.BUILD_BRANCH,
+                    mergeTarget : env.MERGE_TARGET,
+                    mergeSource : env.MERGE_SOURCE,
                     action  : action,
                     commit  : [
                         msg: env.COMMIT_MSG,
@@ -178,7 +194,9 @@ pipeline {
                 }
                 sendMMNotify(false, [
                     mention : "@here",
-                    branch  : env.BRANCH_NAME,
+                    branch  : env.BUILD_BRANCH,
+                    mergeTarget : env.MERGE_TARGET,
+                    mergeSource : env.MERGE_SOURCE,
                     action  : action,
                     details : details
                 ])
