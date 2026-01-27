@@ -13,4 +13,14 @@ public interface TimelineMapper {
     List<SceneTimelineItem> findSceneTimelineItems(@Param("sceneId") Long sceneId);
 
     List<ProjectTimelineItem> findProjectTimelineItems(@Param("projectId") Long projectId);
+
+    int insertSceneTimelineItem(@Param("projectId") Long projectId,
+                                @Param("sceneId") Long sceneId,
+                                @Param("videoNodeId") Long videoNodeId,
+                                @Param("orderIndex") Integer orderIndex,
+                                @Param("createdBy") Long createdBy);
+
+    int deleteSceneTimelineItemByVideoNodeId(@Param("videoNodeId") Long videoNodeId);
+
+    int deleteSceneTimelineItemsByShotId(@Param("shotNodeId") Long shotNodeId);
 }

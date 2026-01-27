@@ -23,6 +23,7 @@ import com.itda.backend.node.repository.NodeMapper;
 import com.itda.backend.project.repository.ProjectMemberMapper;
 import com.itda.backend.scene.domain.Scene;
 import com.itda.backend.scene.repository.SceneMapper;
+import com.itda.backend.timeline.repository.TimelineMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -50,6 +51,7 @@ public class NodeService {
     private final NodeMapper nodeMapper;
     private final SceneMapper sceneMapper;
     private final ProjectMemberMapper projectMemberMapper;
+    private final TimelineMapper timelineMapper;
     private final ObjectMapper objectMapper;
     private final JobService jobService;
     private final MediaUrlResolver mediaUrlResolver;
@@ -203,6 +205,7 @@ public class NodeService {
         if (updated == 0) {
             throw new BusinessException(ErrorCode.INVALID_REQUEST);
         }
+        syncSceneTimelineItem(scene, node, shotNodeId, userId);
 
         log.debug("Confirmed video: nodeId={}, shotNodeId={}, sceneId={}", nodeId, shotNodeId, scene.getId());
     }
@@ -217,6 +220,7 @@ public class NodeService {
 
         assertVideoNode(node.getNodeType());
         nodeMapper.clearConfirmedVideo(nodeId);
+        timelineMapper.deleteSceneTimelineItemByVideoNodeId(nodeId);
 
         log.debug("Unconfirmed video: nodeId={}", nodeId);
     }
@@ -389,6 +393,18 @@ public class NodeService {
         if (!node.getSceneId().equals(sceneId) || node.getNodeType() != NodeType.SHOT) {
             throw new BusinessException(ErrorCode.INVALID_NODE_RELATION);
         }
+    }
+
+    private void syncSceneTimelineItem(Scene scene, Node node, Long shotNodeId, Long userId) {
+        timelineMapper.deleteSceneTimelineItemsByShotId(shotNodeId);
+        int orderIndex = node.getOrderIndex() != null ? node.getOrderIndex() : 0;
+        timelineMapper.insertSceneTimelineItem(
+                scene.getProjectId(),
+                scene.getId(),
+                node.getId(),
+                orderIndex,
+                userId
+        );
     }
 
     private VideoShotIds validateCreateRequestAndExtractShots(

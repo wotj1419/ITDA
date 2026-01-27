@@ -50,4 +50,32 @@
         ORDER BY ti.order_index ASC, ti.id ASC
     </select>
 
+    <insert id="insertSceneTimelineItem">
+        INSERT INTO timeline_items (
+            project_id,
+            scene_id,
+            video_node_id,
+            order_index,
+            created_by
+        ) VALUES (
+            #{projectId},
+            #{sceneId},
+            #{videoNodeId},
+            #{orderIndex},
+            #{createdBy}
+        )
+    </insert>
+
+    <delete id="deleteSceneTimelineItemByVideoNodeId">
+        DELETE FROM timeline_items
+        WHERE video_node_id = #{videoNodeId}
+    </delete>
+
+    <delete id="deleteSceneTimelineItemsByShotId">
+        DELETE ti
+        FROM timeline_items ti
+        JOIN nodes n ON n.id = ti.video_node_id
+        WHERE n.parent_node_id = #{shotNodeId}
+    </delete>
+
 </mapper>
