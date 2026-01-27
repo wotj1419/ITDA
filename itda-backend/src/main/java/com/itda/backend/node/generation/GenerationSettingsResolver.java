@@ -253,6 +253,14 @@ public class GenerationSettingsResolver {
     }
 
     private void normalizeLookKeys(Map<String, Object> settings) {
+        if (settings == null || settings.isEmpty()) {
+            return;
+        }
+
+        removeIfBlank(settings, "styleKey");
+        removeIfBlank(settings, "timeOfDayKey");
+        removeIfBlank(settings, "moodKey");
+
         normalizeStringKey(settings, "styleKey");
         normalizeStringKey(settings, "timeOfDayKey");
         normalizeStringKey(settings, "moodKey");
