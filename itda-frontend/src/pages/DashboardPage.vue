@@ -8,6 +8,7 @@ import DefaultLayout from '../layouts/DefaultLayout.vue'
 import ProjectCard from '../components/project/ProjectCard.vue'
 import NewProjectModal from '../components/project/NewProjectModal.vue'
 import ConfirmModal from '../components/common/ConfirmModal.vue'
+import TimeAgo from '../components/common/TimeAgo.vue'
 
 const projectStore = useProjectStore()
 const uiStore = useUIStore()

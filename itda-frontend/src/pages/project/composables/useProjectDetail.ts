@@ -79,13 +79,16 @@ export function useProjectDetail() {
 
       scenarioStore.switchProject(projectId.value);
 
-      collabStore.joinRoom(projectId.value);
-      collabStore.updateLocation('프로젝트 상세 페이지');
+      scenarioStore.switchProject(projectId.value);
+
+      // Call logic is handled in ProjectDetailPage.vue
+      // collabStore.joinRoom(projectId.value);
+      // collabStore.updateLocation('프로젝트 상세 페이지');
     }
   });
 
   onUnmounted(() => {
-    collabStore.leaveRoom();
+    // collabStore.leaveRoom();
   });
 
   watch(

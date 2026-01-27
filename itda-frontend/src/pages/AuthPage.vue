@@ -147,9 +147,11 @@ async function handleRegister() {
 
     <main class="auth-container">
       <!-- Logo -->
-      <div class="auth-logo">
-        <div class="logo-icon"></div>
-        <h1 class="h2">AI Movie Studio</h1>
+      <div class="auth-logo" @click="router.push('/')" style="cursor: pointer">
+        <div class="logo-container">
+          <img src="/icon.png" alt="Itda Logo" class="logo-icon" />
+          <h1 class="h2">잇다</h1>
+        </div>
         <p class="text-muted text-sm">Turn your ideas into AI-generated films</p>
       </div>
 
@@ -420,12 +422,25 @@ async function handleRegister() {
   margin-bottom: 2rem;
 }
 
+.auth-logo .logo-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.auth-logo .logo-container h1 {
+  margin: 1rem 0 0 0 !important; /* Move down by 1rem */
+  line-height: 1;
+  display: inline-block;
+}
+
 .auth-logo .logo-icon {
-  width: 48px;
-  height: 48px;
-  background: linear-gradient(135deg, var(--rose-400), var(--rose-500));
-  border-radius: 12px;
-  margin: 0 auto 1rem;
+  width: 64px;
+  height: 64px;
+  object-fit: contain;
+  margin: 0;
 }
 
 .auth-card {

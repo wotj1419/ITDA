@@ -7,9 +7,6 @@ import {
   X,
   Mic,
   MicOff,
-  Video,
-  VideoOff,
-  Monitor,
   Send,
   Plus,
 } from 'lucide-vue-next';
@@ -49,7 +46,7 @@ function formatTime(timestamp: number): string {
 <template>
   <div class="collab-panel">
     <!-- Header -->
-    <div class="panel-header">
+    <div class="panel-header drag-handle">
       <div class="panel-title">
         <span class="live-dot"></span>
         브레인스토밍 허들
@@ -113,29 +110,14 @@ function formatTime(timestamp: number): string {
           <button
             :class="['media-btn', { active: !collabStore.isMuted }]"
             @click="collabStore.toggleMute"
-            :title="collabStore.isMuted ? '마이크 켜기' : '마이크 끄기'"
+            :title="collabStore.isMuted ? 'Unmute' : 'Mute'"
           >
             <MicOff v-if="collabStore.isMuted" class="icon" />
             <Mic v-else class="icon" />
           </button>
-          <button
-            :class="['media-btn', { active: !collabStore.isVideoOff }]"
-            @click="collabStore.toggleVideo"
-            :title="collabStore.isVideoOff ? '비디오 켜기' : '비디오 끄기'"
-          >
-            <VideoOff v-if="collabStore.isVideoOff" class="icon" />
-            <Video v-else class="icon" />
-          </button>
-          <button
-            :class="['media-btn', { active: collabStore.isScreenSharing }]"
-            @click="collabStore.toggleScreenShare"
-            :title="collabStore.isScreenSharing ? '화면 공유 중지' : '화면 공유'"
-          >
-            <Monitor class="icon" />
-          </button>
         </div>
         <button class="leave-btn" @click="collabStore.leaveRoom">
-          나가기
+          &#53685;&#54868; &#51333;&#47308;
         </button>
       </div>
     </div>
@@ -171,6 +153,10 @@ function formatTime(timestamp: number): string {
   padding: 1rem;
   border-bottom: 1px solid var(--rose-100);
   background: linear-gradient(135deg, var(--rose-50), white);
+}
+
+.drag-handle {
+  cursor: grab;
 }
 
 .panel-title {
