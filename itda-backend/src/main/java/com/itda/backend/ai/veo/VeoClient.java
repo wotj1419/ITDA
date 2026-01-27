@@ -8,6 +8,7 @@ import com.google.genai.types.GenerateVideosResponse;
 import com.google.genai.types.GenerateVideosSource;
 import com.google.genai.types.GetOperationConfig;
 import com.google.genai.types.HttpOptions;
+import com.google.genai.types.Image;
 import com.google.genai.types.Video;
 import com.itda.backend.ai.AiProviderException;
 import com.itda.backend.ai.AiStubAssets;
@@ -69,9 +70,17 @@ public class VeoClient {
                 timeoutMs
         );
 
-        GenerateVideosSource source = GenerateVideosSource.builder()
-                .prompt(buildPrompt(prompt, settings))
-                .build();
+        Image firstFrame = buildImage(request.firstFrame());
+        if (request.lastFrame() != null) {
+            // TODO(P1): support lastFrame when Veo SDK/REST input is 확정되면 추가
+            log.debug("[VeoClient] lastFrame provided but ignored (P1): contentType={}", request.lastFrame().contentType());
+        }
+        GenerateVideosSource.Builder sourceBuilder = GenerateVideosSource.builder()
+                .prompt(buildPrompt(prompt, settings));
+        if (firstFrame != null) {
+            sourceBuilder.image(firstFrame);
+        }
+        GenerateVideosSource source = sourceBuilder.build();
         GenerateVideosConfig config = buildRequestConfig(settings, timeoutMs);
 
         try {
@@ -165,6 +174,25 @@ public class VeoClient {
         }
         builder.aspectRatio(settings.aspectRatioOrDefault(DEFAULT_ASPECT_RATIO));
         return builder.build();
+    }
+
+    private Image buildImage(VeoImage image) {
+        if (image == null || image.bytes() == null || image.bytes().length == 0) {
+            return null;
+        }
+        String contentType = normalizeImageMime(image.contentType());
+        return Image.builder()
+                .imageBytes(image.bytes())
+                .mimeType(contentType)
+                .build();
+    }
+
+    private String normalizeImageMime(String contentType) {
+        if (contentType == null || contentType.isBlank()) {
+            return "image/png";
+        }
+        String trimmed = contentType.trim();
+        return trimmed.startsWith("image/") ? trimmed : "image/png";
     }
 
     private String buildPrompt(String prompt, VeoSettings settings) {

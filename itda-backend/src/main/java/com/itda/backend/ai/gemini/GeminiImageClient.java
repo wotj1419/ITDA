@@ -3,10 +3,12 @@ package com.itda.backend.ai.gemini;
 import com.google.genai.errors.ApiException;
 import com.google.genai.errors.GenAiIOException;
 import com.google.genai.types.Blob;
+import com.google.genai.types.Content;
 import com.google.genai.types.GenerateContentConfig;
 import com.google.genai.types.GenerateContentResponse;
 import com.google.genai.types.HttpOptions;
 import com.google.genai.types.ImageConfig;
+import com.google.genai.types.Part;
 import com.itda.backend.ai.AiProviderException;
 import com.itda.backend.ai.AiStubAssets;
 import com.itda.backend.ai.GenAiClientProvider;
@@ -18,6 +20,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 
@@ -36,6 +39,13 @@ public class GeminiImageClient {
     private final GenAiClientProvider clientProvider;
 
     public GeminiImageResult generateImage(String prompt, Map<String, Object> settings) {
+        return generateImage(prompt, settings, null, null);
+    }
+
+    public GeminiImageResult generateImage(String prompt,
+                                           Map<String, Object> settings,
+                                           byte[] referenceImageBytes,
+                                           String referenceContentType) {
         String resolvedPrompt = requirePrompt(prompt);
         if (imageProperties.isStub()) {
             log.info("[GeminiImageClient] Stub enabled. Returning stub image.");
@@ -54,9 +64,7 @@ public class GeminiImageClient {
         GenerateContentConfig config = buildRequestConfig(settings);
 
         try {
-            GenerateContentResponse response = clientProvider.getClient()
-                    .models
-                    .generateContent(model, resolvedPrompt, config);
+            GenerateContentResponse response = generateContent(model, resolvedPrompt, referenceImageBytes, referenceContentType, config);
             logResponseDebug(response);
             return parseResponse(response);
         } catch (ApiException e) {
@@ -81,6 +89,27 @@ public class GeminiImageClient {
             builder.imageConfig(ImageConfig.builder().aspectRatio(aspectRatio).build());
         }
         return builder.build();
+    }
+
+    private GenerateContentResponse generateContent(String model,
+                                                    String prompt,
+                                                    byte[] referenceImageBytes,
+                                                    String referenceContentType,
+                                                    GenerateContentConfig config) {
+        if (referenceImageBytes == null || referenceImageBytes.length == 0) {
+            return clientProvider.getClient()
+                    .models
+                    .generateContent(model, prompt, config);
+        }
+        String mimeType = normalizeImageMime(referenceContentType);
+        Part imagePart = Part.fromBytes(referenceImageBytes, mimeType);
+        Part textPart = Part.fromText(prompt);
+        Content content = Content.builder()
+                .parts(List.of(imagePart, textPart))
+                .build();
+        return clientProvider.getClient()
+                .models
+                .generateContent(model, content, config);
     }
 
     private GeminiImageResult parseResponse(GenerateContentResponse response) {
@@ -159,6 +188,17 @@ public class GeminiImageClient {
                 .map(String::trim)
                 .filter(value -> !value.isEmpty())
                 .orElseThrow(() -> new BusinessException(ErrorCode.INVALID_REQUEST, "Prompt is empty"));
+    }
+
+    private String normalizeImageMime(String contentType) {
+        if (contentType == null) {
+            return DEFAULT_IMAGE_MIME;
+        }
+        String trimmed = contentType.trim().toLowerCase(Locale.ROOT);
+        if (trimmed.isEmpty() || !trimmed.startsWith("image/")) {
+            return DEFAULT_IMAGE_MIME;
+        }
+        return trimmed;
     }
 
     private String requireImageModel() {
