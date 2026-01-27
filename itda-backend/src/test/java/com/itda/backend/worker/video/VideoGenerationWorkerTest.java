@@ -1,9 +1,9 @@
-package com.itda.backend.worker.image;
+package com.itda.backend.worker.video;
 
-import com.itda.backend.ai.gemini.GeminiImageClient;
-import com.itda.backend.ai.gemini.GeminiImageResult;
+import com.itda.backend.ai.veo.VeoClient;
+import com.itda.backend.ai.veo.VeoRequest;
+import com.itda.backend.ai.veo.VeoResult;
 import com.itda.backend.asset.domain.AssetType;
-import com.itda.backend.asset.domain.StorageProvider;
 import com.itda.backend.global.exception.BusinessException;
 import com.itda.backend.global.response.ErrorCode;
 import com.itda.backend.job.domain.Job;
@@ -11,6 +11,7 @@ import com.itda.backend.worker.AssetRegistrar;
 import com.itda.backend.worker.ExecutionResult;
 import com.itda.backend.worker.JobRequestParser;
 import com.itda.backend.worker.ParsedJobRequest;
+import com.itda.backend.worker.StoredAsset;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -21,25 +22,26 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
-class ImageGenerationWorkerTest {
+class VideoGenerationWorkerTest {
 
     @Mock
-    private GeminiImageClient geminiImageClient;
+    private VeoClient veoClient;
 
     @Mock
-    private ImageStorage imageStorage;
+    private LocalVideoStorage localVideoStorage;
 
     @Mock
     private AssetRegistrar assetRegistrar;
 
-    @InjectMocks
-    private ImageGenerationWorker imageGenerationWorker;
-
     @Mock
     private JobRequestParser jobRequestParser;
+
+    @InjectMocks
+    private VideoGenerationWorker videoGenerationWorker;
 
     @Test
     void execute_ShouldStoreAssetAndReturnExecutionResult() {
@@ -49,35 +51,25 @@ class ImageGenerationWorkerTest {
                 .requestJson("{\"prompt\":\"test prompt\"}")
                 .build();
 
-        ParsedJobRequest parsed = new ParsedJobRequest("test prompt", Map.of("aspectRatio", "1:1"));
+        ParsedJobRequest parsed = new ParsedJobRequest("test prompt", Map.of("duration", 4));
         when(jobRequestParser.parse(job.getRequestJson())).thenReturn(parsed);
 
-        byte[] imageBytes = new byte[] { 1, 2, 3 };
-        when(geminiImageClient.generateImage("test prompt", parsed.settings()))
-                .thenReturn(new GeminiImageResult(imageBytes, "image/png"));
+        byte[] videoBytes = new byte[] { 1, 2, 3 };
+        VeoResult veoResult = new VeoResult(videoBytes, "video/mp4");
+        when(veoClient.generateVideo(new VeoRequest(parsed.prompt(), parsed.settings())))
+                .thenReturn(veoResult);
 
-        ImageStorageResult storedImage = new ImageStorageResult(
-                "ai/images/1/job-10.png",
-                "image/png",
-                imageBytes.length,
-                StorageProvider.LOCAL
-        );
-        when(imageStorage.save(1L, 10L, imageBytes, "image/png")).thenReturn(storedImage);
-        when(assetRegistrar.registerAsset(
-                job,
-                storedImage.storageKey(),
-                storedImage.sizeBytes(),
-                AssetType.IMAGE,
-                storedImage.contentType(),
-                storedImage.storageProvider()
-        ))
-                .thenReturn(100L);
+        StoredAsset storedAsset = new StoredAsset("ai/videos/1/job-10.mp4", videoBytes.length);
+        when(localVideoStorage.save(1L, 10L, videoBytes)).thenReturn(storedAsset);
+        when(assetRegistrar.registerLocalAsset(job, storedAsset, AssetType.VIDEO, "video/mp4"))
+                .thenReturn(200L);
 
-        ExecutionResult result = imageGenerationWorker.execute(job);
+        ExecutionResult result = videoGenerationWorker.execute(job);
 
         assertThat(result).isNotNull();
-        assertThat(result.resultAssetId()).isEqualTo(100L);
-        assertThat(result.nodeContentKey()).isEqualTo("ai/images/1/job-10.png");
+        assertThat(result.resultAssetId()).isEqualTo(200L);
+        assertThat(result.nodeContentKey()).isEqualTo("ai/videos/1/job-10.mp4");
+        verify(veoClient).generateVideo(new VeoRequest(parsed.prompt(), parsed.settings()));
     }
 
     @Test
@@ -91,8 +83,8 @@ class ImageGenerationWorkerTest {
         when(jobRequestParser.parse(job.getRequestJson()))
                 .thenThrow(new BusinessException(ErrorCode.INVALID_REQUEST, "Prompt is empty"));
 
-        assertThatThrownBy(() -> imageGenerationWorker.execute(job))
-                .isInstanceOf(com.itda.backend.global.exception.BusinessException.class)
+        assertThatThrownBy(() -> videoGenerationWorker.execute(job))
+                .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("Prompt is empty");
     }
 
@@ -102,7 +94,7 @@ class ImageGenerationWorkerTest {
                 .requestJson("{\"prompt\":\"test\"}")
                 .build();
 
-        assertThatThrownBy(() -> imageGenerationWorker.execute(job))
+        assertThatThrownBy(() -> videoGenerationWorker.execute(job))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("Job missing id/projectId");
     }

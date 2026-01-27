@@ -1,13 +1,12 @@
-// ================================
 // Mattermost 알림 함수
-// ================================
 def sendMMNotify(boolean success, Map info) {
     try {
-        def titleLine = success ? "## :jenkins7: 배포 성공 ✅"
-                                : "## :angry_jenkins: 배포 실패 ❌"
+        def action = info.action ?: "Build"
+        def titleLine = success ? "## :jenkins7: ${action} 성공 ✅"
+                                : "## :angry_jenkins: ${action} 실패 ❌"
 
         def lines = []
-        if (info.mention) lines << "**작성자**: ${info.mention}"
+        if (info.mention) lines << "**알림**: ${info.mention}"
         if (info.branch)  lines << "**브랜치**: ${info.branch}"
 
         if (info.commit?.msg) {
@@ -43,6 +42,14 @@ def sendMMNotify(boolean success, Map info) {
     }
 }
 
+def shLog(String cmd) {
+    sh(script: """#!/bin/bash
+set -e
+set -o pipefail
+( ${cmd} ) 2>&1 | tee -a "${env.WORKSPACE}/${env.LOG_FILE}"
+""")
+}
+
 pipeline {
     agent any
     tools {
@@ -52,23 +59,20 @@ pipeline {
     environment {
         DOCKER_IMAGE = 'yh2222/aimovie-api:latest'
         DEPLOY_DIR = '/opt/itda/deploy'
-    }
-    options {
-        skipDefaultCheckout()
+        LOG_FILE = 'jenkins-console.log'
     }
 
     stages {
-        stage('Checkout') {
+        stage('Init') {
             steps {
+                sh 'rm -f "$WORKSPACE/$LOG_FILE"; touch "$WORKSPACE/$LOG_FILE"'
                 script {
-                    def scmVars = checkout scm
-                    // Persist branch info for single-pipeline jobs where BRANCH_NAME is empty.
-                    env.DEPLOY_BRANCH = scmVars.GIT_BRANCH
-                    env.REPO_URL = scmVars.GIT_URL ?: env.GIT_URL
-                    env.COMMIT_SHA = scmVars.GIT_COMMIT ?: env.GIT_COMMIT
+                    env.BUILD_BRANCH = env.BRANCH_NAME
+                    env.REPO_URL = env.GIT_URL
+                    env.COMMIT_SHA = env.GIT_COMMIT
                     env.COMMIT_MSG = sh(script: "git log -1 --pretty=%s", returnStdout: true).trim()
                     env.COMMIT_URL = env.REPO_URL ? "${env.REPO_URL.replace('.git','')}/commit/${env.COMMIT_SHA}" : ''
-                    echo "DEPLOY_BRANCH=${env.DEPLOY_BRANCH} GIT_BRANCH=${env.GIT_BRANCH} GIT_LOCAL_BRANCH=${env.GIT_LOCAL_BRANCH} gitlabBranch=${env.gitlabBranch} gitlabSourceBranch=${env.gitlabSourceBranch} gitlabTargetBranch=${env.gitlabTargetBranch}"
+                    echo "브랜치정보 BRANCH_NAME=${env.BRANCH_NAME} GIT_BRANCH=${env.GIT_BRANCH} GIT_LOCAL_BRANCH=${env.GIT_LOCAL_BRANCH} GIT_URL=${env.GIT_URL}"
                 }
             }
         }
@@ -76,7 +80,7 @@ pipeline {
         stage('Backend Build') {
             steps {
                 dir('itda-backend') {
-                    sh 'gradle clean assemble -x test'
+                    shLog 'gradle clean assemble -x test'
                 }
             }
         }
@@ -84,7 +88,7 @@ pipeline {
         stage('Docker Build') {
             steps {
                 dir('itda-backend') {
-                    sh 'docker build -t $DOCKER_IMAGE .'
+                    shLog 'docker build -t $DOCKER_IMAGE .'
                 }
             }
         }
@@ -92,7 +96,7 @@ pipeline {
         stage('Frontend Install') {
             steps {
                 dir('itda-frontend') {
-                    sh 'npm ci'
+                    shLog 'npm ci'
                 }
             }
         }
@@ -100,20 +104,30 @@ pipeline {
         stage('Frontend Build') {
             steps {
                 dir('itda-frontend') {
-                    sh 'npm run build'
+                    shLog 'npm run build'
+                }
+            }
+        }
+
+        stage('Test') {
+            when {
+                branch 'test/*'
+            }
+            steps {
+                script { env.DID_TEST = 'true' }
+                dir('itda-backend') {
+                    shLog 'gradle test'
                 }
             }
         }
 
         stage('Deploy') {
             when {
-                expression {
-                    def b = env.DEPLOY_BRANCH ?: env.GIT_BRANCH ?: env.GIT_LOCAL_BRANCH ?: env.gitlabBranch ?: env.gitlabSourceBranch ?: ''
-                    return b == 'develop' || b.endsWith('/develop') || b == 'refs/remotes/origin/develop'
-                }
+                branch 'develop'
             }
             steps {
-                sh '''
+                script { env.DID_DEPLOY = 'true' }
+                shLog '''
                     set -e
                     mkdir -p "$DEPLOY_DIR/nginx/conf.d" "$DEPLOY_DIR/prometheus" "$DEPLOY_DIR/grafana/provisioning"
                     mkdir -p "$DEPLOY_DIR/nginx/html"
@@ -138,10 +152,11 @@ pipeline {
     post {
         success {
             script {
-                def branch = env.DEPLOY_BRANCH ?: env.GIT_BRANCH ?: env.GIT_LOCAL_BRANCH ?: env.gitlabBranch ?: env.gitlabSourceBranch
+                def action = env.DID_DEPLOY == 'true' ? 'Deploy' : (env.DID_TEST == 'true' ? 'Test' : 'Build')
                 sendMMNotify(true, [
                     mention : "@here",
-                    branch  : branch,
+                    branch  : env.BRANCH_NAME,
+                    action  : action,
                     commit  : [
                         msg: env.COMMIT_MSG,
                         url: env.COMMIT_URL
@@ -153,20 +168,22 @@ pipeline {
 
         failure {
             script {
-                def branch = env.DEPLOY_BRANCH ?: env.GIT_BRANCH ?: env.GIT_LOCAL_BRANCH ?: env.gitlabBranch ?: env.gitlabSourceBranch
+                def action = env.DID_DEPLOY == 'true' ? 'Deploy' : (env.DID_TEST == 'true' ? 'Test' : 'Build')
                 def details = ''
                 try {
-                    details = sh(script: "docker ps -a | tail -n 10", returnStdout: true).trim()
+                    details = sh(script: 'if [ -f "$WORKSPACE/$LOG_FILE" ]; then tail -n 200 "$WORKSPACE/$LOG_FILE"; else echo "No log file available."; fi', returnStdout: true).trim()
+                    if (details.length() > 4000) { details = details.substring(details.length() - 4000) }
                 } catch (err) {
                     details = "에러 로그 수집 실패: ${err}"
                 }
                 sendMMNotify(false, [
                     mention : "@here",
-                    branch  : branch,
-                    buildUrl: env.BUILD_URL,
+                    branch  : env.BRANCH_NAME,
+                    action  : action,
                     details : details
                 ])
             }
         }
     }
 }
+
