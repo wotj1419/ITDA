@@ -108,7 +108,7 @@ function formatTime(timestamp: number): string {
       <div class="controls">
         <div class="media-controls">
           <button
-            :class="['media-btn', { active: !collabStore.isMuted }]"
+            :class="['media-btn', { muted: collabStore.isMuted }]"
             @click="collabStore.toggleMute"
             :title="collabStore.isMuted ? 'Unmute' : 'Mute'"
           >
@@ -344,7 +344,7 @@ function formatTime(timestamp: number): string {
   background: var(--rose-50);
 }
 
-.media-btn.active {
+.media-btn.muted {
   background: var(--rose-500);
   border-color: var(--rose-500);
   color: white;

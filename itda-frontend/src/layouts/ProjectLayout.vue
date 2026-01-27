@@ -1,4 +1,3 @@
-```
 <script setup lang="ts">
 import { computed, type Component } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
@@ -7,7 +6,6 @@ import { useUIStore } from '../stores/ui'
 import { useSidebarShortcut } from '../composables/useSidebarShortcut'
 import type { ProjectDetail } from '../types/api/projects'
 import Badge from '../components/common/Badge.vue'
-import AvatarGroup from '../components/common/AvatarGroup.vue'
 import Button from '../components/common/Button.vue'
 import ShareProjectModal from '../components/project/ShareProjectModal.vue'
 import {
@@ -67,14 +65,13 @@ const navItems = computed<NavItem[]>(() => [
   { key: 'settings', icon: Settings, label: 'Settings', to: null },
 ])
 
-const avatarItems = computed(() =>
+const memberBadges = computed(() =>
   (props.project?.members || []).slice(0, 3).map((member) => ({
-    src: member.profileImage,
-    alt: member.name,
-    fallback: member.name?.[0]?.toUpperCase() || '?',
+    initials: member.name?.[0]?.toUpperCase() || '?',
   }))
 )
-const memberCount = computed(() => props.project?.memberCount ?? props.project?.members?.length ?? 0)
+const totalMembers = computed(() => props.project?.members?.length ?? props.project?.memberCount ?? 0)
+const extraCount = computed(() => Math.max(totalMembers.value - memberBadges.value.length, 0))
 
 
 const sidebarClasses = computed(() => [
@@ -184,9 +181,15 @@ const progressPercentage = computed(() => {
             <span class="progress-text">{{ progress.completed }}/{{ progress.total }}</span>
           </div>
 
-          <div class="member-summary">
-            <AvatarGroup :avatars="avatarItems" :max="3" size="sm" />
-            <span class="member-count">{{ memberCount }} members</span>
+          <div class="member-pill" v-if="totalMembers > 0">
+            <span
+              v-for="(member, index) in memberBadges"
+              :key="`${member.initials}-${index}`"
+              class="member-initial"
+            >
+              {{ member.initials }}
+            </span>
+            <span v-if="extraCount > 0" class="member-more">+{{ extraCount }}</span>
           </div>
 
           <Button variant="secondary" @click="uiStore.openModal('share-project')">
@@ -194,7 +197,7 @@ const progressPercentage = computed(() => {
             Share
           </Button>
 
-          <Button variant="secondary" @click="collabStore.joinRoom(projectId)">
+          <Button variant="secondary" @click="collabStore.showFloatingBar()">
             <Users class="icon-sm" />
             협업 시작
           </Button>
@@ -375,8 +378,7 @@ const progressPercentage = computed(() => {
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
-  overflow-y: auto;
-  overflow-x: hidden;
+  overflow: visible;
 }
 
 .nav-item {
@@ -487,8 +489,11 @@ const progressPercentage = computed(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 2rem;
-  height: 64px;
+  padding: 0.5rem 2rem;
+  min-height: 64px;
+  height: auto;
+  flex-wrap: wrap;
+  row-gap: 0.5rem;
   background: white;
   border-bottom: 1px solid var(--rose-100);
   flex-shrink: 0;
@@ -557,6 +562,9 @@ const progressPercentage = computed(() => {
   display: flex;
   align-items: center;
   gap: 0.75rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  row-gap: 0.5rem;
 }
 
 .progress-section {
@@ -591,20 +599,33 @@ const progressPercentage = computed(() => {
   color: var(--rose-500);
 }
 
-.member-summary {
-  display: flex;
+.member-pill {
+  display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.25rem;
   padding: 0.25rem 0.5rem;
   border: 1px solid var(--rose-100);
   border-radius: 999px;
   background: var(--rose-50);
+  color: var(--rose-600);
+  font-size: 0.75rem;
+  font-weight: 600;
 }
 
-.member-count {
-  font-size: 0.75rem;
-  color: var(--gray-600);
-  white-space: nowrap;
+.member-initial {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 0.25rem;
+  border-radius: 999px;
+  background: white;
+  border: 1px solid var(--rose-100);
+}
+
+.member-more {
+  padding-left: 0.125rem;
 }
 
 /* Content */

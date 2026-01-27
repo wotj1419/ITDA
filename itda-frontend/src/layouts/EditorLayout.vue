@@ -228,6 +228,7 @@ const sidebarClasses = computed(() => [
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
+  overflow: visible;
 }
 
 .nav-item {
@@ -245,6 +246,8 @@ const sidebarClasses = computed(() => [
   font-size: 0.875rem;
   font-weight: 500;
   transition: all 0.2s ease;
+  position: relative;
+  height: 44px;
 }
 
 .nav-item:hover {
@@ -261,6 +264,29 @@ const sidebarClasses = computed(() => [
   width: 20px;
   height: 20px;
   flex-shrink: 0;
+}
+
+/* Collapsed tooltips */
+.sidebar-collapsed .nav-item::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  left: 100%;
+  margin-left: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--gray-900);
+  color: white;
+  font-size: 0.75rem;
+  border-radius: 6px;
+  white-space: nowrap;
+  opacity: 0;
+  visibility: hidden;
+  transition: all 0.2s ease;
+  z-index: 100;
+}
+
+.sidebar-collapsed .nav-item:hover::after {
+  opacity: 1;
+  visibility: visible;
 }
 
 /* ==========================================================================

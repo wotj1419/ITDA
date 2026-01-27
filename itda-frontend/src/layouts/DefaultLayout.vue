@@ -15,6 +15,12 @@ withDefaults(defineProps<Props>(), {
   showShareButton: true,
   showCollabButton: true,
 })
+
+const emit = defineEmits<{
+  (e: 'start-collab'): void
+  (e: 'share'): void
+  (e: 'search', query: string): void
+}>()
 </script>
 
 <template>
@@ -27,6 +33,9 @@ withDefaults(defineProps<Props>(), {
         :show-collaborators="showCollaborators"
         :show-share-button="showShareButton"
         :show-collab-button="showCollabButton"
+        @startCollab="emit('start-collab')"
+        @share="emit('share')"
+        @search="emit('search', $event)"
       >
         <template #actions>
           <slot name="header-actions" />

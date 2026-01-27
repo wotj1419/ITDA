@@ -4,14 +4,17 @@ import { RouterLink } from 'vue-router'
 import { Plus, Star } from 'lucide-vue-next'
 import { useProjectStore } from '../stores/project'
 import { useUIStore } from '../stores/ui'
+import { useCollabStore } from '../stores/collab'
 import DefaultLayout from '../layouts/DefaultLayout.vue'
 import ProjectCard from '../components/project/ProjectCard.vue'
 import NewProjectModal from '../components/project/NewProjectModal.vue'
+import StartCollabModal from '../components/project/StartCollabModal.vue'
 import ConfirmModal from '../components/common/ConfirmModal.vue'
 import TimeAgo from '../components/common/TimeAgo.vue'
 
 const projectStore = useProjectStore()
 const uiStore = useUIStore()
+const collabStore = useCollabStore()
 
 // Delete Confirmation State
 const showDeleteModal = ref(false)
@@ -36,6 +39,15 @@ const handleToggleFavorite = (projectId: number) => {
 
 const openNewProjectModal = () => {
   uiStore.openModal('new-project')
+}
+
+const openStartCollabModal = () => {
+  uiStore.openModal('start-collab')
+}
+
+const handleStartCollab = async (projectId: number) => {
+  await collabStore.joinRoom(projectId)
+  collabStore.showFloatingBar(true)
 }
 
 // Delete Handlers
@@ -63,7 +75,10 @@ const cancelDelete = () => {
 </script>
 
 <template>
-  <DefaultLayout>
+  <DefaultLayout
+    :show-collaborators="false"
+    @start-collab="openStartCollabModal"
+  >
     <div class="dashboard-container">
       <!-- Welcome Message -->
       <div class="welcome-section">
@@ -147,6 +162,7 @@ const cancelDelete = () => {
 
     <!-- New Project Modal -->
     <NewProjectModal />
+    <StartCollabModal @start="handleStartCollab" />
 
     <!-- Confirm Modal -->
     <ConfirmModal

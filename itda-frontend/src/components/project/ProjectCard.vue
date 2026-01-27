@@ -4,7 +4,6 @@ import { RouterLink } from 'vue-router'
 import { Star, MoreVertical, Trash2, Pencil, Share2 } from 'lucide-vue-next'
 import type { Project } from '../../types/api/projects'
 import Badge from '../common/Badge.vue'
-import AvatarGroup from '../common/AvatarGroup.vue'
 import TimeAgo from '../common/TimeAgo.vue'
 import { getProjectProgress } from '../../services/mock/projects'
 
@@ -38,18 +37,6 @@ const badgeVariant = computed(() => {
     default:
       return 'default'
   }
-})
-
-// Mock member avatars based on member count
-const memberAvatars = computed(() => {
-  const avatars = []
-  for (let i = 0; i < Math.min(props.project.memberCount, 3); i++) {
-    avatars.push({
-      src: `https://i.pravatar.cc/150?u=${props.project.projectId}-${i}`,
-      alt: `Member ${i + 1}`,
-    })
-  }
-  return avatars
 })
 
 const toggleMenu = (e: Event) => {
@@ -169,7 +156,6 @@ const handleDeleteRequest = (e: Event) => {
 
       <!-- Footer -->
       <div class="card-footer">
-        <AvatarGroup :avatars="memberAvatars" :max="2" size="sm" />
         <span class="card-time">Edited <TimeAgo :date="project.updatedAt" /></span>
       </div>
     </div>

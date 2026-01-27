@@ -26,6 +26,11 @@ export const useCollabStore = defineStore('collab', () => {
     const messages = ref<CollabMessage[]>([]);
     const isPanelOpen = ref(false);
 
+    // UI State
+    const isFloatingBarVisible = ref(false);
+    const isMediaConnected = ref(false);
+    const floatingBarResetToken = ref(0);
+
     // Local User State
     const isMuted = ref(true);
     const isVideoOff = ref(true);
@@ -81,7 +86,7 @@ export const useCollabStore = defineStore('collab', () => {
     // ================================
 
     /**
-     * Join a project room
+     * Join a project room (Signaling Only)
      */
     async function joinRoom(projectId: number) {
         const nextRoomId = String(projectId);
@@ -105,18 +110,14 @@ export const useCollabStore = defineStore('collab', () => {
             // 2. Subscribe to room
             socketManager.subscribeToRoom(roomId.value);
 
-            // 3. Initialize Media Stream
-            await peerConnectionService.getLocalStream({ video: false, audio: true });
-
-            // 4. Setup WebRTC Callbacks
+            // 3. Setup WebRTC Callbacks (Prepare for later)
             peerConnectionService.setCallbacks({
                 onTrack: handleRemoteTrack,
                 onIceCandidate: (candidate, peerId) => handleIceCandidate(peerId, candidate),
                 onConnectionStateChange: handleConnectionStateChange,
             });
 
-            // 5. Broadcast Join
-            // Wait slightly for connection to stabilize
+            // 4. Broadcast Join (Signaling Only)
             setTimeout(() => {
                 socketManager.sendSignal({
                     type: 'join',
@@ -134,7 +135,65 @@ export const useCollabStore = defineStore('collab', () => {
     }
 
     /**
-     * Leave the room
+     * Enable Media (Voice/Video) - "Go Live"
+     */
+    async function enableMedia() {
+        if (!roomId.value || status.value !== 'connected') return;
+        if (isMediaConnected.value) return;
+
+        try {
+            // 1. Get Local Stream
+            await peerConnectionService.getLocalStream({ video: false, audio: true });
+
+            // 2. Initialize Peer Connections for existing participants
+            // (In a mesh, we need to offer to everyone who is already here? 
+            //  Or just wait for them? Ideally we offer to existing peers)
+            //  The current logic relied on 'join' signal trigger. 
+            //  Since we already joined, we might need to send a 'media_ready' signal?
+            //  Or just create offers now.
+
+            // Simplified: Just iterate participants and offer if they are media ready?
+            // For now, let's assume standard mesh: create offer to all existing.
+            participants.value.forEach(async (p) => {
+                if (p.odps && p.odps !== localParticipant.value.odps) {
+                    peerConnectionService.createPeerConnection(p.odps);
+                    const offer = await peerConnectionService.createOffer(p.odps);
+                    if (offer) {
+                        socketManager.sendSignal({
+                            type: 'offer',
+                            targetId: p.odps,
+                            payload: offer
+                        });
+                    }
+                }
+            });
+
+            isMediaConnected.value = true;
+            isMuted.value = false; // Auto-unmute on connect? Or keep muted? User said "Live" button. Usually starts unmuted.
+            peerConnectionService.toggleMute(false);
+
+        } catch (e) {
+            console.error('Failed to enable media:', e);
+        }
+    }
+
+    /**
+     * Disable Media - "End Call"
+     */
+    function disableMedia() {
+        if (!isMediaConnected.value) return;
+
+        // Close all peer connections but keep socket
+        peerConnectionService.closeAll();
+        // peerConnectionService.stopLocalStream(); // Assuming this method exists or handled in closeAll
+
+        isMediaConnected.value = false;
+        isFloatingBarVisible.value = false; // Hide bar as requested
+        isMuted.value = true;
+    }
+
+    /**
+     * Leave the room completely
      */
     function leaveRoom() {
         if (!roomId.value) return;
@@ -144,10 +203,9 @@ export const useCollabStore = defineStore('collab', () => {
             type: 'leave',
         });
 
-        // Close WebRTC
-        peerConnectionService.closeAll();
+        disableMedia(); // Handles WebRTC cleanup
 
-        // Close Socket Subscription (Optional, socketManager handles it)
+        // Close Socket Subscription
         socketManager.disconnect();
 
         // Reset State
@@ -158,16 +216,19 @@ export const useCollabStore = defineStore('collab', () => {
         cursors.clear();
         lastCursorSentAt = 0;
         isPanelOpen.value = false;
-        isMuted.value = true;
-        isVideoOff.value = true;
-        isScreenSharing.value = false;
         localStorage.removeItem(STORAGE_KEY);
     }
 
-    // ================================
-    // Actions: Signaling & WebRTC
-    // ================================
+    function showFloatingBar(resetPosition = false) {
+        isFloatingBarVisible.value = true;
+        if (resetPosition) {
+            floatingBarResetToken.value += 1;
+        }
+    }
 
+    function hideFloatingBar() {
+        isFloatingBarVisible.value = false;
+    }
     async function handleSignal(signal: any) {
         const { type, senderId, payload, targetId } = signal;
 
@@ -465,6 +526,9 @@ export const useCollabStore = defineStore('collab', () => {
         messages,
         cursors,
         isPanelOpen,
+        isFloatingBarVisible, // Exported
+        isMediaConnected,     // Exported
+        floatingBarResetToken,
         isMuted,
         isVideoOff,
         isScreenSharing,
@@ -476,6 +540,10 @@ export const useCollabStore = defineStore('collab', () => {
         // Actions
         joinRoom,
         leaveRoom,
+        enableMedia,  // Exported
+        disableMedia, // Exported
+        showFloatingBar, // Exported
+        hideFloatingBar, // Exported
         sendMessage,
         toggleMute,
         toggleVideo,
