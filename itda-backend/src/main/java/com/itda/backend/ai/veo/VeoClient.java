@@ -71,17 +71,14 @@ public class VeoClient {
         );
 
         Image firstFrame = buildImage(request.firstFrame());
-        if (request.lastFrame() != null) {
-            // TODO(P1): support lastFrame when Veo SDK/REST input is 확정되면 추가
-            log.debug("[VeoClient] lastFrame provided but ignored (P1): contentType={}", request.lastFrame().contentType());
-        }
+        Image lastFrame = buildImage(request.lastFrame());
         GenerateVideosSource.Builder sourceBuilder = GenerateVideosSource.builder()
                 .prompt(buildPrompt(prompt, settings));
         if (firstFrame != null) {
             sourceBuilder.image(firstFrame);
         }
         GenerateVideosSource source = sourceBuilder.build();
-        GenerateVideosConfig config = buildRequestConfig(settings, timeoutMs);
+        GenerateVideosConfig config = buildRequestConfig(settings, timeoutMs, lastFrame);
 
         try {
             var client = clientProvider.getClient();
@@ -163,7 +160,7 @@ public class VeoClient {
         throw new AiProviderException("VEO_CALL_FAILED: video payload missing");
     }
 
-    private GenerateVideosConfig buildRequestConfig(VeoSettings settings, long timeoutMs) {
+    private GenerateVideosConfig buildRequestConfig(VeoSettings settings, long timeoutMs, Image lastFrame) {
         GenerateVideosConfig.Builder builder = GenerateVideosConfig.builder()
                 .numberOfVideos(1)
                 .httpOptions(HttpOptions.builder().timeout(toIntTimeoutMs(timeoutMs, VeoProperties.DEFAULT_TIMEOUT_MS)).build());
@@ -171,6 +168,9 @@ public class VeoClient {
         Integer durationSeconds = settings.durationSeconds();
         if (durationSeconds != null) {
             builder.durationSeconds(durationSeconds);
+        }
+        if (lastFrame != null) {
+            builder.lastFrame(lastFrame);
         }
         builder.aspectRatio(settings.aspectRatioOrDefault(DEFAULT_ASPECT_RATIO));
         return builder.build();
