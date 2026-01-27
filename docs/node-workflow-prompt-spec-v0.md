@@ -263,7 +263,7 @@ https://cloud.google.com/vertex-ai/generative-ai/docs/models/gemini/2-5-flash-im
 - `promptEnRewritten`: (선택) Veo 등에서 리라이터가 적용된 “추정 최종 프롬프트”(제공되는 경우에만 저장)
 
 ### 7.2 MASTER(settings)
-- `styleKey`: 예) `CINEMATIC_REAL`
+- `styleKey`: 예) `PHOTO_REAL`
 - `timeOfDayKey`: 예) `DAY`
 - `moodKey`: 예) `NEUTRAL`
 - `objectIds`: 예) `["obj-1","obj-2"]` (향후 오브젝트 시트 연동)
@@ -298,9 +298,57 @@ https://cloud.google.com/vertex-ai/generative-ai/docs/models/gemini/2-5-flash-im
 > 프론트는 “라벨(한글)”을 표시하되, 저장/전송은 아래 key를 사용한다.
 
 #### 7.6.1 MASTER 프리셋
-- `styleKey`: `CINEMATIC_REAL|ANIME|PIXAR|NOIR|DOCUMENTARY` (v0는 `CINEMATIC_REAL`만 있어도 시작 가능)
+- `styleKey`: `PHOTO_REAL|ANIME_2D|STYLIZED_3D|WATERCOLOR_ILLUSTRATION|OIL_PAINT_ILLUSTRATION`
 - `timeOfDayKey`: `DAWN|DAY|DUSK|NIGHT`
 - `moodKey`: `NEUTRAL|COZY|LONELY|TENSE|HOPEFUL|DARK`
+
+##### 7.6.1-1 프리셋 키 → prompt fragment 매핑(Back-end 단일 소스)
+> 실제 영문 fragment는 `PresetFragments` enum 기준으로 렌더링된다.
+
+**Style fragments**
+| styleKey | fragment |
+| --- | --- |
+| PHOTO_REAL | photo-realistic |
+| ANIME_2D | 2D anime illustration, clean line art |
+| STYLIZED_3D | stylized 3D animated feature film look |
+| WATERCOLOR_ILLUSTRATION | watercolor illustration, soft washes, subtle paper texture |
+| OIL_PAINT_ILLUSTRATION | oil paint illustration, textured brush strokes |
+
+**Time of day fragments**
+| timeOfDayKey | fragment |
+| --- | --- |
+| DAWN | dawn |
+| DAY | daytime |
+| DUSK | golden hour, sunset |
+| NIGHT | night |
+
+**Mood fragments**
+| moodKey | fragment |
+| --- | --- |
+| NEUTRAL | natural color grade, balanced lighting, moderate contrast |
+| COZY | warm color grade, soft diffused lighting, gentle contrast |
+| LONELY | cooler tones, slightly desaturated, more negative space, calm atmosphere |
+| TENSE | low-key lighting, higher contrast, cooler grade, subtle shadow emphasis |
+| HOPEFUL | bright high-key lighting, vibrant but natural colors, soft highlights |
+| DARK | desaturated cool palette, soft low contrast, overcast or dim ambience |
+
+##### 7.6.1-2 레거시 호환(설정 키/라벨)
+> 서버는 **레거시 키/라벨**을 `styleKey/timeOfDayKey/moodKey`로 매핑한다.  
+> **지원 종료일: 2026-02-28** (이후 제거 예정).
+
+**Style 레거시 → styleKey**
+- `CINEMATIC_REAL` → `PHOTO_REAL`
+- `ANIME` → `ANIME_2D`
+- `PIXAR` → `STYLIZED_3D`
+- `NOIR`, `DOCUMENTARY` → `PHOTO_REAL`
+- 한글 라벨: `실사` → `PHOTO_REAL`, `애니메이션`/`애니` → `ANIME_2D`, `픽사` → `STYLIZED_3D`, `수채화` → `WATERCOLOR_ILLUSTRATION`, `유화` → `OIL_PAINT_ILLUSTRATION`
+
+**Time 레거시 → timeOfDayKey**
+- `MORNING` → `DAWN`, `EVENING` → `DUSK`
+- 한글 라벨: `아침` → `DAWN`, `낮` → `DAY`, `저녁` → `DUSK`, `밤` → `NIGHT`
+
+**Mood 레거시 → moodKey**
+- 한글 라벨: `편안` → `COZY`, `고독` → `LONELY`, `긴장` → `TENSE`, `행복` → `HOPEFUL`, `우울` → `DARK`
 
 #### 7.6.2 SHOT 프리셋
 - `expressionKey`: `NEUTRAL|SMILE|SAD|SURPRISED|ANGRY|BLANK`
@@ -315,7 +363,7 @@ https://cloud.google.com/vertex-ai/generative-ai/docs/models/gemini/2-5-flash-im
 
 ### 8.1 글로벌 기본값(v0)
 - `aspectRatio`: `"16:9"` (MVP 고정 권장. 필요하면 9:16을 “프로젝트/씬 전역 토글”로 제공)
-- MASTER: `styleKey=CINEMATIC_REAL`, `timeOfDayKey=DAY`, `moodKey=NEUTRAL`
+- MASTER: `styleKey=PHOTO_REAL`, `timeOfDayKey=DAY`, `moodKey=NEUTRAL`
 - GRID(SHOT_VARIATIONS): `layout=2x2`, `shotTypes=["WIDE","MEDIUM","CLOSE_UP","OTS"]`
 - GRID(STORY_BEATS): `layout=1x4`, `beatsKo`는 4개 기본 템플릿 자동 채움(아래 “promptKo 기본값” 참고)
 - SHOT: `gridCellIndex=0`, `shotType=WIDE`, `expressionKey=NEUTRAL`
@@ -356,6 +404,11 @@ https://cloud.google.com/vertex-ai/generative-ai/docs/models/gemini/2-5-flash-im
   - (D) 결과가 빈 문자열이면 400
 
 > 번역/요약은 Vertex Gemini 텍스트 모델을 사용해도 되고(권장), v0에서는 단순 “번역 프롬프트”로 충분하다.
+
+#### 9.2.1 promptEn 정책(현행)
+- **Brand-free 정책**: 현재 PromptRenderer는 브랜드명 제거/치환을 강제하지 않는다. (필요 시 별도 필터/지침 추가)
+- **Tone(톤) 반영**: `styleKey/timeOfDayKey/moodKey` → fragment 매핑으로 톤을 반영한다(7.6.1-1 참고).
+- **공통 금지 규칙**: `No text / no subtitles / no watermark / no logo` 문구를 항상 포함한다.
 
 ### 9.3 노드 타입별 promptEn 템플릿(권장 v0)
 
