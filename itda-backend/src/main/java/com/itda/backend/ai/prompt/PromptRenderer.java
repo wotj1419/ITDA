@@ -3,6 +3,7 @@ package com.itda.backend.ai.prompt;
 import com.itda.backend.global.exception.BusinessException;
 import com.itda.backend.global.response.ErrorCode;
 import com.itda.backend.node.domain.NodeType;
+import com.itda.backend.node.generation.GridLayout;
 import com.itda.backend.scene.domain.Scene;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -34,20 +35,19 @@ public class PromptRenderer {
         return switch (nodeType) {
             case MASTER -> renderMaster(scene, promptKoTrimmed, settings);
             case GRID -> {
-                requireGridShotVariations(settings);
-                yield renderGridShotVariations(scene, promptKoTrimmed, settings);
+                String gridMode = readString(settings, "gridMode");
+                if (gridMode.isEmpty() || gridMode.equalsIgnoreCase("SHOT_VARIATIONS")) {
+                    yield renderGridShotVariations(scene, promptKoTrimmed, settings);
+                }
+                if (gridMode.equalsIgnoreCase("STORY_BEATS")) {
+                    yield renderGridStoryBeats(scene, promptKoTrimmed, settings);
+                }
+                throw new BusinessException(ErrorCode.INVALID_REQUEST, "GRID gridMode must be SHOT_VARIATIONS or STORY_BEATS");
             }
             case SHOT -> renderShot(scene, promptKoTrimmed, settings);
             case VIDEO -> renderVideo(scene, promptKoTrimmed, settings);
             case SCENE_HEADER -> throw new BusinessException(ErrorCode.INVALID_REQUEST);
         };
-    }
-
-    private void requireGridShotVariations(Map<String, Object> settings) {
-        String gridMode = readString(settings, "gridMode");
-        if (!gridMode.isEmpty() && !gridMode.equalsIgnoreCase("SHOT_VARIATIONS")) {
-            throw new BusinessException(ErrorCode.INVALID_REQUEST, "GRID gridMode not supported in P0");
-        }
     }
 
     private String renderMaster(Scene scene, String promptKo, Map<String, Object> settings) {
@@ -103,6 +103,42 @@ public class PromptRenderer {
         lines.add("All panels share consistent characters, outfits, lighting, and location.");
         lines.add("Style: " + safeOrNone(style) + ". Time: " + safeOrNone(time) + ". Mood: " + safeOrNone(mood) + ".");
         lines.add("Composition note: " + safeOrNone(compositionHintEn) + ".");
+        lines.add("No captions, no text, no watermark, no logo. Aspect ratio: " + safeOrNone(aspectRatio) + ".");
+
+        return joinAndValidate(lines);
+    }
+
+    private String renderGridStoryBeats(Scene scene, String promptKo, Map<String, Object> settings) {
+        String layout = readString(settings, "layout");
+        String aspectRatio = readString(settings, "aspectRatio");
+        int panelCount = GridLayout.parse(layout).panelCount();
+        List<String> beatsKo = ensureBeatCount(readStringList(settings, "beatsKo"), panelCount);
+
+        Map<String, String> translationInput = new LinkedHashMap<>();
+        translationInput.put("promptKo", promptKo);
+        translationInput.put("continuityRulesKo", readString(settings, "continuityRulesKo"));
+        for (int i = 0; i < beatsKo.size(); i++) {
+            translationInput.put("beat" + i, beatsKo.get(i));
+        }
+        Map<String, String> translated = koEnTranslator.toEnglishOneSentenceMany(translationInput);
+        String promptKoEn = translated.getOrDefault("promptKo", "");
+        String continuityRulesEn = translated.getOrDefault("continuityRulesKo", "");
+
+        String style = PresetFragments.styleFragment(read(settings, "styleKey"));
+        String time = PresetFragments.timeOfDayFragment(read(settings, "timeOfDayKey"));
+        String mood = PresetFragments.moodFragment(read(settings, "moodKey"));
+
+        List<String> lines = new ArrayList<>();
+        lines.add("Create ONE storyboard grid image with " + safeOrNone(layout) + " panels that depict a short sequence.");
+        lines.add("Base content: " + requireEn(promptKoEn) + ".");
+        lines.add("Panels 1.." + panelCount + " are sequential beats:");
+        for (int i = 0; i < beatsKo.size(); i++) {
+            String beatEn = translated.getOrDefault("beat" + i, "");
+            lines.add((i + 1) + ") " + safeOrNone(beatEn));
+        }
+        lines.add("Keep continuity across panels with the same characters, outfits, lighting, and location.");
+        lines.add("Style: " + safeOrNone(style) + ". Time: " + safeOrNone(time) + ". Mood: " + safeOrNone(mood) + ".");
+        lines.add("Continuity rules: " + safeOrNone(continuityRulesEn) + ".");
         lines.add("No captions, no text, no watermark, no logo. Aspect ratio: " + safeOrNone(aspectRatio) + ".");
 
         return joinAndValidate(lines);
@@ -267,5 +303,22 @@ public class PromptRenderer {
 
     private String safe(String value) {
         return value == null ? "" : value.trim();
+    }
+
+    private List<String> ensureBeatCount(List<String> beats, int panelCount) {
+        if (panelCount <= 0) {
+            return beats;
+        }
+        List<String> corrected = new ArrayList<>();
+        if (beats != null) {
+            corrected.addAll(beats);
+        }
+        while (corrected.size() < panelCount) {
+            corrected.add("");
+        }
+        if (corrected.size() > panelCount) {
+            return new ArrayList<>(corrected.subList(0, panelCount));
+        }
+        return corrected;
     }
 }

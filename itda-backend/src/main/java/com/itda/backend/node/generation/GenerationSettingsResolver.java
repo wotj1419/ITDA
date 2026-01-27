@@ -81,7 +81,10 @@ public class GenerationSettingsResolver {
             case GRID -> {
                 putIfMissing(settings, "gridMode", "SHOT_VARIATIONS");
                 putIfMissing(settings, "layout", DEFAULT_GRID_LAYOUT);
-                putIfMissing(settings, "shotTypes", new ArrayList<>(DEFAULT_GRID_SHOT_TYPES));
+                String gridMode = readString(settings, "gridMode");
+                if (gridMode.isEmpty() || gridMode.equalsIgnoreCase("SHOT_VARIATIONS")) {
+                    putIfMissing(settings, "shotTypes", new ArrayList<>(DEFAULT_GRID_SHOT_TYPES));
+                }
             }
             case SHOT -> {
                 putIfMissing(settings, "gridCellIndex", 0);
@@ -123,14 +126,20 @@ public class GenerationSettingsResolver {
             settings.put("layout", layout);
 
             String gridMode = readString(settings, "gridMode");
-            if (!gridMode.isEmpty() && !gridMode.equalsIgnoreCase("SHOT_VARIATIONS")) {
-                throw new BusinessException(ErrorCode.INVALID_REQUEST, "GRID gridMode not supported in P0");
-            }
-
             int panelCount = GridLayout.parse(layout).panelCount();
-            List<String> shotTypes = normalizeShotTypes(settings.get("shotTypes"));
-            List<String> corrected = autoCorrectShotTypes(panelCount, shotTypes);
-            settings.put("shotTypes", corrected);
+            if (gridMode.isEmpty() || gridMode.equalsIgnoreCase("SHOT_VARIATIONS")) {
+                List<String> shotTypes = normalizeShotTypes(settings.get("shotTypes"));
+                List<String> corrected = autoCorrectShotTypes(panelCount, shotTypes);
+                settings.put("shotTypes", corrected);
+            } else if (gridMode.equalsIgnoreCase("STORY_BEATS")) {
+                removeIfBlank(settings, "continuityRulesKo");
+                List<String> beats = normalizeBeats(settings.get("beatsKo"));
+                // beatsKo length mismatch policy: auto-correct by padding/truncating to match panel count.
+                List<String> corrected = autoCorrectBeats(panelCount, beats);
+                settings.put("beatsKo", corrected);
+            } else {
+                throw new BusinessException(ErrorCode.INVALID_REQUEST, "GRID gridMode must be SHOT_VARIATIONS or STORY_BEATS");
+            }
         }
     }
 
@@ -451,6 +460,26 @@ public class GenerationSettingsResolver {
         return new ArrayList<>();
     }
 
+    private List<String> normalizeBeats(Object raw) {
+        if (raw == null) {
+            return new ArrayList<>();
+        }
+        if (raw instanceof List<?> list) {
+            List<String> result = new ArrayList<>();
+            for (Object item : list) {
+                if (item == null) {
+                    continue;
+                }
+                String text = item.toString().trim();
+                if (!text.isEmpty()) {
+                    result.add(text);
+                }
+            }
+            return result;
+        }
+        return new ArrayList<>();
+    }
+
     private List<String> autoCorrectShotTypes(int panelCount, List<String> shotTypes) {
         if (panelCount <= 0) {
             return new ArrayList<>(DEFAULT_GRID_SHOT_TYPES);
@@ -466,6 +495,29 @@ public class GenerationSettingsResolver {
             while (corrected.size() < panelCount) {
                 corrected.add(DEFAULT_GRID_SHOT_TYPES.get(i % DEFAULT_GRID_SHOT_TYPES.size()));
                 i++;
+            }
+        }
+
+        if (corrected.size() > panelCount) {
+            return new ArrayList<>(corrected.subList(0, panelCount));
+        }
+
+        return corrected;
+    }
+
+    private List<String> autoCorrectBeats(int panelCount, List<String> beats) {
+        if (panelCount <= 0) {
+            return new ArrayList<>();
+        }
+        List<String> base = beats == null ? List.of() : beats;
+        List<String> corrected = new ArrayList<>();
+        if (!base.isEmpty()) {
+            corrected.addAll(base);
+        }
+
+        if (corrected.size() < panelCount) {
+            while (corrected.size() < panelCount) {
+                corrected.add("");
             }
         }
 
