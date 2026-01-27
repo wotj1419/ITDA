@@ -164,6 +164,7 @@ CREATE TABLE nodes (
     is_active TINYINT(1) NOT NULL DEFAULT 0,        -- MASTER용 활성 플래그
     is_confirmed TINYINT(1) NOT NULL DEFAULT 0,     -- VIDEO용 확정 플래그
     content_url VARCHAR(500),        -- 생성 결과 URL
+    asset_id BIGINT,                -- 생성 결과 에셋 ID
     start_shot_node_id BIGINT,       -- VIDEO 시작 샷 노드 ID
     end_shot_node_id BIGINT,         -- VIDEO 종료 샷 노드 ID
     created_by BIGINT,
@@ -174,11 +175,13 @@ CREATE TABLE nodes (
     KEY idx_nodes_scene_order (scene_id, order_index),
     KEY idx_nodes_status (status),
     KEY idx_nodes_start_shot (start_shot_node_id),
+    KEY idx_nodes_asset (asset_id),
     CONSTRAINT fk_nodes_scene FOREIGN KEY (scene_id) REFERENCES scenes(id) ON DELETE CASCADE,
     CONSTRAINT fk_nodes_parent FOREIGN KEY (parent_node_id) REFERENCES nodes(id) ON DELETE CASCADE,
     CONSTRAINT fk_nodes_user FOREIGN KEY (created_by) REFERENCES users(id),
     CONSTRAINT fk_nodes_start_shot FOREIGN KEY (start_shot_node_id) REFERENCES nodes(id) ON DELETE SET NULL,
-    CONSTRAINT fk_nodes_end_shot FOREIGN KEY (end_shot_node_id) REFERENCES nodes(id) ON DELETE SET NULL
+    CONSTRAINT fk_nodes_end_shot FOREIGN KEY (end_shot_node_id) REFERENCES nodes(id) ON DELETE SET NULL,
+    CONSTRAINT fk_nodes_asset FOREIGN KEY (asset_id) REFERENCES assets(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- scenes.active_master_node_id FK 추가
