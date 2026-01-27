@@ -266,6 +266,8 @@ public class NodeService {
                 .endShotNodeId(shotIds.endShotNodeId())
                 .build());
 
+        validateInputImageReady(node, shotIds);
+
         JobType jobType = resolveJobType(node.getNodeType());
         String requestJson = buildGenerationRequestJson(promptEn, cachedSettings);
         String idempotencyKey = request.force()
@@ -422,6 +424,75 @@ public class NodeService {
         if (!node.getSceneId().equals(sceneId) || node.getNodeType() != NodeType.SHOT) {
             throw new BusinessException(ErrorCode.INVALID_NODE_RELATION);
         }
+    }
+
+    private void validateInputImageReady(Node node, VideoShotIds shotIds) {
+        if (node == null || node.getNodeType() == null) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST);
+        }
+        switch (node.getNodeType()) {
+            case GRID -> ensureParentContentReady(node, NodeType.MASTER);
+            case SHOT -> ensureParentContentReady(node, NodeType.GRID);
+            case VIDEO -> ensureStartShotContentReady(node, shotIds);
+            case MASTER, SCENE_HEADER -> {
+            }
+        }
+    }
+
+    private void ensureParentContentReady(Node node, NodeType expectedParentType) {
+        Node parent = requireParentNode(node, expectedParentType);
+        if (!hasReadyContent(parent)) {
+            throw new BusinessException(ErrorCode.INPUT_IMAGE_NOT_READY);
+        }
+    }
+
+    private void ensureStartShotContentReady(Node node, VideoShotIds shotIds) {
+        Long startShotNodeId = shotIds == null ? null : shotIds.startShotNodeId();
+        if (startShotNodeId == null) {
+            throw new BusinessException(ErrorCode.INVALID_NODE_RELATION);
+        }
+        Node shot = requireShotNode(node.getSceneId(), startShotNodeId);
+        if (!hasReadyContent(shot)) {
+            throw new BusinessException(ErrorCode.INPUT_IMAGE_NOT_READY);
+        }
+        Long endShotNodeId = shotIds == null ? null : shotIds.endShotNodeId();
+        if (endShotNodeId != null) {
+            Node endShot = requireShotNode(node.getSceneId(), endShotNodeId);
+            if (!hasReadyContent(endShot)) {
+                throw new BusinessException(ErrorCode.INPUT_IMAGE_NOT_READY);
+            }
+        }
+    }
+
+    private Node requireParentNode(Node node, NodeType expectedParentType) {
+        Long parentNodeId = node.getParentNodeId();
+        if (parentNodeId == null) {
+            throw new BusinessException(ErrorCode.INVALID_NODE_RELATION);
+        }
+        Node parent = getNodeOrThrow(parentNodeId);
+        if (!parent.getSceneId().equals(node.getSceneId()) || parent.getNodeType() != expectedParentType) {
+            throw new BusinessException(ErrorCode.INVALID_NODE_RELATION);
+        }
+        return parent;
+    }
+
+    private Node requireShotNode(Long sceneId, Long shotNodeId) {
+        Node shot = getNodeOrThrow(shotNodeId);
+        if (!shot.getSceneId().equals(sceneId) || shot.getNodeType() != NodeType.SHOT) {
+            throw new BusinessException(ErrorCode.INVALID_NODE_RELATION);
+        }
+        return shot;
+    }
+
+    private boolean hasReadyContent(Node node) {
+        if (node == null) {
+            return false;
+        }
+        String contentUrl = node.getContentUrl();
+        if (contentUrl != null && !contentUrl.isBlank()) {
+            return true;
+        }
+        return node.getStatus() == NodeStatus.SUCCEEDED;
     }
 
     private VideoShotIds validateCreateRequestAndExtractShots(

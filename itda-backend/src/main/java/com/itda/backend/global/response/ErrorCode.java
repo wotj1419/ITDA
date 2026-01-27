@@ -39,6 +39,7 @@ public enum ErrorCode {
     EMAIL_ALREADY_EXISTS(409, "이미 가입된 이메일입니다"),
     SCENE_LIMIT_EXCEEDED(409, "씬 개수 제한을 초과했습니다"),
     MASTER_NODE_LIMIT_EXCEEDED(409, "마스터 노드는 씬당 최대 3개까지 생성할 수 있습니다"),
+    INPUT_IMAGE_NOT_READY(409, "입력 이미지가 준비되지 않았습니다"),
     SCENARIO_VERSION_CONFLICT(409, "시나리오가 최신 상태가 아닙니다"),
 
     // ===== 403 Forbidden (Node specific) =====
