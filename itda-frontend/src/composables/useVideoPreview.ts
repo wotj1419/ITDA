@@ -5,7 +5,14 @@ export function useVideoPreview() {
   function isVideo(url?: string): boolean {
     if (!url) return false
     const lower = url.toLowerCase()
-    return lower.endsWith('.mp4') || lower.endsWith('.webm') || lower.endsWith('.mov') || lower.endsWith('/content')
+    return (
+      lower.startsWith('blob:') ||
+      lower.startsWith('data:video') ||
+      lower.endsWith('.mp4') ||
+      lower.endsWith('.webm') ||
+      lower.endsWith('.mov') ||
+      lower.endsWith('/content')
+    )
   }
 
   function playVideoPreview(event: MouseEvent) {

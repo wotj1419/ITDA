@@ -17,6 +17,7 @@ import {
 } from '../services/ws/projectEvents'
 
 export type MergeStatus = 'idle' | 'merging' | 'done' | 'error'
+const DEFAULT_CLIP_SECONDS = 5
 
 function toDurationSeconds(duration: number): number {
     if (!Number.isFinite(duration)) return 0
@@ -32,27 +33,24 @@ async function resolveMediaUrl(url?: string | null): Promise<string | undefined>
     return blobUrl ?? url
 }
 
-function isVideoUrl(url?: string): boolean {
-    if (!url) return false
-    return /\.(mp4|webm|mov|m4v)(\?.*)?$/.test(url)
-}
-
 async function mapTimelineItemsToClips(items: TimelineItem[]): Promise<TimelineClip[]> {
     return Promise.all(
         items.map(async (item) => {
             const clipKey = item.videoNodeId ?? item.sceneVideoId ?? `${item.sceneId}-${item.order}`
             const resolvedUrl = await resolveMediaUrl(item.thumbnailUrl)
-            const duration = toDurationSeconds(item.duration)
+            const durationSeconds = toDurationSeconds(item.duration)
+            const duration = durationSeconds > 0 ? durationSeconds : DEFAULT_CLIP_SECONDS
+            const isVideoClip = Boolean(item.videoNodeId || item.sceneVideoId)
 
             return {
                 clipId: `clip-${clipKey}`,
                 nodeId: item.videoNodeId ?? `scene-video-${item.sceneVideoId ?? item.order}`,
                 sceneId: item.sceneId,
                 thumbnailUrl: resolvedUrl || '',
-                videoUrl: isVideoUrl(resolvedUrl) ? resolvedUrl : undefined,
+                videoUrl: isVideoClip ? (resolvedUrl || undefined) : undefined,
                 duration,
                 order: item.order,
-                label: `??? ${item.order}`,
+                label: item.sceneTitle ? `${item.sceneTitle}` : `Clip ${item.order}`,
             }
         })
     )
