@@ -20,6 +20,7 @@ import {
 import { generateMockSceneNodes, generateSimpleMockNodes } from '../../services/mock/sceneNodes';
 import {
     fetchSceneNodes,
+    fetchNodeDetail,
     createNode as apiCreateNode,
     updateNode as apiUpdateNode,
     deleteNode as apiDeleteNode,
@@ -46,6 +47,15 @@ import {
     toJobStatus,
     UI_TO_API_NODE_TYPE,
 } from './mappers';
+import {
+    mapShotTypeKeysToLabels,
+    normalizeCameraMotionValue,
+    resolveExpressionLabel,
+    resolveMoodLabel,
+    resolveShotTypeLabel,
+    resolveStyleLabel,
+    resolveTimeOfDayLabel,
+} from '../../utils/nodeSettings';
 import { fetchProtectedBlobUrl } from '../../services/api/media';
 import { resolveApiUrl } from '../../services/api/urls';
 import { SHOT_FALLBACK_THUMBNAIL } from '../../utils/fallbacks';
@@ -72,6 +82,8 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
     }
     const selectedNodeId = ref<string | null>(null);
     const positionHistory = ref<NodePositionSnapshot[]>([]);
+    const hydratedNodeIds = ref<Set<string>>(new Set());
+    const hydrationRequests = new Map<string, Promise<void>>();
 
     // end shot 선택 모드 (트랜지션 영상용)
     const selectionMode = ref<'none' | 'selectEndShot'>('none');
@@ -229,6 +241,8 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
             sceneId.value = sceneIdParam;
             nodes.value = [];
             edges.value = [];
+            hydratedNodeIds.value.clear();
+            hydrationRequests.clear();
 
             const numericSceneId = toFiniteNumber(sceneIdParam);
             if (numericSceneId === null) return;
@@ -540,7 +554,7 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
             endShotId: null,
             videoUrl: null,
             thumbnailUrl: null,
-            duration: 5,
+            duration: 4,
             isConfirmed: false,
             prompt: '',
             cameraMotion: 'staticCamera',
@@ -719,6 +733,159 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
 
     function selectNode(nodeId: string | null): void {
         selectedNodeId.value = nodeId;
+        if (nodeId) {
+            void hydrateNodeDetail(nodeId);
+        }
+    }
+
+    function applyDetailSettings(targetNode: SceneNode, detail: Awaited<ReturnType<typeof fetchNodeDetail>>): void {
+        if (!targetNode.data) return;
+        if (detail.prompt !== null && detail.prompt !== undefined) {
+            targetNode.data.prompt = detail.prompt;
+        }
+
+        const settings = detail.settings ?? undefined;
+        if (!settings) return;
+
+        if (targetNode.data.type === NodeType.MASTER_IMAGE) {
+            const masterData = targetNode.data as MasterImageNodeData;
+            const styleValue = (settings.styleKey ?? settings.style) as string | undefined;
+            const timeValue = (settings.timeOfDayKey ?? settings.timeOfDay) as string | undefined;
+            const moodValue = (settings.moodKey ?? settings.mood) as string | undefined;
+            const objectIdsRaw = (settings.objectIds ?? settings.objects) as unknown;
+
+            masterData.style = resolveStyleLabel(styleValue) || masterData.style;
+            masterData.timeOfDay = resolveTimeOfDayLabel(timeValue) || masterData.timeOfDay;
+            masterData.mood = resolveMoodLabel(moodValue) || masterData.mood;
+            if (Array.isArray(objectIdsRaw)) {
+                masterData.objectIds = objectIdsRaw.filter(
+                    (item): item is string => typeof item === 'string'
+                );
+            }
+            return;
+        }
+
+        if (targetNode.data.type === NodeType.STORYBOARD_GRID) {
+            const gridData = targetNode.data as StoryboardGridNodeData;
+            const layoutValue = settings.layout as string | undefined;
+            const shotTypesRaw = settings.shotTypes as string[] | undefined;
+            const compositionHint =
+                (settings.compositionHintKo ?? settings.compositionHint) as string | undefined;
+
+            if (layoutValue) gridData.layout = layoutValue as StoryboardGridNodeData['layout'];
+            if (shotTypesRaw?.length) {
+                gridData.shotTypes = mapShotTypeKeysToLabels(shotTypesRaw);
+            }
+            if (compositionHint !== undefined) {
+                gridData.compositionHint = compositionHint ?? '';
+            }
+            return;
+        }
+
+        if (targetNode.data.type === NodeType.SHOT) {
+            const shotData = targetNode.data as ShotNodeData;
+            const gridCellIndex = settings.gridCellIndex as number | undefined;
+            const shotTypeValue = settings.shotType as string | undefined;
+            const expressionValue = settings.expressionKey as string | undefined;
+            const detailKo = settings.detailKo as string | undefined;
+
+            if (typeof gridCellIndex === 'number') {
+                shotData.gridCellIndex = gridCellIndex;
+            }
+            if (shotTypeValue) {
+                const resolved = resolveShotTypeLabel(shotTypeValue);
+                shotData.shotType = resolved || shotData.shotType;
+                if (resolved) {
+                    shotData.shotTypes = [resolved];
+                }
+            }
+            if (expressionValue) {
+                shotData.expression = resolveExpressionLabel(expressionValue) || shotData.expression;
+            }
+            if (detailKo !== undefined) {
+                shotData.additionalDetail = detailKo ?? '';
+            }
+            return;
+        }
+
+        if (targetNode.data.type === NodeType.VIDEO) {
+            const videoData = targetNode.data as VideoNodeData;
+            const durationValue = settings.duration as number | undefined;
+            const cameraMotionValue = settings.cameraMotionKey as string | undefined;
+            const motionDescription =
+                (settings.motionDescriptionKo ?? settings.motionDescription) as string | undefined;
+            const startShotNodeId = settings.startShotNodeId as number | undefined;
+            const endShotNodeId = settings.endShotNodeId as number | null | undefined;
+
+            if (typeof durationValue === 'number') {
+                videoData.duration = durationValue;
+            }
+            if (cameraMotionValue) {
+                videoData.cameraMotion = normalizeCameraMotionValue(cameraMotionValue);
+            }
+            if (motionDescription !== undefined) {
+                videoData.motionDescription = motionDescription ?? '';
+            }
+            if (typeof startShotNodeId === 'number') {
+                videoData.startShotId = String(startShotNodeId);
+            }
+            if (endShotNodeId !== undefined) {
+                videoData.endShotId = endShotNodeId === null ? null : String(endShotNodeId);
+            }
+        }
+    }
+
+    async function hydrateNodeDetail(nodeId: string): Promise<void> {
+        const targetNode = nodes.value.find((n) => n.id === nodeId);
+        if (!targetNode?.data || targetNode.data.type === NodeType.SCENE_HEADER) return;
+        if (hydratedNodeIds.value.has(nodeId)) return;
+
+        const existingRequest = hydrationRequests.get(nodeId);
+        if (existingRequest) return existingRequest;
+
+        const request = (async () => {
+            const numericId = toFiniteNumber(nodeId);
+            if (numericId === null) return;
+            try {
+                const detail = await fetchNodeDetail(numericId);
+                applyDetailSettings(targetNode, detail);
+
+                const detailStatus = toJobStatus(detail.status ?? null);
+                if (!targetNode.data?.jobStatus && detailStatus) {
+                    targetNode.data.jobStatus = detailStatus;
+                }
+
+                const detailUrl = resolveApiUrl(detail.contentUrl ?? null);
+                if (detailUrl && targetNode.data) {
+                    if (targetNode.data.type === NodeType.VIDEO) {
+                        const videoData = targetNode.data as VideoNodeData;
+                        if (!videoData.videoUrl) videoData.videoUrl = detailUrl;
+                        if (!videoData.thumbnailUrl) videoData.thumbnailUrl = detailUrl;
+                    } else if (targetNode.data.type === NodeType.MASTER_IMAGE) {
+                        const masterData = targetNode.data as MasterImageNodeData;
+                        if (!masterData.imageUrl) masterData.imageUrl = detailUrl;
+                        if (!masterData.thumbnailUrl) masterData.thumbnailUrl = detailUrl;
+                    } else if (targetNode.data.type === NodeType.STORYBOARD_GRID) {
+                        const gridData = targetNode.data as StoryboardGridNodeData;
+                        if (!gridData.imageUrl) gridData.imageUrl = detailUrl;
+                        if (!gridData.thumbnailUrl) gridData.thumbnailUrl = detailUrl;
+                    } else if (targetNode.data.type === NodeType.SHOT) {
+                        const shotData = targetNode.data as ShotNodeData;
+                        if (!shotData.imageUrl) shotData.imageUrl = detailUrl;
+                        if (!shotData.thumbnailUrl) shotData.thumbnailUrl = detailUrl;
+                    }
+                }
+
+                hydratedNodeIds.value.add(nodeId);
+            } catch (error) {
+                console.error('Failed to hydrate node detail:', error);
+            } finally {
+                hydrationRequests.delete(nodeId);
+            }
+        })();
+
+        hydrationRequests.set(nodeId, request);
+        return request;
     }
 
     // ==========================================================================
