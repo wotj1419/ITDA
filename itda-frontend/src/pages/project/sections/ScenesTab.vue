@@ -86,7 +86,7 @@ defineProps<Props>();
                 </Button>
               </RouterLink>
               <RouterLink
-                :to="{ name: 'timeline', params: { id: projectId }, query: { sceneId: scene.sceneId } }"
+                :to="{ name: 'scene-timeline', params: { id: projectId, sceneId: scene.sceneId } }"
                 custom
                 v-slot="{ navigate }"
               >

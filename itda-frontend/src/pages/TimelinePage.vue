@@ -25,7 +25,7 @@ const collabStore = useCollabStore()
 const projectId = computed(() => Number(route.params.id))
 const project = computed(() => projectStore.currentProject)
 const sceneId = computed(() => {
-  const raw = route.query.sceneId
+  const raw = route.params.sceneId
   const value = Array.isArray(raw) ? raw[0] : raw
   const parsed = Number(value)
   return Number.isFinite(parsed) ? parsed : null

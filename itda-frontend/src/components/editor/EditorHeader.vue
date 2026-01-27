@@ -54,11 +54,9 @@ defineProps<Props>();
       <span class="zoom-indicator">{{ zoomLevel }}</span>
 
       <RouterLink
-        :to="{
-          name: 'timeline',
-          params: { id: projectId },
-          query: sceneId ? { sceneId } : undefined,
-        }"
+        :to="sceneId
+          ? { name: 'scene-timeline', params: { id: projectId, sceneId } }
+          : { name: 'timeline', params: { id: projectId } }"
         class="btn btn-secondary btn-sm"
       >
         <Layers class="icon-sm" />

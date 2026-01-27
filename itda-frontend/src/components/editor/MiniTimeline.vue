@@ -164,11 +164,9 @@ const progressPercent = Math.min(
     </button>
 
     <RouterLink
-      :to="{
-        name: 'timeline',
-        params: { id: projectId },
-        query: sceneId ? { sceneId } : undefined,
-      }"
+      :to="sceneId
+        ? { name: 'scene-timeline', params: { id: projectId, sceneId } }
+        : { name: 'timeline', params: { id: projectId } }"
       class="timeline-link"
     >
       <ArrowRight class="link-icon" />
