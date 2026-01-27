@@ -50,6 +50,9 @@ export type CameraMotion =
 /** 그리드 레이아웃 타입 */
 export type GridLayout = '2x2' | '2x3' | '3x3';
 
+/** 그리드 모드 타입 */
+export type GridMode = 'SHOT_VARIATIONS' | 'STORY_BEATS';
+
 // =============================================================================
 // Interfaces
 // =============================================================================
@@ -119,6 +122,9 @@ export interface StoryboardGridNodeData extends BaseNodeData {
     layout: GridLayout;
     shotTypes: string[];
     compositionHint: string;
+    gridMode?: GridMode;
+    beats?: string[];
+    continuityRules?: string;
 }
 
 /** 샷 노드 */

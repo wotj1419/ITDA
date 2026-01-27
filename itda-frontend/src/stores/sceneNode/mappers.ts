@@ -109,14 +109,24 @@ export function buildNodeSettings(data: AnyNodeData): Record<string, unknown> {
         };
       }
     case NodeType.STORYBOARD_GRID:
-      return {
-        gridMode: 'SHOT_VARIATIONS',
-        layout: (data as StoryboardGridNodeData).layout,
-        shotTypes: mapShotTypeLabelsToKeys(
-          (data as StoryboardGridNodeData).shotTypes
-        ),
-        compositionHintKo: (data as StoryboardGridNodeData).compositionHint,
-      };
+      {
+        const gridData = data as StoryboardGridNodeData;
+        const gridMode = gridData.gridMode ?? 'SHOT_VARIATIONS';
+        if (gridMode === 'STORY_BEATS') {
+          return {
+            gridMode,
+            layout: gridData.layout,
+            beatsKo: gridData.beats ?? [],
+            continuityRulesKo: gridData.continuityRules ?? '',
+          };
+        }
+        return {
+          gridMode,
+          layout: gridData.layout,
+          shotTypes: mapShotTypeLabelsToKeys(gridData.shotTypes),
+          compositionHintKo: gridData.compositionHint,
+        };
+      }
     case NodeType.SHOT:
       {
         const shotData = data as ShotNodeData;
@@ -229,6 +239,9 @@ export function createSceneNodeFromApi(
         layout: '2x2',
         shotTypes: [],
         compositionHint: '',
+        gridMode: 'SHOT_VARIATIONS',
+        beats: [],
+        continuityRules: '',
       } as StoryboardGridNodeData;
       break;
     case NodeType.SHOT:
