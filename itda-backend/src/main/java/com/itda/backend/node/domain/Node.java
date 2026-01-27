@@ -43,6 +43,7 @@ public class Node {
     private Boolean isConfirmed = false;   // VIDEO용 확정 플래그
 
     private String contentUrl;      // 생성 결과 URL
+    private Long assetId;           // 생성 결과 Asset ID
 
     // VIDEO 전용 - 시작/종료 샷 노드
     private Long startShotNodeId;
