@@ -5,16 +5,19 @@
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 import type { Node as VueFlowNode } from '@vue-flow/core';
 import type { StoryboardGridNodeData, GridLayout } from '../../../types/ui/sceneNodes';
-import { PromptStatus } from '../../../types/ui/sceneNodes';
+import { JobStatus, NodeType, PromptStatus } from '../../../types/ui/sceneNodes';
 import BasePanel from './BasePanel.vue';
+import { useSceneNodeStore } from '../../../stores/sceneNode';
 import { useNodeGeneration } from '../../../composables/useNodeGeneration';
 import { LayoutGrid, Camera, Target, FileText, Sparkles, Check, RefreshCw } from 'lucide-vue-next';
+import { mapShotTypeLabelsToKeys } from '../../../utils/nodeSettings';
 
 interface Props {
   node: VueFlowNode<StoryboardGridNodeData>;
 }
 
 const props = defineProps<Props>();
+const nodeStore = useSceneNodeStore();
 const shotTypeHelpRef = ref<HTMLElement | null>(null);
 const isShotTypeHelpOpen = ref(false);
 
@@ -38,6 +41,7 @@ const {
   getPrompt: () => form.value.prompt,
   getPromptPayload: () => ({
     nodeType: 'GRID',
+    sceneOneLine: buildSceneOneLine(),
     layout: form.value.layout,
     shotTypes: form.value.shotTypes,
     compositionHint: form.value.compositionHint,
@@ -50,9 +54,10 @@ const {
   }),
   getApprovedUpdate: () => ({ prompt: form.value.prompt }),
   getJobSettings: () => ({
+    gridMode: 'SHOT_VARIATIONS',
     layout: form.value.layout,
-    shotTypes: form.value.shotTypes,
-    compositionHint: form.value.compositionHint,
+    shotTypes: mapShotTypeLabelsToKeys(form.value.shotTypes),
+    compositionHintKo: form.value.compositionHint,
   }),
   getJobSuccessUpdate: ({ resultUrl, thumbnailUrl }) => ({
     imageUrl: resultUrl || null,
@@ -95,7 +100,31 @@ const shotTypeOptions = shotTypeHelpItems.map((item) => item.label);
 const data = computed(() => props.node.data as StoryboardGridNodeData | undefined);
 const isPromptGenerated = computed(() => data.value?.promptStatus !== PromptStatus.DRAFT);
 const isPromptApproved = computed(() => data.value?.promptStatus === PromptStatus.APPROVED);
-const canGenerate = computed(() => isPromptApproved.value && !isGeneratingGrid.value);
+const sceneHeaderData = computed(() =>
+  nodeStore.nodes.find((node) => node.data?.type === NodeType.SCENE_HEADER)?.data
+);
+const parentMasterData = computed(() =>
+  nodeStore.nodes.find((node) => node.id === data.value?.parentNodeId)?.data
+);
+const isParentReady = computed(() => {
+  const parent = parentMasterData.value as { jobStatus?: string; imageUrl?: string | null; thumbnailUrl?: string | null } | undefined;
+  const hasImage = Boolean(parent?.thumbnailUrl || parent?.imageUrl);
+  return parent?.jobStatus === JobStatus.SUCCEEDED && hasImage;
+});
+const canGenerate = computed(() =>
+  isPromptApproved.value && isParentReady.value && !isGeneratingGrid.value
+);
+
+function buildSceneOneLine(): string {
+  const parts: string[] = [];
+  const header = sceneHeaderData.value as { title?: string; description?: string } | undefined;
+  if (header?.title) parts.push(`scene: ${header.title}`);
+  if (header?.description) parts.push(`description: ${header.description}`);
+  if (form.value.layout) parts.push(`layout: ${form.value.layout}`);
+  if (form.value.shotTypes.length) parts.push(`shotTypes: ${form.value.shotTypes.join(', ')}`);
+  if (form.value.compositionHint) parts.push(`composition: ${form.value.compositionHint}`);
+  return parts.join(', ');
+}
 
 watch(() => props.node.id, () => {
   if (!data.value) return;
@@ -115,6 +144,16 @@ watch(
     if (normalized !== form.value.prompt) {
       form.value.prompt = normalized;
     }
+  }
+);
+
+watch(
+  () => [data.value?.layout, data.value?.shotTypes, data.value?.compositionHint],
+  () => {
+    if (!data.value) return;
+    form.value.layout = data.value.layout || '2x3';
+    form.value.shotTypes = [...(data.value.shotTypes || [])];
+    form.value.compositionHint = data.value.compositionHint || '';
   }
 );
 
@@ -166,6 +205,9 @@ onUnmounted(() => {
 <template>
   <BasePanel title="스토리보드 그리드 생성" :icon="LayoutGrid">
     <template v-if="data">
+      <p v-if="!isParentReady" class="panel-hint">
+        상위 MASTER 이미지가 준비되어야 그리드를 생성할 수 있습니다.
+      </p>
       <!-- Layout -->
       <div class="panel-section">
         <label class="panel-label">

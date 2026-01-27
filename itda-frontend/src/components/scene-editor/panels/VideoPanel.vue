@@ -11,6 +11,7 @@ import BasePanel from './BasePanel.vue';
 import { useSceneNodeStore } from '../../../stores/sceneNode';
 import { useNodeGeneration } from '../../../composables/useNodeGeneration';
 import { Video, Repeat, Move, Timer, Text, FileText, Sparkles, Check, RefreshCw, Target, ZoomIn, ZoomOut, ArrowRight, ArrowUp, Circle } from 'lucide-vue-next';
+import { resolveCameraMotionKey } from '../../../utils/nodeSettings';
 
 interface Props {
   node: VueFlowNode<VideoNodeData>;
@@ -73,6 +74,11 @@ const isPromptGenerated = computed(() => data.value?.promptStatus !== PromptStat
 const isPromptApproved = computed(() => data.value?.promptStatus === PromptStatus.APPROVED);
 const isSucceeded = computed(() => data.value?.jobStatus === JobStatus.SUCCEEDED);
 const isConfirmed = computed(() => data.value?.isConfirmed ?? false);
+const isStartShotReady = computed(() => {
+  const start = startShotData.value as { jobStatus?: string; imageUrl?: string | null; thumbnailUrl?: string | null } | undefined;
+  const hasImage = Boolean(start?.thumbnailUrl || start?.imageUrl);
+  return start?.jobStatus === JobStatus.SUCCEEDED && hasImage;
+});
 
 const {
   isGeneratingJob: isGeneratingVideo,
@@ -100,11 +106,11 @@ const {
   }),
   getApprovedUpdate: () => ({ prompt: form.value.prompt }),
   getJobSettings: () => ({
-    cameraMotion: form.value.cameraMotion,
-    motionDescription: form.value.motionDescription,
+    cameraMotionKey: resolveCameraMotionKey(form.value.cameraMotion),
+    motionDescriptionKo: form.value.motionDescription,
     duration: form.value.duration,
-    startShotNodeId: data.value?.startShotId,
-    endShotNodeId: data.value?.endShotId,
+    startShotNodeId: data.value?.startShotId ? Number(data.value.startShotId) : undefined,
+    endShotNodeId: data.value?.endShotId ? Number(data.value.endShotId) : null,
   }),
   getJobSuccessUpdate: ({ resultUrl, thumbnailUrl }) => ({
     videoUrl: resultUrl || null,
@@ -118,6 +124,7 @@ const {
 const canGenerate = computed(() =>
   isPromptApproved.value &&
   (!form.value.isTransition || hasEndShot.value) &&
+  isStartShotReady.value &&
   !isGeneratingVideo.value
 );
 
@@ -196,7 +203,7 @@ watch(() => props.node.id, () => {
   form.value = {
     isTransition: !!data.value.endShotId,
     cameraMotion: normalizeCameraMotion(data.value.cameraMotion),
-    duration: data.value.duration || 5,
+    duration: data.value.duration || 4,
     motionDescription: data.value.motionDescription || '',
     prompt: data.value.prompt || '',
   };
@@ -210,6 +217,16 @@ watch(
     if (normalized !== form.value.prompt) {
       form.value.prompt = normalized;
     }
+  }
+);
+
+watch(
+  () => [data.value?.cameraMotion, data.value?.duration, data.value?.motionDescription],
+  () => {
+    if (!data.value) return;
+    form.value.cameraMotion = normalizeCameraMotion(data.value.cameraMotion);
+    form.value.duration = data.value.duration || 4;
+    form.value.motionDescription = data.value.motionDescription || '';
   }
 );
 
@@ -234,6 +251,9 @@ function toggleConfirm(): void {
 <template>
   <BasePanel title="영상 생성" :icon="Video">
     <template v-if="data">
+      <p v-if="!isStartShotReady" class="panel-hint">
+        시작 SHOT 이미지가 준비되어야 영상을 생성할 수 있습니다.
+      </p>
       <!-- Transition Toggle -->
       <div class="panel-section">
         <div class="panel-toggle-row">

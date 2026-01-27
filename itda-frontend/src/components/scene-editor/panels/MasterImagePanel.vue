@@ -7,11 +7,12 @@
 import { ref, computed, watch } from 'vue';
 import type { Node } from '@vue-flow/core';
 import type { MasterImageNodeData } from '../../../types/ui/sceneNodes';
-import { PromptStatus } from '../../../types/ui/sceneNodes';
+import { NodeType, PromptStatus } from '../../../types/ui/sceneNodes';
 import BasePanel from './BasePanel.vue';
 import { useSceneNodeStore } from '../../../stores/sceneNode';
 import { useNodeGeneration } from '../../../composables/useNodeGeneration';
 import { Film, Palette, Sun, Smile, Sparkles, FileText, Image, Check, RefreshCw, Star, Users, Loader2 } from 'lucide-vue-next';
+import { resolveMoodKey, resolveStyleKey, resolveTimeOfDayKey } from '../../../utils/nodeSettings';
 
 interface Props {
   node: Node<MasterImageNodeData>;
@@ -28,33 +29,6 @@ const form = ref({
   prompt: '',
 });
 
-const STYLE_KEY_MAP: Record<string, string> = {
-  '실사': 'PHOTO_REAL',
-  '애니메이션': 'ANIME_2D',
-  '픽사': 'STYLIZED_3D',
-  '수채화': 'WATERCOLOR_ILLUSTRATION',
-  '유화': 'OIL_PAINT_ILLUSTRATION',
-};
-
-const TIME_OF_DAY_KEY_MAP: Record<string, string> = {
-  '아침': 'DAWN',
-  '낮': 'DAY',
-  '저녁': 'DUSK',
-  '밤': 'NIGHT',
-};
-
-const MOOD_KEY_MAP: Record<string, string> = {
-  '편안': 'COZY',
-  '고독': 'LONELY',
-  '긴장': 'TENSE',
-  '행복': 'HOPEFUL',
-  '우울': 'DARK',
-};
-
-const resolveStyleKey = (label: string): string | undefined => STYLE_KEY_MAP[label];
-const resolveTimeOfDayKey = (label: string): string | undefined => TIME_OF_DAY_KEY_MAP[label];
-const resolveMoodKey = (label: string): string => MOOD_KEY_MAP[label] ?? 'NEUTRAL';
-
 const {
   isGeneratingPrompt,
   isGeneratingJob: isGeneratingImage,
@@ -70,6 +44,7 @@ const {
   getPrompt: () => form.value.prompt,
   getPromptPayload: () => ({
     nodeType: 'MASTER',
+    sceneOneLine: buildSceneOneLine(),
     style: form.value.style,
     timeOfDay: form.value.timeOfDay,
     mood: form.value.mood,
@@ -86,7 +61,7 @@ const {
   getJobSettings: () => ({
     styleKey: resolveStyleKey(form.value.style),
     timeOfDayKey: resolveTimeOfDayKey(form.value.timeOfDay),
-    moodKey: resolveMoodKey(form.value.mood),
+    moodKey: resolveMoodKey(form.value.mood) ?? 'NEUTRAL',
     objectIds: form.value.objectIds,
   }),
   getJobSuccessUpdate: ({ resultUrl, thumbnailUrl }) => ({
@@ -100,7 +75,7 @@ const {
 
 const styleOptions = ['실사', '애니메이션', '픽사', '수채화', '유화'];
 const timeOptions = ['아침', '낮', '저녁', '밤'];
-const moodOptions = ['편안', '고독', '긴장', '행복', '우울'];
+const moodOptions = ['중립', '편안', '고독', '긴장', '행복', '우울'];
 
 // TODO: 실제로는 Store/API에서 캐릭터/오브젝트 목록을 가져와야 함
 const objectOptions = [
@@ -112,9 +87,35 @@ const objectOptions = [
 ];
 
 const data = computed(() => props.node.data as MasterImageNodeData | undefined);
+const sceneHeaderData = computed(() =>
+  nodeStore.nodes.find((node) => node.data?.type === NodeType.SCENE_HEADER)?.data
+);
 const isPromptGenerated = computed(() => data.value?.promptStatus !== PromptStatus.DRAFT);
 const isPromptApproved = computed(() => data.value?.promptStatus === PromptStatus.APPROVED);
 const canGenerate = computed(() => isPromptApproved.value && !isGeneratingImage.value);
+const isLookChanged = computed(() => {
+  if (!data.value) return false;
+  const formIds = [...form.value.objectIds].sort().join(',');
+  const dataIds = [...(data.value.objectIds || [])].sort().join(',');
+  return (
+    form.value.style !== (data.value.style || '') ||
+    form.value.timeOfDay !== (data.value.timeOfDay || '') ||
+    form.value.mood !== (data.value.mood || '') ||
+    formIds !== dataIds
+  );
+});
+
+function buildSceneOneLine(): string {
+  const parts: string[] = [];
+  const header = sceneHeaderData.value as { title?: string; description?: string } | undefined;
+  if (header?.title) parts.push(`scene: ${header.title}`);
+  if (header?.description) parts.push(`description: ${header.description}`);
+  if (form.value.style) parts.push(`style: ${form.value.style}`);
+  if (form.value.timeOfDay) parts.push(`time: ${form.value.timeOfDay}`);
+  if (form.value.mood) parts.push(`mood: ${form.value.mood}`);
+  if (form.value.objectIds.length) parts.push(`objects: ${form.value.objectIds.join(', ')}`);
+  return parts.join(', ');
+}
 
 // 노드 변경 시 폼 동기화
 watch(() => props.node.id, () => {
@@ -139,6 +140,22 @@ watch(
   }
 );
 
+watch(
+  () => [
+    data.value?.style,
+    data.value?.timeOfDay,
+    data.value?.mood,
+    data.value?.objectIds,
+  ],
+  () => {
+    if (!data.value) return;
+    form.value.style = data.value.style || '';
+    form.value.timeOfDay = data.value.timeOfDay || '';
+    form.value.mood = data.value.mood || '';
+    form.value.objectIds = [...(data.value.objectIds || [])];
+  }
+);
+
 // 오브젝트 선택 토글
 function toggleObject(objectId: string): void {
   const idx = form.value.objectIds.indexOf(objectId);
@@ -159,6 +176,9 @@ function setActive(): void {
 <template>
   <BasePanel title="마스터 이미지 생성" :icon="Film">
     <template v-if="data">
+      <div v-if="isLookChanged" class="panel-alert">
+        룩 변경됨 → MASTER 재생성 필요
+      </div>
       <!-- Active Status -->
       <div v-if="!data.isActive" class="panel-alert">
         <button class="panel-btn panel-btn--secondary" @click="setActive">

@@ -5,11 +5,12 @@
 import { ref, computed, watch } from 'vue';
 import type { Node } from '@vue-flow/core';
 import type { MasterImageNodeData, ShotNodeData, StoryboardGridNodeData } from '../../../types/ui/sceneNodes';
-import { NodeType, PromptStatus } from '../../../types/ui/sceneNodes';
+import { JobStatus, NodeType, PromptStatus } from '../../../types/ui/sceneNodes';
 import BasePanel from './BasePanel.vue';
 import { useSceneNodeStore } from '../../../stores/sceneNode';
 import { useNodeGeneration } from '../../../composables/useNodeGeneration';
 import { Camera, Smile, PenLine, FileText, Sparkles, Check, RefreshCw, LayoutGrid } from 'lucide-vue-next';
+import { resolveExpressionKey, resolveShotTypeKey } from '../../../utils/nodeSettings';
 
 interface Props {
   node: Node<ShotNodeData>;
@@ -92,9 +93,9 @@ const {
   getApprovedUpdate: () => ({ prompt: form.value.prompt }),
   getJobSettings: () => ({
     gridCellIndex: data.value?.gridCellIndex ?? 0,
-    shotType: buildShotTypeValue(form.value.shotTypes),
-    expression: form.value.expression,
-    additionalDetail: form.value.additionalDetail,
+    shotType: resolveShotTypeKey(form.value.shotTypes[0] ?? data.value?.shotType),
+    expressionKey: resolveExpressionKey(form.value.expression),
+    detailKo: form.value.additionalDetail,
   }),
   getJobSuccessUpdate: ({ resultUrl, thumbnailUrl }) => ({
     imageUrl: resultUrl || null,
@@ -105,7 +106,14 @@ const {
   },
 });
 
-const canGenerate = computed(() => isPromptApproved.value && !isGeneratingShot.value);
+const isParentReady = computed(() => {
+  const parent = parentGridData.value as { jobStatus?: string; imageUrl?: string | null; thumbnailUrl?: string | null } | undefined;
+  const hasImage = Boolean(parent?.thumbnailUrl || parent?.imageUrl);
+  return parent?.jobStatus === JobStatus.SUCCEEDED && hasImage;
+});
+const canGenerate = computed(() =>
+  isPromptApproved.value && isParentReady.value && !isGeneratingShot.value
+);
 
 function normalizeShotTypes(value?: string | null): string[] {
   if (!value) return [];
@@ -173,6 +181,20 @@ watch(
   }
 );
 
+watch(
+  () => [data.value?.shotTypes, data.value?.shotType, data.value?.expression, data.value?.additionalDetail],
+  () => {
+    if (!data.value) return;
+    const fallbackShotTypes =
+      data.value.shotTypes && data.value.shotTypes.length > 0
+        ? [...data.value.shotTypes]
+        : normalizeShotTypes(data.value.shotType);
+    form.value.shotTypes = fallbackShotTypes;
+    form.value.expression = data.value.expression || '';
+    form.value.additionalDetail = data.value.additionalDetail || '';
+  }
+);
+
 function selectGridCell(index: number): void {
   nodeStore.updateNode(props.node.id, { gridCellIndex: index });
 }
@@ -181,6 +203,9 @@ function selectGridCell(index: number): void {
 <template>
   <BasePanel :title="`샷 ${shotLabel} 생성`" :icon="Camera">
     <template v-if="data">
+      <p v-if="!isParentReady" class="panel-hint">
+        상위 GRID 이미지가 준비되어야 샷을 생성할 수 있습니다.
+      </p>
       <!-- Grid Cell Info -->
       <div class="panel-info">
         <span class="panel-info-label">그리드 셀:</span>

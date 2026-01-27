@@ -17,6 +17,21 @@ export interface NodeSummary {
     position?: NodePosition | null
 }
 
+export interface NodeDetail {
+    nodeId: number
+    sceneId: number
+    type: ApiNodeType
+    parentNodeId?: number | null
+    prompt?: string | null
+    settings?: Record<string, unknown> | null
+    status?: string | null
+    isActive?: boolean | null
+    isConfirmed?: boolean | null
+    contentUrl?: string | null
+    positionX?: number | null
+    positionY?: number | null
+}
+
 export interface NodeTreeResponse {
     nodes: NodeSummary[]
 }
@@ -31,6 +46,14 @@ export interface CreateNodeRequest {
 export async function fetchSceneNodes(sceneId: number): Promise<NodeSummary[]> {
     const response = await apiClient.get<ApiResponse<NodeTreeResponse>>(`/scenes/${sceneId}/nodes`)
     return response.data.data?.nodes || []
+}
+
+export async function fetchNodeDetail(nodeId: number): Promise<NodeDetail> {
+    const response = await apiClient.get<ApiResponse<NodeDetail>>(`/nodes/${nodeId}`)
+    if (!response.data.data) {
+        throw new Error('Failed to fetch node detail')
+    }
+    return response.data.data
 }
 
 export async function createNode(sceneId: number, data: CreateNodeRequest): Promise<number> {
