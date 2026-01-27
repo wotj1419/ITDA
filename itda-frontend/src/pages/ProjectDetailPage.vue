@@ -42,10 +42,15 @@ const {
   handleDeleteCharacter,
 } = useProjectDetail()
 
-import { onMounted, watch } from 'vue'
+import { computed, onMounted, watch } from 'vue'
 import { useCollabStore } from '../stores/collab'
 
 const collabStore = useCollabStore()
+// Hide Scenes tab UI (page disabled for now).
+const isScenesTabHidden = true
+const visibleTabs = computed(() =>
+  tabItems.filter((tab) => (isScenesTabHidden ? tab.key !== 'scenes' : true))
+)
 
 // ... existing code ...
 
@@ -71,13 +76,14 @@ const openScenarioDrawer = () => scenarioStore.openDrawer()
     :active-tab="activeTab"
     :scene-count="scenes.length"
     :progress="sceneProgress"
+    :hide-scenes="isScenesTabHidden"
     @tab-change="handleTabChange"
   >
     <div class="project-content">
       <!-- Tabs -->
       <div class="tabs">
         <button
-          v-for="tab in tabItems"
+        v-for="tab in visibleTabs"
           :key="tab.key"
           :class="['tab', { active: activeTab === tab.key }]"
           type="button"
@@ -90,10 +96,15 @@ const openScenarioDrawer = () => scenarioStore.openDrawer()
       <StoryTab
         v-if="activeTab === 'story'"
         :scenes="scenes"
+        :project="project"
         :project-id="projectId"
         :storyboard-open-map="storyboardOpenMap"
         :get-scene-preview="getScenePreview"
         :is-preview-loading="isPreviewLoading"
+        :open-preview="openPreview"
+        :close-preview="closePreview"
+        :active-preview-clip="activePreviewClip"
+        :active-preview-scene="activePreviewScene"
         :toggle-storyboard="toggleStoryboard"
         :handle-storyboard-wheel="handleStoryboardWheel"
         :handle-add-scene="handleAddScene"
@@ -104,7 +115,7 @@ const openScenarioDrawer = () => scenarioStore.openDrawer()
       />
 
       <ScenesTab
-        v-if="activeTab === 'scenes'"
+        v-if="activeTab === 'scenes' && !isScenesTabHidden"
         :scenes="scenes"
         :project-id="projectId"
         :resolve-scene-status-config="resolveSceneStatusConfig"

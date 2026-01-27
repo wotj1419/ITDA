@@ -1,13 +1,16 @@
 <script setup lang="ts">
-import { onMounted } from 'vue'
+import { onMounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { Plus } from 'lucide-vue-next'
 import { useProjectStore } from '../stores/project'
 import { useUIStore } from '../stores/ui'
 import DefaultLayout from '../layouts/DefaultLayout.vue'
 import ProjectCard from '../components/project/ProjectCard.vue'
 
+const router = useRouter()
 const projectStore = useProjectStore()
 const uiStore = useUIStore()
+const isCreatingProject = ref(false)
 
 onMounted(async () => {
   if (projectStore.projects.length === 0) {
@@ -19,8 +22,26 @@ const handleToggleFavorite = (projectId: number) => {
   projectStore.toggleFavorite(projectId)
 }
 
-const openNewProjectModal = () => {
-  uiStore.openModal('new-project')
+const createEmptyProject = async () => {
+  if (isCreatingProject.value) return
+  isCreatingProject.value = true
+  const newProject = await projectStore.addProject({
+    title: '새 프로젝트',
+    description: '',
+    genre: '',
+  })
+  isCreatingProject.value = false
+
+  if (newProject) {
+    router.push({ name: 'project-detail', params: { id: newProject.projectId } })
+    return
+  }
+
+  uiStore.showToast({
+    type: 'error',
+    title: '프로젝트 생성 실패',
+    message: '잠시 후 다시 시도해주세요.',
+  })
 }
 </script>
 
@@ -48,7 +69,7 @@ const openNewProjectModal = () => {
           <div class="empty-icon">⭐</div>
           <h3 class="empty-title">즐겨찾는 프로젝트가 없습니다</h3>
           <p class="empty-desc">프로젝트 카드의 별 아이콘을 눌러 즐겨찾기에 추가해보세요.</p>
-          <button class="btn btn-primary" @click="openNewProjectModal">
+          <button class="btn btn-primary" :disabled="isCreatingProject" @click="createEmptyProject">
             <Plus class="icon-sm" />
             새 프로젝트 만들기
           </button>

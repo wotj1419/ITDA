@@ -23,7 +23,7 @@ function mapTimelineItemsToClips(items: TimelineItem[]): TimelineClip[] {
         sceneId: item.sceneId,
         thumbnailUrl: item.url || '',
         videoUrl: item.url || undefined,
-        duration: 5,
+        duration: 4,
         order: item.order,
         label: `영상 ${item.order}`,
     }))

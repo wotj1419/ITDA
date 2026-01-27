@@ -78,7 +78,7 @@ const timelineClips = computed(() => {
       sourceNodeId: n.id,
       thumbnailUrl: data.thumbnailUrl || '',
       videoUrl: data.videoUrl || undefined,
-      duration: data.duration || 5,
+      duration: data.duration || 4,
       order,
       label: `영상 ${data.version || 1}`,
     };

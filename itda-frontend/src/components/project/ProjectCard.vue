@@ -12,10 +12,12 @@ import { useProjectStore } from '../../stores/project'
 interface Props {
   project: Project
   isFavorite?: boolean
+  viewMode?: 'grid' | 'list'
 }
 
 const props = withDefaults(defineProps<Props>(), {
   isFavorite: false,
+  viewMode: 'grid',
 })
 
 const projectStore = useProjectStore()
@@ -100,7 +102,7 @@ const handleDeleteRequest = (e: Event) => {
 <template>
   <RouterLink
     :to="`/projects/${project.projectId}`"
-    class="project-card"
+    :class="['project-card', { 'project-card--list': viewMode === 'list' }]"
     @click="handleCardClick"
   >
     <!-- Favorite Icon (Top-Left) -->
@@ -203,11 +205,26 @@ const handleDeleteRequest = (e: Event) => {
   transform: translateY(-2px);
 }
 
+.project-card--list {
+  display: flex;
+  align-items: stretch;
+  gap: 1rem;
+  padding: 1rem;
+}
+
 /* Thumbnail */
 .card-thumbnail {
   aspect-ratio: 16 / 9;
   position: relative;
   overflow: hidden;
+}
+
+.project-card--list .card-thumbnail {
+  flex: 0 0 160px;
+  aspect-ratio: auto;
+  width: 160px;
+  height: 96px;
+  border-radius: 12px;
 }
 
 .thumbnail-image {
@@ -232,11 +249,23 @@ const handleDeleteRequest = (e: Event) => {
   padding: 1rem;
 }
 
+.project-card--list .card-content {
+  flex: 1;
+  padding: 0.25rem 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
 .card-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   margin-bottom: 0.5rem;
+}
+
+.project-card--list .card-header {
+  margin-bottom: 0;
 }
 
 .card-title {
@@ -255,12 +284,20 @@ const handleDeleteRequest = (e: Event) => {
   white-space: nowrap;
 }
 
+.project-card--list .card-description {
+  margin: 0;
+}
+
 /* Progress */
 .card-progress {
   display: flex;
   align-items: center;
   gap: 0.5rem;
   margin-bottom: 0.75rem;
+}
+
+.project-card--list .card-progress {
+  margin-bottom: 0;
 }
 
 .progress-bar {
@@ -291,6 +328,10 @@ const handleDeleteRequest = (e: Event) => {
   justify-content: space-between;
 }
 
+.project-card--list .card-footer {
+  margin-top: auto;
+}
+
 .card-time {
   font-size: 0.75rem;
   color: var(--gray-500);
@@ -319,6 +360,11 @@ const handleDeleteRequest = (e: Event) => {
   top: 0.5rem;
   right: 0.5rem;
   z-index: 20;
+}
+
+.project-card--list .more-menu-container {
+  top: 0.75rem;
+  right: 0.75rem;
 }
 
 .more-btn {

@@ -4,7 +4,7 @@
  * 
  * 설계 문서: docs/vue-flow-node-workflow-design.md Section 6.2
  */
-import { ref, computed, watch } from 'vue';
+import { ref, computed, watch, nextTick, onUnmounted } from 'vue';
 import type { Node } from '@vue-flow/core';
 import type { MasterImageNodeData } from '../../../types/ui/sceneNodes';
 import { PromptStatus } from '../../../types/ui/sceneNodes';
@@ -12,6 +12,7 @@ import BasePanel from './BasePanel.vue';
 import { useSceneNodeStore } from '../../../stores/sceneNode';
 import { useNodeGeneration } from '../../../composables/useNodeGeneration';
 import { Film, Palette, Sun, Smile, Sparkles, FileText, Image, Check, RefreshCw, Star, Users, Loader2 } from 'lucide-vue-next';
+import { gsap } from 'gsap';
 
 interface Props {
   node: Node<MasterImageNodeData>;
@@ -88,6 +89,8 @@ const data = computed(() => props.node.data as MasterImageNodeData | undefined);
 const isPromptGenerated = computed(() => data.value?.promptStatus !== PromptStatus.DRAFT);
 const isPromptApproved = computed(() => data.value?.promptStatus === PromptStatus.APPROVED);
 const canGenerate = computed(() => isPromptApproved.value && !isGeneratingImage.value);
+const generateButtonRef = ref<HTMLButtonElement | null>(null);
+let generateButtonTween: gsap.core.Tween | null = null;
 
 // 노드 변경 시 폼 동기화
 watch(() => props.node.id, () => {
@@ -111,6 +114,38 @@ watch(
     }
   }
 );
+
+watch(
+  isGeneratingImage,
+  async (running) => {
+    if (running) {
+      await nextTick();
+      if (!generateButtonRef.value) return;
+      generateButtonTween?.kill();
+      generateButtonTween = gsap.to(generateButtonRef.value, {
+        scale: 1.02,
+        boxShadow: '0 10px 26px rgba(255, 107, 138, 0.35)',
+        duration: 0.6,
+        ease: 'power1.inOut',
+        yoyo: true,
+        repeat: -1,
+      });
+      return;
+    }
+
+    generateButtonTween?.kill();
+    generateButtonTween = null;
+    if (generateButtonRef.value) {
+      gsap.set(generateButtonRef.value, { clearProps: 'transform,boxShadow' });
+    }
+  },
+  { immediate: true }
+);
+
+onUnmounted(() => {
+  generateButtonTween?.kill();
+  generateButtonTween = null;
+});
 
 // 오브젝트 선택 토글
 function toggleObject(objectId: string): void {
@@ -214,7 +249,7 @@ function setActive(): void {
         :disabled="isGeneratingPrompt"
         @click="generatePrompt"
       >
-        <Loader2 v-if="isGeneratingPrompt" class="panel-btn-icon panel-btn-icon--spin" />
+        <Loader2 v-if="isGeneratingPrompt" class="panel-btn-icon animate-spin" />
         <Sparkles v-else class="panel-btn-icon" />
         {{ isGeneratingPrompt ? '생성 중...' : '프롬프트 생성' }}
       </button>
@@ -246,8 +281,9 @@ function setActive(): void {
         class="panel-btn panel-btn--primary panel-btn--full"
         :disabled="!canGenerate"
         @click="generateImage"
+        ref="generateButtonRef"
       >
-        <Loader2 v-if="isGeneratingImage" class="panel-btn-icon panel-btn-icon--spin" />
+        <Loader2 v-if="isGeneratingImage" class="panel-btn-icon animate-spin" />
         <Image v-else class="panel-btn-icon" />
         {{ isGeneratingImage ? '생성 중...' : '이미지 생성' }}
       </button>
