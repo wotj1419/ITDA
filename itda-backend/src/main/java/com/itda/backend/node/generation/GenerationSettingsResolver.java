@@ -1,5 +1,6 @@
 package com.itda.backend.node.generation;
 
+import com.itda.backend.ai.prompt.PresetFragments;
 import com.itda.backend.global.exception.BusinessException;
 import com.itda.backend.global.response.ErrorCode;
 import com.itda.backend.node.domain.NodeType;
@@ -43,7 +44,10 @@ public class GenerationSettingsResolver {
             merged.putAll(requestSettings);
         }
 
+        normalizeLookKeys(merged);
+        fillLookKeysFromLegacyLabelsIfMissing(merged);
         applyLookInheritanceIfNeeded(nodeType, merged, activeMasterSettings);
+        normalizeLookKeys(merged);
         applyGlobalDefaults(nodeType, merged);
         normalizeByType(nodeType, merged);
         validateByType(nodeType, merged);
@@ -67,12 +71,12 @@ public class GenerationSettingsResolver {
 
     private void applyGlobalDefaults(NodeType nodeType, Map<String, Object> settings) {
         putIfMissing(settings, KEY_ASPECT_RATIO, DEFAULT_ASPECT_RATIO);
+        putIfMissing(settings, "styleKey", "PHOTO_REAL");
+        putIfMissing(settings, "timeOfDayKey", "DAY");
+        putIfMissing(settings, "moodKey", "NEUTRAL");
 
         switch (nodeType) {
             case MASTER -> {
-                putIfMissing(settings, "styleKey", "CINEMATIC_REAL");
-                putIfMissing(settings, "timeOfDayKey", "DAY");
-                putIfMissing(settings, "moodKey", "NEUTRAL");
             }
             case GRID -> {
                 putIfMissing(settings, "gridMode", "SHOT_VARIATIONS");
@@ -95,6 +99,8 @@ public class GenerationSettingsResolver {
     }
 
     private void normalizeByType(NodeType nodeType, Map<String, Object> settings) {
+        normalizeLookKeys(settings);
+
         if (nodeType == NodeType.MASTER) {
             if (settings.containsKey("objectIds") && settings.get("objectIds") == null) {
                 settings.put("objectIds", List.of());
@@ -128,6 +134,175 @@ public class GenerationSettingsResolver {
         }
     }
 
+    private void fillLookKeysFromLegacyLabelsIfMissing(Map<String, Object> settings) {
+        if (settings == null || settings.isEmpty()) {
+            return;
+        }
+
+        removeIfBlank(settings, "styleKey");
+        removeIfBlank(settings, "timeOfDayKey");
+        removeIfBlank(settings, "moodKey");
+
+        if (isMissing(settings, "styleKey")) {
+            String legacy = readString(settings, "style");
+            String mapped = mapStyleToStyleKey(legacy);
+            if (mapped != null) {
+                settings.put("styleKey", mapped);
+            }
+        }
+
+        if (isMissing(settings, "timeOfDayKey")) {
+            String legacy = readString(settings, "timeOfDay");
+            String mapped = mapTimeOfDayToKey(legacy);
+            if (mapped != null) {
+                settings.put("timeOfDayKey", mapped);
+            }
+        }
+
+        if (isMissing(settings, "moodKey")) {
+            String legacy = readString(settings, "mood");
+            String mapped = mapMoodToKey(legacy);
+            if (mapped != null) {
+                settings.put("moodKey", mapped);
+            }
+        }
+    }
+
+    private void removeIfBlank(Map<String, Object> settings, String key) {
+        if (!settings.containsKey(key)) {
+            return;
+        }
+        Object value = settings.get(key);
+        if (value == null) {
+            settings.remove(key);
+            return;
+        }
+        if (value.toString().trim().isEmpty()) {
+            settings.remove(key);
+        }
+    }
+
+    private boolean isMissing(Map<String, Object> settings, String key) {
+        if (!settings.containsKey(key)) {
+            return true;
+        }
+        Object value = settings.get(key);
+        if (value == null) {
+            return true;
+        }
+        return value.toString().trim().isEmpty();
+    }
+
+    private String mapStyleToStyleKey(String legacy) {
+        if (legacy == null || legacy.isBlank()) {
+            return null;
+        }
+        PresetFragments.StyleKey parsed = PresetFragments.StyleKey.from(legacy);
+        if (parsed != null) {
+            return parsed.name();
+        }
+
+        String trimmed = legacy.trim();
+        return switch (trimmed) {
+            case "실사" -> "PHOTO_REAL";
+            case "애니메이션", "애니" -> "ANIME_2D";
+            case "픽사" -> "STYLIZED_3D";
+            case "수채화" -> "WATERCOLOR_ILLUSTRATION";
+            case "유화" -> "OIL_PAINT_ILLUSTRATION";
+            default -> null;
+        };
+    }
+
+    private String mapTimeOfDayToKey(String legacy) {
+        if (legacy == null || legacy.isBlank()) {
+            return null;
+        }
+        PresetFragments.TimeOfDayKey parsed = PresetFragments.TimeOfDayKey.from(legacy);
+        if (parsed != null) {
+            return parsed.name();
+        }
+
+        String trimmed = legacy.trim();
+        return switch (trimmed) {
+            case "아침" -> "DAWN";
+            case "낮" -> "DAY";
+            case "저녁" -> "DUSK";
+            case "밤" -> "NIGHT";
+            default -> null;
+        };
+    }
+
+    private String mapMoodToKey(String legacy) {
+        if (legacy == null || legacy.isBlank()) {
+            return null;
+        }
+        PresetFragments.MoodKey parsed = PresetFragments.MoodKey.from(legacy);
+        if (parsed != null) {
+            return parsed.name();
+        }
+
+        String trimmed = legacy.trim();
+        return switch (trimmed) {
+            case "편안" -> "COZY";
+            case "고독" -> "LONELY";
+            case "긴장" -> "TENSE";
+            case "행복" -> "HOPEFUL";
+            case "우울" -> "DARK";
+            default -> null;
+        };
+    }
+
+    private void normalizeLookKeys(Map<String, Object> settings) {
+        normalizeStringKey(settings, "styleKey");
+        normalizeStringKey(settings, "timeOfDayKey");
+        normalizeStringKey(settings, "moodKey");
+
+        String styleKey = readString(settings, "styleKey");
+        if (!styleKey.isEmpty()) {
+            PresetFragments.StyleKey parsed = PresetFragments.StyleKey.from(styleKey);
+            if (parsed != null) {
+                settings.put("styleKey", parsed.name());
+            } else {
+                String mapped = mapStyleToStyleKey(styleKey);
+                if (mapped != null) {
+                    settings.put("styleKey", mapped);
+                } else {
+                    settings.remove("styleKey");
+                }
+            }
+        }
+
+        String timeOfDayKey = readString(settings, "timeOfDayKey");
+        if (!timeOfDayKey.isEmpty()) {
+            PresetFragments.TimeOfDayKey parsed = PresetFragments.TimeOfDayKey.from(timeOfDayKey);
+            if (parsed != null) {
+                settings.put("timeOfDayKey", parsed.name());
+            } else {
+                String mapped = mapTimeOfDayToKey(timeOfDayKey);
+                if (mapped != null) {
+                    settings.put("timeOfDayKey", mapped);
+                } else {
+                    settings.remove("timeOfDayKey");
+                }
+            }
+        }
+
+        String moodKey = readString(settings, "moodKey");
+        if (!moodKey.isEmpty()) {
+            PresetFragments.MoodKey parsed = PresetFragments.MoodKey.from(moodKey);
+            if (parsed != null) {
+                settings.put("moodKey", parsed.name());
+            } else {
+                String mapped = mapMoodToKey(moodKey);
+                if (mapped != null) {
+                    settings.put("moodKey", mapped);
+                } else {
+                    settings.remove("moodKey");
+                }
+            }
+        }
+    }
+
     private void validateByType(NodeType nodeType, Map<String, Object> settings) {
         if (nodeType != NodeType.VIDEO) {
             return;
@@ -149,21 +324,21 @@ public class GenerationSettingsResolver {
     }
 
     private void copyIfMissing(Map<String, Object> target, Map<String, Object> source, String key) {
-        if (target.containsKey(key) && target.get(key) != null) {
+        if (target.containsKey(key) && !isBlankValue(target.get(key))) {
             return;
         }
         if (!source.containsKey(key)) {
             return;
         }
         Object value = source.get(key);
-        if (value == null) {
+        if (isBlankValue(value)) {
             return;
         }
         target.put(key, value);
     }
 
     private void putIfMissing(Map<String, Object> settings, String key, Object value) {
-        if (settings.containsKey(key) && settings.get(key) != null) {
+        if (settings.containsKey(key) && !isBlankValue(settings.get(key))) {
             return;
         }
         settings.put(key, value);
@@ -179,6 +354,16 @@ public class GenerationSettingsResolver {
         }
         String text = value.toString().trim();
         return text.isEmpty() ? "" : text;
+    }
+
+    private boolean isBlankValue(Object value) {
+        if (value == null) {
+            return true;
+        }
+        if (value instanceof String text) {
+            return text.trim().isEmpty();
+        }
+        return false;
     }
 
     private Integer readInt(Map<String, Object> settings, String key) {
