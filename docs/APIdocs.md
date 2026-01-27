@@ -1542,9 +1542,9 @@ API /api/ai/prompts/generate
 {
   "nodeType": "MASTER",
   "sceneOneLine": "화성 기지의 식당",
-  "style": "CINEMATIC",
-  "timeOfDay": "MORNING",
-  "mood": "PEACEFUL",
+  "style": "실사",
+  "timeOfDay": "아침",
+  "mood": "편안",
   "objects": ["우주복", "테이블"]
 }
 ```
@@ -1554,9 +1554,9 @@ API /api/ai/prompts/generate
 | --- | --- | --- | --- |
 | nodeType | String | 필수 | 노드 타입 (MASTER, GRID, SHOT, VIDEO) |
 | sceneOneLine | String | 필수 | 씬 한줄 설명 |
-| style | String | 필수 | 아트 스타일 (CINEMATIC, ANIME, PIXAR 등) |
-| timeOfDay | String | 필수 | 시간대 (MORNING, DAY, EVENING, NIGHT) |
-| mood | String | 필수 | 분위기 (PEACEFUL, LONELY, TENSE 등) |
+| style | String | 필수 | 스타일 라벨(자유 텍스트, 한글/영문 가능) |
+| timeOfDay | String | 필수 | 시간대 라벨(자유 텍스트, 한글/영문 가능) |
+| mood | String | 필수 | 분위기 라벨(자유 텍스트, 한글/영문 가능) |
 | objects | List<String> | 선택 | 등장 오브젝트 텍스트 목록 |
 
 #### 3. Response
@@ -2081,6 +2081,5 @@ Subscribe /topic/projects/{projectId}
   }
 }
 ```
-
 
 
