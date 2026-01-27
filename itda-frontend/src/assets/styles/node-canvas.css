@@ -39,7 +39,87 @@
 /* 트랜지션 엣지 (점선) */
 .vue-flow__edge.transition .vue-flow__edge-path {
     stroke: var(--rose-400, #FFB3C6);
-    stroke-dasharray: 6 4;
+    /* keep solid for a cleaner look; the flowing highlight communicates the "transition" */
+    stroke-dasharray: none;
+}
+
+.vue-flow__edge {
+    /* Defaults (Rose) */
+    --edge-base: var(--rose-400, #FFB3C6);
+    --edge-width: 1.8;
+    --edge-tube-width: 3.2;
+    --edge-core-width: 1.1;
+    --edge-core: rgba(255, 255, 255, 0.88);
+    --edge-glow: rgba(255, 133, 161, 0.35);
+    --edge-glow-width: 8;
+    --edge-breathe-duration: 3.8s;
+}
+
+.vue-flow__edge.selected {
+    --edge-base: var(--rose-500, #FF85A1);
+    --edge-width: 3;
+}
+
+.vue-flow__edge.confirmed {
+    --edge-base: var(--success, #22C55E);
+    --edge-width: 3;
+    --edge-glow: rgba(34, 197, 94, 0.35);
+}
+
+.vue-flow__edge.transition {
+    /* A touch warmer/more noticeable than normal edges */
+    --edge-base: var(--rose-400, #FFB3C6);
+    --edge-glow: rgba(255, 107, 138, 0.38);
+    --edge-breathe-duration: 3s;
+}
+
+/* ==========================================================================
+   Flowing Edge (custom edge renderer)
+   ========================================================================== */
+
+.edge-flow__tube {
+    stroke: var(--edge-base);
+    stroke-width: var(--edge-tube-width);
+    stroke-linecap: round;
+    opacity: 0.55;
+}
+
+.edge-flow__core {
+    stroke: var(--edge-core);
+    stroke-width: var(--edge-core-width);
+    stroke-linecap: round;
+    opacity: 0.8;
+}
+
+.edge-flow__glow {
+    stroke: var(--edge-glow);
+    stroke-width: var(--edge-glow-width);
+    stroke-linecap: round;
+    opacity: 0.22;
+    filter: blur(1.4px);
+    animation: edge-breathe var(--edge-breathe-duration) ease-in-out infinite;
+    animation-delay: var(--edge-flow-delay, 0ms);
+    pointer-events: none;
+    will-change: opacity, filter;
+}
+
+@keyframes edge-breathe {
+    0%,
+    100% {
+        opacity: 0.18;
+        filter: blur(1.2px);
+    }
+    50% {
+        opacity: 0.34;
+        filter: blur(1.8px);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .edge-flow__glow {
+        animation: none;
+        opacity: 0.2;
+    }
 }
 
 .vue-flow__handle {
