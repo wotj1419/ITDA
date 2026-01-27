@@ -122,7 +122,9 @@ public class PromptRenderer {
         String expressionEn = PresetFragments.expressionEn(read(settings, "expressionKey"));
 
         List<String> lines = new ArrayList<>();
-        lines.add("High-quality single cinematic frame based on storyboard cell #" + (gridCellIndex == null ? 0 : gridCellIndex) + ".");
+        int safeGridCellIndex = gridCellIndex == null ? 0 : Math.max(0, gridCellIndex);
+        int cellNumberHuman = safeGridCellIndex + 1;
+        lines.add("High-quality single cinematic frame based on storyboard cell #" + cellNumberHuman + ".");
         lines.add("Content: " + requireEn(promptKoEn) + ".");
         lines.add("Camera framing: " + safeOrNone(shotTypeEn) + ". Facial expression: " + safeOrNone(expressionEn) + ".");
         lines.add("Extra detail: " + safeOrNone(detailEn) + ".");
