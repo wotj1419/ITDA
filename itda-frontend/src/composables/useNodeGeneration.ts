@@ -43,15 +43,24 @@ export function useNodeGeneration(options: UseNodeGenerationOptions) {
     isGeneratingPrompt.value = true;
     errorMessage.value = null;
 
+    // 프롬프트 생성 시작 토스트
+    const toastId = startGenerationToast('prompt');
+
     try {
       const prompt = await aiService.generatePrompt(options.getPromptPayload());
       nodeStore.updateNode(options.nodeId, {
         ...options.getPromptUpdate(prompt),
         promptStatus: PromptStatus.GENERATED,
       });
+      // 성공 토스트
+      finishGenerationToast(toastId, 'prompt', 'success');
     } catch (error) {
       console.error('Failed to generate prompt:', error);
       errorMessage.value = options.messages?.promptError ?? '프롬프트 생성에 실패했습니다. 다시 시도해주세요.';
+      // 실패 토스트
+      finishGenerationToast(toastId, 'prompt', 'error', {
+        reason: error instanceof Error ? error.message : '알 수 없는 오류',
+      });
     } finally {
       isGeneratingPrompt.value = false;
     }

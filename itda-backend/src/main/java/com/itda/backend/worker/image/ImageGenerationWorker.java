@@ -8,7 +8,6 @@ import com.itda.backend.worker.AssetRegistrar;
 import com.itda.backend.worker.ExecutionResult;
 import com.itda.backend.worker.JobRequestParser;
 import com.itda.backend.worker.ParsedJobRequest;
-import com.itda.backend.worker.StoredAsset;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 @Component
@@ -16,7 +15,7 @@ import org.springframework.stereotype.Component;
 public class ImageGenerationWorker {
 
     private final GeminiImageClient geminiImageClient;
-    private final LocalImageStorage localImageStorage;
+    private final ImageStorage imageStorage;
     private final AssetRegistrar assetRegistrar;
     private final JobRequestParser jobRequestParser;
 
@@ -24,9 +23,21 @@ public class ImageGenerationWorker {
         requireJobIdentifiers(job);
         ParsedJobRequest request = jobRequestParser.parse(job.getRequestJson());
         GeminiImageResult result = geminiImageClient.generateImage(request.prompt(), request.settings());
-        StoredAsset storedAsset = localImageStorage.save(job.getProjectId(), job.getId(), result.bytes());
-        Long assetId = assetRegistrar.registerLocalAsset(job, storedAsset, AssetType.IMAGE, result.contentType());
-        return new ExecutionResult(assetId, storedAsset.storageKey());
+        ImageStorageResult storedImage = imageStorage.save(
+                job.getProjectId(),
+                job.getId(),
+                result.bytes(),
+                result.contentType()
+        );
+        Long assetId = assetRegistrar.registerAsset(
+                job,
+                storedImage.storageKey(),
+                storedImage.sizeBytes(),
+                AssetType.IMAGE,
+                storedImage.contentType(),
+                storedImage.storageProvider()
+        );
+        return new ExecutionResult(assetId, storedImage.storageKey());
     }
 
     private void requireJobIdentifiers(Job job) {

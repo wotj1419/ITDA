@@ -1,6 +1,6 @@
 import { useUIStore } from '../stores/ui'
 
-type GenerationKind = 'image' | 'grid' | 'shot' | 'video'
+type GenerationKind = 'image' | 'grid' | 'shot' | 'video' | 'prompt' | 'scenario_prompt' | 'plot' | 'scenes'
 type GenerationResult = 'success' | 'error'
 type GenerationErrorOptions = {
   reason?: string
@@ -12,6 +12,10 @@ const labelMap: Record<GenerationKind, string> = {
   grid: '그리드',
   shot: '샷',
   video: '영상',
+  prompt: '프롬프트',
+  scenario_prompt: '시나리오 프롬프트',
+  plot: '줄거리',
+  scenes: '씬',
 }
 
 function getEtaLabel(eta?: string | null): string {

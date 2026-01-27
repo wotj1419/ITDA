@@ -2,6 +2,7 @@ package com.itda.backend.node.service;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.itda.backend.ai.prompt.PromptRenderer;
 import com.itda.backend.global.exception.BusinessException;
 import com.itda.backend.global.response.ErrorCode;
 import com.itda.backend.job.domain.Job;
@@ -19,6 +20,7 @@ import com.itda.backend.node.controller.dto.response.NodeTreeResponse;
 import com.itda.backend.node.domain.Node;
 import com.itda.backend.node.domain.NodeStatus;
 import com.itda.backend.node.domain.NodeType;
+import com.itda.backend.node.generation.GenerationSettingsResolver;
 import com.itda.backend.node.repository.NodeMapper;
 import com.itda.backend.project.repository.ProjectMemberMapper;
 import com.itda.backend.scene.domain.Scene;
@@ -53,6 +55,8 @@ public class NodeService {
     private final ObjectMapper objectMapper;
     private final JobService jobService;
     private final MediaUrlResolver mediaUrlResolver;
+    private final PromptRenderer promptRenderer;
+    private final GenerationSettingsResolver generationSettingsResolver;
 
     private record VideoShotIds(Long startShotNodeId, Long endShotNodeId) {}
 
@@ -226,15 +230,44 @@ public class NodeService {
      */
     @Transactional
     public Job generateNode(Long userId, Long nodeId, GenerateNodeRequest request) {
+        if (request == null) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST);
+        }
         Node node = getNodeOrThrow(nodeId);
         Scene scene = getSceneAndEnsureMemberForUpdate(node.getSceneId(), userId);
         assertNotSceneHeader(node.getNodeType());
 
-        UpdateNodeRequest updateRequest = new UpdateNodeRequest(request.prompt(), request.settings());
+        String promptKo = requirePromptKo(request.prompt());
+        Map<String, Object> existingSettings = deserializeSettings(node.getDataJson());
+        Map<String, Object> activeMasterSettings = resolveActiveMasterSettings(scene, node);
+        Map<String, Object> effectiveSettings = generationSettingsResolver.resolve(
+                node.getNodeType(),
+                existingSettings,
+                request.settings(),
+                activeMasterSettings
+        );
+
+        String promptEn = promptRenderer.render(node.getNodeType(), scene, promptKo, effectiveSettings);
+        Map<String, Object> cachedSettings = new LinkedHashMap<>(effectiveSettings);
+        cachedSettings.put("promptEn", promptEn);
+        if (node.getNodeType() == NodeType.VIDEO) {
+            cachedSettings.putIfAbsent("promptEnRewritten", "");
+        }
+
+        UpdateNodeRequest updateRequest = new UpdateNodeRequest(promptKo, cachedSettings);
         VideoShotIds shotIds = resolveUpdatedVideoShotIds(node, updateRequest);
 
+        // Always persist promptKo + settings(promptEn cache) without touching status/contentUrl.
+        nodeMapper.updateGenerationInputs(Node.builder()
+                .id(nodeId)
+                .prompt(promptKo)
+                .dataJson(serializeSettings(cachedSettings))
+                .startShotNodeId(shotIds.startShotNodeId())
+                .endShotNodeId(shotIds.endShotNodeId())
+                .build());
+
         JobType jobType = resolveJobType(node.getNodeType());
-        String requestJson = buildGenerationRequestJson(updateRequest, node);
+        String requestJson = buildGenerationRequestJson(promptEn, cachedSettings);
         String idempotencyKey = request.force()
                 ? UUID.randomUUID().toString()
                 : request.idempotencyKey();
@@ -489,16 +522,11 @@ public class NodeService {
         return nodeType == NodeType.VIDEO ? JobType.VIDEO_GENERATION : JobType.IMAGE_GENERATION;
     }
 
-    private String buildGenerationRequestJson(UpdateNodeRequest request, Node node) {
+    private String buildGenerationRequestJson(String promptEn, Map<String, Object> settings) {
         try {
-            String resolvedPrompt = resolvePrompt(request, node);
-            Map<String, Object> normalizedSettings = normalizeMasterObjectIds(node, request.settings());
-            Map<String, Object> resolvedSettings = normalizedSettings != null
-                    ? normalizedSettings
-                    : deserializeSettings(node.getDataJson());
             Map<String, Object> payload = new java.util.LinkedHashMap<>();
-            payload.put("prompt", resolvedPrompt);
-            payload.put("settings", resolvedSettings);
+            payload.put("prompt", promptEn);
+            payload.put("settings", settings);
             return objectMapper.writeValueAsString(payload);
         } catch (JsonProcessingException e) {
             throw new BusinessException(ErrorCode.INTERNAL_ERROR);
@@ -596,5 +624,30 @@ public class NodeService {
         Map<String, Object> normalized = new java.util.LinkedHashMap<>(settings);
         normalized.put("objectIds", List.of());
         return normalized;
+    }
+
+    private String requirePromptKo(String prompt) {
+        if (prompt == null || prompt.isBlank()) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST, "Prompt is empty");
+        }
+        return prompt.trim();
+    }
+
+    private Map<String, Object> resolveActiveMasterSettings(Scene scene, Node node) {
+        if (scene == null) {
+            return Map.of();
+        }
+        if (node != null && node.getNodeType() == NodeType.MASTER) {
+            return Map.of();
+        }
+        Long activeMasterNodeId = scene.getActiveMasterNodeId();
+        if (activeMasterNodeId == null) {
+            return Map.of();
+        }
+        Node master = nodeMapper.findById(activeMasterNodeId).orElse(null);
+        if (master == null) {
+            return Map.of();
+        }
+        return deserializeSettings(master.getDataJson());
     }
 }
