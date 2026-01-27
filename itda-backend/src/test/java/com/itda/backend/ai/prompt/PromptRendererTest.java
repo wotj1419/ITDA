@@ -1,6 +1,7 @@
 package com.itda.backend.ai.prompt;
 
 import com.itda.backend.node.domain.NodeType;
+import com.itda.backend.node.generation.GenerationSettingsResolver;
 import com.itda.backend.scene.domain.Scene;
 import com.itda.backend.global.exception.BusinessException;
 import com.itda.backend.global.response.ErrorCode;
@@ -22,6 +23,7 @@ class PromptRendererTest {
     };
 
     private final PromptRenderer renderer = new PromptRenderer(translator, new VideoActionPlanGenerator());
+    private final GenerationSettingsResolver settingsResolver = new GenerationSettingsResolver();
 
     @Test
     void render_video_includesHoldAndOptionalEndLine() {
@@ -83,5 +85,45 @@ class PromptRendererTest {
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.INVALID_REQUEST);
+    }
+
+    @Test
+    void render_master_pixarStyleKey_doesNotIncludeBrandString() {
+        Scene scene = Scene.builder().title("씬").description("설명").build();
+        String promptEn = renderer.render(
+                NodeType.MASTER,
+                scene,
+                "기본 프롬프트",
+                Map.of(
+                        "aspectRatio", "16:9",
+                        "styleKey", "PIXAR",
+                        "timeOfDayKey", "DAY",
+                        "moodKey", "NEUTRAL"
+                )
+        );
+
+        assertThat(promptEn.toLowerCase()).doesNotContain("pixar");
+    }
+
+    @Test
+    void render_master_legacyLookLabels_normalizesAndRendersPromptEn() {
+        Scene scene = Scene.builder().title("씬").description("설명").build();
+        Map<String, Object> effectiveSettings = settingsResolver.resolve(
+                NodeType.MASTER,
+                Map.of(),
+                Map.of(
+                        "style", "실사",
+                        "timeOfDay", "저녁",
+                        "mood", "편안"
+                ),
+                Map.of()
+        );
+
+        assertThat(effectiveSettings.get("styleKey")).isEqualTo("PHOTO_REAL");
+        assertThat(effectiveSettings.get("timeOfDayKey")).isEqualTo("DUSK");
+        assertThat(effectiveSettings.get("moodKey")).isEqualTo("COZY");
+
+        String promptEn = renderer.render(NodeType.MASTER, scene, "기본 프롬프트", effectiveSettings);
+        assertThat(promptEn).isNotBlank();
     }
 }
