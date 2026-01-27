@@ -12,6 +12,8 @@ import org.springframework.stereotype.Component;
 
 import java.io.BufferedWriter;
 import java.io.IOException;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -64,7 +66,7 @@ public class MergeWorker {
 
         Path outputPath = resolveProjectExportPath(projectId);
         mergeConfirmedVideos(rows, outputPath);
-        return new ExecutionResult(null, null);
+        return new ExecutionResult(null, resolveRelativeContentKey(outputPath));
     }
 
     private ExecutionResult mergeScene(Job job) {
@@ -80,7 +82,7 @@ public class MergeWorker {
 
         Path outputPath = resolveSceneExportPath(sceneId);
         mergeConfirmedVideos(rows, outputPath);
-        return new ExecutionResult(null, null);
+        return new ExecutionResult(null, resolveRelativeContentKey(outputPath));
     }
 
     private void mergeConfirmedVideos(List<TimelineNodeRow> rows, Path outputPath) {
@@ -88,9 +90,12 @@ public class MergeWorker {
         ensureParentDir(outputPath);
 
         Path concatList = createConcatListFile(inputPaths, outputPath.getParent());
-        boolean keepAudio = allHaveAudio(inputPaths);
-        runFfmpeg(concatList, outputPath, keepAudio);
-        deleteQuietly(concatList);
+        try {
+            boolean keepAudio = allHaveAudio(inputPaths);
+            runFfmpeg(concatList, outputPath, keepAudio);
+        } finally {
+            deleteQuietly(concatList);
+        }
     }
 
     private List<Path> resolveInputPaths(List<TimelineNodeRow> rows) {
@@ -98,7 +103,8 @@ public class MergeWorker {
         for (TimelineNodeRow row : rows) {
             Path path = resolveNodeVideoPath(row.getVideoNodeId(), row.getContentUrl());
             if (!Files.exists(path)) {
-                throw new IllegalStateException("Video file missing: " + path);
+                throw new IllegalStateException(
+                        "Video file missing: nodeId=" + row.getVideoNodeId() + ", path=" + path);
             }
             paths.add(path);
         }
@@ -125,7 +131,17 @@ public class MergeWorker {
             return null;
         }
         if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
-            return null;
+            try {
+                URI uri = new URI(trimmed);
+                String path = uri.getPath();
+                if (path == null || path.isBlank()) {
+                    return null;
+                }
+                trimmed = path;
+            } catch (URISyntaxException e) {
+                log.warn("[MergeWorker] Invalid content URL: {}", trimmed);
+                return null;
+            }
         }
         if (trimmed.startsWith(FILES_PREFIX)) {
             return trimmed.substring(FILES_PREFIX.length());
@@ -169,6 +185,20 @@ public class MergeWorker {
                 SCENE_EXPORTS_DIR,
                 String.valueOf(sceneId),
                 EXPORT_FILE_NAME).toAbsolutePath().normalize();
+    }
+
+    private String resolveRelativeContentKey(Path absolutePath) {
+        if (absolutePath == null) {
+            return null;
+        }
+        Path root = Path.of(fileStorageProperties.getUploadDir())
+                .toAbsolutePath()
+                .normalize();
+        Path normalized = absolutePath.toAbsolutePath().normalize();
+        if (!normalized.startsWith(root)) {
+            return null;
+        }
+        return root.relativize(normalized).toString().replace("\\", "/");
     }
 
     private void ensureParentDir(Path outputPath) {
