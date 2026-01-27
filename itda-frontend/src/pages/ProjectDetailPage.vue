@@ -277,6 +277,10 @@ const openScenarioDrawer = () => scenarioStore.openDrawer()
   font-size: 0.75rem;
   color: var(--gray-500);
   padding: 0.5rem 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
 }
 
 .add-scene-card {
@@ -443,6 +447,8 @@ const openScenarioDrawer = () => scenarioStore.openDrawer()
   display: flex;
   align-items: center;
   justify-content: center;
+  flex-direction: column;
+  gap: 0.5rem;
   color: var(--gray-500);
   font-size: 0.75rem;
   background: white;
@@ -453,6 +459,18 @@ const openScenarioDrawer = () => scenarioStore.openDrawer()
   height: 100%;
   object-fit: cover;
   border-radius: 10px;
+}
+
+.preview-empty img.preview-empty-icon {
+  width: 36px;
+  height: 36px;
+  object-fit: contain;
+}
+
+.preview-empty-icon {
+  width: 36px;
+  height: 36px;
+  object-fit: contain;
 }
 
 .preview-loading {
@@ -621,6 +639,18 @@ img, video {
 .preview-modal-empty img {
   max-width: 100%;
   border-radius: 12px;
+}
+
+.preview-modal-empty-icon {
+  width: 48px;
+  height: 48px;
+  object-fit: contain;
+}
+
+.storyboard-empty-icon {
+  width: 32px;
+  height: 32px;
+  object-fit: contain;
 }
 
 /* Character Grid */

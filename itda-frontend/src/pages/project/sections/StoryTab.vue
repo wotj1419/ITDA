@@ -281,7 +281,10 @@ const handleOpenScenario = async () => {
                 <div class="storyboard-empty">영상 불러오는 중..</div>
               </template>
               <template v-else-if="getScenePreview(scene.sceneId).clips.length === 0">
-                <div class="storyboard-empty">생성된 영상이 없습니다.</div>
+                <div class="storyboard-empty">
+                  <img src="/icon.png" alt="No Preview" class="storyboard-empty-icon" />
+                  <span>생성된 영상이 없습니다.</span>
+                </div>
               </template>
               <template v-else>
                 <div class="storyboard-strip" @wheel.prevent="handleStoryboardWheel">
@@ -316,7 +319,7 @@ const handleOpenScenario = async () => {
                     <span class="storyboard-label">{{ clip.label || scene.title }}</span>
                   </button>
                 </div>
-              </template>
+</template>
             </div>
           </template>
         </SceneCard>
@@ -363,7 +366,10 @@ const handleOpenScenario = async () => {
             :src="activePreviewClip.thumbnailUrl"
             :alt="activePreviewClip.label || 'preview'"
           />
-          <span v-else>영상 미리보기를 준비 중입니다.</span>
+          <template v-else>
+            <img src="/icon.png" alt="No Preview" class="preview-modal-empty-icon" />
+            <span>?? ????? ?? ????.</span>
+          </template>
         </div>
       </div>
     </div>

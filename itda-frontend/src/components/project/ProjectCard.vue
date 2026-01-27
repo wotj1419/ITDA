@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { RouterLink } from 'vue-router'
-import { Star, MoreVertical, Trash2, Pencil, Share2 } from 'lucide-vue-next'
+import { MoreVertical, Trash2, Pencil, Share2 } from 'lucide-vue-next'
 import type { Project } from '../../types/api/projects'
 import Badge from '../common/Badge.vue'
 import AvatarGroup from '../common/AvatarGroup.vue'
@@ -106,13 +106,55 @@ const handleDeleteRequest = (e: Event) => {
     @click="handleCardClick"
   >
     <!-- Favorite Icon (Top-Left) -->
-    <Star
+    <label
       v-if="project"
-      class="favorite-icon"
-      :fill="isFavorite ? 'currentColor' : 'none'"
-      :class="{ active: isFavorite }"
-      @click.prevent.stop="$emit('toggle-favorite', project.projectId)"
-    />
+      title="Star"
+      class="star"
+      @click.stop
+    >
+      <input
+        :id="`star-checkbox-${project.projectId}`"
+        class="checkbox"
+        type="checkbox"
+        :checked="isFavorite"
+        @click.stop
+        @change.stop="$emit('toggle-favorite', project.projectId)"
+      />
+      <div class="svg-container">
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          class="svg-outline"
+          viewBox="0 0 24 24"
+        >
+          <path
+            d="M12 2.5L9.45 8.5L3 9.06L7.725 13.39L6.25 19.82L12 16.5L17.75 19.82L16.275 13.39L21 9.06L14.55 8.5L12 2.5ZM12 4.75L14 9.33L18.7 9.75L15 13.07L16.18 17.75L12 15.16L7.82 17.75L9 13.07L5.3 9.75L10 9.33L12 4.75Z"
+          ></path>
+        </svg>
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          class="svg-filled"
+          viewBox="0 0 24 24"
+        >
+          <path
+            d="M12 2.5L9.45 8.5L3 9.06L7.725 13.39L6.25 19.82L12 16.5L17.75 19.82L16.275 13.39L21 9.06L14.55 8.5L12 2.5Z"
+          ></path>
+        </svg>
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          class="svg-celebrate"
+          viewBox="0 0 100 100"
+        >
+          <circle r="2" cy="50" cx="50" class="particle"></circle>
+          <circle r="2" cy="50" cx="50" class="particle"></circle>
+          <circle r="2" cy="50" cx="50" class="particle"></circle>
+          <circle r="2" cy="50" cx="50" class="particle"></circle>
+          <circle r="2" cy="50" cx="50" class="particle"></circle>
+          <circle r="2" cy="50" cx="50" class="particle"></circle>
+          <circle r="2" cy="50" cx="50" class="particle"></circle>
+          <circle r="2" cy="50" cx="50" class="particle"></circle>
+        </svg>
+      </div>
+    </label>
 
     <!-- More Menu (Top-Right) -->
     <div class="more-menu-container" ref="menuRef">
@@ -145,6 +187,7 @@ const handleDeleteRequest = (e: Event) => {
         class="thumbnail-image"
       />
       <div v-else class="thumbnail-placeholder">
+        <img src="/icon.png" alt="No Preview" class="preview-icon" />
         <span>No Preview</span>
       </div>
     </div>
@@ -240,8 +283,16 @@ const handleDeleteRequest = (e: Event) => {
   display: flex;
   align-items: center;
   justify-content: center;
+  flex-direction: column;
+  gap: 0.5rem;
   color: var(--gray-400);
   font-size: 0.875rem;
+}
+
+.preview-icon {
+  width: 36px;
+  height: 36px;
+  object-fit: contain;
 }
 
 /* Content */
@@ -338,20 +389,262 @@ const handleDeleteRequest = (e: Event) => {
 }
 
 /* Favorite */
-.favorite-icon {
+.star {
+  --star-color: #FFDAF6;
+  display: inline-flex;
   position: absolute;
   top: 0.75rem;
   left: 0.75rem;
-  width: 20px;
-  height: 20px;
-  color: var(--rose-400);
-  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.2));
+  width: 28px;
+  height: 28px;
   cursor: pointer;
   z-index: 10;
+  transition: transform 0.3s ease;
 }
 
-.favorite-icon:hover {
+.star .checkbox {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  z-index: 20;
+  cursor: pointer;
+}
+
+.star .svg-container {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.star .svg-outline,
+.star .svg-filled {
+  fill: var(--star-color);
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  transition: all 0.3s ease;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.2));
+}
+
+.star .svg-filled {
+  opacity: 0;
+  transform: scale(0);
+}
+
+.star .svg-celebrate {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  display: none;
+  stroke: var(--star-color);
+  fill: var(--star-color);
+  stroke-width: 2px;
+}
+
+.star .particle {
+  position: absolute;
+  animation-fill-mode: forwards;
+  display: none;
+}
+
+.star .checkbox:checked ~ .svg-container .svg-outline {
+  opacity: 0;
+}
+
+.star .checkbox:checked ~ .svg-container .svg-filled {
+  opacity: 1;
+  transform: scale(1);
+  animation: keyframes-svg-filled 0.9s;
+}
+
+.star .checkbox:not(:checked) ~ .svg-container .svg-filled {
+  animation: keyframes-svg-unfilled 0.3s forwards;
+}
+
+.star .checkbox:checked ~ .svg-container .svg-celebrate {
+  display: block;
+}
+
+.star .checkbox:checked ~ .svg-container .particle {
+  display: block;
+}
+
+.star:hover {
   transform: scale(1.1);
+}
+
+.star .particle:nth-child(1) {
+  animation: particle-1 1s cubic-bezier(0.25, 0.1, 0.25, 1);
+}
+.star .particle:nth-child(2) {
+  animation: particle-2 1s ease-out;
+}
+.star .particle:nth-child(3) {
+  animation: particle-3 1s ease-out;
+}
+.star .particle:nth-child(4) {
+  animation: particle-4 1s ease-out;
+}
+.star .particle:nth-child(5) {
+  animation: particle-5 1s ease-out;
+}
+.star .particle:nth-child(6) {
+  animation: particle-6 1s ease-out;
+}
+.star .particle:nth-child(7) {
+  animation: particle-7 1s ease-out;
+}
+.star .particle:nth-child(8) {
+  animation: particle-8 1s ease-out;
+}
+
+@keyframes keyframes-svg-filled {
+  0% {
+    transform: scale(0);
+    opacity: 0;
+  }
+  25% {
+    transform: scale(1.2);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1);
+    filter: brightness(1.5);
+  }
+}
+
+@keyframes keyframes-svg-unfilled {
+  0% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(0);
+    opacity: 0;
+  }
+}
+
+@keyframes particle-1 {
+  0% {
+    transform: translate(0, 0) scale(1);
+    opacity: 1;
+  }
+  40% {
+    transform: translate(-9px, -12px) scale(0.6);
+    opacity: 0.6;
+  }
+  100% {
+    transform: translate(-18px, 18px) scale(0);
+    opacity: 0;
+  }
+}
+
+@keyframes particle-2 {
+  0% {
+    transform: translate(0, 0) scale(1);
+    opacity: 1;
+  }
+  40% {
+    transform: translate(9px, -12px) scale(0.6);
+    opacity: 0.6;
+  }
+  100% {
+    transform: translate(18px, 18px) scale(0);
+    opacity: 0;
+  }
+}
+
+@keyframes particle-3 {
+  0% {
+    transform: translate(0, 0) scale(1);
+    opacity: 1;
+  }
+  40% {
+    transform: translate(-13px, -9px) scale(0.6);
+    opacity: 0.6;
+  }
+  100% {
+    transform: translate(-21px, 20px) scale(0);
+    opacity: 0;
+  }
+}
+
+@keyframes particle-4 {
+  0% {
+    transform: translate(0, 0) scale(1);
+    opacity: 1;
+  }
+  40% {
+    transform: translate(13px, -9px) scale(0.6);
+    opacity: 0.6;
+  }
+  100% {
+    transform: translate(21px, 20px) scale(0);
+    opacity: 0;
+  }
+}
+
+@keyframes particle-5 {
+  0% {
+    transform: translate(0, 0) scale(1);
+    opacity: 1;
+  }
+  45% {
+    transform: translate(0, -13px) scale(0.6);
+    opacity: 0.6;
+  }
+  100% {
+    transform: translate(0, 18px) scale(0);
+    opacity: 0;
+  }
+}
+
+@keyframes particle-6 {
+  0% {
+    transform: translate(0, 0) scale(1);
+    opacity: 1;
+  }
+  35% {
+    transform: translate(-15px, -7px) scale(0.6);
+    opacity: 0.6;
+  }
+  100% {
+    transform: translate(-26px, 22px) scale(0);
+    opacity: 0;
+  }
+}
+
+@keyframes particle-7 {
+  0% {
+    transform: translate(0, 0) scale(1);
+    opacity: 1;
+  }
+  35% {
+    transform: translate(15px, -7px) scale(0.6);
+    opacity: 0.6;
+  }
+  100% {
+    transform: translate(26px, 22px) scale(0);
+    opacity: 0;
+  }
+}
+
+@keyframes particle-8 {
+  0% {
+    transform: translate(0, 0) scale(1);
+    opacity: 1;
+  }
+  45% {
+    transform: translate(0, -16px) scale(0.6);
+    opacity: 0.6;
+  }
+  100% {
+    transform: translate(0, 20px) scale(0);
+    opacity: 0;
+  }
 }
 
 /* More Menu */
