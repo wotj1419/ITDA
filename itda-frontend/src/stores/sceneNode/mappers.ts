@@ -17,6 +17,15 @@ import {
 } from '../../types/ui/sceneNodes';
 import type { NodeSummary, ApiNodeType } from '../../services/api/nodes';
 import { resolveApiUrl } from '../../services/api/urls';
+import {
+  mapShotTypeLabelsToKeys,
+  resolveCameraMotionKey,
+  resolveExpressionKey,
+  resolveMoodKey,
+  resolveShotTypeKey,
+  resolveStyleKey,
+  resolveTimeOfDayKey,
+} from '../../utils/nodeSettings';
 
 export const API_TO_UI_NODE_TYPE: Record<ApiNodeType, NodeType> = {
   SCENE_HEADER: NodeType.SCENE_HEADER,
@@ -88,35 +97,53 @@ export function toFiniteNumber(value: string | number): number | null {
 export function buildNodeSettings(data: AnyNodeData): Record<string, unknown> {
   switch (data.type) {
     case NodeType.MASTER_IMAGE:
-      return {
-        style: (data as MasterImageNodeData).style,
-        timeOfDay: (data as MasterImageNodeData).timeOfDay,
-        mood: (data as MasterImageNodeData).mood,
-        objectIds: (data as MasterImageNodeData).objectIds,
-      };
+      {
+        const styleKey = resolveStyleKey((data as MasterImageNodeData).style);
+        const timeOfDayKey = resolveTimeOfDayKey((data as MasterImageNodeData).timeOfDay);
+        const moodKey = resolveMoodKey((data as MasterImageNodeData).mood) ?? 'NEUTRAL';
+        return {
+          styleKey,
+          timeOfDayKey,
+          moodKey,
+          objectIds: (data as MasterImageNodeData).objectIds,
+        };
+      }
     case NodeType.STORYBOARD_GRID:
       return {
+        gridMode: 'SHOT_VARIATIONS',
         layout: (data as StoryboardGridNodeData).layout,
-        shotTypes: (data as StoryboardGridNodeData).shotTypes,
-        compositionHint: (data as StoryboardGridNodeData).compositionHint,
+        shotTypes: mapShotTypeLabelsToKeys(
+          (data as StoryboardGridNodeData).shotTypes
+        ),
+        compositionHintKo: (data as StoryboardGridNodeData).compositionHint,
       };
     case NodeType.SHOT:
-      return {
-        gridCellIndex: (data as ShotNodeData).gridCellIndex,
-        shotTypes: (data as ShotNodeData).shotTypes,
-        shotType: (data as ShotNodeData).shotType,
-        expression: (data as ShotNodeData).expression,
-        additionalDetail: (data as ShotNodeData).additionalDetail,
-      };
+      {
+        const shotData = data as ShotNodeData;
+        const fallbackShotType =
+          shotData.shotType?.split(',')[0]?.trim() ||
+          shotData.shotTypes?.[0];
+        const shotTypeKey = resolveShotTypeKey(fallbackShotType);
+        const expressionKey = resolveExpressionKey(shotData.expression);
+        return {
+          gridCellIndex: shotData.gridCellIndex,
+          shotType: shotTypeKey,
+          expressionKey,
+          detailKo: shotData.additionalDetail,
+        };
+      }
     case NodeType.VIDEO:
-      return {
-        startShotNodeId: (data as VideoNodeData).startShotId,
-        endShotNodeId: (data as VideoNodeData).endShotId,
-        cameraMotion: (data as VideoNodeData).cameraMotion,
-        motionDescription: (data as VideoNodeData).motionDescription,
-        duration: (data as VideoNodeData).duration,
-        timelineOrder: (data as VideoNodeData).timelineOrder,
-      };
+      {
+        const videoData = data as VideoNodeData;
+        return {
+          startShotNodeId: Number(videoData.startShotId),
+          endShotNodeId: videoData.endShotId ? Number(videoData.endShotId) : null,
+          cameraMotionKey: resolveCameraMotionKey(videoData.cameraMotion),
+          motionDescriptionKo: videoData.motionDescription,
+          duration: videoData.duration,
+          timelineOrder: videoData.timelineOrder,
+        };
+      }
     default:
       return {};
   }
@@ -227,7 +254,7 @@ export function createSceneNodeFromApi(
         endShotId: null,
         videoUrl: resolvedContentUrl,
         thumbnailUrl: resolvedContentUrl,
-        duration: 5,
+        duration: 4,
         isConfirmed: !!node.isConfirmed,
         prompt: '',
         cameraMotion: 'staticCamera',
