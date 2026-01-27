@@ -42,7 +42,7 @@ const {
   handleDeleteCharacter,
 } = useProjectDetail()
 
-import { onMounted, watch } from 'vue'
+import { computed, onMounted, watch } from 'vue'
 import { useCollabStore } from '../stores/collab'
 
 const collabStore = useCollabStore()
@@ -52,6 +52,7 @@ const collabStore = useCollabStore()
 onMounted(() => {
   if (projectId.value) {
     collabStore.joinRoom(Number(projectId.value))
+    collabStore.updateLocation('Project')
   }
 })
 
@@ -59,8 +60,26 @@ onMounted(() => {
 watch(projectId, (newId) => {
     if (newId) {
         collabStore.joinRoom(Number(newId))
+        collabStore.updateLocation('Project')
     }
 })
+
+const tabLabelMap: Record<string, string> = {
+  story: 'Story',
+  scenes: 'Scenes',
+  objects: 'Objects',
+  timeline: 'Timeline',
+  settings: 'Settings',
+}
+
+const projectLocation = computed(() => {
+  const label = tabLabelMap[activeTab.value] || 'Project'
+  return project.value?.title ? `${project.value.title} · ${label}` : label
+})
+
+watch([projectLocation], ([nextLocation]) => {
+  collabStore.updateLocation(nextLocation)
+}, { immediate: true })
 
 const openScenarioDrawer = () => scenarioStore.openDrawer()
 </script>

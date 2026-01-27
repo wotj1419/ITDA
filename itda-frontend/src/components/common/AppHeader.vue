@@ -1,25 +1,19 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { RouterLink } from 'vue-router'
-import { Search, Share2, Users } from 'lucide-vue-next'
+import { Search } from 'lucide-vue-next'
 import AvatarGroup from './AvatarGroup.vue'
 
 interface Props {
   showCollaborators?: boolean
-  showShareButton?: boolean
-  showCollabButton?: boolean
 }
 
 withDefaults(defineProps<Props>(), {
   showCollaborators: true,
-  showShareButton: true,
-  showCollabButton: true,
 })
 
 const emit = defineEmits<{
   (e: 'search', query: string): void
-  (e: 'share'): void
-  (e: 'startCollab'): void
 }>()
 
 const searchQuery = ref('')
@@ -42,26 +36,15 @@ const handleSearch = () => {
     <div class="header-left">
       <!-- Logo -->
       <RouterLink to="/dashboard" class="header-logo">
-        <div class="logo-icon"></div>
-        <span class="logo-text">AI Movie Studio</span>
+        <img src="/icon.png" alt="Logo" class="logo-icon" />
+        <span class="logo-text">잇다</span>
       </RouterLink>
 
       <div class="divider"></div>
 
-      <!-- Collaborator Avatars -->
-      <AvatarGroup
-        v-if="showCollaborators"
-        :avatars="collaborators"
-        :max="3"
-        size="sm"
-      />
-
-      <div v-if="showCollaborators && showShareButton" class="divider"></div>
-
-      <button v-if="showShareButton" class="btn btn-ghost" @click="emit('share')">
-        <Share2 class="icon-sm" />
-        <span>프로젝트 공유</span>
-      </button>
+      <div v-if="$slots['left-after-divider']" class="header-left-extra">
+        <slot name="left-after-divider" />
+      </div>
     </div>
 
     <div class="header-center">
@@ -71,18 +54,22 @@ const handleSearch = () => {
           v-model="searchQuery"
           type="text"
           class="header-search"
-          placeholder="씬, 프롬프트, 에셋 검색..."
+          placeholder="프로젝트 검색"
           @keyup.enter="handleSearch"
         />
       </div>
+      <div v-if="showCollaborators" class="divider"></div>
+      <!-- Collaborator Avatars -->
+      <AvatarGroup
+        v-if="showCollaborators"
+        :avatars="collaborators"
+        :max="3"
+        size="sm"
+      />
     </div>
 
-    <div class="header-right">
+    <div class="header-actions">
       <slot name="actions" />
-      <button v-if="showCollabButton" class="btn btn-primary" @click="emit('startCollab')">
-        <Users class="icon-sm" />
-        <span>실시간 협업 시작</span>
-      </button>
     </div>
   </header>
 </template>
@@ -95,35 +82,43 @@ const handleSearch = () => {
   border-bottom: 1px solid var(--rose-100);
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 1rem;
   flex-shrink: 0;
 }
 
-.header-left,
-.header-right {
+.header-left {
   display: flex;
   align-items: center;
   gap: 0.75rem;
+}
+
+.header-left-extra {
+  display: flex;
+  align-items: center;
+  min-width: 0;
 }
 
 /* Logo */
 .header-logo {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: 0.5rem;
   text-decoration: none;
   color: var(--gray-900);
   margin-right: 0.5rem;
 }
 
 .logo-icon {
+  margin-top: -2px;
   width: 24px;
   height: 24px;
-  background: linear-gradient(135deg, var(--rose-400), var(--rose-500));
   border-radius: 6px;
+  object-fit: contain; /* 투명 배경이면 contain 추천 */
+  background: transparent;
   flex-shrink: 0;
 }
+
 
 .logo-text {
   font-weight: 700;
@@ -134,9 +129,21 @@ const handleSearch = () => {
 /* Header Layout Refinement */
 .header-center {
   flex: 0 1 400px; /* Grow 0 to prevent bounce, Shrink 1, Basis 400px */
-  margin: 0 auto;
+  margin-left: auto;
+  margin-right: 1rem;
   min-width: 0;
   transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.75rem;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-shrink: 0;
 }
 
 .divider {
@@ -148,7 +155,7 @@ const handleSearch = () => {
 /* Search */
 .search-wrapper {
   position: relative;
-  width: 100%;
+  width: 50%;
 }
 
 .search-icon {
@@ -183,10 +190,6 @@ const handleSearch = () => {
   box-shadow: 0 0 0 3px rgba(255, 133, 161, 0.1);
 }
 
-/* Prevent right section from being crushed */
-.header-right {
-  flex-shrink: 0;
-}
 
 /* Responsive Header */
 @media (max-width: 1100px) {
@@ -207,7 +210,8 @@ const handleSearch = () => {
 @media (max-width: 768px) {
   /* Reuse mobile/tablet logic */
   .header-left .divider,
-  .header-left :deep(.avatar-group) {
+  .header-center .divider,
+  .header-center :deep(.avatar-group) {
     display: none;
   }
 }

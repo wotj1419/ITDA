@@ -8,6 +8,7 @@ import type { ProjectDetail } from '../types/api/projects'
 import Badge from '../components/common/Badge.vue'
 import Button from '../components/common/Button.vue'
 import ShareProjectModal from '../components/project/ShareProjectModal.vue'
+import PresencePanel from '../components/collab/PresencePanel.vue'
 import {
   BookOpen,
   Clapperboard,
@@ -142,10 +143,7 @@ const progressPercentage = computed(() => {
       <!-- Online Now -->
       <div class="sidebar-section border-top">
         <div class="sidebar-text">
-          <div class="section-label">ONLINE NOW</div>
-          <div class="online-users">
-            <AvatarGroup :avatars="avatarItems" :max="3" size="sm" />
-          </div>
+          <PresencePanel />
           <Button variant="secondary" class="start-call-btn">
             <Phone class="icon-sm" />
             <span class="nav-label">Start Call</span>

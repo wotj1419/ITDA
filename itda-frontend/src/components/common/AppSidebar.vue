@@ -43,7 +43,7 @@ const closeProfileMenu = (e: MouseEvent) => {
 
 const handleLogout = () => {
   authStore.logout()
-  router.push('/auth')
+  router.push('/')
 }
 
 onMounted(() => {

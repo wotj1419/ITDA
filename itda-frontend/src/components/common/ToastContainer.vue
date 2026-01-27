@@ -71,7 +71,7 @@ const getIcon = (type: string) => {
 .toast-container {
   position: fixed;
   right: 1.5rem;
-  z-index: 100;
+  z-index: 9999;
   display: flex;
   flex-direction: column;
   gap: 0.75rem;

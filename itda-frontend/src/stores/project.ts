@@ -17,6 +17,19 @@ export const useProjectStore = defineStore('project', () => {
   const { isLoading, error, run } = useAsyncAction()
   const favoriteIds = ref<Set<number>>(new Set([1, 2])) // Mock default favorites
 
+  // Local Storage for Last Accessed Time
+  const lastAccessedMap = ref<Record<number, number>>({})
+
+  // Initialize from localStorage
+  try {
+    const stored = localStorage.getItem('project_last_accessed')
+    if (stored) {
+      lastAccessedMap.value = JSON.parse(stored)
+    }
+  } catch (e) {
+    console.error('Failed to parse last accessed projects', e)
+  }
+
   // Getters
   const projectCount = computed(() => projects.value.length)
 
@@ -29,6 +42,23 @@ export const useProjectStore = defineStore('project', () => {
       .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
       .slice(0, 2)
   )
+
+  const sortedProjects = computed(() => {
+    return [...projects.value].sort((a, b) => {
+      const timeA = lastAccessedMap.value[a.projectId] || 0
+      const timeB = lastAccessedMap.value[b.projectId] || 0
+
+      // 1. Sort by last accessed time (descending)
+      if (timeA !== timeB) {
+        return timeB - timeA
+      }
+
+      // 2. If never accessed (Time=0) or equal, sort by updatedAt (descending)
+      const dateA = new Date(a.updatedAt).getTime()
+      const dateB = new Date(b.updatedAt).getTime()
+      return dateB - dateA
+    })
+  })
 
   // Actions
   function isFavorite(projectId: number): boolean {
@@ -43,6 +73,18 @@ export const useProjectStore = defineStore('project', () => {
     }
   }
 
+  function touchProject(projectId: number): void {
+    const now = Date.now()
+    lastAccessedMap.value[projectId] = now
+
+    // Persist to localStorage
+    try {
+      localStorage.setItem('project_last_accessed', JSON.stringify(lastAccessedMap.value))
+    } catch (e) {
+      console.error('Failed to save last accessed projects', e)
+    }
+  }
+
   async function loadProjects(): Promise<void> {
     await run(async () => {
       projects.value = await fetchProjects()
@@ -54,6 +96,10 @@ export const useProjectStore = defineStore('project', () => {
       errorMessage: 'Failed to load project',
     })
     currentProject.value = result
+    if (result) {
+      // update access time when loading detail
+      touchProject(projectId)
+    }
     if (!result && !error.value) {
       error.value = 'Project not found'
     }
@@ -65,6 +111,7 @@ export const useProjectStore = defineStore('project', () => {
     })
     if (newProject) {
       projects.value.push(newProject)
+      touchProject(newProject.projectId) // New project is accessed
     }
     return newProject
   }
@@ -108,6 +155,7 @@ export const useProjectStore = defineStore('project', () => {
           ...updatedProject,
         }
       }
+      touchProject(projectId) // Updated project is accessed
     }
     return updatedProject
   }
@@ -139,9 +187,11 @@ export const useProjectStore = defineStore('project', () => {
     projectCount,
     favoriteProjects,
     recentProjects,
+    sortedProjects,
     // Actions
     isFavorite,
     toggleFavorite,
+    touchProject,
     loadProjects,
     loadProject,
     addProject,

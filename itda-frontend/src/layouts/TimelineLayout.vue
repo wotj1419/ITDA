@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { useUIStore } from '../stores/ui'
 import { useSidebarShortcut } from '../composables/useSidebarShortcut'
+import PresencePanel from '../components/collab/PresencePanel.vue'
 import {
   ArrowLeft,
   Layers,
@@ -84,6 +85,13 @@ function formatDuration(seconds: number): string {
             <span class="stat-value">{{ formatDuration(totalDuration) }}</span>
             <span class="stat-label nav-label">총 길이</span>
           </div>
+        </div>
+      </div>
+
+      <!-- Presence -->
+      <div class="sidebar-section border-top">
+        <div class="sidebar-text">
+          <PresencePanel />
         </div>
       </div>
     </aside>

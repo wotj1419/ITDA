@@ -8,6 +8,7 @@ import { RouterLink, useRoute } from 'vue-router';
 import { useUIStore } from '../stores/ui';
 import { useSidebarShortcut } from '../composables/useSidebarShortcut';
 import Badge from '../components/common/Badge.vue';
+import PresencePanel from '../components/collab/PresencePanel.vue';
 import {
   BookOpen,
   Clapperboard,
@@ -121,7 +122,14 @@ const sidebarClasses = computed(() => [
         </template>
       </nav>
 
-      <!-- Footer with Toggle -->
+      <!-- Presence -->
+      <div class="sidebar-section border-top">
+        <div class="sidebar-text">
+          <PresencePanel />
+        </div>
+      </div>
+
+      <!-- Footer -->
       <div class="sidebar-section border-top">
         <div class="sidebar-text text-xs text-muted">{{ sceneTitle }}</div>
       </div>

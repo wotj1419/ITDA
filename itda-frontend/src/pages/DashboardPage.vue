@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import { onMounted, computed, ref } from 'vue'
-import { RouterLink } from 'vue-router'
-import { Plus, Star } from 'lucide-vue-next'
+import { onMounted, ref } from 'vue'
+import { Plus } from 'lucide-vue-next'
 import { useProjectStore } from '../stores/project'
 import { useUIStore } from '../stores/ui'
 import { useCollabStore } from '../stores/collab'
+import { useAuthStore } from '../stores/auth'
 import DefaultLayout from '../layouts/DefaultLayout.vue'
 import ProjectCard from '../components/project/ProjectCard.vue'
 import NewProjectModal from '../components/project/NewProjectModal.vue'
@@ -15,6 +15,7 @@ import TimeAgo from '../components/common/TimeAgo.vue'
 const projectStore = useProjectStore()
 const uiStore = useUIStore()
 const collabStore = useCollabStore()
+const authStore = useAuthStore()
 
 // Delete Confirmation State
 const showDeleteModal = ref(false)
@@ -25,8 +26,8 @@ onMounted(async () => {
   await projectStore.loadProjects()
 })
 
-// Quick access projects (favorites / recent)
-const quickAccessProjects = computed(() => projectStore.recentProjects)
+// Quick access projects removed
+
 
 // Check if project is favorite
 const isFavorite = (projectId: number) => {
@@ -79,61 +80,28 @@ const cancelDelete = () => {
     :show-collaborators="false"
     @start-collab="openStartCollabModal"
   >
+    <template #header-left-after-divider>
+      <h2 class="welcome-title">
+        반가워요<span v-if="authStore.user?.name">, {{ authStore.user.name }}님</span> ✨
+      </h2>
+    </template>
+    <template #header-actions>
+      <button class="btn btn-primary" @click="openNewProjectModal">
+        <Plus class="icon-sm" />
+        New Project
+      </button>
+    </template>
     <div class="dashboard-container">
-      <!-- Welcome Message -->
-      <div class="welcome-section">
-        <h2 class="welcome-title">
-          반가워요, 크리에이터님 ✨
-        </h2>
-        <p class="welcome-subtitle">
-          오늘도 당신의 놀라운 아이디어를 영화로 만들어보세요.
-        </p>
-      </div>
-
       <!-- Toolbar -->
       <div class="toolbar">
         <div class="toolbar-left">
           <h1 class="page-title">My Projects</h1>
           <p class="project-count">{{ projectStore.projectCount }} projects</p>
         </div>
-        <div class="toolbar-right">
-          <button class="btn btn-primary" @click="openNewProjectModal">
-            <Plus class="icon-sm" />
-            New Project
-          </button>
-        </div>
       </div>
 
-      <!-- Quick Access Section -->
-      <section v-if="quickAccessProjects.length > 0" class="section">
-        <h3 class="section-title">Quick Access</h3>
-        <div class="quick-access-list">
-          <RouterLink
-            v-for="project in quickAccessProjects"
-            :key="project.projectId"
-            :to="`/projects/${project.projectId}`"
-            class="quick-access-card"
-          >
-            <div
-              class="quick-access-thumbnail"
-              :style="{
-                backgroundImage: project.thumbnailUrl
-                  ? `url(${project.thumbnailUrl})`
-                  : undefined,
-              }"
-            ></div>
-            <div class="quick-access-info">
-              <div class="quick-access-title">{{ project.title }}</div>
-              <div class="quick-access-time">Edited <TimeAgo :date="project.updatedAt" /></div>
-            </div>
-            <Star
-              v-if="isFavorite(project.projectId)"
-              class="quick-access-star"
-              fill="currentColor"
-            />
-          </RouterLink>
-        </div>
-      </section>
+      <!-- Quick Access Section Removed -->
+
 
       <!-- All Projects Section -->
       <section class="section">
@@ -141,7 +109,7 @@ const cancelDelete = () => {
         <div class="projects-grid">
           <!-- Project Cards -->
           <ProjectCard
-            v-for="project in projectStore.projects"
+            v-for="project in projectStore.sortedProjects"
             :key="project.projectId"
             :project="project"
             :is-favorite="isFavorite(project.projectId)"
@@ -183,21 +151,12 @@ const cancelDelete = () => {
   margin: 0 auto;
 }
 
-/* Welcome Section */
-.welcome-section {
-  margin-bottom: 2.5rem;
-}
-
 .welcome-title {
-  font-size: 1.875rem;
-  font-weight: 700;
-  color: var(--gray-900);
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--gray-800);
   margin: 0;
-}
-
-.welcome-subtitle {
-  color: var(--gray-500);
-  margin-top: 0.5rem;
+  white-space: nowrap;
 }
 
 /* Toolbar */
@@ -239,63 +198,7 @@ const cancelDelete = () => {
   margin-bottom: 0.75rem;
 }
 
-/* Quick Access */
-.quick-access-list {
-  display: flex;
-  gap: 1rem;
-  overflow-x: auto;
-  padding-bottom: 0.5rem;
-}
 
-.quick-access-card {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  padding: 1rem;
-  background: white;
-  border: 1px solid var(--rose-100);
-  border-radius: 16px;
-  text-decoration: none;
-  color: inherit;
-  flex-shrink: 0;
-  transition: all 0.2s ease;
-}
-
-.quick-access-card:hover {
-  border-color: var(--rose-200);
-  box-shadow: 0 4px 12px rgba(255, 133, 161, 0.1);
-}
-
-.quick-access-thumbnail {
-  width: 48px;
-  height: 48px;
-  border-radius: 12px;
-  background: var(--rose-100);
-  background-size: cover;
-  background-position: center;
-}
-
-.quick-access-info {
-  display: flex;
-  flex-direction: column;
-}
-
-.quick-access-title {
-  font-size: 0.875rem;
-  font-weight: 600;
-  color: var(--gray-900);
-}
-
-.quick-access-time {
-  font-size: 0.75rem;
-  color: var(--gray-500);
-}
-
-.quick-access-star {
-  width: 20px;
-  height: 20px;
-  color: var(--rose-400);
-}
 
 /* Projects Grid */
 .projects-grid {

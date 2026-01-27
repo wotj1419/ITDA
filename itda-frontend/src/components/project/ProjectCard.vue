@@ -6,6 +6,7 @@ import type { Project } from '../../types/api/projects'
 import Badge from '../common/Badge.vue'
 import TimeAgo from '../common/TimeAgo.vue'
 import { getProjectProgress } from '../../services/mock/projects'
+import { useProjectStore } from '../../stores/project'
 
 interface Props {
   project: Project
@@ -15,6 +16,12 @@ interface Props {
 const props = withDefaults(defineProps<Props>(), {
   isFavorite: false,
 })
+
+const projectStore = useProjectStore()
+
+const handleCardClick = () => {
+  projectStore.touchProject(props.project.projectId)
+}
 
 const isMenuOpen = ref(false)
 const menuRef = ref<HTMLElement | null>(null)
@@ -81,6 +88,7 @@ const handleDeleteRequest = (e: Event) => {
   <RouterLink
     :to="`/projects/${project.projectId}`"
     class="project-card"
+    @click="handleCardClick"
   >
     <!-- Favorite Icon (Top-Left) -->
     <Star
