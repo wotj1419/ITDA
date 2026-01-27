@@ -6,6 +6,7 @@ import { ref } from 'vue';
 import { RouterLink } from 'vue-router';
 import type { TimelineClip } from '../../types/ui';
 import { Star, ArrowRight, Play, X } from 'lucide-vue-next';
+import { useVideoPreview } from '../../composables/useVideoPreview';
 
 // =============================================================================
 // Props
@@ -22,6 +23,8 @@ interface Props {
 const props = withDefaults(defineProps<Props>(), {
   maxDuration: 60,
 });
+
+const { isVideo, playVideoPreview, stopVideoPreview } = useVideoPreview();
 
 const emit = defineEmits<{
   (e: 'reorder', clipIds: string[]): void;
@@ -92,29 +95,6 @@ const progressPercent = Math.min(
   (props.totalDuration / props.maxDuration) * 100,
   100
 );
-
-function isVideo(url?: string): boolean {
-  if (!url) return false;
-  const lower = url.toLowerCase();
-  return lower.endsWith('.mp4') || lower.endsWith('.webm') || lower.endsWith('.mov');
-}
-
-function handleVideoEnter(event: MouseEvent) {
-  const video = event.target as HTMLVideoElement;
-  if (video && video.paused) {
-    video.play().catch(() => {
-      // Auto-play might be blocked or interrupted
-    });
-  }
-}
-
-function handleVideoLeave(event: MouseEvent) {
-  const video = event.target as HTMLVideoElement;
-  if (video) {
-    video.pause();
-    video.currentTime = 0; // Reset to start
-  }
-}
 </script>
 
 <template>
@@ -150,8 +130,8 @@ function handleVideoLeave(event: MouseEvent) {
           preload="metadata"
           muted
           playsinline
-          @mouseenter="handleVideoEnter"
-          @mouseleave="handleVideoLeave"
+          @mouseenter="playVideoPreview"
+          @mouseleave="stopVideoPreview"
         />
         <img
           v-else
