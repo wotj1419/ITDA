@@ -52,7 +52,11 @@ export const useCollabStore = defineStore('collab', () => {
      * 협업 방 입장
      */
     function joinRoom(projectId: number): void {
-        roomId.value = `project-${projectId}`;
+        const nextRoomId = `project-${projectId}`;
+        if (roomId.value === nextRoomId && status.value !== 'disconnected') {
+            return;
+        }
+        roomId.value = nextRoomId;
         status.value = 'connecting';
 
         // Simulate connection (백엔드 연동 후 실제 연결로 대체)

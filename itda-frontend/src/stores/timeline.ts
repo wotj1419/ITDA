@@ -1,12 +1,14 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import type { TimelineClip } from '../types/ui'
+import type { TimelineItem } from '../types/api/timeline'
 import {
     fetchProjectTimeline,
+    fetchSceneTimeline,
     requestProjectMerge,
     fetchProjectExport,
-    type TimelineItem,
 } from '../services/api/timeline'
+import { fetchProtectedBlobUrl } from '../services/api/media'
 import { unconfirmNode } from '../services/api/nodes'
 import {
     subscribeProjectEvents,
@@ -16,18 +18,46 @@ import {
 
 export type MergeStatus = 'idle' | 'merging' | 'done' | 'error'
 
-function mapTimelineItemsToClips(items: TimelineItem[]): TimelineClip[] {
-    return items.map((item) => ({
-        clipId: `node-${item.videoNodeId}`,
-        nodeId: item.videoNodeId,
-        sceneId: item.sceneId,
-        thumbnailUrl: item.url || '',
-        videoUrl: item.url || undefined,
-        duration: 5,
-        order: item.order,
-        label: `영상 ${item.order}`,
-    }))
+function toDurationSeconds(duration: number): number {
+    if (!Number.isFinite(duration)) return 0
+    if (duration >= 1000) {
+        return Math.max(0, Math.round(duration / 1000))
+    }
+    return Math.max(0, duration)
 }
+
+async function resolveMediaUrl(url?: string | null): Promise<string | undefined> {
+    if (!url) return undefined
+    const blobUrl = await fetchProtectedBlobUrl(url).catch(() => null)
+    return blobUrl ?? url
+}
+
+function isVideoUrl(url?: string): boolean {
+    if (!url) return false
+    return /\.(mp4|webm|mov|m4v)(\?.*)?$/.test(url)
+}
+
+async function mapTimelineItemsToClips(items: TimelineItem[]): Promise<TimelineClip[]> {
+    return Promise.all(
+        items.map(async (item) => {
+            const clipKey = item.videoNodeId ?? item.sceneVideoId ?? `${item.sceneId}-${item.order}`
+            const resolvedUrl = await resolveMediaUrl(item.thumbnailUrl)
+            const duration = toDurationSeconds(item.duration)
+
+            return {
+                clipId: `clip-${clipKey}`,
+                nodeId: item.videoNodeId ?? `scene-video-${item.sceneVideoId ?? item.order}`,
+                sceneId: item.sceneId,
+                thumbnailUrl: resolvedUrl || '',
+                videoUrl: isVideoUrl(resolvedUrl) ? resolvedUrl : undefined,
+                duration,
+                order: item.order,
+                label: `??? ${item.order}`,
+            }
+        })
+    )
+}
+
 
 export const useTimelineStore = defineStore('timeline', () => {
     // State
@@ -110,12 +140,13 @@ export const useTimelineStore = defineStore('timeline', () => {
 
         try {
             ensureProjectSubscription(projectId)
-            const response = await fetchProjectTimeline(projectId)
-            let nextClips = mapTimelineItemsToClips(response.items)
             if (sceneId) {
-                nextClips = nextClips.filter((clip) => clip.sceneId === sceneId)
+                const response = await fetchSceneTimeline(sceneId)
+                clips.value = await mapTimelineItemsToClips(response.items)
+                return
             }
-            clips.value = nextClips
+            const response = await fetchProjectTimeline(projectId)
+            clips.value = await mapTimelineItemsToClips(response.items)
         } catch (e) {
             error.value = 'Failed to load clips'
             console.error(e)

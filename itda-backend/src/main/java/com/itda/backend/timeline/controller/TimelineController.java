@@ -4,7 +4,7 @@ import com.itda.backend.global.response.ApiResponse;
 import com.itda.backend.global.security.CustomUserDetails;
 import com.itda.backend.timeline.controller.dto.request.MergeRequest;
 import com.itda.backend.timeline.controller.dto.response.MergeResponse;
-import com.itda.backend.timeline.controller.dto.response.ProjectTimelineResponse;
+
 import com.itda.backend.timeline.controller.dto.response.SceneTimelineResponse;
 import com.itda.backend.timeline.service.TimelineService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -36,15 +36,6 @@ public class TimelineController {
         return ApiResponse.success(response);
     }
 
-    @Operation(summary = "Get project timeline", description = "List merged scene clips in a project.")
-    @GetMapping("/timeline/projects/{projectId}")
-    public ResponseEntity<ApiResponse<ProjectTimelineResponse>> getProjectTimeline(
-            @AuthenticationPrincipal CustomUserDetails userDetails,
-            @PathVariable Long projectId) {
-        ProjectTimelineResponse response = timelineService.getProjectTimeline(userDetails.getUserId(), projectId);
-        return ApiResponse.success(response);
-    }
-
     @Operation(summary = "Request scene merge", description = "Create a merge job for confirmed scene clips.")
     @PostMapping("/scenes/{sceneId}/merge")
     public ResponseEntity<ApiResponse<MergeResponse>> requestSceneMerge(
@@ -52,16 +43,6 @@ public class TimelineController {
             @PathVariable Long sceneId,
             @RequestBody(required = false) MergeRequest request) {
         MergeResponse response = timelineService.requestSceneMerge(userDetails.getUserId(), sceneId, request);
-        return ApiResponse.accepted(response);
-    }
-
-    @Operation(summary = "Request project merge", description = "Create a merge job for project timeline clips.")
-    @PostMapping("/timeline/projects/{projectId}/merge")
-    public ResponseEntity<ApiResponse<MergeResponse>> requestProjectMerge(
-            @AuthenticationPrincipal CustomUserDetails userDetails,
-            @PathVariable Long projectId,
-            @RequestBody(required = false) MergeRequest request) {
-        MergeResponse response = timelineService.requestProjectMerge(userDetails.getUserId(), projectId, request);
         return ApiResponse.accepted(response);
     }
 }

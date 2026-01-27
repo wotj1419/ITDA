@@ -1,20 +1,15 @@
 import apiClient from './client'
 import type { ApiResponse } from '../../types/api/common'
+import type { ProjectTimeline, SceneTimeline } from '../../types/api/timeline'
 
-export interface TimelineItem {
-    videoNodeId: number
-    sceneId: number
-    order: number
-    url: string
+export async function fetchProjectTimeline(projectId: number): Promise<ProjectTimeline> {
+    const response = await apiClient.get<ApiResponse<ProjectTimeline>>(`/projects/${projectId}/timeline`)
+    return response.data.data || { items: [], totalDuration: 0 }
 }
 
-export interface ProjectTimelineResponse {
-    items: TimelineItem[]
-}
-
-export async function fetchProjectTimeline(projectId: number): Promise<ProjectTimelineResponse> {
-    const response = await apiClient.get<ApiResponse<ProjectTimelineResponse>>(`/projects/${projectId}/timeline`)
-    return response.data.data || { items: [] }
+export async function fetchSceneTimeline(sceneId: number): Promise<SceneTimeline> {
+    const response = await apiClient.get<ApiResponse<SceneTimeline>>(`/scenes/${sceneId}/timeline`)
+    return response.data.data || { items: [], totalDuration: 0 }
 }
 
 export async function requestProjectMerge(projectId: number): Promise<{ jobId: number; status: string }> {
