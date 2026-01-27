@@ -15,24 +15,15 @@
    ============================================================================= */
 :root {
     /* Glass Effect */
-    --node-glass-bg: rgba(255, 255, 255, 0.85);
-    --node-glass-bg-hover: rgba(255, 255, 255, 0.95);
-    --node-glass-blur: 12px;
-    --node-glass-border: rgba(255, 179, 198, 0.8);
-    /* 더 진한 Rose 테두리 */
+    --node-glass-bg: #ffffff;
+    --node-glass-bg-hover: #ffffff;
+    --node-glass-blur: 0px;
+    --node-glass-border: rgba(255, 214, 229, 0.5);
 
     /* Shadows - Multi-layer for depth */
-    --node-shadow:
-        0 2px 4px rgba(0, 0, 0, 0.04),
-        0 4px 8px rgba(0, 0, 0, 0.06),
-        0 8px 16px rgba(255, 133, 161, 0.08);
-    --node-shadow-hover:
-        0 4px 8px rgba(0, 0, 0, 0.06),
-        0 12px 24px rgba(0, 0, 0, 0.08),
-        0 16px 32px rgba(255, 133, 161, 0.12);
-    --node-shadow-selected:
-        0 0 0 3px rgba(255, 133, 161, 0.4),
-        0 8px 24px rgba(255, 133, 161, 0.2);
+    --node-shadow: 0 4px 20px rgba(0, 0, 0, 0.03), 0 2px 8px rgba(0, 0, 0, 0.02);
+    --node-shadow-hover: 0 8px 30px rgba(0, 0, 0, 0.06), 0 4px 12px rgba(0, 0, 0, 0.04);
+    --node-shadow-selected: 0 0 0 1px rgba(255, 77, 141, 0.1), 0 20px 40px -10px rgba(255, 77, 141, 0.2);
 
     /* Type-specific accent colors - 더 진하게 */
     --node-accent-header: var(--rose-500, #FF85A1);
@@ -62,17 +53,13 @@
     display: flex;
     flex-direction: column;
     background: var(--node-glass-bg);
-    backdrop-filter: blur(var(--node-glass-blur));
-    -webkit-backdrop-filter: blur(var(--node-glass-blur));
-    border: 2px solid var(--node-glass-border);
-    /* 2px로 더 두껍게 */
-    border-radius: var(--radius-lg, 1rem);
+    border: 1px solid var(--node-glass-border);
+    border-radius: var(--radius-xl, 1.5rem);
     box-shadow: var(--node-shadow);
     overflow: visible;
-    transition:
-        box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1),
-        border-color 0.2s ease,
-        background 0.2s ease;
+    transition: box-shadow 0.4s cubic-bezier(0.165, 0.84, 0.44, 1),
+        border-color 0.4s cubic-bezier(0.165, 0.84, 0.44, 1),
+        background 0.4s cubic-bezier(0.165, 0.84, 0.44, 1);
 }
 
 .node-glass:hover {
@@ -91,15 +78,14 @@
    ============================================================================= */
 .node-glass--selected {
     box-shadow: var(--node-shadow-selected);
-    transform: scale(1.02);
-    border-color: var(--node-resizer-color, var(--rose-500, #FF85A1));
+    border-color: var(--node-resizer-color, var(--rose-500, #FF4D8D));
     z-index: 10;
 }
 
 .node-resizer-outline {
     position: absolute;
     inset: -8px;
-    border-radius: calc(var(--radius-lg, 1rem) + 8px);
+    border-radius: calc(var(--radius-xl, 1.5rem) + 8px);
     pointer-events: none;
     z-index: 2;
     --node-resizer-corner-size: 36px;
@@ -192,8 +178,9 @@
    Active Master Indicator
    ============================================================================= */
 .node-glass--active {
-    background: rgba(255, 240, 245, 0.9);
-    border-color: var(--rose-500, #FF85A1);
+    background: linear-gradient(to bottom right, #ffffff, #fff9fb);
+    border: 2px solid var(--rose-500, #FF4D8D);
+    box-shadow: var(--node-shadow-selected);
 }
 
 .node-glass--active::before {
@@ -330,13 +317,14 @@
    ============================================================================= */
 .node-glass__thumbnail {
     position: relative;
-    background: var(--gray-50, #F9FAFB);
-    border-radius: 0.5rem;
+    background: rgba(250, 250, 251, 0.6);
+    border: 1px solid var(--gray-100, #F3F4F6);
+    border-radius: 1rem;
     overflow: hidden;
     display: flex;
     align-items: center;
     justify-content: center;
-    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.06);
+    box-shadow: none;
     /* 박스가 커질 때 썸네일 영역도 함께 확장되도록 유연한 높이 설정 */
     width: 100%;
     flex: 1 1 auto;
@@ -371,9 +359,9 @@
 }
 
 .node-glass__thumbnail-placeholder {
-    font-size: 0.6875rem;
-    color: var(--gray-400, #9CA3AF);
-    font-weight: 500;
+    font-size: 0.875rem;
+    color: var(--gray-300, #D1D5DB);
+    font-weight: 800;
 }
 
 /* =============================================================================
@@ -399,20 +387,21 @@
     position: absolute;
     display: inline-flex;
     align-items: center;
-    gap: 0.25rem;
-    padding: 0.25rem 0.5rem;
-    font-size: 0.625rem;
-    font-weight: 600;
+    gap: 0.375rem;
+    padding: 4px 12px;
+    font-size: 11px;
+    font-weight: 900;
+    letter-spacing: 0.02em;
     border-radius: var(--radius-full, 9999px);
     z-index: 5;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 4px 10px rgba(255, 77, 141, 0.3);
 }
 
 .node-glass__badge--active {
-    top: -8px;
+    top: -12px;
     left: 50%;
     transform: translateX(-50%);
-    background: linear-gradient(135deg, var(--rose-500, #FF85A1), var(--rose-400, #FFB3C6));
+    background: var(--rose-500, #FF4D8D);
     color: white;
 }
 
@@ -428,8 +417,9 @@
 }
 
 .node-glass__badge-icon {
-    width: 10px;
-    height: 10px;
+    width: 12px;
+    height: 12px;
+    fill: currentColor;
 }
 
 /* =============================================================================

@@ -40,7 +40,7 @@ const emit = defineEmits<{
 
 const nodeStore = useSceneNodeStore();
 const { getLayoutedElements } = useAutoLayout();
-const { fitView, onNodeClick, onNodeDragStart, onSelectionDragStart } = useVueFlow();
+const { fitView, onNodeClick, onNodeDragStart, onNodeDragStop, onSelectionDragStart, onSelectionDragStop } = useVueFlow();
 
 const edgeTypes = {
   flowing: FlowingEdge,
@@ -53,12 +53,23 @@ const edgeTypes = {
 const hasAppliedInitialLayout = ref(false);
 
 watch(
-  () => [nodeStore.nodes.length, nodeStore.edges.length],
-  ([nodeCount = 0]) => {
-    if (nodeCount > 0 && !hasAppliedInitialLayout.value) {
+  () => [nodeStore.isLoading, nodeStore.nodes.length, nodeStore.edges.length],
+  ([isLoading, nodeCount = 0, edgeCount = 0]) => {
+    if (isLoading) return;
+    if (nodeCount <= 1) return;
+    if (edgeCount === 0) return;
+    if (hasAppliedInitialLayout.value) return;
+
+    const hasSavedPositions = nodeStore.nodes.some(
+      (node) => node.position.x !== 0 || node.position.y !== 0
+    );
+    if (hasSavedPositions) {
       hasAppliedInitialLayout.value = true;
-      applyLayout();
+      return;
     }
+
+    hasAppliedInitialLayout.value = true;
+    applyLayout();
   },
   { immediate: true }
 );
@@ -93,6 +104,8 @@ function applyLayout(): void {
   setTimeout(() => {
     fitView({ padding: 0.2 });
   }, 100);
+
+  nodeStore.persistNodePositions();
 }
 
 // =============================================================================
@@ -118,8 +131,14 @@ const handleNodeDragStart = () => {
   nodeStore.pushPositionSnapshot();
 };
 
+const handleNodeDragStop = () => {
+  nodeStore.persistNodePositions();
+};
+
 onNodeDragStart(handleNodeDragStart);
+onNodeDragStop(handleNodeDragStop);
 onSelectionDragStart(handleNodeDragStart);
+onSelectionDragStop(handleNodeDragStop);
 
 function handlePaneClick(): void {
   // 캔버스 빈 영역 클릭 시 선택 해제
@@ -178,7 +197,7 @@ defineExpose({
       @node-resize-start="handleNodeDragStart"
     >
       <!-- Background -->
-      <Background pattern-color="var(--rose-200)" :gap="24" />
+      <Background variant="dots" color="var(--rose-200)" :gap="30" :size="1.5" />
 
       <!-- Controls -->
       <Controls position="bottom-left" />

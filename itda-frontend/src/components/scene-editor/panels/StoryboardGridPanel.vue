@@ -158,7 +158,9 @@ function buildSceneOneLine(): string {
 }
 
 function getPanelCount(layout: GridLayout): number {
-  const [rows, cols] = layout.split('x').map((value) => Number(value));
+  const parts = layout.split('x').map((value) => Number(value));
+  const rows = parts[0] ?? Number.NaN;
+  const cols = parts[1] ?? Number.NaN;
   if (!Number.isFinite(rows) || !Number.isFinite(cols)) return 0;
   return rows * cols;
 }
