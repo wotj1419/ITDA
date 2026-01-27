@@ -20,105 +20,50 @@
     transform: scale(1.02);
 }
 
-.vue-flow__edge-path {
-    stroke: var(--rose-300, #FFD9E8);
-    stroke-width: 2;
-}
-
-.vue-flow__edge.selected .vue-flow__edge-path {
-    stroke: var(--rose-500, #FF85A1);
-    stroke-width: 3;
-}
-
-/* 확정 엣지 (녹색) */
-.vue-flow__edge.confirmed .vue-flow__edge-path {
-    stroke: var(--success, #22C55E);
-    stroke-width: 3;
-}
-
-/* 트랜지션 엣지 (점선) */
-.vue-flow__edge.transition .vue-flow__edge-path {
-    stroke: var(--rose-400, #FFB3C6);
-    /* keep solid for a cleaner look; the flowing highlight communicates the "transition" */
-    stroke-dasharray: none;
-}
-
-.vue-flow__edge {
-    /* Defaults (Rose) */
-    --edge-base: var(--rose-400, #FFB3C6);
-    --edge-width: 1.8;
-    --edge-tube-width: 3.2;
-    --edge-core-width: 1.1;
-    --edge-core: rgba(255, 255, 255, 0.88);
-    --edge-glow: rgba(255, 133, 161, 0.35);
-    --edge-glow-width: 8;
-    --edge-breathe-duration: 3.8s;
-}
-
-.vue-flow__edge.selected {
-    --edge-base: var(--rose-500, #FF85A1);
-    --edge-width: 3;
-}
-
-.vue-flow__edge.confirmed {
-    --edge-base: var(--success, #22C55E);
-    --edge-width: 3;
-    --edge-glow: rgba(34, 197, 94, 0.35);
-}
-
-.vue-flow__edge.transition {
-    /* A touch warmer/more noticeable than normal edges */
-    --edge-base: var(--rose-400, #FFB3C6);
-    --edge-glow: rgba(255, 107, 138, 0.38);
-    --edge-breathe-duration: 3s;
-}
-
 /* ==========================================================================
-   Flowing Edge (custom edge renderer)
+   Edge styling (match sample/reference.html connector-line)
    ========================================================================== */
 
-.edge-flow__tube {
-    stroke: var(--edge-base);
-    stroke-width: var(--edge-tube-width);
-    stroke-linecap: round;
-    opacity: 0.55;
+.vue-flow__edge {
+    /* Reference colors */
+    --edge-track: #FFD6E5;      /* connector-line background */
+
+    /* Reference geometry */
+    --edge-track-width: 2;
+    --edge-highlight-width: 2;
 }
 
-.edge-flow__core {
-    stroke: var(--edge-core);
-    stroke-width: var(--edge-core-width);
-    stroke-linecap: round;
-    opacity: 0.8;
+/* Base line (increase specificity to override Vue Flow default edge styles, which may load later) */
+.vue-flow__edge-path.edge-flow__track {
+    stroke: var(--edge-track);
+    stroke-width: var(--edge-track-width);
+    stroke-linecap: butt; /* reference connector-line is a straight rectangle (no rounded caps) */
+    stroke-linejoin: round;
 }
 
-.edge-flow__glow {
-    stroke: var(--edge-glow);
-    stroke-width: var(--edge-glow-width);
-    stroke-linecap: round;
-    opacity: 0.22;
-    filter: blur(1.4px);
-    animation: edge-breathe var(--edge-breathe-duration) ease-in-out infinite;
-    animation-delay: var(--edge-flow-delay, 0ms);
+.vue-flow__edge.selected .vue-flow__edge-path.edge-flow__track,
+.vue-flow__edge:focus .vue-flow__edge-path.edge-flow__track,
+.vue-flow__edge:focus-visible .vue-flow__edge-path.edge-flow__track {
+    stroke: var(--edge-track);
+    stroke-width: var(--edge-track-width);
+}
+
+.edge-flow__track {
+    opacity: 1;
+}
+
+/* Moving highlight (reference-like gradient band; animation is in SVG) */
+.edge-flow__highlight {
+    stroke-width: var(--edge-highlight-width);
+    stroke-linecap: butt;
+    stroke-linejoin: round;
     pointer-events: none;
-    will-change: opacity, filter;
-}
-
-@keyframes edge-breathe {
-    0%,
-    100% {
-        opacity: 0.18;
-        filter: blur(1.2px);
-    }
-    50% {
-        opacity: 0.34;
-        filter: blur(1.8px);
-    }
+    will-change: opacity;
 }
 
 @media (prefers-reduced-motion: reduce) {
-    .edge-flow__glow {
-        animation: none;
-        opacity: 0.2;
+    .edge-flow__highlight {
+        display: none;
     }
 }
 
