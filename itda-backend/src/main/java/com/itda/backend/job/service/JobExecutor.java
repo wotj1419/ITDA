@@ -74,7 +74,7 @@ public class JobExecutor {
         log.info("[JobExecutor] Job started: id={}, type={}", jobId, job.getType());
 
         try {
-            updateNodeStatusIfApplicable(job, NodeStatus.RUNNING, null);
+            updateNodeStatusIfApplicable(job, NodeStatus.RUNNING, null, null);
 
             ExecutionResult result = executeByType(job);
             validateExecutionResult(job, result);
@@ -85,7 +85,7 @@ public class JobExecutor {
                 return;
             }
 
-            updateNodeStatusIfApplicable(job, NodeStatus.SUCCEEDED, result.nodeContentKey());
+            updateNodeStatusIfApplicable(job, NodeStatus.SUCCEEDED, result.nodeContentKey(), result.resultAssetId());
             log.info("[JobExecutor] Job succeeded: id={}, resultAssetId={}", jobId, result.resultAssetId());
             publishDoneSafely(jobId);
 
@@ -164,7 +164,7 @@ public class JobExecutor {
             return;
         }
 
-        updateNodeStatusIfApplicable(job, NodeStatus.FAILED, null);
+        updateNodeStatusIfApplicable(job, NodeStatus.FAILED, null, null);
         publishFailedSafely(jobId);
     }
 
@@ -189,7 +189,7 @@ public class JobExecutor {
         return job.getNodeId();
     }
 
-    private void updateNodeStatusIfApplicable(Job job, NodeStatus status, String nodeContentKey) {
+    private void updateNodeStatusIfApplicable(Job job, NodeStatus status, String nodeContentKey, Long assetId) {
         if (job.getNodeId() == null) {
             return;
         }
@@ -198,11 +198,16 @@ public class JobExecutor {
             return;
         }
         int updated;
-        if (nodeContentKey == null) {
+        if (nodeContentKey == null && assetId == null) {
             updated = nodeMapper.updateStatus(job.getNodeId(), status);
         } else {
             // NOTE: DB 컬럼명이 content_url 이지만, 로컬 저장소 기준으로는 storageKey가 들어갈 수 있음.
-            updated = nodeMapper.updateStatusAndContentUrl(job.getNodeId(), status, nodeContentKey);
+            updated = nodeMapper.updateStatusAndContentUrlAndAssetId(
+                    job.getNodeId(),
+                    status,
+                    nodeContentKey,
+                    assetId
+            );
         }
         if (updated == 0) {
             log.warn("[JobExecutor] Node status update ignored: jobId={}, nodeId={}, status={}, contentKeyPresent={}",
