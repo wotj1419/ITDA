@@ -49,11 +49,11 @@ public final class PresetFragments {
     }
 
     public enum StyleKey {
-        CINEMATIC_REAL("cinematic realistic"),
-        ANIME("anime style"),
-        PIXAR("Pixar-like 3D animation"),
-        NOIR("film noir"),
-        DOCUMENTARY("documentary style");
+        PHOTO_REAL("photo-realistic"),
+        ANIME_2D("2D anime illustration, clean line art"),
+        STYLIZED_3D("stylized 3D animated feature film look"),
+        WATERCOLOR_ILLUSTRATION("watercolor illustration, soft washes, subtle paper texture"),
+        OIL_PAINT_ILLUSTRATION("oil paint illustration, textured brush strokes");
 
         private final String fragment;
 
@@ -70,18 +70,31 @@ public final class PresetFragments {
             if (key == null) {
                 return null;
             }
+            key = normalizeStyleKeyAlias(key);
             try {
                 return valueOf(key);
             } catch (IllegalArgumentException e) {
                 return null;
             }
         }
+
+        private static String normalizeStyleKeyAlias(String key) {
+            return switch (key) {
+                // Legacy aliases (1~2 sprints compatibility)
+                case "CINEMATIC_REAL" -> "PHOTO_REAL";
+                case "ANIME" -> "ANIME_2D";
+                case "PIXAR" -> "STYLIZED_3D";
+                // These are film-look keys; for now degrade safely to a media/rendering style
+                case "NOIR", "DOCUMENTARY" -> "PHOTO_REAL";
+                default -> key;
+            };
+        }
     }
 
     public enum TimeOfDayKey {
         DAWN("dawn"),
         DAY("daytime"),
-        DUSK("dusk"),
+        DUSK("golden hour, sunset"),
         NIGHT("night");
 
         private final String fragment;
@@ -99,21 +112,30 @@ public final class PresetFragments {
             if (key == null) {
                 return null;
             }
+            key = normalizeTimeOfDayKeyAlias(key);
             try {
                 return valueOf(key);
             } catch (IllegalArgumentException e) {
                 return null;
             }
         }
+
+        private static String normalizeTimeOfDayKeyAlias(String key) {
+            return switch (key) {
+                case "MORNING" -> "DAWN";
+                case "EVENING" -> "DUSK";
+                default -> key;
+            };
+        }
     }
 
     public enum MoodKey {
-        NEUTRAL("neutral"),
-        COZY("cozy"),
-        LONELY("lonely"),
-        TENSE("tense"),
-        HOPEFUL("hopeful"),
-        DARK("dark");
+        NEUTRAL("natural color grade, balanced lighting, moderate contrast"),
+        COZY("warm color grade, soft diffused lighting, gentle contrast"),
+        LONELY("cooler tones, slightly desaturated, more negative space, calm atmosphere"),
+        TENSE("low-key lighting, higher contrast, cooler grade, subtle shadow emphasis"),
+        HOPEFUL("bright high-key lighting, vibrant but natural colors, soft highlights"),
+        DARK("desaturated cool palette, soft low contrast, overcast or dim ambience");
 
         private final String fragment;
 
@@ -232,4 +254,3 @@ public final class PresetFragments {
         }
     }
 }
-
