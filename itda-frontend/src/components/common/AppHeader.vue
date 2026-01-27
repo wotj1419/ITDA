@@ -1,25 +1,19 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { RouterLink } from 'vue-router'
-import { Search, Share2, Users } from 'lucide-vue-next'
+import { Search } from 'lucide-vue-next'
 import AvatarGroup from './AvatarGroup.vue'
 
 interface Props {
   showCollaborators?: boolean
-  showShareButton?: boolean
-  showCollabButton?: boolean
 }
 
 withDefaults(defineProps<Props>(), {
   showCollaborators: true,
-  showShareButton: true,
-  showCollabButton: true,
 })
 
 const emit = defineEmits<{
   (e: 'search', query: string): void
-  (e: 'share'): void
-  (e: 'startCollab'): void
 }>()
 
 const searchQuery = ref('')
@@ -48,13 +42,23 @@ const handleSearch = () => {
 
       <div class="divider"></div>
 
-      <button v-if="showShareButton" class="btn btn-ghost" @click="emit('share')">
-        <Share2 class="icon-sm" />
-        <span>프로젝트 공유</span>
-      </button>
+      <div v-if="$slots['left-after-divider']" class="header-left-extra">
+        <slot name="left-after-divider" />
+      </div>
     </div>
 
     <div class="header-center">
+      <div class="search-wrapper">
+        <Search class="search-icon" />
+        <input
+          v-model="searchQuery"
+          type="text"
+          class="header-search"
+          placeholder="프로젝트 검색"
+          @keyup.enter="handleSearch"
+        />
+      </div>
+      <div v-if="showCollaborators" class="divider"></div>
       <!-- Collaborator Avatars -->
       <AvatarGroup
         v-if="showCollaborators"
@@ -62,25 +66,10 @@ const handleSearch = () => {
         :max="3"
         size="sm"
       />
-      <div v-if="showCollaborators" class="divider"></div>
-      <div class="search-wrapper">
-        <Search class="search-icon" />
-        <input
-          v-model="searchQuery"
-          type="text"
-          class="header-search"
-          placeholder="씬, 프롬프트, 에셋 검색..."
-          @keyup.enter="handleSearch"
-        />
-      </div>
     </div>
 
-    <div class="header-right">
+    <div class="header-actions">
       <slot name="actions" />
-      <button v-if="showCollabButton" class="btn btn-primary" @click="emit('startCollab')">
-        <Users class="icon-sm" />
-        <span>실시간 협업 시작</span>
-      </button>
     </div>
   </header>
 </template>
@@ -93,16 +82,21 @@ const handleSearch = () => {
   border-bottom: 1px solid var(--rose-100);
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 1rem;
   flex-shrink: 0;
 }
 
-.header-left,
-.header-right {
+.header-left {
   display: flex;
   align-items: center;
   gap: 0.75rem;
+}
+
+.header-left-extra {
+  display: flex;
+  align-items: center;
+  min-width: 0;
 }
 
 /* Logo */
@@ -135,12 +129,21 @@ const handleSearch = () => {
 /* Header Layout Refinement */
 .header-center {
   flex: 0 1 400px; /* Grow 0 to prevent bounce, Shrink 1, Basis 400px */
-  margin: 0 auto;
+  margin-left: auto;
+  margin-right: 1rem;
   min-width: 0;
   transition: all 0.2s ease;
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 0.75rem;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-shrink: 0;
 }
 
 .divider {
@@ -187,10 +190,6 @@ const handleSearch = () => {
   box-shadow: 0 0 0 3px rgba(255, 133, 161, 0.1);
 }
 
-/* Prevent right section from being crushed */
-.header-right {
-  flex-shrink: 0;
-}
 
 /* Responsive Header */
 @media (max-width: 1100px) {

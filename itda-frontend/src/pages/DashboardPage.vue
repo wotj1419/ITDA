@@ -3,6 +3,7 @@ import { onMounted, ref } from 'vue'
 import { Plus } from 'lucide-vue-next'
 import { useProjectStore } from '../stores/project'
 import { useUIStore } from '../stores/ui'
+import { useAuthStore } from '../stores/auth'
 import DefaultLayout from '../layouts/DefaultLayout.vue'
 import ProjectCard from '../components/project/ProjectCard.vue'
 import NewProjectModal from '../components/project/NewProjectModal.vue'
@@ -10,6 +11,7 @@ import ConfirmModal from '../components/common/ConfirmModal.vue'
 
 const projectStore = useProjectStore()
 const uiStore = useUIStore()
+const authStore = useAuthStore()
 
 // Delete Confirmation State
 const showDeleteModal = ref(false)
@@ -62,28 +64,23 @@ const cancelDelete = () => {
 
 <template>
   <DefaultLayout>
+    <template #header-left-after-divider>
+      <h2 class="welcome-title">
+        반가워요<span v-if="authStore.user?.name">, {{ authStore.user.name }}님</span> ✨
+      </h2>
+    </template>
+    <template #header-actions>
+      <button class="btn btn-primary" @click="openNewProjectModal">
+        <Plus class="icon-sm" />
+        New Project
+      </button>
+    </template>
     <div class="dashboard-container">
-      <!-- Welcome Message -->
-      <div class="welcome-section">
-        <h2 class="welcome-title">
-          반가워요, 크리에이터님 ✨
-        </h2>
-        <p class="welcome-subtitle">
-          오늘도 당신의 놀라운 아이디어를 영화로 만들어보세요.
-        </p>
-      </div>
-
       <!-- Toolbar -->
       <div class="toolbar">
         <div class="toolbar-left">
           <h1 class="page-title">My Projects</h1>
           <p class="project-count">{{ projectStore.projectCount }} projects</p>
-        </div>
-        <div class="toolbar-right">
-          <button class="btn btn-primary" @click="openNewProjectModal">
-            <Plus class="icon-sm" />
-            New Project
-          </button>
         </div>
       </div>
 
@@ -137,21 +134,12 @@ const cancelDelete = () => {
   margin: 0 auto;
 }
 
-/* Welcome Section */
-.welcome-section {
-  margin-bottom: 2.5rem;
-}
-
 .welcome-title {
-  font-size: 1.875rem;
-  font-weight: 700;
-  color: var(--gray-900);
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--gray-800);
   margin: 0;
-}
-
-.welcome-subtitle {
-  color: var(--gray-500);
-  margin-top: 0.5rem;
+  white-space: nowrap;
 }
 
 /* Toolbar */
