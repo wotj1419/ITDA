@@ -6,9 +6,14 @@ def sendMMNotify(boolean success, Map info) {
                                 : "## :angry_jenkins: ${action} 실패 ❌"
 
         def lines = []
-        if (info.mergeTarget) {
+        def mergeTarget = info.mergeTarget?.toString()?.trim()
+        if (mergeTarget && mergeTarget != "null") {
             def mergeSource = info.mergeSource ?: info.branch ?: "unknown"
-            lines << "**머지**: ${mergeSource} -> ${info.mergeTarget}"
+            def mergeSourceText = mergeSource?.toString()?.trim()
+            if (!mergeSourceText || mergeSourceText == "null") {
+                mergeSourceText = "unknown"
+            }
+            lines << "**머지**: ${mergeSourceText} -> ${mergeTarget}"
         }
         if (info.mention) lines << "**알림**: ${info.mention}"
         if (info.branch)  lines << "**브랜치**: ${info.branch}"

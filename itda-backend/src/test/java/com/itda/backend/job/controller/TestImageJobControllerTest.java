@@ -1,6 +1,7 @@
 package com.itda.backend.job.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.itda.backend.global.security.JwtTokenProvider;
 import com.itda.backend.job.domain.Job;
 import com.itda.backend.job.domain.JobStatus;
 import com.itda.backend.job.domain.JobType;
@@ -43,6 +44,9 @@ class TestImageJobControllerTest {
 
     @MockBean
     private ObjectMapper objectMapper;
+
+    @MockBean
+    private JwtTokenProvider jwtTokenProvider;
 
     @Test
     void createImageJob_returnsAcceptedJob() throws Exception {

@@ -52,6 +52,9 @@
 - 컨트롤러가 `ObjectMapper`를 생성자 주입받는 경우
   - `@MockBean ObjectMapper`로 해결하거나
   - `@Import(JacksonAutoConfiguration.class)`로 자동 구성 추가
+- 보안 필터가 빈으로 등록되어 의존성이 필요한 경우
+  - `@MockBean JwtTokenProvider` 등 필터 의존성을 mock 처리
+  - 또는 `SecurityAutoConfiguration` 제외 고려
 
 ## CI(Jenkins) 주의사항
 - Jenkins 기본 환경에는 MySQL이 없음
