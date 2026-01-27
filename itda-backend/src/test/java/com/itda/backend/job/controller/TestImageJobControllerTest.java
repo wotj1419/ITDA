@@ -1,5 +1,6 @@
 package com.itda.backend.job.controller;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.itda.backend.job.domain.Job;
 import com.itda.backend.job.domain.JobStatus;
 import com.itda.backend.job.domain.JobType;
@@ -17,6 +18,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -39,6 +41,9 @@ class TestImageJobControllerTest {
     @MockBean
     private NodeMapper nodeMapper;
 
+    @MockBean
+    private ObjectMapper objectMapper;
+
     @Test
     void createImageJob_returnsAcceptedJob() throws Exception {
         Job job = Job.builder()
@@ -57,6 +62,9 @@ class TestImageJobControllerTest {
                 eq(null),
                 anyBoolean()
         )).thenReturn(job);
+
+        when(objectMapper.writeValueAsString(any()))
+                .thenReturn("{\"prompt\":\"test\"}");
 
         when(jobResultResolver.resolve(job)).thenReturn(null);
 
