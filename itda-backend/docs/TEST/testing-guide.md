@@ -50,8 +50,8 @@
 - `MockMvc`로 엔드포인트 검증
 - 예: `TestImageJobControllerTest`는 WebMvcTest로 전환해 DB 의존성 제거
 - 컨트롤러가 `ObjectMapper`를 생성자 주입받는 경우
-  - `@MockBean ObjectMapper`로 해결하거나
-  - `@Import(JacksonAutoConfiguration.class)`로 자동 구성 추가
+  - 기본은 실제 `ObjectMapper` 사용을 권장 (`@Import(JacksonAutoConfiguration.class)`)
+  - `@MockBean ObjectMapper`는 JacksonJsonProvider에서 NPE를 유발할 수 있어 주의
 - 보안 필터가 빈으로 등록되어 의존성이 필요한 경우
   - `@MockBean JwtTokenProvider` 등 필터 의존성을 mock 처리
   - 또는 `SecurityAutoConfiguration` 제외 고려

@@ -1,6 +1,5 @@
 package com.itda.backend.job.controller;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.itda.backend.global.security.JwtTokenProvider;
 import com.itda.backend.job.domain.Job;
 import com.itda.backend.job.domain.JobStatus;
@@ -13,13 +12,14 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.boot.autoconfigure.jackson.JacksonAutoConfiguration;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -27,6 +27,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(TestImageJobController.class)
+@Import(JacksonAutoConfiguration.class)
 @AutoConfigureMockMvc(addFilters = false)
 class TestImageJobControllerTest {
 
@@ -41,9 +42,6 @@ class TestImageJobControllerTest {
 
     @MockBean
     private NodeMapper nodeMapper;
-
-    @MockBean
-    private ObjectMapper objectMapper;
 
     @MockBean
     private JwtTokenProvider jwtTokenProvider;
@@ -66,9 +64,6 @@ class TestImageJobControllerTest {
                 eq(null),
                 anyBoolean()
         )).thenReturn(job);
-
-        when(objectMapper.writeValueAsString(any()))
-                .thenReturn("{\"prompt\":\"test\"}");
 
         when(jobResultResolver.resolve(job)).thenReturn(null);
 
