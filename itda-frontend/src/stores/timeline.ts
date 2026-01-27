@@ -6,6 +6,7 @@ import {
     fetchProjectTimeline,
     fetchSceneTimeline,
     requestProjectMerge,
+    requestSceneMerge,
     fetchProjectExport,
 } from '../services/api/timeline'
 import { fetchProtectedBlobUrl } from '../services/api/media'
@@ -100,8 +101,14 @@ export const useTimelineStore = defineStore('timeline', () => {
 
         if (!payload?.type) return
 
-        if (payload.type === 'PROJECT_MERGE') {
-            const targetId = payload.target?.id
+        const targetId = payload.target?.id
+        const targetType = payload.target?.type
+
+        const isProjectMerge = payload.type === 'PROJECT_MERGE'
+        const isSceneMerge = payload.type === 'SCENE_MERGE'
+
+        if (isProjectMerge) {
+            if (targetType && targetType !== 'PROJECT') return
             if (currentProjectId.value && targetId && targetId !== currentProjectId.value) return
 
             if (eventType === 'job.failed' || payload.status === 'FAILED') {
@@ -117,6 +124,23 @@ export const useTimelineStore = defineStore('timeline', () => {
                 if (currentProjectId.value) {
                     downloadUrl.value = await fetchProjectExport(currentProjectId.value)
                 }
+            }
+        }
+
+        if (isSceneMerge) {
+            if (targetType && targetType !== 'SCENE') return
+            if (currentSceneId.value && targetId && targetId !== currentSceneId.value) return
+
+            if (eventType === 'job.failed' || payload.status === 'FAILED') {
+                mergeStatus.value = 'error'
+                mergeStatusText.value = '병합 실패'
+                return
+            }
+
+            if (eventType === 'job.done' || payload.status === 'SUCCEEDED') {
+                mergeStatus.value = 'done'
+                mergeProgress.value = 100
+                mergeStatusText.value = '병합 완료'
             }
         }
     }
@@ -194,7 +218,9 @@ export const useTimelineStore = defineStore('timeline', () => {
         downloadUrl.value = null
 
         try {
-            const result = await requestProjectMerge(currentProjectId.value)
+            const result = currentSceneId.value
+                ? await requestSceneMerge(currentSceneId.value)
+                : await requestProjectMerge(currentProjectId.value)
             mergeJobId.value = result.jobId
             mergeStatusText.value = '병합 진행 중'
             return true
