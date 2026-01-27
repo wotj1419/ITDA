@@ -9,6 +9,7 @@ import { VueFlow, useVueFlow } from '@vue-flow/core';
 import { Background } from '@vue-flow/background';
 import { Controls } from '@vue-flow/controls';
 import { nodeTypes } from './nodes';
+import FlowingEdge from './edges/FlowingEdge.vue';
 import { useSceneNodeStore } from '../../stores/sceneNode';
 import { useAutoLayout } from '../../composables/useAutoLayout';
 import { NodeType } from '../../types/ui/sceneNodes';
@@ -40,6 +41,10 @@ const emit = defineEmits<{
 const nodeStore = useSceneNodeStore();
 const { getLayoutedElements } = useAutoLayout();
 const { fitView, onNodeClick, onNodeDragStart, onSelectionDragStart } = useVueFlow();
+
+const edgeTypes = {
+  flowing: FlowingEdge,
+} as const;
 
 // =============================================================================
 // Lifecycle
@@ -164,6 +169,7 @@ defineExpose({
       v-model:nodes="nodeStore.nodes"
       v-model:edges="nodeStore.edges"
       :node-types="nodeTypes"
+      :edge-types="edgeTypes"
       :default-viewport="{ x: 0, y: 0, zoom: 1 }"
       :min-zoom="0.25"
       :max-zoom="2"

@@ -11,6 +11,7 @@ import { useSceneNodeStore } from '../../../stores/sceneNode';
 import { useNodeGeneration } from '../../../composables/useNodeGeneration';
 import { LayoutGrid, Camera, Target, FileText, Sparkles, Check, RefreshCw } from 'lucide-vue-next';
 import { mapShotTypeLabelsToKeys } from '../../../utils/nodeSettings';
+import { DEFAULT_GRID_LAYOUT, DEFAULT_GRID_SHOT_TYPES } from '../../../utils/nodeDefaults';
 
 interface Props {
   node: VueFlowNode<StoryboardGridNodeData>;
@@ -23,8 +24,8 @@ const isShotTypeHelpOpen = ref(false);
 
 const form = ref({
   gridMode: 'SHOT_VARIATIONS' as GridMode,
-  layout: '2x3' as GridLayout,
-  shotTypes: [] as string[],
+  layout: DEFAULT_GRID_LAYOUT as GridLayout,
+  shotTypes: [...DEFAULT_GRID_SHOT_TYPES] as string[],
   compositionHint: '',
   beats: [] as string[],
   continuityRules: '',
@@ -158,7 +159,10 @@ function buildSceneOneLine(): string {
 }
 
 function getPanelCount(layout: GridLayout): number {
-  const [rows, cols] = layout.split('x').map((value) => Number(value));
+  const parts = layout.split('x');
+  if (parts.length !== 2) return 0;
+  const rows = Number(parts[0]);
+  const cols = Number(parts[1]);
   if (!Number.isFinite(rows) || !Number.isFinite(cols)) return 0;
   return rows * cols;
 }
@@ -174,12 +178,14 @@ function normalizeBeats(beats: string[], layout: GridLayout): string[] {
 
 watch(() => props.node.id, () => {
   if (!data.value) return;
-  const layout = data.value.layout || '2x3';
+  const layout = data.value.layout || DEFAULT_GRID_LAYOUT;
   const gridMode = data.value.gridMode ?? 'SHOT_VARIATIONS';
   form.value = {
     gridMode,
     layout,
-    shotTypes: data.value.shotTypes || [],
+    shotTypes: (data.value.shotTypes && data.value.shotTypes.length > 0)
+      ? data.value.shotTypes
+      : [...DEFAULT_GRID_SHOT_TYPES],
     compositionHint: data.value.compositionHint || '',
     beats: normalizeBeats(data.value.beats || [], layout),
     continuityRules: data.value.continuityRules || '',
@@ -209,10 +215,12 @@ watch(
   ],
   () => {
     if (!data.value) return;
-    const layout = data.value.layout || '2x3';
+    const layout = data.value.layout || DEFAULT_GRID_LAYOUT;
     form.value.gridMode = data.value.gridMode ?? 'SHOT_VARIATIONS';
     form.value.layout = layout;
-    form.value.shotTypes = [...(data.value.shotTypes || [])];
+    form.value.shotTypes = (data.value.shotTypes && data.value.shotTypes.length > 0)
+      ? [...data.value.shotTypes]
+      : [...DEFAULT_GRID_SHOT_TYPES];
     form.value.compositionHint = data.value.compositionHint || '';
     form.value.beats = normalizeBeats(data.value.beats || [], layout);
     form.value.continuityRules = data.value.continuityRules || '';

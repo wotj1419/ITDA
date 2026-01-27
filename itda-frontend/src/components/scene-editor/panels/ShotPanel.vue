@@ -11,6 +11,7 @@ import { useSceneNodeStore } from '../../../stores/sceneNode';
 import { useNodeGeneration } from '../../../composables/useNodeGeneration';
 import { Camera, Smile, PenLine, FileText, Sparkles, Check, RefreshCw, LayoutGrid } from 'lucide-vue-next';
 import { resolveExpressionKey, resolveShotTypeKey } from '../../../utils/nodeSettings';
+import { DEFAULT_GRID_LAYOUT } from '../../../utils/nodeDefaults';
 
 interface Props {
   node: Node<ShotNodeData>;
@@ -39,7 +40,7 @@ const parentGridNode = computed(() =>
   )
 );
 const parentGridData = computed(() => parentGridNode.value?.data as StoryboardGridNodeData | undefined);
-const gridLayout = computed(() => parentGridData.value?.layout || '2x3');
+const gridLayout = computed(() => parentGridData.value?.layout || DEFAULT_GRID_LAYOUT);
 const gridCellCount = computed(() => {
   const match = gridLayout.value.match(/(\d+)x(\d+)/);
   if (!match) return 6;

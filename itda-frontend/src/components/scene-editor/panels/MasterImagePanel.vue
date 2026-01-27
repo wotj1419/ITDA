@@ -13,6 +13,11 @@ import { useSceneNodeStore } from '../../../stores/sceneNode';
 import { useNodeGeneration } from '../../../composables/useNodeGeneration';
 import { Film, Palette, Sun, Smile, Sparkles, FileText, Image, Check, RefreshCw, Star, Users, Loader2 } from 'lucide-vue-next';
 import { resolveMoodKey, resolveStyleKey, resolveTimeOfDayKey } from '../../../utils/nodeSettings';
+import {
+  DEFAULT_MASTER_MOOD,
+  DEFAULT_MASTER_STYLE,
+  DEFAULT_MASTER_TIME_OF_DAY,
+} from '../../../utils/nodeDefaults';
 
 interface Props {
   node: Node<MasterImageNodeData>;
@@ -22,9 +27,9 @@ const props = defineProps<Props>();
 const nodeStore = useSceneNodeStore();
 // 폼 상태 - objectIds는 배열로 관리 (다중 선택)
 const form = ref({
-  style: '',
-  timeOfDay: '',
-  mood: '',
+  style: DEFAULT_MASTER_STYLE,
+  timeOfDay: DEFAULT_MASTER_TIME_OF_DAY,
+  mood: DEFAULT_MASTER_MOOD,
   objectIds: [] as string[],  // 등장 오브젝트 IDs (캐릭터 포함)
   prompt: '',
 });
@@ -121,9 +126,9 @@ function buildSceneOneLine(): string {
 watch(() => props.node.id, () => {
   if (!data.value) return;
   form.value = {
-    style: data.value.style || '',
-    timeOfDay: data.value.timeOfDay || '',
-    mood: data.value.mood || '',
+    style: data.value.style || DEFAULT_MASTER_STYLE,
+    timeOfDay: data.value.timeOfDay || DEFAULT_MASTER_TIME_OF_DAY,
+    mood: data.value.mood || DEFAULT_MASTER_MOOD,
     objectIds: data.value.objectIds || [],
     prompt: data.value.prompt || '',
   };
@@ -149,9 +154,9 @@ watch(
   ],
   () => {
     if (!data.value) return;
-    form.value.style = data.value.style || '';
-    form.value.timeOfDay = data.value.timeOfDay || '';
-    form.value.mood = data.value.mood || '';
+    form.value.style = data.value.style || DEFAULT_MASTER_STYLE;
+    form.value.timeOfDay = data.value.timeOfDay || DEFAULT_MASTER_TIME_OF_DAY;
+    form.value.mood = data.value.mood || DEFAULT_MASTER_MOOD;
     form.value.objectIds = [...(data.value.objectIds || [])];
   }
 );

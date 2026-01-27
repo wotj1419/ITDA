@@ -34,7 +34,8 @@ export function buildEdge(
     id: edgeId,
     source: sourceId,
     target: targetId,
-    type: 'smoothstep',
+    // Custom edge renderer that keeps the smoothstep geometry but adds a flowing highlight.
+    type: 'flowing',
     sourceHandle: options.sourceHandle,
     targetHandle: options.targetHandle,
     data: { isTransition: meta.isTransition, isConfirmed: meta.isConfirmed },

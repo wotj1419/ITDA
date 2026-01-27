@@ -197,6 +197,7 @@ function createVideo(
             videoUrl: 'https://sample-videos.com/video.mp4',
             thumbnailUrl: 'https://picsum.photos/seed/video' + id + '/200/112',
             duration,
+            aspectRatio: '16:9',
             isConfirmed,
             prompt: `${cameraMotion} 모션으로 ${duration}초 영상 생성`,
             cameraMotion,

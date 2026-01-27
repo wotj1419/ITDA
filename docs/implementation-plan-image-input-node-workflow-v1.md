@@ -10,15 +10,20 @@
 2) **병렬 개발 가능**: FE/BE/Worker/QA가 각자 진행해도 다시 맞추기 쉽도록 Contract를 고정한다.
 3) **MVP 현실성**: 외부 업로드/외부 URL은 P0에서 제외하고, 현재 노드 결과(LOCAL/S3 저장)만 입력 이미지 소스로 사용한다.
 
-### 0.2 현재 코드 기준(핵심 요약)
-- 프롬프트 자동 생성(promptKo) 기능은 이미 존재: `/api/ai/prompts/generate` (사용자 수정/승인 후 생성).
-- 노드 생성(Job)은 현재 `promptEn + settings`만 워커로 전달하며, **입력 이미지(first frame/reference image/last frame)가 전달되지 않음**.
-- VIDEO는 `start_shot_node_id/end_shot_node_id`를 저장/검증하지만, 실제 Veo 요청에는 이미지가 포함되지 않음.
-- 프론트는 노드 선택 시 `GET /api/nodes/{id}` 하이드레이트가 없어, 새로고침/재진입 시 폼이 비어 보이는 문제가 남아 있음.
+### 0.2 현재 구현 현황(2026-01-27 기준, 핵심 요약)
+- 프롬프트 자동 생성(promptKo): `/api/ai/prompts/generate`는 동작하며 nodeType별 가이드를 포함한다.
+- 노드 선택 시 하이드레이트 + 캐시(선택 시 1회): 프론트 Store에 구현됨.
+- generate 시점에 서버가 `promptKo` → `promptEn`을 만들고 저장하며, Job requestJson의 `prompt`는 `promptEn`이다.
+- 입력 이미지 기반 체인(Worker):
+  - GRID/SHOT: 부모 노드 결과 이미지를 reference로 사용한다.
+  - VIDEO: startShot(firstFrame) + endShot(lastFrame, 선택) 이미지를 Veo 요청에 포함한다.
+- Job requestJson은 현재 `{ prompt, settings }` 형태이며, `inputs` 메타는 아직 없다(필요 시 확장 가능).
+
+> 주의: 본 문서의 “티켓/범위” 중 일부는 이미 구현되어 있어, 아래에서 **DONE/TODO**로 재정리한다.
 
 ### 0.3 참고 문서(요구사항/규칙)
 - PRD: `docs/PRD_AI_Movie_Studio_v2.5.md`
-  - P0: Image-to-Video(시작 샷 필수), P1: end shot(트랜지션) 선택
+  - P0: Image-to-Video(시작 샷 필수), P1: end shot(트랜지션) 선택 *(코드는 end shot도 이미 지원)*
 - Node Workflow & Prompt Spec(v0): `docs/node-workflow-prompt-spec-v0.md`
   - promptKo(한글 UI) / promptEn(영문 생성) 분리, 노드 선택 시 하이드레이트(상세 단일소스)
 
@@ -33,7 +38,7 @@
   - GRID: 부모 MASTER 결과 이미지(룩/캐릭터 일관성 유지)
   - SHOT: 부모 GRID 결과 이미지(특정 셀 기반 재생성)
 - **firstFrame/lastFrame**:
-  - VIDEO: 시작 샷(필수) / 끝 샷(P1, 선택)
+  - VIDEO: 시작 샷(필수) / 끝 샷(선택)
 - **contentKey**: 노드 결과가 저장된 경로 키(LOCAL/S3). 현재 `/api/nodes/{id}/content` 다운로드는 이 키를 사용해 로드한다.
 
 ---
@@ -41,19 +46,30 @@
 ## 2. P0/P1 범위 선언(Contract Freeze)
 
 ### 2.1 P0 (이번 범위)
-1) MASTER 프롬프트 자동 생성(promptKo) 시 **씬 스토리 컨텍스트 포함**
-2) 노드 선택 시 **하이드레이트(상세 1회 + 캐시)**
-3) settings 키 정합(프론트↔백엔드) 최소한으로 맞춤
-4) **이미지 기반 입력 체인**
-   - MASTER → GRID: GRID 생성 시 부모 MASTER 결과 이미지를 reference로 사용
-   - GRID → SHOT: SHOT 생성 시 부모 GRID 결과 이미지를 reference로 사용(+ gridCellIndex)
-   - SHOT → VIDEO: VIDEO 생성 시 시작 샷 이미지를 firstFrame으로 사용(필수)
-5) 스토리지: **LOCAL/S3 둘 다 지원** (S3 우선, 없으면 로컬)
+아래 항목은 “P0로 의도했던 것”을 기준으로, 현재 코드 상태를 반영해 정리한다.
+
+- DONE: MASTER 프롬프트 자동 생성(promptKo) 시 sceneOneLine 포함
+- DONE: 노드 선택 시 하이드레이트(상세 1회 + 캐시)
+- DONE: settings 키 정합(서버는 key 기준 처리 + 레거시 매핑 유지)
+- DONE: 이미지 기반 입력 체인
+  - MASTER → GRID (reference)
+  - GRID → SHOT (reference)
+  - SHOT → VIDEO (firstFrame 필수)
+  - SHOT 2개 기반 트랜지션 VIDEO (lastFrame 선택) *(기존 문서상 P1이었으나 현재 구현됨)*
+- DONE: 스토리지 로딩 LOCAL/S3 지원(S3 우선 + 로컬 fallback)
+
+- TODO(P0 보강): 프론트 “기본값 자동 주입”
+  - 패널 폼 초기값이 항상 채워져 보이도록(특히 MASTER style/time/mood, GRID layout/shotTypes)
+- TODO(P0 보강): 프론트 `aspectRatio` UI/전송(16:9/9:16)
+  - 현재 프론트에서 `aspectRatio`를 저장/전송하지 않는다.
+- TODO(P0 보강): GRID(SHOT_VARIATIONS) 기본 템플릿 정합
+  - 문서 기본(2x2 + 4 shotTypes) vs 현재 UI 기본(2x3 + 빈 shotTypes) 중 하나로 고정
 
 ### 2.2 P1 (다음 범위)
-1) SHOT 2개 기반 트랜지션 VIDEO: end shot 이미지(lastFrame) 지원
-2) GRID(STORY_BEATS) 모드(스펙 v0의 P1)
-3) 그리드 셀 “직접 크롭” (PRD에서도 P1~P2 우선순위로 분리)
+P1은 “외부 입력/편집 편의/정교한 제어” 중심으로 둔다.
+
+1) 외부 업로드/외부 URL을 입력 이미지 소스로 지원(보안/검증 포함)
+2) Job requestJson에 `inputs` 메타를 추가해 워커 기대 입력을 명시(선택)
 
 ---
 
@@ -90,7 +106,7 @@ Acceptance Criteria:
 ### 3.4 스토리지 로딩(LOCAL + S3)
 워커는 사용자 인증 없이 내부 로딩이 가능해야 한다.
 - `MediaFileService`는 userId 권한 체크가 있어 워커에서 직접 재사용하기 애매함.
-- 워커 전용으로 **NodeContentLoader(내부 서비스)** 를 만들어 NodeMapper + 파일/S3 로더를 조합한다.
+- 워커 전용으로 **NodeContentLoader(내부 서비스)** 를 사용한다(S3 우선 + 로컬 fallback).
 
 ---
 
@@ -108,32 +124,30 @@ Acceptance Criteria:
   - `sceneOneLine`은 “씬 제목/설명 + 노드 타입별 추가 정보(선택)”를 1~2문장으로 구성한다.
 
 ### 4.3 Job requestJson 스키마(확장)
-현재: `{ "prompt": "<promptEn>", "settings": { ... } }`
+현재(구현됨):
+```json
+{
+  "prompt": "promptEn",
+  "settings": { "..." : "..." }
+}
+```
 
-P0 확장(권장):
+선택 확장(미구현, 필요 시 적용):
 ```json
 {
   "prompt": "promptEn",
   "settings": { "..." : "..." },
   "inputs": {
     "reference": { "mode": "PARENT_RESULT" },
-    "firstFrame": { "mode": "START_SHOT_RESULT" }
+    "firstFrame": { "mode": "START_SHOT_RESULT" },
+    "lastFrame": { "mode": "END_SHOT_RESULT" }
   }
 }
 ```
 
 설명:
-- P0에서는 **실제 식별자(nodeId/parentId/startShotNodeId)는 Job의 nodeId + DB 관계로 해석** 가능하므로,
-  `inputs`는 “의도”만 표현하는 메타로 두고, 워커는 nodeId로 실데이터를 찾는다.
-- P1에서는 `lastFrame`까지 사용:
-```json
-"inputs": {
-  "firstFrame": { "mode": "START_SHOT_RESULT" },
-  "lastFrame": { "mode": "END_SHOT_RESULT" }
-}
-```
-
-> 이유: requestJson을 작게 유지하면서도, 워커가 “어떤 입력 이미지를 기대해야 하는지”를 명확히 할 수 있음.
+- 현재는 워커가 `job.nodeId` 및 DB 관계(부모/shot ids)로 입력 이미지를 찾아 사용한다.
+- `inputs`는 워커가 “어떤 입력을 기대하는지”를 명시하는 메타로만 쓰고, base64 저장은 금지한다.
 
 ---
 
@@ -186,6 +200,27 @@ Acceptance Criteria:
 - 입력 이미지가 없으면 버튼이 disabled + 안내 문구 표시.
 - (Option A) MASTER 룩 변경 후 MASTER가 재생성되기 전까지, 하위 노드 생성 버튼/결과는 “기존 상위 이미지 기준”으로 동작한다.
 
+### A5. (P0 보강) 폼 기본값 자동 주입(“항상 채워짐” 체감)
+요구:
+- “필수 강제”가 아니라 **자동 주입**으로 빈 폼 체감을 없앤다.
+- 예시:
+  - MASTER: style/time/mood 기본값을 UI에도 바로 반영(예: 실사/낮/중립)
+  - GRID(SHOT_VARIATIONS): layout 기본 2x2 또는 2x3 중 하나로 고정 + shotTypes 템플릿 기본 제공
+  - VIDEO: duration 기본 4, cameraMotion 기본 static
+
+Acceptance Criteria:
+- 새 노드를 추가했을 때 패널이 빈 값(선택 없음)처럼 보이지 않는다.
+- generate 요청으로 전달되는 settings가 항상 유효한 값으로 채워진다.
+
+### A6. (P0 보강) aspectRatio UI + 전송(16:9 / 9:16)
+요구:
+- 프론트에서 `aspectRatio`를 선택/저장/전송한다(서버는 VIDEO 제약을 검증한다).
+- P0 제한: `16:9` 기본, `9:16` 옵션.
+
+Acceptance Criteria:
+- VIDEO 생성에서 aspectRatio가 16:9/9:16 이외 값이면 서버가 400으로 거절한다.
+- UI에서 16:9/9:16만 선택 가능하다.
+
 ---
 
 ## 6. 백엔드/API 구현 항목(Workstream B)
@@ -214,10 +249,12 @@ P0 권장 개선:
 
 ## 7. 워커/AI Provider 구현 항목(Workstream C)
 
-### C1. NodeContentLoader(내부 서비스) 추가
+### C1. NodeContentLoader(내부 서비스)
 역할:
 - `nodeId`를 받아 노드 결과 파일을 bytes로 로드한다.
-- 로딩 우선순위: `contentUrl`이 절대 URL이면(현재는 remote 가능) **P0에서는 미지원**(실패 처리) 또는 다운로드(선택).
+- `contentUrl`이 절대 URL이면:
+  - `/files/...` 형태로 key 추출 가능할 때만 지원
+  - 그 외 remote 다운로드는 워커에서 미지원(실패)
 - 그렇지 않으면:
   1) S3 bucket에서 `contentKey`로 로드(HEAD + GET)
   2) 없으면 로컬 업로드 루트에서 파일 로드
@@ -236,21 +273,20 @@ Acceptance Criteria:
 - GRID 생성 시: 부모 MASTER 결과 이미지를 참조로 전달
 - SHOT 생성 시: 부모 GRID 결과 이미지를 참조로 전달(+ gridCellIndex는 promptEn에 이미 포함)
 
-구현 선택지(결정 필요):
-- (권장) Vertex AI 이미지 생성 모델이 “image + text” 입력을 지원하므로, GeminiImageClient를 멀티파트 입력으로 확장
-- (대안) 이미지 입력이 SDK에서 난이도가 높다면, P0는 “promptEn + 상속룩”만으로 시연하고, 이미지 참조는 P1로 미룸(하지만 본 프로젝트 목표상 P0에서 이미지 기반이 필수라 권장하지 않음)
+현재 구현:
+- ImageGenerationWorker가 parent node의 결과 이미지를 `NodeContentLoader`로 로드해, 이미지+텍스트로 생성 요청을 보낸다.
 
 Acceptance Criteria:
 - 동일 MASTER에서 GRID를 여러 번 생성할 때 캐릭터/룩/배경 일관성이 체감상 개선된다.
 
-### C3. VIDEO 생성: firstFrame(필수) + lastFrame(P1) 지원
+### C3. VIDEO 생성: firstFrame(필수) + lastFrame(선택)
 목표(P0):
 - VIDEO 생성 요청 시 start shot 이미지가 Veo 요청에 포함되어야 한다.
 
 구현:
 1) VideoGenerationWorker가 startShotNodeId로 NodeContentLoader를 호출해 bytes를 얻는다.
 2) VeoClient가 “firstFrame 이미지”를 포함한 요청을 보낸다.
-3) P1에서 endShotNodeId도 동일하게 lastFrame으로 포함.
+3) endShotNodeId가 있으면 lastFrame으로 함께 포함한다.
 
 SDK/REST 선택:
 - 현재 VeoClient는 google-genai SDK를 사용 중.
@@ -272,7 +308,7 @@ Acceptance Criteria(P0):
 2) GRID 생성(SUCCEEDED) → SHOT 생성(특정 gridCellIndex) 버튼 활성 확인
 3) SHOT 생성(SUCCEEDED) → VIDEO 생성 버튼 활성 확인
 4) VIDEO 생성 결과가 “시작 샷과 유사한 첫 프레임”으로 시작하는지 육안 확인
-5) (P1) end shot 지정 후 트랜지션 느낌 확인
+5) end shot 지정 후 트랜지션 느낌 확인(선택)
 
 ### D3. 실패 케이스(시연 안전망)
 - 상위 이미지가 없을 때 하위 생성 버튼이 비활성이고, API도 400/409로 명확히 실패하는지
@@ -283,21 +319,25 @@ Acceptance Criteria(P0):
 ## 9. 작업 분해(병렬 진행을 위한 티켓 형태)
 
 ### FE 티켓
-- FE-1: 노드 상세 하이드레이트 + 캐시(선택 시 1회)
-- FE-2: MASTER/GRID promptKo 생성 시 sceneOneLine 포함
-- FE-3: settings key 정합(라벨↔key 매핑) + generate/settings 전송 통일
-- FE-4: 입력 이미지 준비 여부에 따른 버튼/안내 UX
-- FE-5: (Option A) MASTER 룩 변경 시 “MASTER 재생성 필요” 안내 + 하위 노드 재생성 필요 상태 표시(간단 배지/문구)
+- FE-1(DONE): 노드 상세 하이드레이트 + 캐시(선택 시 1회)
+- FE-2(DONE): MASTER/GRID promptKo 생성 시 sceneOneLine 포함
+- FE-3(DONE): settings key 정합(라벨↔key 매핑) + generate/settings 전송 통일
+- FE-4(DONE): 입력 이미지 준비 여부에 따른 버튼/안내 UX
+- FE-5(DONE): (Option A) MASTER 룩 변경 시 “MASTER 재생성 필요” 안내
+- FE-6(TODO): 폼 기본값 자동 주입(빈 값 체감 제거)
+- FE-7(TODO): `aspectRatio` UI/저장/전송(16:9/9:16)
+- FE-8(TODO): GRID 기본 템플릿 정합(2x2+4 shotTypes vs 현재 기본값)
 
 ### BE 티켓
-- BE-1: generateNode 타입별 입력 이미지 준비 검증(409/400)
-- BE-2: AiPromptService 템플릿 개선(nodeType별 가이드 강화) *(선택)*
+- BE-1(DONE): generateNode 타입별 입력 이미지 준비 검증(409/400)
+- BE-2(DONE): AiPromptService 템플릿 개선(nodeType별 가이드 강화)
+- BE-3(TODO, 선택): Job requestJson `inputs` 메타 추가 + 파서/워커 반영
 
 ### Worker 티켓
-- WK-1: NodeContentLoader 구현(S3 우선 + 로컬 fallback)
-- WK-2: ImageGenerationWorker: GRID/SHOT에서 parent result 로드 → GeminiImageClient에 참조 이미지 전달
-- WK-3: VideoGenerationWorker: startShot 이미지 로드 → VeoClient firstFrame 전달
-- WK-4(P1): endShot 이미지 로드 → VeoClient lastFrame 전달
+- WK-1(DONE): NodeContentLoader(S3 우선 + 로컬 fallback)
+- WK-2(DONE): ImageGenerationWorker: GRID/SHOT parent result → 참조 이미지 전달
+- WK-3(DONE): VideoGenerationWorker: startShot firstFrame 전달
+- WK-4(DONE): VideoGenerationWorker: endShot lastFrame 전달(선택)
 
 ### QA 티켓
 - QA-1: 시나리오/실패 케이스 체크리스트 작성 및 검증
@@ -307,7 +347,7 @@ Acceptance Criteria(P0):
 ## 10. 리스크/대응
 
 ### 10.1 AI Provider 기능/SDK 제약
-- SDK가 first/last frame 또는 image+text를 직접 지원하지 않을 수 있음.
+- SDK/Provider 제약으로 first/last frame 또는 image+text 입력이 기대대로 동작하지 않을 수 있음.
   - 대응: VeoClient/GeminiImageClient를 REST 호출로 부분 대체(최소 영향)
 
 ### 10.2 S3/로컬 환경 차이
@@ -327,3 +367,4 @@ P0 완료 조건:
 2) 노드 클릭 시 폼 값이 복원(하이드레이트)
 3) GRID/SHOT/VIDEO 생성이 상위 이미지 준비 상태에 따라 UX/서버 모두 방어
 4) VIDEO는 start shot 이미지 기반으로 생성되어 “샷에서 영상으로 이어지는” 시연이 가능
+5) (P0 보강) 폼 기본값 자동 주입 + aspectRatio 제약이 UI에서도 보장됨

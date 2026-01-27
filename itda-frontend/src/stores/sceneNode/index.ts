@@ -59,6 +59,17 @@ import {
 import { fetchProtectedBlobUrl } from '../../services/api/media';
 import { resolveApiUrl } from '../../services/api/urls';
 import { SHOT_FALLBACK_THUMBNAIL } from '../../utils/fallbacks';
+import {
+    DEFAULT_GRID_LAYOUT,
+    DEFAULT_GRID_SHOT_TYPES,
+    DEFAULT_MASTER_MOOD,
+    DEFAULT_MASTER_STYLE,
+    DEFAULT_MASTER_TIME_OF_DAY,
+    DEFAULT_VIDEO_ASPECT_RATIO,
+    DEFAULT_VIDEO_CAMERA_MOTION,
+    DEFAULT_VIDEO_DURATION,
+    normalizeAspectRatio,
+} from '../../utils/nodeDefaults';
 
 const MAX_POSITION_HISTORY = 20;
 
@@ -392,9 +403,9 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
             imageUrl: null,
             thumbnailUrl: null,
             prompt: '',
-            style: '',
-            timeOfDay: '',
-            mood: '',
+            style: DEFAULT_MASTER_STYLE,
+            timeOfDay: DEFAULT_MASTER_TIME_OF_DAY,
+            mood: DEFAULT_MASTER_MOOD,
             objectIds: [],
         };
 
@@ -444,9 +455,10 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
             imageUrl: null,
             thumbnailUrl: null,
             prompt: '',
-            layout: '2x3',
-            shotTypes: [],
+            layout: DEFAULT_GRID_LAYOUT,
+            shotTypes: [...DEFAULT_GRID_SHOT_TYPES],
             compositionHint: '',
+            gridMode: 'SHOT_VARIATIONS',
         };
 
         const newNode: SceneNode = {
@@ -554,10 +566,11 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
             endShotId: null,
             videoUrl: null,
             thumbnailUrl: null,
-            duration: 4,
+            duration: DEFAULT_VIDEO_DURATION,
+            aspectRatio: DEFAULT_VIDEO_ASPECT_RATIO,
             isConfirmed: false,
             prompt: '',
-            cameraMotion: 'staticCamera',
+            cameraMotion: DEFAULT_VIDEO_CAMERA_MOTION,
             motionDescription: '',
         };
 
@@ -579,7 +592,7 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
     // Actions - Update / Delete
     // ==========================================================================
 
-    async function updateNode(nodeId: string, updates: Partial<AnyNodeData>): Promise<void> {
+    function applyNodeUpdates(nodeId: string, updates: Partial<AnyNodeData>): AnyNodeData | null {
         const nodeIndex = nodes.value.findIndex((n) => n.id === nodeId);
         const targetNode = nodeIndex !== -1 ? nodes.value[nodeIndex] : undefined;
         if (targetNode && targetNode.data) {
@@ -590,17 +603,28 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
             } as AnyNodeData;
             targetNode.data = nextData;
             ensureSceneInProgress();
+            return nextData;
+        }
+        return null;
+    }
 
-            const numericNodeId = toFiniteNumber(nodeId);
-            if (numericNodeId !== null && nextData.type !== NodeType.SCENE_HEADER) {
-                try {
-                    await apiUpdateNode(numericNodeId, {
-                        prompt: 'prompt' in nextData ? nextData.prompt : undefined,
-                        settings: buildNodeSettings(nextData),
-                    });
-                } catch (error) {
-                    console.error('Failed to update node:', error);
-                }
+    function updateNodeLocal(nodeId: string, updates: Partial<AnyNodeData>): void {
+        applyNodeUpdates(nodeId, updates);
+    }
+
+    async function updateNode(nodeId: string, updates: Partial<AnyNodeData>): Promise<void> {
+        const nextData = applyNodeUpdates(nodeId, updates);
+        if (!nextData) return;
+
+        const numericNodeId = toFiniteNumber(nodeId);
+        if (numericNodeId !== null && nextData.type !== NodeType.SCENE_HEADER) {
+            try {
+                await apiUpdateNode(numericNodeId, {
+                    prompt: 'prompt' in nextData ? nextData.prompt : undefined,
+                    settings: buildNodeSettings(nextData),
+                });
+            } catch (error) {
+                console.error('Failed to update node:', error);
             }
         }
     }
@@ -740,6 +764,7 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
 
     function applyDetailSettings(targetNode: SceneNode, detail: Awaited<ReturnType<typeof fetchNodeDetail>>): void {
         if (!targetNode.data) return;
+        if (targetNode.data.type === NodeType.SCENE_HEADER) return;
         if (detail.prompt !== null && detail.prompt !== undefined) {
             targetNode.data.prompt = detail.prompt;
         }
@@ -814,11 +839,16 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
             const cameraMotionValue = settings.cameraMotionKey as string | undefined;
             const motionDescription =
                 (settings.motionDescriptionKo ?? settings.motionDescription) as string | undefined;
+            const aspectRatioValue =
+                (settings.aspectRatio ?? settings.ratio) as string | undefined;
             const startShotNodeId = settings.startShotNodeId as number | undefined;
             const endShotNodeId = settings.endShotNodeId as number | null | undefined;
 
             if (typeof durationValue === 'number') {
                 videoData.duration = durationValue;
+            }
+            if (aspectRatioValue) {
+                videoData.aspectRatio = normalizeAspectRatio(aspectRatioValue);
             }
             if (cameraMotionValue) {
                 videoData.cameraMotion = normalizeCameraMotionValue(cameraMotionValue);
@@ -848,10 +878,11 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
             if (numericId === null) return;
             try {
                 const detail = await fetchNodeDetail(numericId);
+                if (!targetNode.data || targetNode.data.type === NodeType.SCENE_HEADER) return;
                 applyDetailSettings(targetNode, detail);
 
                 const detailStatus = toJobStatus(detail.status ?? null);
-                if (!targetNode.data?.jobStatus && detailStatus) {
+                if (!targetNode.data.jobStatus && detailStatus) {
                     targetNode.data.jobStatus = detailStatus;
                 }
 
@@ -1226,6 +1257,7 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
         addVideoNode,
 
         // Actions - Update/Delete
+        updateNodeLocal,
         updateNode,
         deleteNode,
         hasDescendants,

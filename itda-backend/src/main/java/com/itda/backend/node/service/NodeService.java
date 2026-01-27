@@ -488,10 +488,6 @@ public class NodeService {
         if (node == null) {
             return false;
         }
-        String contentUrl = node.getContentUrl();
-        if (contentUrl != null && !contentUrl.isBlank()) {
-            return true;
-        }
         return node.getStatus() == NodeStatus.SUCCEEDED;
     }
 

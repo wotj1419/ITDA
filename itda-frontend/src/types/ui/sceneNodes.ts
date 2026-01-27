@@ -47,6 +47,9 @@ export type CameraMotion =
     | 'tiltUp'
     | 'staticCamera';
 
+/** 영상 비율 타입 */
+export type AspectRatio = '16:9' | '9:16';
+
 /** 그리드 레이아웃 타입 */
 export type GridLayout = '2x2' | '2x3' | '3x3';
 
@@ -152,6 +155,7 @@ export interface VideoNodeData extends BaseNodeData {
     videoUrl: string | null;
     thumbnailUrl: string | null;
     duration: number;
+    aspectRatio: AspectRatio;
 
     // 확정 상태
     isConfirmed: boolean;

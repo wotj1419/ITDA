@@ -18,6 +18,17 @@ import {
 import type { NodeSummary, ApiNodeType } from '../../services/api/nodes';
 import { resolveApiUrl } from '../../services/api/urls';
 import {
+  DEFAULT_GRID_LAYOUT,
+  DEFAULT_GRID_SHOT_TYPES,
+  DEFAULT_MASTER_MOOD,
+  DEFAULT_MASTER_STYLE,
+  DEFAULT_MASTER_TIME_OF_DAY,
+  DEFAULT_VIDEO_ASPECT_RATIO,
+  DEFAULT_VIDEO_CAMERA_MOTION,
+  DEFAULT_VIDEO_DURATION,
+  normalizeAspectRatio,
+} from '../../utils/nodeDefaults';
+import {
   mapShotTypeLabelsToKeys,
   resolveCameraMotionKey,
   resolveExpressionKey,
@@ -100,7 +111,8 @@ export function buildNodeSettings(data: AnyNodeData): Record<string, unknown> {
       {
         const styleKey = resolveStyleKey((data as MasterImageNodeData).style);
         const timeOfDayKey = resolveTimeOfDayKey((data as MasterImageNodeData).timeOfDay);
-        const moodKey = resolveMoodKey((data as MasterImageNodeData).mood) ?? 'NEUTRAL';
+        const moodKey =
+          resolveMoodKey((data as MasterImageNodeData).mood) ?? 'NEUTRAL';
         return {
           styleKey,
           timeOfDayKey,
@@ -151,6 +163,7 @@ export function buildNodeSettings(data: AnyNodeData): Record<string, unknown> {
           cameraMotionKey: resolveCameraMotionKey(videoData.cameraMotion),
           motionDescriptionKo: videoData.motionDescription,
           duration: videoData.duration,
+          aspectRatio: normalizeAspectRatio(videoData.aspectRatio),
           timelineOrder: videoData.timelineOrder,
         };
       }
@@ -223,9 +236,9 @@ export function createSceneNodeFromApi(
         imageUrl: resolvedContentUrl,
         thumbnailUrl: resolvedContentUrl,
         prompt: '',
-        style: '',
-        timeOfDay: '',
-        mood: '',
+        style: DEFAULT_MASTER_STYLE,
+        timeOfDay: DEFAULT_MASTER_TIME_OF_DAY,
+        mood: DEFAULT_MASTER_MOOD,
         objectIds: [],
       } as MasterImageNodeData;
       break;
@@ -236,8 +249,8 @@ export function createSceneNodeFromApi(
         imageUrl: resolvedContentUrl,
         thumbnailUrl: resolvedContentUrl,
         prompt: '',
-        layout: '2x2',
-        shotTypes: [],
+        layout: DEFAULT_GRID_LAYOUT,
+        shotTypes: [...DEFAULT_GRID_SHOT_TYPES],
         compositionHint: '',
         gridMode: 'SHOT_VARIATIONS',
         beats: [],
@@ -267,10 +280,11 @@ export function createSceneNodeFromApi(
         endShotId: null,
         videoUrl: resolvedContentUrl,
         thumbnailUrl: resolvedContentUrl,
-        duration: 4,
+        duration: DEFAULT_VIDEO_DURATION,
+        aspectRatio: DEFAULT_VIDEO_ASPECT_RATIO,
         isConfirmed: !!node.isConfirmed,
         prompt: '',
-        cameraMotion: 'staticCamera',
+        cameraMotion: DEFAULT_VIDEO_CAMERA_MOTION,
         motionDescription: '',
         timelineOrder: undefined,
       } as VideoNodeData;

@@ -37,8 +37,6 @@ public class VeoClient {
     private static final String SETTING_PROVIDER = "provider";
     private static final String SETTING_DURATION_SECONDS = "duration";
     private static final String SETTING_ASPECT_RATIO = "aspectRatio";
-    private static final String SETTING_CAMERA_MOTION = "cameraMotion";
-    private static final String SETTING_MOTION_DESCRIPTION = "motionDescription";
 
     private static final Map<String, String> MODEL_ALIASES = Map.of(
             "VEO_3_1", "veo-3.1-generate-001",
@@ -73,7 +71,7 @@ public class VeoClient {
         Image firstFrame = buildImage(request.firstFrame());
         Image lastFrame = buildImage(request.lastFrame());
         GenerateVideosSource.Builder sourceBuilder = GenerateVideosSource.builder()
-                .prompt(buildPrompt(prompt, settings));
+                .prompt(prompt);
         if (firstFrame != null) {
             sourceBuilder.image(firstFrame);
         }
@@ -195,22 +193,6 @@ public class VeoClient {
         return trimmed.startsWith("image/") ? trimmed : "image/png";
     }
 
-    private String buildPrompt(String prompt, VeoSettings settings) {
-        String cameraMotion = settings.cameraMotion();
-        String motionDescription = settings.motionDescription();
-        if (cameraMotion == null && motionDescription == null) {
-            return prompt;
-        }
-        StringBuilder builder = new StringBuilder(prompt);
-        if (cameraMotion != null) {
-            builder.append(" Camera motion: ").append(cameraMotion).append(".");
-        }
-        if (motionDescription != null) {
-            builder.append(" Motion description: ").append(motionDescription).append(".");
-        }
-        return builder.toString();
-    }
-
     private String resolveModel(VeoSettings settings) {
         String provider = settings.provider();
         if (provider == null) {
@@ -311,14 +293,6 @@ public class VeoClient {
         private String aspectRatioOrDefault(String defaultValue) {
             String value = readString(SETTING_ASPECT_RATIO);
             return value == null ? defaultValue : value;
-        }
-
-        private String cameraMotion() {
-            return readString(SETTING_CAMERA_MOTION);
-        }
-
-        private String motionDescription() {
-            return readString(SETTING_MOTION_DESCRIPTION);
         }
 
         private Integer readInt(String key) {
