@@ -18,7 +18,6 @@ import {
   Settings,
   Phone,
   Share2,
-  Menu,
   Play,
   ArrowLeft,
 } from 'lucide-vue-next'
@@ -106,10 +105,15 @@ const progressPercentage = computed(() => {
       <div class="sidebar-section border-bottom sidebar-header-row">
         <button
           class="menu-btn"
+          :class="{ 'menu-btn--open': uiStore.sidebarExpanded }"
           @click="uiStore.toggleSidebar"
           :title="uiStore.sidebarExpanded ? 'Collapse' : 'Expand'"
         >
-          <Menu class="icon-md" />
+          <span class="toggle" aria-hidden="true">
+            <span class="bars bar1"></span>
+            <span class="bars bar2"></span>
+            <span class="bars bar3"></span>
+          </span>
         </button>
       </div>
 
@@ -295,6 +299,11 @@ const progressPercentage = computed(() => {
   pointer-events: none;
 }
 
+.sidebar-collapsed .nav-label,
+.sidebar-collapsed .nav-badge {
+  display: none;
+}
+
 .sidebar-header-row {
   display: flex;
   align-items: center;
@@ -304,23 +313,62 @@ const progressPercentage = computed(() => {
 }
 
 .menu-btn {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
   width: 40px;
   height: 40px;
   border: none;
   background: transparent;
-  color: var(--gray-500);
   border-radius: 50%;
   cursor: pointer;
-  transition: all 0.2s ease;
+  padding: 0;
+  transition: background 0.2s ease;
   flex-shrink: 0;
 }
 
 .menu-btn:hover {
   background: var(--rose-50);
-  color: var(--rose-600);
+}
+
+.menu-btn .toggle {
+  position: relative;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition-duration: 0.3s;
+}
+
+.menu-btn .bars {
+  width: 24px;
+  height: 3px;
+  background-color: var(--rose-500);
+  border-radius: 4px;
+  transition-duration: 0.3s;
+}
+
+.menu-btn--open .bars {
+  margin-left: 8px;
+}
+
+.menu-btn--open .bar2 {
+  transform: rotate(135deg);
+  margin-left: 0;
+  transform-origin: center;
+}
+
+.menu-btn--open .bar1 {
+  transform: rotate(45deg);
+  transform-origin: left center;
+}
+
+.menu-btn--open .bar3 {
+  transform: rotate(-45deg);
+  transform-origin: left center;
 }
 
 .icon-md {
@@ -339,14 +387,6 @@ const progressPercentage = computed(() => {
 
 .sidebar-collapsed .menu-btn {
   margin: 0;
-  /* Centering in collapsed mode */
-  margin-left: 0; 
-}
-
-/* Ensure menu button is centered when collapsed (72px width, 40px btn -> 16px margin) */
-.sidebar-collapsed .sidebar-header-row {
-    justify-content: center;
-    padding: 1rem 0;
 }
 
 .sidebar-section {
@@ -442,8 +482,9 @@ const progressPercentage = computed(() => {
   left: 100%;
   margin-left: 0.5rem;
   padding: 0.5rem 0.75rem;
-  background: var(--gray-900);
-  color: white;
+  background: var(--rose-50);
+  color: var(--gray-900);
+  border: 1px solid var(--rose-100);
   font-size: 0.75rem;
   border-radius: 6px;
   white-space: nowrap;
@@ -456,6 +497,19 @@ const progressPercentage = computed(() => {
 .sidebar-collapsed .nav-item:hover::after {
   opacity: 1;
   visibility: visible;
+}
+
+.sidebar-collapsed .nav-item {
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  justify-content: center;
+  align-self: center;
+  gap: 0;
+}
+
+.sidebar-collapsed .nav-icon {
+  margin: 0;
 }
 
 /* Online Now Section */
