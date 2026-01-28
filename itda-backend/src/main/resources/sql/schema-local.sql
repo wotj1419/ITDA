@@ -95,6 +95,7 @@ CREATE TABLE objects (
     description TEXT NOT NULL,
     style VARCHAR(100),
     sheet_image_url VARCHAR(500),
+    sheet_image_asset_id BIGINT,
     status VARCHAR(20) NOT NULL DEFAULT 'PENDING',  -- PENDING, RUNNING, SUCCEEDED, FAILED
     created_by BIGINT,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,

@@ -13,6 +13,7 @@
         <result property="description" column="description"/>
         <result property="style" column="style"/>
         <result property="sheetImageUrl" column="sheet_image_url"/>
+        <result property="sheetImageAssetId" column="sheet_image_asset_id"/>
         <result property="status" column="status" javaType="com.itda.backend.object.domain.ObjectStatus"/>
         <result property="createdBy" column="created_by"/>
         <result property="createdAt" column="created_at"/>
@@ -20,16 +21,16 @@
     </resultMap>
 
     <sql id="objectColumns">
-        id, project_id, name, type, description, style, sheet_image_url,
+        id, project_id, name, type, description, style, sheet_image_url, sheet_image_asset_id,
         status, created_by, created_at, updated_at
     </sql>
 
     <insert id="insertObject" parameterType="com.itda.backend.object.domain.ObjectSheet"
             useGeneratedKeys="true" keyProperty="id" keyColumn="id">
         INSERT INTO objects (
-            project_id, name, type, description, style, sheet_image_url, status, created_by
+            project_id, name, type, description, style, sheet_image_url, sheet_image_asset_id, status, created_by
         ) VALUES (
-            #{projectId}, #{name}, #{type}, #{description}, #{style}, #{sheetImageUrl}, #{status}, #{createdBy}
+            #{projectId}, #{name}, #{type}, #{description}, #{style}, #{sheetImageUrl}, #{sheetImageAssetId}, #{status}, #{createdBy}
         )
     </insert>
 
@@ -89,6 +90,15 @@
             </if>
             updated_at = CURRENT_TIMESTAMP
         </set>
+        WHERE id = #{id}
+    </update>
+
+    <update id="updateSheetImage">
+        UPDATE objects
+        SET sheet_image_url = #{sheetImageUrl},
+            sheet_image_asset_id = #{sheetImageAssetId},
+            status = #{status},
+            updated_at = CURRENT_TIMESTAMP
         WHERE id = #{id}
     </update>
 

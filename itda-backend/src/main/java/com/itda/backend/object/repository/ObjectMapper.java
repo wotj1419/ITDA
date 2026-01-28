@@ -28,5 +28,10 @@ public interface ObjectMapper {
                      @Param("description") String description,
                      @Param("style") String style);
 
+    int updateSheetImage(@Param("id") Long id,
+                         @Param("sheetImageUrl") String sheetImageUrl,
+                         @Param("sheetImageAssetId") Long sheetImageAssetId,
+                         @Param("status") com.itda.backend.object.domain.ObjectStatus status);
+
     int deleteObject(@Param("id") Long id);
 }

@@ -7,6 +7,11 @@ import com.itda.backend.node.domain.Node;
 import com.itda.backend.node.domain.NodeStatus;
 import com.itda.backend.node.domain.NodeType;
 import com.itda.backend.node.repository.NodeMapper;
+import com.itda.backend.object.domain.ObjectSheet;
+import com.itda.backend.object.repository.ObjectMapper;
+import com.itda.backend.asset.domain.Asset;
+import com.itda.backend.asset.domain.StorageProvider;
+import com.itda.backend.asset.repository.AssetMapper;
 import com.itda.backend.project.service.ProjectAccessService;
 import com.itda.backend.scene.domain.Scene;
 import com.itda.backend.scene.repository.SceneMapper;
@@ -41,6 +46,8 @@ public class MediaFileService {
 
     private final NodeMapper nodeMapper;
     private final SceneMapper sceneMapper;
+    private final ObjectMapper objectMapper;
+    private final AssetMapper assetMapper;
     private final ProjectAccessService projectAccessService;
     private final FileStorageProperties fileStorageProperties;
     private final ObjectProvider<S3Client> s3ClientProvider;
@@ -79,6 +86,39 @@ public class MediaFileService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.SCENE_NOT_FOUND));
         projectAccessService.ensureProjectAccessible(scene.getProjectId(), userId);
         Path targetPath = resolveSceneExportPath(sceneId);
+        return toMediaFile(targetPath);
+    }
+
+    public MediaFile loadObjectImage(Long userId, Long objectId) {
+        ObjectSheet objectSheet = objectMapper.findById(objectId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.OBJECT_NOT_FOUND));
+        projectAccessService.ensureProjectAccessible(objectSheet.getProjectId(), userId);
+
+        Long assetId = objectSheet.getSheetImageAssetId();
+        if (assetId == null) {
+            String url = objectSheet.getSheetImageUrl();
+            if (isAbsoluteUrl(url)) {
+                return toRemoteMediaFile(url);
+            }
+            throw new BusinessException(ErrorCode.CONTENT_NOT_FOUND);
+        }
+
+        Asset asset = assetMapper.findById(assetId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.CONTENT_NOT_FOUND));
+
+        String storageKey = asset.getStorageKey();
+        if (storageKey == null || storageKey.isBlank()) {
+            throw new BusinessException(ErrorCode.CONTENT_NOT_FOUND);
+        }
+
+        if (asset.getStorageProvider() == StorageProvider.S3) {
+            MediaFile s3MediaFile = tryLoadFromS3(storageKey);
+            if (s3MediaFile != null) {
+                return s3MediaFile;
+            }
+        }
+
+        Path targetPath = resolveUnderUploadRoot(storageKey, ErrorCode.CONTENT_NOT_FOUND);
         return toMediaFile(targetPath);
     }
 
