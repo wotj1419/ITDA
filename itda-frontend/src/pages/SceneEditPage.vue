@@ -38,6 +38,7 @@ const collabStore = useCollabStore();
 
 const nodeCanvasRef = ref<InstanceType<typeof NodeCanvas> | null>(null);
 const pendingDeleteNodeId = ref<string | null>(null);
+const pendingDeleteHasChildren = ref(false);
 
 const NODE_DELETE_MODAL_ID = 'node-delete-confirm';
 
@@ -194,14 +195,9 @@ function handleNodeSelect(nodeId: string | null): void {
 
 function requestDeleteNode(nodeId: string): void {
   if (!nodeStore.canDeleteNode(nodeId)) return;
-
-  if (nodeStore.hasDescendants(nodeId)) {
-    pendingDeleteNodeId.value = nodeId;
-    uiStore.openModal(NODE_DELETE_MODAL_ID);
-    return;
-  }
-
-  nodeStore.deleteNode(nodeId);
+  pendingDeleteNodeId.value = nodeId;
+  pendingDeleteHasChildren.value = nodeStore.hasDescendants(nodeId);
+  uiStore.openModal(NODE_DELETE_MODAL_ID);
 }
 
 provide('nodeDeleteRequest', requestDeleteNode);
@@ -211,10 +207,12 @@ function handleDeleteConfirm(): void {
     nodeStore.deleteNode(pendingDeleteNodeId.value);
   }
   pendingDeleteNodeId.value = null;
+  pendingDeleteHasChildren.value = false;
 }
 
 function handleDeleteCancel(): void {
   pendingDeleteNodeId.value = null;
+  pendingDeleteHasChildren.value = false;
 }
 
 function handleTimelineReorder(clipIds: string[]): void {
@@ -305,6 +303,7 @@ const { handleBeforeUnload, handleEditorKeydown } = useSceneEditorEvents({
 
   <NodeDeleteConfirmModal
     :node-id="pendingDeleteNodeId"
+    :has-children="pendingDeleteHasChildren"
     @confirm="handleDeleteConfirm"
     @cancel="handleDeleteCancel"
   />
