@@ -11,13 +11,14 @@ import { NodeResizer } from '@vue-flow/node-resizer';
 import { useSceneNodeStore } from '../../../stores/sceneNode';
 import { JobStatus, NODE_HEIGHTS, NODE_WIDTHS } from '../../../types/ui/sceneNodes';
 import type { StoryboardGridNodeData } from '../../../types/ui/sceneNodes';
+import { useThumbnailGuard } from '../../../composables/useThumbnailGuard';
 import { 
   LayoutGrid, 
   Loader2, 
   CheckCircle, 
   AlertCircle, 
   Clock,
-  Plus 
+  Plus
 } from 'lucide-vue-next';
 
 // =============================================================================
@@ -73,17 +74,26 @@ const statusIcon = computed(() => {
   return icons[props.data.jobStatus as JobStatus] ?? Clock;
 });
 
-const statusText = computed(() => {
-  const texts: Record<string, string> = {
-    [JobStatus.PENDING]: '대기중',
-    [JobStatus.RUNNING]: '생성중',
-    [JobStatus.SUCCEEDED]: '완료',
-    [JobStatus.FAILED]: '실패',
-  };
-  return texts[props.data.jobStatus as string] ?? '준비';
-});
-
 const isRunning = computed(() => props.data.jobStatus === JobStatus.RUNNING);
+const isGenerationRequested = computed(() => props.data.generationState === 'requested');
+const isGenerationFailed = computed(() => props.data.generationState === 'failed');
+const hasGenerationFailure = computed(
+  () => isGenerationFailed.value || props.data.jobStatus === JobStatus.FAILED
+);
+const {
+  hasSource: hasThumbnailSource,
+  isVisible: isThumbnailVisible,
+  isLoading: isThumbnailGuardLoading,
+  isBlocked: isThumbnailBlocked,
+  handleLoad: handleThumbnailLoad,
+  handleError: handleThumbnailError,
+} = useThumbnailGuard(() => props.data.thumbnailUrl);
+const isThumbnailLoading = computed(
+  () => isGenerationRequested.value || isRunning.value || isThumbnailGuardLoading.value
+);
+const showFailureOverlay = computed(
+  () => hasGenerationFailure.value && !isThumbnailVisible.value && !isThumbnailLoading.value
+);
 
 // =============================================================================
 // Handlers
@@ -98,6 +108,12 @@ function handleToggleCollapse(event: Event): void {
   event.stopPropagation();
   store.toggleCollapse(props.id);
 }
+
+function handleRetry(event: Event): void {
+  event.stopPropagation();
+  store.updateNodeLocal(props.id, { generationState: null });
+  store.selectNode(props.id);
+}
 </script>
 
 <template>
@@ -107,6 +123,7 @@ function handleToggleCollapse(event: Event): void {
       :min-height="minHeight"
       :is-visible="props.selected"
       @resize-start="store.pushPositionSnapshot()"
+      @resize-end="store.persistNodePositions()"
     />
     <div v-if="props.selected" class="node-resizer-outline" />
     <!-- Target Handle (top) -->
@@ -136,20 +153,41 @@ function handleToggleCollapse(event: Event): void {
 
     <!-- Body -->
     <div class="node-glass__body">
-      <div class="node-glass__thumbnail node-glass__thumbnail--wide">
+      <div
+        class="node-glass__thumbnail node-glass__thumbnail--wide"
+        :class="{ 'node-glass__thumbnail--loading': isThumbnailLoading && !isThumbnailVisible }"
+      >
         <img 
-          v-if="data.thumbnailUrl" 
-          :src="data.thumbnailUrl" 
+          v-if="hasThumbnailSource" 
+          v-show="isThumbnailVisible"
+          :src="data.thumbnailUrl || ''" 
           alt="그리드 이미지" 
           class="node-glass__thumbnail-img"
+          @load="handleThumbnailLoad"
+          @error="handleThumbnailError"
         />
-        <span v-else class="node-glass__thumbnail-placeholder">
-          그리드 이미지
-        </span>
-      </div>
-      <div class="node-glass__footer">
-        <div class="node-glass__info">
-          {{ statusText }}
+        <div
+          v-if="isThumbnailLoading && !isThumbnailVisible"
+          class="node-glass__thumbnail-loader"
+        >
+          <span class="node-glass__thumbnail-spinner" />
+          <span>생성중…</span>
+        </div>
+        <div
+          v-if="showFailureOverlay"
+          class="node-glass__thumbnail-error"
+        >
+          <span>생성 실패</span>
+          <button class="node-glass__thumbnail-retry" @click="handleRetry">
+            다시 시도
+          </button>
+        </div>
+        <div
+          v-if="(!hasThumbnailSource || isThumbnailBlocked) && !isThumbnailLoading"
+          class="node-glass__thumbnail-placeholder node-glass__thumbnail-placeholder--grid"
+        >
+          <LayoutGrid class="node-glass__thumbnail-placeholder-icon" />
+          <span class="node-glass__thumbnail-placeholder-label">그리드 없음</span>
         </div>
       </div>
     </div>
@@ -180,7 +218,7 @@ function handleToggleCollapse(event: Event): void {
       title="샷 추가"
       @click="handleAddChild"
     >
-      <Plus :size="14" />
+      <Plus :size="32" />
     </button>
   </div>
 </template>

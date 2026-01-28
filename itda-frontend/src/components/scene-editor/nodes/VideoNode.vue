@@ -11,6 +11,7 @@ import { NodeResizer } from '@vue-flow/node-resizer';
 import { useSceneNodeStore } from '../../../stores/sceneNode';
 import { JobStatus, NODE_HEIGHTS, NODE_WIDTHS } from '../../../types/ui/sceneNodes';
 import type { VideoNodeData } from '../../../types/ui/sceneNodes';
+import { useThumbnailGuard } from '../../../composables/useThumbnailGuard';
 import { 
   Video, 
   Star, 
@@ -18,7 +19,7 @@ import {
   CheckCircle, 
   AlertCircle, 
   Clock, 
-  Play 
+  Play
 } from 'lucide-vue-next';
 
 // =============================================================================
@@ -76,18 +77,31 @@ const statusIcon = computed(() => {
   return icons[props.data.jobStatus as JobStatus] ?? Clock;
 });
 
-const statusText = computed(() => {
-  if (props.data.isConfirmed) return '타임라인에 추가됨';
-  const texts: Record<string, string> = {
-    [JobStatus.PENDING]: '대기중',
-    [JobStatus.RUNNING]: '생성중',
-    [JobStatus.SUCCEEDED]: '완료',
-    [JobStatus.FAILED]: '실패',
-  };
-  return texts[props.data.jobStatus as string] ?? '준비';
-});
-
 const isRunning = computed(() => props.data.jobStatus === JobStatus.RUNNING);
+const isGenerationRequested = computed(() => props.data.generationState === 'requested');
+const isGenerationFailed = computed(() => props.data.generationState === 'failed');
+const hasGenerationFailure = computed(
+  () => isGenerationFailed.value || props.data.jobStatus === JobStatus.FAILED
+);
+const {
+  hasSource: hasThumbnailSource,
+  isVisible: isThumbnailVisible,
+  isLoading: isThumbnailGuardLoading,
+  isBlocked: isThumbnailBlocked,
+  handleLoad: handleThumbnailLoad,
+  handleError: handleThumbnailError,
+} = useThumbnailGuard(() => props.data.thumbnailUrl);
+const isThumbnailLoading = computed(
+  () => isGenerationRequested.value || isRunning.value || isThumbnailGuardLoading.value
+);
+const showFailureOverlay = computed(
+  () =>
+    hasGenerationFailure.value &&
+    !isThumbnailVisible.value &&
+    !props.data.videoUrl &&
+    !isThumbnailLoading.value
+);
+const hasPreview = computed(() => Boolean(props.data.videoUrl || isThumbnailVisible.value));
 
 /** Camera motion labels in Korean */
 const cameraMotionLabel = computed(() => {
@@ -132,6 +146,12 @@ function handleThumbnailClick(event: MouseEvent): void {
     videoRef.value.pause();
   }
 }
+
+function handleRetry(event: Event): void {
+  event.stopPropagation();
+  store.updateNodeLocal(props.id, { generationState: null });
+  store.selectNode(props.id);
+}
 </script>
 
 <template>
@@ -141,6 +161,7 @@ function handleThumbnailClick(event: MouseEvent): void {
       :min-height="minHeight"
       :is-visible="props.selected"
       @resize-start="store.pushPositionSnapshot()"
+      @resize-end="store.persistNodePositions()"
     />
     <div v-if="props.selected" class="node-resizer-outline" />
     <!-- Confirmed Badge -->
@@ -189,7 +210,11 @@ function handleThumbnailClick(event: MouseEvent): void {
 
     <!-- Body -->
     <div class="node-glass__body">
-      <div class="node-glass__thumbnail node-glass__thumbnail--video" @click="handleThumbnailClick">
+      <div
+        class="node-glass__thumbnail node-glass__thumbnail--video"
+        :class="{ 'node-glass__thumbnail--loading': isThumbnailLoading && !isThumbnailVisible && !data.videoUrl }"
+        @click="handleThumbnailClick"
+      >
         <video
           v-if="data.videoUrl"
           :src="data.videoUrl"
@@ -200,33 +225,52 @@ function handleThumbnailClick(event: MouseEvent): void {
           playsinline
         />
         <img
-          v-else-if="data.thumbnailUrl"
-          :src="data.thumbnailUrl"
+          v-else-if="hasThumbnailSource"
+          v-show="isThumbnailVisible"
+          :src="data.thumbnailUrl || ''"
           alt="영상 썸네일"
           class="node-glass__thumbnail-img"
+          @load="handleThumbnailLoad"
+          @error="handleThumbnailError"
         />
-        <span v-else class="node-glass__thumbnail-placeholder">
-          영상 썸네일
-        </span>
+        <div
+          v-if="isThumbnailLoading && !isThumbnailVisible && !data.videoUrl"
+          class="node-glass__thumbnail-loader"
+        >
+          <span class="node-glass__thumbnail-spinner" />
+          <span>생성중…</span>
+        </div>
+        <div
+          v-if="showFailureOverlay"
+          class="node-glass__thumbnail-error"
+        >
+          <span>생성 실패</span>
+          <button class="node-glass__thumbnail-retry" @click="handleRetry">
+            다시 시도
+          </button>
+        </div>
+        <div
+          v-if="!data.videoUrl && (!hasThumbnailSource || isThumbnailBlocked) && !isThumbnailLoading"
+          class="node-glass__thumbnail-placeholder node-glass__thumbnail-placeholder--video"
+        >
+          <Video class="node-glass__thumbnail-placeholder-icon" />
+          <span class="node-glass__thumbnail-placeholder-label">영상 없음</span>
+        </div>
         <!-- Play overlay on hover -->
-        <div v-if="data.videoUrl || data.thumbnailUrl" class="node-glass__play-overlay">
+        <div v-if="hasPreview" class="node-glass__play-overlay">
           <Play class="node-glass__play-icon" />
         </div>
       </div>
 
       <!-- Confirm Button or Status -->
-      <div class="node-glass__footer">
+      <div v-if="canConfirm" class="node-glass__footer">
         <button 
-          v-if="canConfirm" 
           class="node-glass__confirm-btn"
           @click="handleConfirm"
         >
           <Star class="node-glass__confirm-btn-icon" />
           타임라인에 확정
         </button>
-        <div v-else class="node-glass__info">
-          {{ statusText }}
-        </div>
       </div>
     </div>
 

@@ -63,12 +63,15 @@ function addMasterImage(event: Event) {
       :min-height="minHeight"
       :is-visible="props.selected"
       @resize-start="store.pushPositionSnapshot()"
+      @resize-end="store.persistNodePositions()"
     />
     <div v-if="props.selected" class="node-resizer-outline" />
     <!-- Header -->
     <div class="node-glass__header">
       <div class="node-glass__header-left">
-        <BookOpen class="node-glass__icon" />
+        <div class="node-glass__icon-box node-glass__icon-box--header">
+          <BookOpen class="node-glass__icon" />
+        </div>
         <div class="node-glass__title-group">
           <span class="node-glass__title">
             씬 {{ data.sceneOrder }}: {{ data.title }}
@@ -96,7 +99,7 @@ function addMasterImage(event: Event) {
       title="마스터 이미지 추가"
       @click="addMasterImage"
     >
-      <Plus :size="14" />
+      <Plus :size="32" />
     </button>
   </div>
 </template>
