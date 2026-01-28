@@ -12,14 +12,11 @@ import { useSceneNodeStore } from '../../../stores/sceneNode';
 import { useUIStore } from '../../../stores/ui';
 import { useNodeGeneration } from '../../../composables/useNodeGeneration';
 import { useHelpPopover } from '../../../composables/useHelpPopover';
-import { Video, Repeat, Move, Timer, Text, FileText, Sparkles, Check, RefreshCw, Target, ZoomIn, ZoomOut, ArrowRight, ArrowUp, Circle, Crop, Loader2 } from 'lucide-vue-next';
+import { Video, Repeat, Move, Timer, Text, FileText, Sparkles, Check, RefreshCw, Target, ZoomIn, ZoomOut, ArrowRight, ArrowUp, Circle, Loader2 } from 'lucide-vue-next';
 import { resolveCameraMotionKey } from '../../../utils/nodeSettings';
 import {
-  DEFAULT_VIDEO_ASPECT_RATIO,
   DEFAULT_VIDEO_CAMERA_MOTION,
   DEFAULT_VIDEO_DURATION,
-  VIDEO_ASPECT_RATIO_OPTIONS,
-  normalizeAspectRatio,
 } from '../../../utils/nodeDefaults';
 
 interface Props {
@@ -35,7 +32,6 @@ const form = ref({
   isTransition: false,
   cameraMotion: DEFAULT_VIDEO_CAMERA_MOTION as CameraMotion,
   duration: DEFAULT_VIDEO_DURATION,
-  aspectRatio: DEFAULT_VIDEO_ASPECT_RATIO,
   motionDescription: '',
   prompt: '',
 });
@@ -71,10 +67,12 @@ const cameraMotionHelpItems = [
 ];
 
 const durationOptions = [4, 6, 8];
-const aspectRatioLabels: Record<string, string> = {
-  '16:9': '16:9 (가로)',
-  '9:16': '9:16 (세로)',
-};
+const defaultDuration = durationOptions[0] ?? 4;
+
+function normalizeDuration(value?: number | null): number {
+  if (value == null) return defaultDuration;
+  return durationOptions.includes(value) ? value : defaultDuration;
+}
 
 const data = computed(() => props.node.data as VideoNodeData | undefined);
 const startShotData = computed(() => {
@@ -161,13 +159,12 @@ const {
     nodeType: 'VIDEO',
     sceneOneLine: buildVideoSceneOneLine(),
     cameraMotion: form.value.cameraMotion,
-    duration: form.value.duration,
+    duration: normalizeDuration(form.value.duration),
     motionDescription: form.value.motionDescription,
   }),
   getPromptUpdate: (prompt) => ({
     cameraMotion: form.value.cameraMotion,
-    duration: form.value.duration,
-    aspectRatio: form.value.aspectRatio,
+    duration: normalizeDuration(form.value.duration),
     motionDescription: form.value.motionDescription,
     prompt,
   }),
@@ -175,8 +172,7 @@ const {
   getJobSettings: () => ({
     cameraMotionKey: resolveCameraMotionKey(form.value.cameraMotion),
     motionDescriptionKo: form.value.motionDescription,
-    duration: form.value.duration,
-    aspectRatio: form.value.aspectRatio,
+    duration: normalizeDuration(form.value.duration),
     startShotNodeId: data.value?.startShotId ? Number(data.value.startShotId) : undefined,
     endShotNodeId: form.value.isTransition && data.value?.endShotId
       ? Number(data.value.endShotId)
@@ -233,8 +229,7 @@ watch(() => props.node.id, () => {
   form.value = {
     isTransition: !!data.value.endShotId,
     cameraMotion: normalizeCameraMotion(data.value.cameraMotion),
-    duration: data.value.duration || DEFAULT_VIDEO_DURATION,
-    aspectRatio: normalizeAspectRatio(data.value.aspectRatio),
+    duration: normalizeDuration(data.value.duration),
     motionDescription: data.value.motionDescription || '',
     prompt: data.value.prompt || '',
   };
@@ -256,8 +251,7 @@ watch(
   () => {
     if (!data.value) return;
     form.value.cameraMotion = normalizeCameraMotion(data.value.cameraMotion);
-    form.value.duration = data.value.duration || DEFAULT_VIDEO_DURATION;
-    form.value.aspectRatio = normalizeAspectRatio(data.value.aspectRatio);
+    form.value.duration = normalizeDuration(data.value.duration);
     form.value.motionDescription = data.value.motionDescription || '';
   }
 );
@@ -404,19 +398,6 @@ function handleGenerateVideo(): void {
         </label>
         <select v-model="form.duration" class="panel-select">
           <option v-for="d in durationOptions" :key="d" :value="d">{{ d }}초</option>
-        </select>
-      </div>
-
-      <!-- Aspect Ratio -->
-      <div class="panel-section">
-        <label class="panel-label">
-          <Crop class="panel-label-icon" />
-          화면 비율
-        </label>
-        <select v-model="form.aspectRatio" class="panel-select">
-          <option v-for="ratio in VIDEO_ASPECT_RATIO_OPTIONS" :key="ratio" :value="ratio">
-            {{ aspectRatioLabels[ratio] ?? ratio }}
-          </option>
         </select>
       </div>
 

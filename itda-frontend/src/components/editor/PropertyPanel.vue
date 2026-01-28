@@ -37,7 +37,7 @@ const cameraOptions: { value: CameraMotion; label: string }[] = [
   { value: 'STATIC', label: 'Static' },
 ];
 
-const durationOptions = [3, 4, 5, 6];
+const durationOptions = [4, 6, 8];
 
 // =============================================================================
 // Computed

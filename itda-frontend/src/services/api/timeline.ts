@@ -5,7 +5,9 @@ export interface TimelineItem {
     videoNodeId: number
     sceneId: number
     order: number
-    url: string
+    url?: string
+    thumbnailUrl?: string
+    duration?: number
 }
 
 export interface ProjectTimelineResponse {

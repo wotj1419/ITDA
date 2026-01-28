@@ -12,6 +12,7 @@ import { useUIStore } from '../stores/ui';
 import { useCollabStore } from '../stores/collab';
 import { TIMELINE_PLAYBACK_MODAL_ID } from '../constants/ui';
 import type { ProjectDetail } from '../types/api/projects';
+import type { VideoNodeData } from '../types/ui/sceneNodes';
 
 import EditorLayout from '../layouts/EditorLayout.vue';
 import EditorHeader from '../components/editor/EditorHeader.vue';
@@ -21,7 +22,6 @@ import AutoLayoutButton from '../components/scene-editor/AutoLayoutButton.vue';
 import MiniTimeline from '../components/editor/MiniTimeline.vue';
 import TimelinePlaybackModal from '../components/timeline/TimelinePlaybackModal.vue';
 import NodeDeleteConfirmModal from '../components/scene-editor/NodeDeleteConfirmModal.vue';
-import { useSceneEditorTimeline } from '../composables/useSceneEditorTimeline';
 import { useLayoutButtonPosition } from '../composables/useLayoutButtonPosition';
 import { useSceneEditorEvents } from '../composables/useSceneEditorEvents';
 
@@ -71,7 +71,28 @@ const sceneTitle = computed(() => {
   return `Scene ${scene.order}: ${scene.title}`;
 });
 
-const { timelineClips, totalDuration } = useSceneEditorTimeline(sceneId, nodeStore);
+// Timeline clips from confirmed videos
+const timelineClips = computed(() => {
+  return nodeStore.confirmedVideos.map((n, index) => {
+    const data = n.data as VideoNodeData;
+    const order = data.timelineOrder ?? index + 1;
+    return {
+      clipId: n.id,
+      nodeId: n.id,
+      sceneId: Number(sceneId.value) || undefined,
+      sourceNodeId: n.id,
+      thumbnailUrl: data.thumbnailUrl || '',
+      videoUrl: data.videoUrl || undefined,
+      duration: data.duration || 4,
+      order,
+      label: `영상 ${data.version || 1}`,
+    };
+  });
+});
+
+const totalDuration = computed(() => {
+  return timelineClips.value.reduce((sum, clip) => sum + clip.duration, 0);
+});
 
 /**
  * 레이아웃 정렬 버튼의 동적 bottom 위치

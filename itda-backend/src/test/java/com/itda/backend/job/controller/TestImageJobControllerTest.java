@@ -1,5 +1,6 @@
 package com.itda.backend.job.controller;
 
+import com.itda.backend.global.security.JwtTokenProvider;
 import com.itda.backend.job.domain.Job;
 import com.itda.backend.job.domain.JobStatus;
 import com.itda.backend.job.domain.JobType;
@@ -9,8 +10,10 @@ import com.itda.backend.node.repository.NodeMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
-import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.boot.autoconfigure.jackson.JacksonAutoConfiguration;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -23,7 +26,8 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@SpringBootTest
+@WebMvcTest(TestImageJobController.class)
+@Import(JacksonAutoConfiguration.class)
 @AutoConfigureMockMvc(addFilters = false)
 class TestImageJobControllerTest {
 
@@ -38,6 +42,9 @@ class TestImageJobControllerTest {
 
     @MockBean
     private NodeMapper nodeMapper;
+
+    @MockBean
+    private JwtTokenProvider jwtTokenProvider;
 
     @Test
     void createImageJob_returnsAcceptedJob() throws Exception {

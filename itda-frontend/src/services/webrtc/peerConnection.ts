@@ -1,8 +1,10 @@
 /**
- * WebRTC PeerConnection Service (Stub)
- * 
- * 백엔드 완료 후 실제 PeerConnection 구현 예정
- * 현재는 UI 테스트를 위한 Mock 구현
+ * WebRTC PeerConnection Service (Mesh P2P)
+ *
+ * Handles multiple RTCPeerConnections for a mesh network.
+ * - Manages local media stream.
+ * - Creates and manages peer connections.
+ * - Handles ICE candidates and SDP negotiation.
  */
 
 export interface PeerConnectionConfig {
@@ -16,133 +18,287 @@ export interface MediaStreamConfig {
 
 export interface PeerConnectionCallbacks {
     onTrack: (stream: MediaStream, peerId: string) => void;
-    onIceCandidate: (candidate: RTCIceCandidate) => void;
+    onIceCandidate: (candidate: RTCIceCandidate, peerId: string) => void;
     onConnectionStateChange: (state: RTCPeerConnectionState, peerId: string) => void;
 }
+
+// Default Google STUN servers (free and reliable)
+const DEFAULT_ICE_SERVERS: RTCIceServer[] = [
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' },
+];
 
 class PeerConnectionService {
     private localStream: MediaStream | null = null;
     private screenStream: MediaStream | null = null;
     private peers: Map<string, RTCPeerConnection> = new Map();
+    private callbacks: PeerConnectionCallbacks | null = null;
 
     /**
-     * 로컬 미디어 스트림 가져오기 (Stub)
+     * Initialize callbacks
+     */
+    setCallbacks(callbacks: PeerConnectionCallbacks) {
+        this.callbacks = callbacks;
+    }
+
+    /**
+     * Get Local Media Stream
      */
     async getLocalStream(config: MediaStreamConfig): Promise<MediaStream | null> {
-        console.log('[PeerConnection Stub] Getting local stream:', config);
+        console.log('[PeerConnection] Getting local stream:', config);
+        try {
+            // Stop existing tracks if any
+            if (this.localStream) {
+                this.localStream.getTracks().forEach(track => track.stop());
+            }
 
-        // TODO: 실제 getUserMedia 구현
-        // try {
-        //   this.localStream = await navigator.mediaDevices.getUserMedia({
-        //     video: config.video,
-        //     audio: config.audio,
-        //   });
-        //   return this.localStream;
-        // } catch (error) {
-        //   console.error('Failed to get local stream:', error);
-        //   return null;
-        // }
-
-        return null;
+            this.localStream = await navigator.mediaDevices.getUserMedia({
+                video: config.video,
+                audio: config.audio,
+            });
+            return this.localStream;
+        } catch (error) {
+            console.error('[PeerConnection] Failed to get local stream:', error);
+            return null;
+        }
     }
 
     /**
-     * 화면 공유 시작 (Stub)
+     * Start Screen Share
      */
     async startScreenShare(): Promise<MediaStream | null> {
-        console.log('[PeerConnection Stub] Starting screen share');
+        console.log('[PeerConnection] Starting screen share');
+        try {
+            if (this.screenStream) {
+                this.screenStream.getTracks().forEach(track => track.stop());
+            }
 
-        // TODO: 실제 getDisplayMedia 구현
-        // try {
-        //   this.screenStream = await navigator.mediaDevices.getDisplayMedia({
-        //     video: true,
-        //   });
-        //   return this.screenStream;
-        // } catch (error) {
-        //   console.error('Failed to start screen share:', error);
-        //   return null;
-        // }
+            this.screenStream = await navigator.mediaDevices.getDisplayMedia({
+                video: true,
+                audio: false
+            });
 
-        return null;
+            // Replace video track in all peer connections
+            const videoTrack = this.screenStream.getVideoTracks()[0];
+
+            if (videoTrack) {
+                // Handle stream stop (user clicks "Stop sharing" in browser UI)
+                videoTrack.onended = () => {
+                    this.stopScreenShare();
+                };
+
+                this.peers.forEach((pc) => {
+                    const senders = pc.getSenders();
+                    const videoSender = senders.find(s => s.track?.kind === 'video');
+                    if (videoSender) {
+                        videoSender.replaceTrack(videoTrack);
+                    }
+                });
+            }
+
+            return this.screenStream;
+        } catch (error) {
+            console.error('[PeerConnection] Failed to start screen share:', error);
+            return null;
+        }
     }
 
     /**
-     * 화면 공유 중지 (Stub)
+     * Stop Screen Share & Revert to Camera
      */
     stopScreenShare(): void {
-        console.log('[PeerConnection Stub] Stopping screen share');
-        this.screenStream?.getTracks().forEach(track => track.stop());
-        this.screenStream = null;
+        console.log('[PeerConnection] Stopping screen share');
+        if (this.screenStream) {
+            this.screenStream.getTracks().forEach(track => track.stop());
+            this.screenStream = null;
+
+            // Revert to local camera if available
+            if (this.localStream) {
+                const videoTrack = this.localStream.getVideoTracks()[0];
+                if (videoTrack) {
+                    this.peers.forEach((pc) => {
+                        const senders = pc.getSenders();
+                        const videoSender = senders.find(s => s.track?.kind === 'video');
+                        if (videoSender) {
+                            videoSender.replaceTrack(videoTrack);
+                        }
+                    });
+                }
+            }
+        }
     }
 
     /**
-     * Peer 연결 생성 (Stub)
+     * Create Peer Connection
      */
-    createPeerConnection(
-        peerId: string,
-        _config: PeerConnectionConfig,
-        _callbacks: PeerConnectionCallbacks
-    ): RTCPeerConnection | null {
-        console.log('[PeerConnection Stub] Creating peer connection for:', peerId);
+    createPeerConnection(peerId: string): RTCPeerConnection {
+        if (this.peers.has(peerId)) {
+            console.warn(`[PeerConnection] Peer connection for ${peerId} already exists`);
+            return this.peers.get(peerId)!;
+        }
 
-        // TODO: 실제 RTCPeerConnection 구현
-        // const pc = new RTCPeerConnection(config);
-        // this.peers.set(peerId, pc);
-        // return pc;
+        console.log(`[PeerConnection] Creating peer connection for: ${peerId}`);
 
-        return null;
+        const pc = new RTCPeerConnection({
+            iceServers: DEFAULT_ICE_SERVERS
+        });
+
+        this.peers.set(peerId, pc);
+
+        // Add local tracks
+        if (this.localStream) {
+            this.localStream.getTracks().forEach(track => {
+                pc.addTrack(track, this.localStream!);
+            });
+        }
+
+        // ICE Candidate handling
+        pc.onicecandidate = (event) => {
+            if (event.candidate && this.callbacks) {
+                this.callbacks.onIceCandidate(event.candidate, peerId);
+            }
+        };
+
+        // Connection state changes
+        pc.onconnectionstatechange = () => {
+            console.log(`[PeerConnection] State change for ${peerId}: ${pc.connectionState}`);
+            if (this.callbacks) {
+                this.callbacks.onConnectionStateChange(pc.connectionState, peerId);
+            }
+            if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed' || pc.connectionState === 'closed') {
+                this.removePeer(peerId);
+            }
+        };
+
+        // Track handling (Remote stream)
+        pc.ontrack = (event) => {
+            console.log(`[PeerConnection] Received track from ${peerId}:`, event.streams[0]);
+            if (this.callbacks && event.streams[0]) {
+                this.callbacks.onTrack(event.streams[0], peerId);
+            }
+        };
+
+        return pc;
     }
 
     /**
-     * Offer 생성 (Stub)
+     * Create Offer
      */
-    async createOffer(_peerId: string): Promise<RTCSessionDescriptionInit | null> {
-        console.log('[PeerConnection Stub] Creating offer');
+    async createOffer(peerId: string): Promise<RTCSessionDescriptionInit | null> {
+        const pc = this.peers.get(peerId);
+        if (!pc) return null;
 
-        // TODO: 실제 offer 생성 구현
-        return null;
+        try {
+            const offer = await pc.createOffer();
+            await pc.setLocalDescription(offer);
+            return offer;
+        } catch (error) {
+            console.error(`[PeerConnection] Failed to create offer for ${peerId}:`, error);
+            return null;
+        }
     }
 
     /**
-     * Answer 생성 (Stub)
+     * Handle Answer
      */
-    async createAnswer(_peerId: string): Promise<RTCSessionDescriptionInit | null> {
-        console.log('[PeerConnection Stub] Creating answer');
-
-        // TODO: 실제 answer 생성 구현
-        return null;
+    async setRemoteDescription(peerId: string, sdp: RTCSessionDescriptionInit): Promise<void> {
+        const pc = this.peers.get(peerId);
+        if (!pc) {
+            console.warn(`[PeerConnection] Peer ${peerId} not found for setting remote description`);
+            return;
+        }
+        try {
+            await pc.setRemoteDescription(new RTCSessionDescription(sdp));
+        } catch (error) {
+            console.error(`[PeerConnection] Failed to set remote description for ${peerId}:`, error);
+        }
     }
 
     /**
-     * 모든 연결 종료 (Stub)
+     * Create Answer
+     */
+    async createAnswer(peerId: string): Promise<RTCSessionDescriptionInit | null> {
+        const pc = this.peers.get(peerId);
+        if (!pc) return null;
+
+        try {
+            const answer = await pc.createAnswer();
+            await pc.setLocalDescription(answer);
+            return answer;
+        } catch (error) {
+            console.error(`[PeerConnection] Failed to create answer for ${peerId}:`, error);
+            return null;
+        }
+    }
+
+    /**
+     * Add ICE Candidate
+     */
+    async addIceCandidate(peerId: string, candidate: RTCIceCandidateInit): Promise<void> {
+        const pc = this.peers.get(peerId);
+        if (!pc) {
+            console.warn(`[PeerConnection] Peer ${peerId} not found for adding ICE candidate`);
+            return;
+        }
+        try {
+            await pc.addIceCandidate(new RTCIceCandidate(candidate));
+        } catch (error) {
+            console.error(`[PeerConnection] Failed to add ICE candidate for ${peerId}:`, error);
+        }
+    }
+
+    /**
+     * Remove Peer
+     */
+    removePeer(peerId: string): void {
+        const pc = this.peers.get(peerId);
+        if (pc) {
+            console.log(`[PeerConnection] Removing peer: ${peerId}`);
+            pc.onicecandidate = null;
+            pc.ontrack = null;
+            pc.close();
+            this.peers.delete(peerId);
+        }
+    }
+
+    /**
+     * Close All
      */
     closeAll(): void {
-        console.log('[PeerConnection Stub] Closing all connections');
+        console.log('[PeerConnection] Closing all connections');
         this.peers.forEach(pc => pc.close());
         this.peers.clear();
-        this.localStream?.getTracks().forEach(track => track.stop());
-        this.localStream = null;
-        this.stopScreenShare();
+
+        if (this.localStream) {
+            this.localStream.getTracks().forEach(track => track.stop());
+            this.localStream = null;
+        }
+        if (this.screenStream) {
+            this.screenStream.getTracks().forEach(track => track.stop());
+            this.screenStream = null;
+        }
     }
 
     /**
-     * 마이크 음소거 토글 (Stub)
+     * Toggle Mute
      */
     toggleMute(muted: boolean): void {
-        console.log('[PeerConnection Stub] Toggle mute:', muted);
-        this.localStream?.getAudioTracks().forEach(track => {
-            track.enabled = !muted;
-        });
+        if (this.localStream) {
+            this.localStream.getAudioTracks().forEach(track => {
+                track.enabled = !muted;
+            });
+        }
     }
 
     /**
-     * 비디오 토글 (Stub)
+     * Toggle Video
      */
     toggleVideo(videoOff: boolean): void {
-        console.log('[PeerConnection Stub] Toggle video:', videoOff);
-        this.localStream?.getVideoTracks().forEach(track => {
-            track.enabled = !videoOff;
-        });
+        if (this.localStream) {
+            this.localStream.getVideoTracks().forEach(track => {
+                track.enabled = !videoOff;
+            });
+        }
     }
 }
 

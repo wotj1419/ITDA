@@ -3,6 +3,7 @@ package com.itda.backend.node.controller.dto.request;
 import com.itda.backend.node.domain.NodeType;
 import io.swagger.v3.oas.annotations.media.Schema;
 
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -19,6 +20,9 @@ public record GenerateNodeRequest(
 
         @Schema(description = "Node settings (style, ratio, etc.)")
         Map<String, Object> settings,
+
+        @Schema(description = "Reference object IDs (optional)", example = "[1, 2, 3]")
+        List<Long> referenceObjectIds,
 
         @Schema(description = "Idempotency key (optional). If provided, same key will return existing job.", example = "node-generate-001")
         String idempotencyKey,

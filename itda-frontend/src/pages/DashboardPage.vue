@@ -1,16 +1,24 @@
 <script setup lang="ts">
-import { onMounted, computed, ref } from 'vue'
-import { RouterLink } from 'vue-router'
-import { Plus, Star } from 'lucide-vue-next'
+import { onMounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
+import { Plus } from 'lucide-vue-next'
 import { useProjectStore } from '../stores/project'
 import { useUIStore } from '../stores/ui'
+import { useCollabStore } from '../stores/collab'
+import { useAuthStore } from '../stores/auth'
 import DefaultLayout from '../layouts/DefaultLayout.vue'
 import ProjectCard from '../components/project/ProjectCard.vue'
 import NewProjectModal from '../components/project/NewProjectModal.vue'
+import StartCollabModal from '../components/project/StartCollabModal.vue'
 import ConfirmModal from '../components/common/ConfirmModal.vue'
 
+const router = useRouter()
 const projectStore = useProjectStore()
 const uiStore = useUIStore()
+const collabStore = useCollabStore()
+const authStore = useAuthStore()
+const isCreatingProject = ref(false)
+const viewMode = ref<'grid' | 'list'>('grid')
 
 // Delete Confirmation State
 const showDeleteModal = ref(false)
@@ -21,8 +29,8 @@ onMounted(async () => {
   await projectStore.loadProjects()
 })
 
-// Quick access projects (favorites / recent)
-const quickAccessProjects = computed(() => projectStore.recentProjects)
+// Quick access projects removed
+
 
 // Check if project is favorite
 const isFavorite = (projectId: number) => {
@@ -33,8 +41,35 @@ const handleToggleFavorite = (projectId: number) => {
   projectStore.toggleFavorite(projectId)
 }
 
-const openNewProjectModal = () => {
-  uiStore.openModal('new-project')
+const createEmptyProject = async () => {
+  if (isCreatingProject.value) return
+  isCreatingProject.value = true
+  const newProject = await projectStore.addProject({
+    title: '새 프로젝트',
+    description: '',
+    genre: '',
+  })
+  isCreatingProject.value = false
+
+  if (newProject) {
+    router.push({ name: 'project-detail', params: { id: newProject.projectId } })
+    return
+  }
+
+  uiStore.showToast({
+    type: 'error',
+    title: '프로젝트 생성 실패',
+    message: '잠시 후 다시 시도해주세요.',
+  })
+}
+
+const openStartCollabModal = () => {
+  uiStore.openModal('start-collab')
+}
+
+const handleStartCollab = async (projectId: number) => {
+  await collabStore.joinRoom(projectId)
+  collabStore.showFloatingBar(true)
 }
 
 // Delete Handlers
@@ -59,86 +94,135 @@ const cancelDelete = () => {
   showDeleteModal.value = false
   projectToDelete.value = null
 }
+
 </script>
 
 <template>
-  <DefaultLayout>
+  <DefaultLayout
+    :show-collaborators="false"
+    @start-collab="openStartCollabModal"
+  >
+    <template #header-left-after-divider>
+      <h2 class="welcome-title">
+        반가워요<span v-if="authStore.user?.name">, {{ authStore.user.name }}님</span> ✨
+      </h2>
+    </template>
+    <template #header-actions>
+      <button
+        class="button"
+        type="button"
+        :disabled="isCreatingProject"
+        @click="createEmptyProject"
+      >
+        <span class="button__text">새 프로젝트</span>
+        <span class="button__icon">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 24 24"
+            class="svg"
+            aria-hidden="true"
+          >
+            <path d="M11 5h2v14h-2zM5 11h14v2H5z"></path>
+          </svg>
+        </span>
+      </button>
+    </template>
     <div class="dashboard-container">
-      <!-- Welcome Message -->
-      <div class="welcome-section">
-        <h2 class="welcome-title">
-          반가워요, 크리에이터님 ✨
-        </h2>
-        <p class="welcome-subtitle">
-          오늘도 당신의 놀라운 아이디어를 영화로 만들어보세요.
-        </p>
-      </div>
-
       <!-- Toolbar -->
       <div class="toolbar">
         <div class="toolbar-left">
-          <h1 class="page-title">My Projects</h1>
+          <h1 class="page-title">내 프로젝트</h1>
           <p class="project-count">{{ projectStore.projectCount }} projects</p>
         </div>
         <div class="toolbar-right">
-          <button class="btn btn-primary" @click="openNewProjectModal">
-            <Plus class="icon-sm" />
-            New Project
-          </button>
+          <div class="cyber-signboard">
+            <div class="cyber-switch">
+              <input
+                id="cyber-opt-1"
+                type="radio"
+                name="cyber-mode"
+                value="grid"
+                :checked="viewMode === 'grid'"
+                @change="viewMode = 'grid'"
+              />
+              <label for="cyber-opt-1" class="cyber-label" aria-label="Grid view">
+                <svg
+                  class="icon"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <rect x="3" y="3" width="7" height="9"></rect>
+                  <rect x="14" y="3" width="7" height="5"></rect>
+                  <rect x="14" y="12" width="7" height="9"></rect>
+                  <rect x="3" y="16" width="7" height="5"></rect>
+                </svg>
+                <span class="glare"></span>
+              </label>
+
+              <input
+                id="cyber-opt-2"
+                type="radio"
+                name="cyber-mode"
+                value="list"
+                :checked="viewMode === 'list'"
+                @change="viewMode = 'list'"
+              />
+              <label for="cyber-opt-2" class="cyber-label" aria-label="List view">
+                <svg
+                  class="icon"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <line x1="10" y1="6" x2="20" y2="6"></line>
+                  <line x1="10" y1="12" x2="20" y2="12"></line>
+                  <line x1="10" y1="18" x2="20" y2="18"></line>
+                  <circle cx="5" cy="6" r="1.4"></circle>
+                  <circle cx="5" cy="12" r="1.4"></circle>
+                  <circle cx="5" cy="18" r="1.4"></circle>
+                </svg>
+                <span class="glare"></span>
+              </label>
+
+              <div class="cyber-highlight">
+                <div class="highlight-inner"></div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
-      <!-- Quick Access Section -->
-      <section v-if="quickAccessProjects.length > 0" class="section">
-        <h3 class="section-title">Quick Access</h3>
-        <div class="quick-access-list">
-          <RouterLink
-            v-for="project in quickAccessProjects"
-            :key="project.projectId"
-            :to="`/projects/${project.projectId}`"
-            class="quick-access-card"
-          >
-            <div
-              class="quick-access-thumbnail"
-              :style="{
-                backgroundImage: project.thumbnailUrl
-                  ? `url(${project.thumbnailUrl})`
-                  : undefined,
-              }"
-            ></div>
-            <div class="quick-access-info">
-              <div class="quick-access-title">{{ project.title }}</div>
-              <div class="quick-access-time">Edited <TimeAgo :date="project.updatedAt" /></div>
-            </div>
-            <Star
-              v-if="isFavorite(project.projectId)"
-              class="quick-access-star"
-              fill="currentColor"
-            />
-          </RouterLink>
-        </div>
-      </section>
+      <!-- Quick Access Section Removed -->
+
 
       <!-- All Projects Section -->
       <section class="section">
-        <h3 class="section-title">All Projects</h3>
-        <div class="projects-grid">
+        <h3 class="section-title">모든 프로젝트</h3>
+        <div :class="['projects-grid', { 'list-view': viewMode === 'list' }]">
           <!-- Project Cards -->
           <ProjectCard
-            v-for="project in projectStore.projects"
+            v-for="project in projectStore.sortedProjects"
             :key="project.projectId"
             :project="project"
             :is-favorite="isFavorite(project.projectId)"
+            :view-mode="viewMode"
             @toggle-favorite="handleToggleFavorite"
             @delete="handleRequestDelete"
           />
 
           <!-- Add New Project Card -->
-          <button class="add-project-card" @click="openNewProjectModal">
+          <button class="add-project-card" :disabled="isCreatingProject" @click="createEmptyProject">
             <div class="add-project-icon">
               <Plus class="icon-lg" />
             </div>
-            <span class="add-project-text">Create New Project</span>
+            <span class="add-project-text">새로운 프로젝트 생성</span>
           </button>
         </div>
       </section>
@@ -146,6 +230,7 @@ const cancelDelete = () => {
 
     <!-- New Project Modal -->
     <NewProjectModal />
+    <StartCollabModal @start="handleStartCollab" />
 
     <!-- Confirm Modal -->
     <ConfirmModal
@@ -166,21 +251,12 @@ const cancelDelete = () => {
   margin: 0 auto;
 }
 
-/* Welcome Section */
-.welcome-section {
-  margin-bottom: 2.5rem;
-}
-
 .welcome-title {
-  font-size: 1.875rem;
-  font-weight: 700;
-  color: var(--gray-900);
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--gray-800);
   margin: 0;
-}
-
-.welcome-subtitle {
-  color: var(--gray-500);
-  margin-top: 0.5rem;
+  white-space: nowrap;
 }
 
 /* Toolbar */
@@ -194,6 +270,187 @@ const cancelDelete = () => {
 .toolbar-left {
   display: flex;
   flex-direction: column;
+}
+
+.toolbar-right {
+  display: flex;
+  align-items: center;
+}
+
+.cyber-signboard {
+  --primary-glow: rgba(255, 133, 161, 0.9);
+  --secondary-glow: rgba(255, 197, 210, 0.9);
+  --inactive-color: var(--gray-400);
+  --bg-dark: var(--rose-50);
+  --switch-width: 84px;
+  --switch-height: 42px;
+  --padding: 5px;
+  --item-width: calc((var(--switch-width) - (var(--padding) * 2)) / 2);
+
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 2px;
+  font-family: inherit;
+}
+
+.cyber-switch {
+  position: relative;
+  width: var(--switch-width);
+  height: var(--switch-height);
+  background: var(--bg-dark);
+  border-radius: 14px;
+  box-shadow: none;
+  display: flex;
+  align-items: center;
+  padding: var(--padding);
+  box-sizing: border-box;
+  overflow: hidden;
+  border: 1px solid var(--rose-100);
+}
+
+.cyber-switch input[type="radio"] {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.cyber-label {
+  flex: 1;
+  height: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  cursor: pointer;
+  z-index: 2;
+  position: relative;
+  border-radius: 14px;
+  transition: all 0.3s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.cyber-label .icon {
+  width: 18px;
+  height: 18px;
+  color: var(--inactive-color);
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  filter: drop-shadow(0 1px 2px rgba(255, 133, 161, 0.2));
+}
+
+.cyber-highlight {
+  position: absolute;
+  top: var(--padding);
+  left: var(--padding);
+  width: var(--item-width);
+  height: calc(var(--switch-height) - (var(--padding) * 2));
+  background: transparent;
+  z-index: 1;
+  transition: transform 0.45s cubic-bezier(0.34, 1.56, 0.64, 1);
+  pointer-events: none;
+}
+
+.highlight-inner {
+  width: 100%;
+  height: 100%;
+  border-radius: 10px;
+  background: linear-gradient(
+    145deg,
+    rgba(255, 255, 255, 0.9) 0%,
+    rgba(255, 245, 249, 0.7) 100%
+  );
+  border: 1px solid rgba(255, 133, 161, 0.25);
+  box-shadow: none;
+  backdrop-filter: blur(4px);
+  position: relative;
+}
+
+.highlight-inner::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 10%;
+  width: 80%;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.8),
+    transparent
+  );
+  opacity: 0.8;
+}
+
+#cyber-opt-1:checked ~ .cyber-highlight {
+  transform: translateX(0%);
+}
+
+#cyber-opt-1:checked ~ [for="cyber-opt-1"] .icon {
+  color: var(--rose-600);
+  filter: drop-shadow(0 0 8px var(--primary-glow));
+  transform: scale(1.08);
+}
+
+#cyber-opt-2:checked ~ .cyber-highlight {
+  transform: translateX(100%);
+}
+
+#cyber-opt-2:checked ~ [for="cyber-opt-2"] .icon {
+  color: var(--rose-600);
+  filter: drop-shadow(0 0 8px var(--primary-glow));
+  transform: scale(1.08);
+}
+
+.cyber-switch input:focus-visible ~ .cyber-highlight .highlight-inner {
+  border: 1px solid rgba(255, 133, 161, 0.6);
+  box-shadow: 0 0 20px var(--primary-glow);
+}
+
+.cyber-label:hover .icon {
+  color: var(--rose-400);
+}
+
+.cyber-label:active .icon {
+  transform: scale(0.95);
+}
+
+.glare {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: 10px;
+  background: radial-gradient(
+    circle at 50% -20%,
+    rgba(255, 255, 255, 0.35),
+    transparent 60%
+  );
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+
+.cyber-label:hover .glare {
+  opacity: 1;
+}
+
+@keyframes neon-pulse {
+  0%,
+  100% {
+    box-shadow: none;
+  }
+  50% {
+    box-shadow: none;
+  }
+}
+
+.highlight-inner {
+  animation: neon-pulse 3s infinite ease-in-out;
 }
 
 .page-title {
@@ -222,63 +479,7 @@ const cancelDelete = () => {
   margin-bottom: 0.75rem;
 }
 
-/* Quick Access */
-.quick-access-list {
-  display: flex;
-  gap: 1rem;
-  overflow-x: auto;
-  padding-bottom: 0.5rem;
-}
 
-.quick-access-card {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  padding: 1rem;
-  background: white;
-  border: 1px solid var(--rose-100);
-  border-radius: 16px;
-  text-decoration: none;
-  color: inherit;
-  flex-shrink: 0;
-  transition: all 0.2s ease;
-}
-
-.quick-access-card:hover {
-  border-color: var(--rose-200);
-  box-shadow: 0 4px 12px rgba(255, 133, 161, 0.1);
-}
-
-.quick-access-thumbnail {
-  width: 48px;
-  height: 48px;
-  border-radius: 12px;
-  background: var(--rose-100);
-  background-size: cover;
-  background-position: center;
-}
-
-.quick-access-info {
-  display: flex;
-  flex-direction: column;
-}
-
-.quick-access-title {
-  font-size: 0.875rem;
-  font-weight: 600;
-  color: var(--gray-900);
-}
-
-.quick-access-time {
-  font-size: 0.75rem;
-  color: var(--gray-500);
-}
-
-.quick-access-star {
-  width: 20px;
-  height: 20px;
-  color: var(--rose-400);
-}
 
 /* Projects Grid */
 .projects-grid {
@@ -287,8 +488,32 @@ const cancelDelete = () => {
   gap: 1.5rem;
 }
 
+.projects-grid.list-view {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.projects-grid.list-view .add-project-card {
+  min-height: 96px;
+  flex-direction: row;
+  justify-content: flex-start;
+  gap: 1rem;
+  padding: 1.25rem;
+}
+
+.projects-grid.list-view .add-project-icon {
+  margin-bottom: 0;
+}
+
 @media (max-width: 640px) {
   .projects-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 900px) {
+  .projects-grid.list-view {
     grid-template-columns: 1fr;
   }
 }
@@ -305,6 +530,11 @@ const cancelDelete = () => {
   border-radius: 16px;
   cursor: pointer;
   transition: all 0.2s ease;
+}
+
+.add-project-card:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
 }
 
 .add-project-card:hover {
@@ -338,5 +568,75 @@ const cancelDelete = () => {
 .icon-lg {
   width: 32px;
   height: 32px;
+}
+
+/* New Project Button Animation */
+.button {
+  position: relative;
+  width: 150px;
+  height: 40px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  border: 1px solid var(--rose-500);
+  background-color: var(--rose-500);
+  overflow: hidden;
+  border-radius: 12px;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  box-shadow: var(--shadow-md);
+}
+
+.button,
+.button__icon,
+.button__text {
+  transition: all 0.3s;
+}
+
+.button__text {
+  transform: translateX(20px);
+  color: #fff;
+  font-weight: 600;
+}
+
+.button__icon {
+  position: absolute;
+  transform: translateX(105px);
+  height: 100%;
+  width: 38px;
+  background-color: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.button .svg {
+  width: 22px;
+  height: 22px;
+  fill: #fff;
+}
+
+.button:hover {
+  background: var(--rose-600);
+}
+
+.button:hover .button__text {
+  color: transparent;
+}
+
+.button:hover .button__icon {
+  width: 148px;
+  transform: translateX(0);
+}
+
+.button:active {
+  transform: scale(0.95);
+}
+
+.button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+  box-shadow: none;
 }
 </style>

@@ -53,6 +53,7 @@ public class NodeService {
     private final SceneMapper sceneMapper;
     private final ProjectMemberMapper projectMemberMapper;
     private final ObjectMapper objectMapper;
+    private final com.itda.backend.object.repository.ObjectMapper objectSheetMapper;
     private final JobService jobService;
     private final MediaUrlResolver mediaUrlResolver;
     private final PromptRenderer promptRenderer;
@@ -283,7 +284,8 @@ public class NodeService {
         validateInputImageReady(node, shotIds);
 
         JobType jobType = resolveJobType(node.getNodeType());
-        String requestJson = buildGenerationRequestJson(promptEn, cachedSettings);
+        List<Long> referenceObjectIds = normalizeReferenceObjectIds(scene.getProjectId(), request.referenceObjectIds());
+        String requestJson = buildGenerationRequestJson(promptEn, cachedSettings, referenceObjectIds);
         String idempotencyKey = request.force()
                 ? UUID.randomUUID().toString()
                 : request.idempotencyKey();
@@ -626,11 +628,14 @@ public class NodeService {
         return nodeType == NodeType.VIDEO ? JobType.VIDEO_GENERATION : JobType.IMAGE_GENERATION;
     }
 
-    private String buildGenerationRequestJson(String promptEn, Map<String, Object> settings) {
+    private String buildGenerationRequestJson(String promptEn, Map<String, Object> settings, List<Long> referenceObjectIds) {
         try {
             Map<String, Object> payload = new java.util.LinkedHashMap<>();
             payload.put("prompt", promptEn);
             payload.put("settings", settings);
+            if (referenceObjectIds != null && !referenceObjectIds.isEmpty()) {
+                payload.put("referenceObjectIds", referenceObjectIds);
+            }
             return objectMapper.writeValueAsString(payload);
         } catch (JsonProcessingException e) {
             throw new BusinessException(ErrorCode.INTERNAL_ERROR);
@@ -735,6 +740,23 @@ public class NodeService {
             throw new BusinessException(ErrorCode.INVALID_REQUEST, "Prompt is empty");
         }
         return prompt.trim();
+    }
+
+    private List<Long> normalizeReferenceObjectIds(Long projectId, List<Long> referenceObjectIds) {
+        if (referenceObjectIds == null || referenceObjectIds.isEmpty()) {
+            return List.of();
+        }
+        if (referenceObjectIds.stream().anyMatch(id -> id == null || id <= 0)) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST, "Invalid referenceObjectIds");
+        }
+        List<Long> deduped = referenceObjectIds.stream()
+                .distinct()
+                .toList();
+        int count = objectSheetMapper.countByProjectIdAndIds(projectId, deduped);
+        if (count != deduped.size()) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST, "Invalid referenceObjectIds");
+        }
+        return deduped;
     }
 
     private Map<String, Object> resolveActiveMasterSettings(Scene scene, Node node) {

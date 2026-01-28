@@ -12,6 +12,8 @@ import com.itda.backend.scene.controller.dto.response.SceneDetailResponse;
 import com.itda.backend.scene.controller.dto.response.SceneSummaryResponse;
 import com.itda.backend.scene.domain.Scene;
 import com.itda.backend.scene.repository.SceneMapper;
+import com.itda.backend.scene.repository.SceneObjectMapper;
+import com.itda.backend.object.repository.ObjectMapper;
 import com.itda.backend.scene.repository.dto.SceneSummary;
 import com.itda.backend.scene.service.dto.SceneDraft;
 import lombok.RequiredArgsConstructor;
@@ -28,6 +30,8 @@ import java.util.Set;
 public class SceneService {
 
     private final SceneMapper sceneMapper;
+    private final SceneObjectMapper sceneObjectMapper;
+    private final ObjectMapper objectMapper;
     private final ProjectMemberMapper projectMemberMapper;
     private final ProjectMapper projectMapper;
 
@@ -61,7 +65,7 @@ public class SceneService {
         for (SceneDraft draft : drafts) {
             Scene scene = Scene.create(projectId, draft.title(), draft.description(), orderIndex++);
             sceneMapper.insertScene(scene);
-            created.add(SceneDetailResponse.from(scene));
+            created.add(SceneDetailResponse.from(scene, List.of()));
         }
 
         return created;
@@ -82,7 +86,8 @@ public class SceneService {
     public SceneDetailResponse getSceneDetail(Long userId, Long sceneId) {
         Scene scene = requireScene(sceneId);
         ensureMember(scene.getProjectId(), userId);
-        return SceneDetailResponse.from(scene);
+        List<Long> objectIds = sceneObjectMapper.findObjectIdsBySceneId(sceneId);
+        return SceneDetailResponse.from(scene, objectIds);
     }
 
     @Transactional
@@ -96,7 +101,8 @@ public class SceneService {
             throw new BusinessException(ErrorCode.SCENE_NOT_FOUND);
         }
 
-        return buildUpdatedDetailResponse(scene, request);
+        List<Long> objectIds = updateSceneObjects(sceneId, scene.getProjectId(), request.objectIds());
+        return buildUpdatedDetailResponse(scene, request, objectIds);
     }
 
     @Transactional
@@ -160,12 +166,12 @@ public class SceneService {
     }
 
     private void validateUpdateRequest(UpdateSceneRequest request) {
-        if (request.title() == null && request.description() == null) {
+        if (request.title() == null && request.description() == null && request.objectIds() == null) {
             throw new BusinessException(ErrorCode.INVALID_REQUEST);
         }
     }
 
-    private SceneDetailResponse buildUpdatedDetailResponse(Scene scene, UpdateSceneRequest request) {
+    private SceneDetailResponse buildUpdatedDetailResponse(Scene scene, UpdateSceneRequest request, List<Long> objectIds) {
         String title = request.title() != null ? request.title() : scene.getTitle();
         String description = request.description() != null ? request.description() : scene.getDescription();
         return new SceneDetailResponse(
@@ -173,8 +179,33 @@ public class SceneService {
                 scene.getProjectId(),
                 title,
                 description,
-                scene.getOrderIndex()
+                scene.getOrderIndex(),
+                objectIds
         );
+    }
+
+    private List<Long> updateSceneObjects(Long sceneId, Long projectId, List<Long> objectIds) {
+        if (objectIds == null) {
+            return sceneObjectMapper.findObjectIdsBySceneId(sceneId);
+        }
+        if (objectIds.contains(null)) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST);
+        }
+        if (objectIds.isEmpty()) {
+            sceneObjectMapper.deleteBySceneId(sceneId);
+            return List.of();
+        }
+        int distinctCount = new HashSet<>(objectIds).size();
+        if (distinctCount != objectIds.size()) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST);
+        }
+        int matched = objectMapper.countByProjectIdAndIds(projectId, objectIds);
+        if (matched != objectIds.size()) {
+            throw new BusinessException(ErrorCode.OBJECT_NOT_FOUND);
+        }
+        sceneObjectMapper.deleteBySceneId(sceneId);
+        sceneObjectMapper.insertBatch(sceneId, objectIds);
+        return objectIds;
     }
 
     private List<Long> validateReorderRequest(ReorderScenesRequest request) {

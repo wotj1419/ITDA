@@ -3,9 +3,6 @@ import { useCollabStore } from '../../stores/collab';
 import {
   Mic,
   MicOff,
-  Video,
-  VideoOff,
-  Monitor,
   MessageCircle,
 } from 'lucide-vue-next';
 
@@ -27,32 +24,13 @@ const collabStore = useCollabStore();
       class="pill-btn" 
       :class="{ active: !collabStore.isMuted }"
       @click.stop="collabStore.toggleMute"
-      title="마이크 토글"
+      title="Mute"
     >
       <MicOff v-if="collabStore.isMuted" class="icon" />
       <Mic v-else class="icon" />
     </button>
     
-    <button 
-      class="pill-btn" 
-      :class="{ active: !collabStore.isVideoOff }"
-      @click.stop="collabStore.toggleVideo"
-      title="비디오 토글"
-    >
-      <VideoOff v-if="collabStore.isVideoOff" class="icon" />
-      <Video v-else class="icon" />
-    </button>
-    
-    <button 
-      class="pill-btn" 
-      :class="{ active: collabStore.isScreenSharing }"
-      @click.stop="collabStore.toggleScreenShare"
-      title="화면 공유"
-    >
-      <Monitor class="icon" />
-    </button>
-    
-    <button class="pill-btn" title="채팅">
+    <button class="pill-btn" title="Chat" @click.stop="collabStore.togglePanel">
       <MessageCircle class="icon" />
       <span v-if="collabStore.hasUnreadMessages" class="unread-badge"></span>
     </button>

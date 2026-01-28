@@ -675,16 +675,36 @@ API /api/projects/{id}/objects
 | description | String | 필수 | 외형 설명 |
 | style | String | 선택 | 아트 스타일 |
 
-#### 3. Response (Job Accepted)
+#### 3. Response (현재 OBJ-1 기준)
 ```json
 {
-  "code": "ACCEPTED",
+  "code": "SUCCESS",
   "data": {
-    "jobId": 123,
+    "objectId": 101,
+    "projectId": 12,
+    "name": "우주인 민준",
+    "type": "CHARACTER",
+    "description": "20대 후반 남성, 우주복 착용, 헬멧 벗음",
+    "style": "SF 실사",
+    "sheetImageUrl": null,
     "status": "PENDING"
   }
 }
 ```
+
+#### 응답 필드 설명
+| 필드 | 타입 | 설명 |
+| --- | --- | --- |
+| objectId | Long | 오브젝트 ID |
+| projectId | Long | 프로젝트 ID |
+| name | String | 오브젝트 이름 |
+| type | String | 오브젝트 유형 (CHARACTER, PROP, ETC) |
+| description | String | 외형 설명 |
+| style | String | 아트 스타일 (선택) |
+| sheetImageUrl | String | 시트 이미지 URL (생성 완료 전 null 가능) |
+| status | String | 생성 상태 (PENDING/RUNNING/SUCCEEDED/FAILED) |
+
+> OBJ-2 전환 시 `202 Accepted + jobId` 응답으로 변경 예정
 
 ---
 
@@ -809,6 +829,21 @@ API /api/scenes/{id}
 보안 Bearer Token
 상태 완료
 설명 씬의 상세 정보와 포함된 등장 오브젝트 내역 등을 조회합니다.
+```
+
+#### 3. Response
+```json
+{
+  "code": "SUCCESS",
+  "data": {
+    "sceneId": 201,
+    "projectId": 101,
+    "title": "Scene 1: Mars Base",
+    "description": "Morning at the base",
+    "order": 1,
+    "objectIds": [1, 2, 3]
+  }
+}
 ```
 
 ---
