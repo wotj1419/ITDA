@@ -233,6 +233,8 @@ CREATE TABLE generation_jobs (
     node_id BIGINT,  -- 추가: 어떤 노드의 작업인지
     job_type VARCHAR(20) NOT NULL,  -- IMAGE_GENERATION, VIDEO_GENERATION, SCENE_MERGE, PROJECT_MERGE
     idempotency_key VARCHAR(128),
+    merge_signature VARCHAR(128),
+    merge_source VARCHAR(20),
     status VARCHAR(20) NOT NULL DEFAULT 'PENDING',  -- PENDING, RUNNING, SUCCEEDED, FAILED
     request_json JSON,  -- 입력 파라미터
     result_asset_id BIGINT,
@@ -245,6 +247,8 @@ CREATE TABLE generation_jobs (
     KEY idx_jobs_scene (scene_id),
     KEY idx_jobs_status (status),
     KEY idx_jobs_node (node_id),
+    KEY idx_jobs_merge_sig (merge_signature),
+    KEY idx_jobs_merge_source (merge_source),
     UNIQUE KEY uk_jobs_idempotency (idempotency_key),
     CONSTRAINT fk_jobs_project FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
     CONSTRAINT fk_jobs_scene FOREIGN KEY (scene_id) REFERENCES scenes(id) ON DELETE CASCADE,
