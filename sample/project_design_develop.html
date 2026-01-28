@@ -87,6 +87,17 @@
         .dark ::-webkit-scrollbar-thumb {
             background: #334155;
         }
+
+        /* Toast container control (e.g., react-toastify) */
+        .toast-container.toast-container--top-right {
+            transition: transform 0.25s ease, opacity 0.25s ease;
+        }
+
+        body.hide-toast-container .toast-container.toast-container--top-right {
+            transform: translateX(140%);
+            opacity: 0;
+            pointer-events: none;
+        }
     </style>
     <script>
         tailwind.config = {
@@ -356,6 +367,10 @@
         if (localStorage.getItem('theme') === 'dark') {
             html.classList.add('dark');
         }
+
+        // Toast container helpers: call in console or from your app code.
+        window.hideToastContainer = () => document.body.classList.add('hide-toast-container');
+        window.showToastContainer = () => document.body.classList.remove('hide-toast-container');
     </script>
 </body>
 
