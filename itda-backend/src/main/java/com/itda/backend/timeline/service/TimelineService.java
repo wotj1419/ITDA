@@ -27,8 +27,10 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
@@ -137,6 +139,25 @@ public class TimelineService {
         return MergeResponse.from(job);
     }
 
+    @Transactional
+    public void reorderSceneTimeline(Long userId, Long sceneId, List<Long> orderedVideoNodeIds) {
+        Scene scene = requireScene(sceneId);
+        ensureMember(scene.getProjectId(), userId);
+        validateOrderedIds(orderedVideoNodeIds);
+
+        int total = timelineMapper.countSceneTimelineItems(sceneId);
+        if (total == 0) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST);
+        }
+
+        int matched = timelineMapper.countSceneTimelineItemsByVideoNodeIds(sceneId, orderedVideoNodeIds);
+        if (matched != total || matched != orderedVideoNodeIds.size()) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST);
+        }
+
+        timelineMapper.reorderSceneTimelineItems(sceneId, orderedVideoNodeIds);
+    }
+
     private int sumDuration(List<SceneTimelineItemResponse> items) {
         return items.stream()
                 .map(SceneTimelineItemResponse::duration)
@@ -172,6 +193,16 @@ public class TimelineService {
     private void ensureMember(Long projectId, Long userId) {
         if (!projectMemberMapper.existsMember(projectId, userId)) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
+    }
+
+    private void validateOrderedIds(List<Long> orderedIds) {
+        if (orderedIds == null || orderedIds.isEmpty()) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST);
+        }
+        Set<Long> uniqueIds = new HashSet<>(orderedIds);
+        if (uniqueIds.size() != orderedIds.size()) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST);
         }
     }
 }

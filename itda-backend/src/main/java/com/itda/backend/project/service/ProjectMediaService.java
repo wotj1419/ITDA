@@ -25,8 +25,10 @@ import org.springframework.transaction.annotation.Transactional;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
@@ -66,6 +68,24 @@ public class ProjectMediaService {
         String requestJson = buildMergeRequestJson(projectId, includeMusic);
         String mergeSignature = mergeSignatureService.projectSignature(projectId, includeMusic, timelineItems);
         return enqueueProjectMergeJob(projectId, requestJson, mergeSignature);
+    }
+
+    @Transactional
+    public void reorderTimeline(Long userId, Long projectId, List<Long> orderedSceneVideoIds) {
+        projectAccessService.ensureProjectAccessible(projectId, userId);
+        validateOrderedIds(orderedSceneVideoIds);
+
+        int total = timelineMapper.countProjectTimelineItems(projectId);
+        if (total == 0) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST);
+        }
+
+        int matched = timelineMapper.countProjectTimelineItemsBySceneVideoIds(projectId, orderedSceneVideoIds);
+        if (matched != total || matched != orderedSceneVideoIds.size()) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST);
+        }
+
+        timelineMapper.reorderProjectTimelineItems(projectId, orderedSceneVideoIds);
     }
 
     @Transactional(readOnly = true)
@@ -141,5 +161,15 @@ public class ProjectMediaService {
                 String.valueOf(projectId),
                 EXPORT_FILE_NAME
         );
+    }
+
+    private void validateOrderedIds(List<Long> orderedIds) {
+        if (orderedIds == null || orderedIds.isEmpty()) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST);
+        }
+        Set<Long> uniqueIds = new HashSet<>(orderedIds);
+        if (uniqueIds.size() != orderedIds.size()) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST);
+        }
     }
 }

@@ -54,6 +54,70 @@
         ORDER BY ti.order_index ASC, ti.id ASC
     </select>
 
+    <select id="countSceneTimelineItems" resultType="int">
+        SELECT COUNT(*)
+        FROM timeline_items
+        WHERE scene_id = #{sceneId}
+          AND video_node_id IS NOT NULL
+    </select>
+
+    <select id="countSceneTimelineItemsByVideoNodeIds" resultType="int">
+        SELECT COUNT(*)
+        FROM timeline_items
+        WHERE scene_id = #{sceneId}
+          AND video_node_id IN
+        <foreach collection="videoNodeIds" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </select>
+
+    <update id="reorderSceneTimelineItems">
+        UPDATE timeline_items
+        SET order_index = CASE video_node_id
+        <foreach collection="orderedVideoNodeIds" item="id" index="idx">
+            WHEN #{id} THEN #{idx} + 1
+        </foreach>
+        ELSE order_index
+        END
+        WHERE scene_id = #{sceneId}
+          AND video_node_id IN
+        <foreach collection="orderedVideoNodeIds" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </update>
+
+    <select id="countProjectTimelineItems" resultType="int">
+        SELECT COUNT(*)
+        FROM timeline_items
+        WHERE project_id = #{projectId}
+          AND scene_video_id IS NOT NULL
+    </select>
+
+    <select id="countProjectTimelineItemsBySceneVideoIds" resultType="int">
+        SELECT COUNT(*)
+        FROM timeline_items
+        WHERE project_id = #{projectId}
+          AND scene_video_id IN
+        <foreach collection="sceneVideoIds" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </select>
+
+    <update id="reorderProjectTimelineItems">
+        UPDATE timeline_items
+        SET order_index = CASE scene_video_id
+        <foreach collection="orderedSceneVideoIds" item="id" index="idx">
+            WHEN #{id} THEN #{idx} + 1
+        </foreach>
+        ELSE order_index
+        END
+        WHERE project_id = #{projectId}
+          AND scene_video_id IN
+        <foreach collection="orderedSceneVideoIds" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </update>
+
     <insert id="insertSceneTimelineItem">
         INSERT INTO timeline_items (
             project_id,

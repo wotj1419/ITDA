@@ -8,6 +8,7 @@ import com.itda.backend.media.MediaFile;
 import com.itda.backend.media.MediaFileService;
 import com.itda.backend.project.controller.dto.request.CreateProjectRequest;
 import com.itda.backend.project.controller.dto.request.UpdateProjectRequest;
+import com.itda.backend.timeline.controller.dto.request.ReorderProjectTimelineRequest;
 import com.itda.backend.project.controller.dto.response.ProjectCreateResponse;
 import com.itda.backend.project.controller.dto.response.ProjectDetailResponse;
 import com.itda.backend.project.controller.dto.response.ProjectExportResponse;
@@ -231,6 +232,17 @@ public class ProjectController {
         ProjectTimelineResponse response = projectMediaService.getTimeline(userDetails.getUserId(), projectId);
         return ApiResponse.success(response);
     }
+
+
+    @PutMapping("/{projectId}/timeline/order")
+    public ResponseEntity<ApiResponse<Void>> reorderProjectTimeline(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @Parameter(description = "Project ID") @PathVariable Long projectId,
+            @Valid @RequestBody ReorderProjectTimelineRequest request) {
+        projectMediaService.reorderTimeline(userDetails.getUserId(), projectId, request.orderedSceneVideoIds());
+        return ApiResponse.success();
+    }
+
 
     @Operation(
             summary = "프로젝트 병합 요청",

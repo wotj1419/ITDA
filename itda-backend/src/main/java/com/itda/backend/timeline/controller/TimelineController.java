@@ -3,6 +3,7 @@ package com.itda.backend.timeline.controller;
 import com.itda.backend.global.response.ApiResponse;
 import com.itda.backend.global.security.CustomUserDetails;
 import com.itda.backend.timeline.controller.dto.request.MergeRequest;
+import com.itda.backend.timeline.controller.dto.request.ReorderSceneTimelineRequest;
 import com.itda.backend.timeline.controller.dto.response.MergeResponse;
 
 import com.itda.backend.timeline.controller.dto.response.SceneTimelineResponse;
@@ -10,11 +11,13 @@ import com.itda.backend.timeline.service.TimelineService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
+import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -44,5 +47,15 @@ public class TimelineController {
             @RequestBody(required = false) MergeRequest request) {
         MergeResponse response = timelineService.requestSceneMerge(userDetails.getUserId(), sceneId, request);
         return ApiResponse.accepted(response);
+    }
+
+    @Operation(summary = "Reorder scene timeline", description = "Save scene timeline clip order.")
+    @PutMapping("/scenes/{sceneId}/timeline/order")
+    public ResponseEntity<ApiResponse<Void>> reorderSceneTimeline(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @PathVariable Long sceneId,
+            @Valid @RequestBody ReorderSceneTimelineRequest request) {
+        timelineService.reorderSceneTimeline(userDetails.getUserId(), sceneId, request.orderedVideoNodeIds());
+        return ApiResponse.success(null);
     }
 }

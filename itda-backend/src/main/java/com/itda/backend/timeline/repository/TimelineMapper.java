@@ -14,6 +14,22 @@ public interface TimelineMapper {
 
     List<ProjectTimelineItem> findProjectTimelineItems(@Param("projectId") Long projectId);
 
+    int countSceneTimelineItems(@Param("sceneId") Long sceneId);
+
+    int countSceneTimelineItemsByVideoNodeIds(@Param("sceneId") Long sceneId,
+                                              @Param("videoNodeIds") List<Long> videoNodeIds);
+
+    int reorderSceneTimelineItems(@Param("sceneId") Long sceneId,
+                                  @Param("orderedVideoNodeIds") List<Long> orderedVideoNodeIds);
+
+    int countProjectTimelineItems(@Param("projectId") Long projectId);
+
+    int countProjectTimelineItemsBySceneVideoIds(@Param("projectId") Long projectId,
+                                                 @Param("sceneVideoIds") List<Long> sceneVideoIds);
+
+    int reorderProjectTimelineItems(@Param("projectId") Long projectId,
+                                    @Param("orderedSceneVideoIds") List<Long> orderedSceneVideoIds);
+
     int insertSceneTimelineItem(@Param("projectId") Long projectId,
                                 @Param("sceneId") Long sceneId,
                                 @Param("videoNodeId") Long videoNodeId,
