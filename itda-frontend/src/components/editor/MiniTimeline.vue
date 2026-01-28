@@ -95,7 +95,7 @@ const progressPercent = Math.min(
 </script>
 
 <template>
-  <div class="mini-timeline">
+  <div class="mini-timeline" :class="{ 'is-expanded': clips.length > 0 }">
     <!-- Label -->
     <div class="timeline-label">
       <Star class="label-icon" />
@@ -166,10 +166,19 @@ const progressPercent = Math.min(
 .mini-timeline {
   display: flex;
   align-items: center;
-  gap: 1rem;
-  padding: 0.75rem 1.5rem;
+  gap: 1.5rem;
+  height: 40px;
+  padding: 0 1.5rem;
   background: white;
-  border-top: 1px solid var(--rose-100);
+  border-top: 1px solid var(--gray-100);
+  position: relative;
+  z-index: 20;
+  transition: height 0.2s ease, padding 0.2s ease;
+}
+
+.mini-timeline.is-expanded {
+  height: 72px;
+  padding: 0.25rem 1.5rem;
 }
 
 /* ==========================================================================
@@ -180,15 +189,18 @@ const progressPercent = Math.min(
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  font-size: 0.75rem;
-  font-weight: 600;
+  font-size: 10px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
   color: var(--rose-500);
   white-space: nowrap;
 }
 
 .label-icon {
-  width: 16px;
-  height: 16px;
+  width: 14px;
+  height: 14px;
+  fill: currentColor;
 }
 
 /* ==========================================================================
@@ -201,6 +213,7 @@ const progressPercent = Math.min(
   flex: 1;
   overflow-x: auto;
   padding: 4px 0;
+  align-items: center;
 }
 
 .timeline-clip {
@@ -212,6 +225,11 @@ const progressPercent = Math.min(
   flex-shrink: 0;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
   transition: transform 0.2s ease;
+}
+
+.mini-timeline.is-expanded .timeline-clip {
+  height: 56px;
+  width: 74px;
 }
 
 .timeline-clip.drag-over {
@@ -272,9 +290,8 @@ const progressPercent = Math.min(
 }
 
 .timeline-empty {
-  font-size: 0.75rem;
-  color: var(--gray-400);
-  font-style: italic;
+  font-size: 10px;
+  color: var(--gray-300);
 }
 
 /* ==========================================================================
