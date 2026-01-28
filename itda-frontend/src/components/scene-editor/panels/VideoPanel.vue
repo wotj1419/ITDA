@@ -3,7 +3,7 @@
  * VideoPanel - 영상 생성/편집 패널
  * 트랜지션 영상 + 확정 기능 지원
  */
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
+import { ref, computed, watch } from 'vue';
 import type { Node as VueFlowNode } from '@vue-flow/core';
 import type { VideoNodeData, CameraMotion, ShotNodeData } from '../../../types/ui/sceneNodes';
 import { PromptStatus, JobStatus, NodeType } from '../../../types/ui/sceneNodes';
@@ -11,6 +11,7 @@ import BasePanel from './BasePanel.vue';
 import { useSceneNodeStore } from '../../../stores/sceneNode';
 import { useUIStore } from '../../../stores/ui';
 import { useNodeGeneration } from '../../../composables/useNodeGeneration';
+import { useHelpPopover } from '../../../composables/useHelpPopover';
 import { Video, Repeat, Move, Timer, Text, FileText, Sparkles, Check, RefreshCw, Target, ZoomIn, ZoomOut, ArrowRight, ArrowUp, Circle, Crop, Loader2 } from 'lucide-vue-next';
 import { resolveCameraMotionKey } from '../../../utils/nodeSettings';
 import {
@@ -28,8 +29,7 @@ interface Props {
 const props = defineProps<Props>();
 const nodeStore = useSceneNodeStore();
 const uiStore = useUIStore();
-const cameraMotionHelpRef = ref<HTMLElement | null>(null);
-const isCameraMotionHelpOpen = ref(false);
+const cameraMotionHelp = useHelpPopover();
 
 const form = ref({
   isTransition: false,
@@ -228,40 +228,6 @@ function buildVideoSceneOneLine(): string {
   return parts.join(', ');
 }
 
-function toggleCameraMotionHelp(event: MouseEvent): void {
-  event.stopPropagation();
-  isCameraMotionHelpOpen.value = !isCameraMotionHelpOpen.value;
-}
-
-function closeCameraMotionHelp(): void {
-  isCameraMotionHelpOpen.value = false;
-}
-
-function handleDocumentClick(event: MouseEvent): void {
-  if (!isCameraMotionHelpOpen.value) return;
-  const target = event.target as Node | null;
-  if (!cameraMotionHelpRef.value || !target) return;
-  if (!cameraMotionHelpRef.value.contains(target)) {
-    closeCameraMotionHelp();
-  }
-}
-
-function handleDocumentKeydown(event: KeyboardEvent): void {
-  if (event.key === 'Escape' && isCameraMotionHelpOpen.value) {
-    closeCameraMotionHelp();
-  }
-}
-
-onMounted(() => {
-  document.addEventListener('click', handleDocumentClick);
-  document.addEventListener('keydown', handleDocumentKeydown);
-});
-
-onUnmounted(() => {
-  document.removeEventListener('click', handleDocumentClick);
-  document.removeEventListener('keydown', handleDocumentKeydown);
-});
-
 watch(() => props.node.id, () => {
   if (!data.value) return;
   form.value = {
@@ -396,17 +362,17 @@ function handleGenerateVideo(): void {
             <Move class="panel-label-icon" />
             카메라 움직임
           </label>
-          <div ref="cameraMotionHelpRef" class="panel-info">
+          <div :ref="cameraMotionHelp.popoverRef" class="panel-info">
             <button
               type="button"
               class="panel-info-button"
               aria-label="카메라 움직임 안내"
-              :aria-expanded="isCameraMotionHelpOpen"
-              @click="toggleCameraMotionHelp"
+              :aria-expanded="cameraMotionHelp.isOpen.value"
+              @click="cameraMotionHelp.toggle"
             >
               <span class="panel-info-icon">i</span>
             </button>
-            <div v-if="isCameraMotionHelpOpen" class="panel-info-popover">
+            <div v-if="cameraMotionHelp.isOpen" class="panel-info-popover">
               <div class="panel-info-title">카메라 움직임 안내</div>
               <ul class="panel-info-list">
                 <li v-for="item in cameraMotionHelpItems" :key="item.label" class="panel-info-item">

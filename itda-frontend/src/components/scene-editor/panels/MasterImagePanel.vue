@@ -180,21 +180,27 @@ function setActive(): void {
 </script>
 
 <template>
-  <BasePanel title="마스터 이미지 생성" :icon="Film">
+  <BasePanel title="마스터 이미지 생성" :icon="Film" class="master-panel">
+    <template v-if="data" #header-actions>
+      <button
+        class="panel-btn master-panel__header-action"
+        :class="data.isActive ? 'panel-btn--confirmed' : 'panel-btn--secondary'"
+        @click="setActive"
+        :title="data.isActive ? '현재 Active' : 'Active로 설정'"
+      >
+        <Star class="panel-btn-icon" />
+        {{ data.isActive ? '마스터 활성' : '활성화' }}
+      </button>
+    </template>
     <template v-if="data">
       <div v-if="isLookChanged" class="panel-alert">
         룩 변경됨 → MASTER 재생성 필요
       </div>
-      <!-- Active Status -->
-      <div class="panel-alert panel-alert--center">
-        <button
-          class="panel-btn"
-          :class="data.isActive ? 'panel-btn--confirmed' : 'panel-btn--secondary'"
-          @click="setActive"
-        >
-          <Star class="panel-btn-icon" />
-          {{ data.isActive ? '현재 Active' : 'Active로 설정' }}
-        </button>
+      <div v-if="!data.isActive" class="master-panel__inactive-hint">
+        <span class="master-panel__inactive-title">안내</span>
+        <p class="master-panel__inactive-text">
+          이 마스터가 활성화되어야 하위 생성이 정상 동작합니다.
+        </p>
       </div>
 
       <!-- Style Selection -->
@@ -317,4 +323,54 @@ function setActive(): void {
 </template>
 
 <style scoped>
+.master-panel__header-action {
+  padding: 0.4rem 0.65rem;
+  font-size: 0.75rem;
+  gap: 0.35rem;
+  border-radius: 0.65rem;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.master-panel__header-action .panel-btn-icon {
+  width: 14px;
+  height: 14px;
+}
+
+.master-panel :deep(.base-panel__actions) {
+  width: 100%;
+  flex: 1 1 100%;
+  margin-left: 0;
+  justify-content: flex-start;
+}
+
+.master-panel :deep(.base-panel__close) {
+  margin-left: auto;
+}
+
+.master-panel__inactive-hint {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin-bottom: 1rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--rose-50, #FFFAFC);
+  border: 1px solid var(--rose-200, #FFE8F2);
+  border-radius: 0.75rem;
+}
+
+.master-panel__inactive-title {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--rose-600, #FF6B8A);
+}
+
+.master-panel__inactive-text {
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--gray-700, #374151);
+  line-height: 1.4;
+  word-break: keep-all;
+  white-space: normal;
+}
 </style>

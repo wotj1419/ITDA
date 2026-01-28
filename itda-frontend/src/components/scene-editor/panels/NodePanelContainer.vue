@@ -7,6 +7,7 @@
 import { computed, inject, nextTick, provide, ref, watch } from 'vue';
 import { panelRegistry } from './index';
 import { useSceneNodeStore } from '../../../stores/sceneNode';
+import { NodeType } from '../../../types/ui/sceneNodes';
 import type { AnyNodeData } from '../../../types/ui/sceneNodes';
 
 // =============================================================================
@@ -29,8 +30,8 @@ const panelComponent = computed(() => {
   return panelRegistry[nodeType] || null;
 });
 
-const canDeleteSelected = computed(() =>
-  Boolean(selectedNode.value && nodeStore.canDeleteNode(selectedNode.value.id))
+const canDeleteSelected = computed(
+  () => selectedNode.value?.data?.type !== NodeType.SCENE_HEADER
 );
 
 // =============================================================================

@@ -36,8 +36,9 @@ const panelCanDelete = inject<ComputedRef<boolean> | null>('nodePanelCanDelete',
         <h3 class="base-panel__title">{{ title }}</h3>
       </div>
       <div v-if="panelClose" class="base-panel__actions">
+        <slot name="header-actions" />
         <button
-          v-if="panelCanDelete?.value && panelDelete"
+          v-if="panelCanDelete && panelDelete"
           type="button"
           class="base-panel__delete"
           title="노드 삭제"
@@ -45,7 +46,7 @@ const panelCanDelete = inject<ComputedRef<boolean> | null>('nodePanelCanDelete',
           @click="panelDelete"
         >
           <Trash2 class="base-panel__delete-icon" />
-          <span class="base-panel__delete-label">삭제</span>
+          <span class="base-panel__delete-label">노드 삭제</span>
         </button>
         <button
           v-if="panelClose"
@@ -168,6 +169,13 @@ const panelCanDelete = inject<ComputedRef<boolean> | null>('nodePanelCanDelete',
   font-weight: 600;
   cursor: pointer;
   transition: background 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+}
+
+.base-panel__delete:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  background: #fff;
+  border-color: rgba(239, 68, 68, 0.15);
 }
 
 .base-panel__delete:hover {

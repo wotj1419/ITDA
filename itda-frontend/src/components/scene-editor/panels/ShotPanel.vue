@@ -229,12 +229,6 @@ function handleGenerateShot(): void {
 <template>
   <BasePanel :title="`샷 ${shotLabel} 생성`" :icon="Camera">
     <template v-if="data">
-      <!-- Grid Cell Info -->
-      <div class="panel-info">
-        <span class="panel-info-label">그리드 셀:</span>
-        <span class="panel-info-value">#{{ data.gridCellIndex + 1 }}</span>
-      </div>
-
       <!-- Grid Cell Selection -->
       <div class="panel-section">
         <label class="panel-label">

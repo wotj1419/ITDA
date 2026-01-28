@@ -2,7 +2,7 @@
 /**
  * StoryboardGridPanel - 스토리보드 그리드 생성/편집 패널
  */
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
+import { ref, computed, watch } from 'vue';
 import type { Node as VueFlowNode } from '@vue-flow/core';
 import type { StoryboardGridNodeData, GridLayout, GridMode } from '../../../types/ui/sceneNodes';
 import { JobStatus, NodeType, PromptStatus } from '../../../types/ui/sceneNodes';
@@ -10,6 +10,7 @@ import BasePanel from './BasePanel.vue';
 import { useSceneNodeStore } from '../../../stores/sceneNode';
 import { useUIStore } from '../../../stores/ui';
 import { useNodeGeneration } from '../../../composables/useNodeGeneration';
+import { useHelpPopover } from '../../../composables/useHelpPopover';
 import { LayoutGrid, Camera, Target, FileText, Sparkles, Check, RefreshCw, Loader2 } from 'lucide-vue-next';
 import { mapShotTypeLabelsToKeys } from '../../../utils/nodeSettings';
 import { DEFAULT_GRID_LAYOUT, DEFAULT_GRID_SHOT_TYPES } from '../../../utils/nodeDefaults';
@@ -21,8 +22,7 @@ interface Props {
 const props = defineProps<Props>();
 const nodeStore = useSceneNodeStore();
 const uiStore = useUIStore();
-const shotTypeHelpRef = ref<HTMLElement | null>(null);
-const isShotTypeHelpOpen = ref(false);
+const shotTypeHelp = useHelpPopover();
 
 const form = ref({
   gridMode: 'SHOT_VARIATIONS' as GridMode,
@@ -252,30 +252,6 @@ function toggleShotType(type: string): void {
   }
 }
 
-function toggleShotTypeHelp(event: MouseEvent): void {
-  event.stopPropagation();
-  isShotTypeHelpOpen.value = !isShotTypeHelpOpen.value;
-}
-
-function closeShotTypeHelp(): void {
-  isShotTypeHelpOpen.value = false;
-}
-
-function handleDocumentClick(event: MouseEvent): void {
-  if (!isShotTypeHelpOpen.value) return;
-  const target = event.target as Node | null;
-  if (!shotTypeHelpRef.value || !target) return;
-  if (!shotTypeHelpRef.value.contains(target)) {
-    closeShotTypeHelp();
-  }
-}
-
-function handleDocumentKeydown(event: KeyboardEvent): void {
-  if (event.key === 'Escape' && isShotTypeHelpOpen.value) {
-    closeShotTypeHelp();
-  }
-}
-
 function notifyBlocked(title: string, message: string): void {
   uiStore.showToast({
     type: 'warning',
@@ -300,16 +276,6 @@ function handleGenerateGrid(): void {
   }
   generateGrid();
 }
-
-onMounted(() => {
-  document.addEventListener('click', handleDocumentClick);
-  document.addEventListener('keydown', handleDocumentKeydown);
-});
-
-onUnmounted(() => {
-  document.removeEventListener('click', handleDocumentClick);
-  document.removeEventListener('keydown', handleDocumentKeydown);
-});
 
 </script>
 
@@ -359,17 +325,17 @@ onUnmounted(() => {
             <Camera class="panel-label-icon" />
             샷 타입 (다중 선택)
           </label>
-          <div ref="shotTypeHelpRef" class="panel-info">
+          <div :ref="shotTypeHelp.popoverRef" class="panel-info">
             <button
               type="button"
               class="panel-info-button"
               aria-label="샷 타입 안내"
-              :aria-expanded="isShotTypeHelpOpen"
-              @click="toggleShotTypeHelp"
+              :aria-expanded="shotTypeHelp.isOpen.value"
+              @click="shotTypeHelp.toggle"
             >
               <span class="panel-info-icon">i</span>
             </button>
-            <div v-if="isShotTypeHelpOpen" class="panel-info-popover">
+            <div v-if="shotTypeHelp.isOpen" class="panel-info-popover">
               <div class="panel-info-title">샷 타입 안내</div>
               <ul class="panel-info-list">
                 <li v-for="item in shotTypeHelpItems" :key="item.label" class="panel-info-item">
