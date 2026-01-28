@@ -42,6 +42,20 @@ const nodeStore = useSceneNodeStore();
 const { getLayoutedElements } = useAutoLayout();
 const { fitView, onNodeClick, onNodeDragStart, onNodeDragStop, onSelectionDragStart, onSelectionDragStop } = useVueFlow();
 
+type FitViewOptions = {
+  padding?: number;
+  minZoom?: number;
+  maxZoom?: number;
+};
+
+const DEFAULT_HEADER_POSITION = { x: 0, y: -200 };
+const INITIAL_ZOOM = 0.7;
+const INITIAL_FIT_OPTIONS: FitViewOptions = {
+  padding: 0.2,
+  minZoom: 0.25,
+  maxZoom: INITIAL_ZOOM,
+};
+
 const edgeTypes = {
   flowing: FlowingEdge,
 } as const;
@@ -51,6 +65,16 @@ const edgeTypes = {
 // =============================================================================
 
 const hasAppliedInitialLayout = ref(false);
+
+function hasMeaningfulPositions(): boolean {
+  return nodeStore.nodes.some((node) => {
+    const position = node.position ?? { x: 0, y: 0 };
+    if (node.data?.type === NodeType.SCENE_HEADER) {
+      return position.x !== DEFAULT_HEADER_POSITION.x || position.y !== DEFAULT_HEADER_POSITION.y;
+    }
+    return position.x !== 0 || position.y !== 0;
+  });
+}
 
 watch(
   () => [nodeStore.isLoading, nodeStore.nodes.length, nodeStore.edges.length] as const,
@@ -62,16 +86,13 @@ watch(
     if (edgeTotal === 0) return;
     if (hasAppliedInitialLayout.value) return;
 
-    const hasSavedPositions = nodeStore.nodes.some(
-      (node) => node.position.x !== 0 || node.position.y !== 0
-    );
-    if (hasSavedPositions) {
+    if (hasMeaningfulPositions()) {
       hasAppliedInitialLayout.value = true;
       return;
     }
 
     hasAppliedInitialLayout.value = true;
-    applyLayout();
+    applyLayout(INITIAL_FIT_OPTIONS);
   },
   { immediate: true }
 );
@@ -87,7 +108,7 @@ watch(
 // Layout
 // =============================================================================
 
-function applyLayout(): void {
+function applyLayout(fitOptions?: FitViewOptions): void {
   const { nodes: layoutedNodes } = getLayoutedElements(
     nodeStore.nodes,
     nodeStore.edges,
@@ -104,7 +125,11 @@ function applyLayout(): void {
 
   // 약간의 지연 후 fitView
   setTimeout(() => {
-    fitView({ padding: 0.2 });
+    const resolvedOptions = fitOptions ? { ...fitOptions } : { padding: 0.2 };
+    if (resolvedOptions.padding === undefined) {
+      resolvedOptions.padding = 0.2;
+    }
+    fitView(resolvedOptions);
   }, 100);
 
   nodeStore.persistNodePositions();
@@ -191,10 +216,9 @@ defineExpose({
       v-model:edges="nodeStore.edges"
       :node-types="nodeTypes"
       :edge-types="edgeTypes"
-      :default-viewport="{ x: 0, y: 0, zoom: 1 }"
+      :default-viewport="{ x: 0, y: 0, zoom: INITIAL_ZOOM }"
       :min-zoom="0.25"
       :max-zoom="2"
-      fit-view-on-init
       @pane-click="handlePaneClick"
       @node-resize-start="handleNodeDragStart"
     >

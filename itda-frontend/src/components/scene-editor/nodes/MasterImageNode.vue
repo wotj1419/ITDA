@@ -153,7 +153,7 @@ function handleActivate(event: Event): void {
           </span>
         </div>
       </div>
-      <div class="node-glass__status">
+      <div v-if="statusIcon" class="node-glass__status">
         <component 
           :is="statusIcon" 
           class="node-glass__status-icon" 

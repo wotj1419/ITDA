@@ -10,6 +10,7 @@ import type { MasterImageNodeData } from '../../../types/ui/sceneNodes';
 import { NodeType, PromptStatus } from '../../../types/ui/sceneNodes';
 import BasePanel from './BasePanel.vue';
 import { useSceneNodeStore } from '../../../stores/sceneNode';
+import { useObjectStore } from '../../../stores/object';
 import { useNodeGeneration } from '../../../composables/useNodeGeneration';
 import { Film, Palette, Sun, Smile, Sparkles, FileText, Image, Check, RefreshCw, Star, Users, Loader2 } from 'lucide-vue-next';
 import { gsap } from 'gsap';
@@ -26,12 +27,13 @@ interface Props {
 
 const props = defineProps<Props>();
 const nodeStore = useSceneNodeStore();
+const objectStore = useObjectStore();
 // 폼 상태 - objectIds는 배열로 관리 (다중 선택)
 const form = ref({
   style: DEFAULT_MASTER_STYLE,
   timeOfDay: DEFAULT_MASTER_TIME_OF_DAY,
   mood: DEFAULT_MASTER_MOOD,
-  objectIds: [] as string[],  // 등장 오브젝트 IDs (캐릭터 포함)
+  objectIds: [] as number[],  // 등장 오브젝트 IDs (캐릭터 포함)
   prompt: '',
 });
 
@@ -54,7 +56,7 @@ const {
     style: form.value.style,
     timeOfDay: form.value.timeOfDay,
     mood: form.value.mood,
-    objectIds: form.value.objectIds,
+    objects: selectedObjectNames.value,
   }),
   getPromptUpdate: (prompt) => ({
     style: form.value.style,
@@ -83,14 +85,25 @@ const styleOptions = ['실사', '애니메이션', '픽사', '수채화', '유�
 const timeOptions = ['아침', '낮', '저녁', '밤'];
 const moodOptions = ['중립', '편안', '고독', '긴장', '행복', '우울'];
 
-// TODO: 실제로는 Store/API에서 캐릭터/오브젝트 목록을 가져와야 함
-const objectOptions = [
-  { id: 'char-nahido', name: '나희도', type: 'character' },
-  { id: 'char-baekijin', name: '백이진', type: 'character' },
-  { id: 'char-goyurim', name: '고유림', type: 'character' },
-  { id: 'obj-robot-bell', name: '로봇 벨', type: 'object' },
-  { id: 'obj-spaceship', name: '우주선', type: 'object' },
-];
+const objectOptions = computed(() =>
+  objectStore.objects.map((item) => ({
+    id: item.objectId,
+    name: item.name,
+    type: item.type,
+  }))
+);
+
+const objectNameMap = computed(() => {
+  const map = new Map<number, string>();
+  objectOptions.value.forEach((item) => map.set(item.id, item.name));
+  return map;
+});
+
+const selectedObjectNames = computed(() =>
+  form.value.objectIds
+    .map((id) => objectNameMap.value.get(id))
+    .filter((name): name is string => Boolean(name))
+);
 
 const data = computed(() => props.node.data as MasterImageNodeData | undefined);
 const sceneHeaderData = computed(() =>
@@ -101,8 +114,8 @@ const isPromptApproved = computed(() => data.value?.promptStatus === PromptStatu
 const canGenerate = computed(() => isPromptApproved.value && !isGeneratingImage.value);
 const isLookChanged = computed(() => {
   if (!data.value) return false;
-  const formIds = [...form.value.objectIds].sort().join(',');
-  const dataIds = [...(data.value.objectIds || [])].sort().join(',');
+  const formIds = [...form.value.objectIds].sort((a, b) => a - b).join(',');
+  const dataIds = [...(data.value.objectIds || [])].sort((a, b) => a - b).join(',');
   return (
     form.value.style !== (data.value.style || '') ||
     form.value.timeOfDay !== (data.value.timeOfDay || '') ||
@@ -119,7 +132,9 @@ function buildSceneOneLine(): string {
   if (form.value.style) parts.push(`style: ${form.value.style}`);
   if (form.value.timeOfDay) parts.push(`time: ${form.value.timeOfDay}`);
   if (form.value.mood) parts.push(`mood: ${form.value.mood}`);
-  if (form.value.objectIds.length) parts.push(`objects: ${form.value.objectIds.join(', ')}`);
+  if (selectedObjectNames.value.length) {
+    parts.push(`objects: ${selectedObjectNames.value.join(', ')}`);
+  }
   return parts.join(', ');
 }
 const generateButtonRef = ref<HTMLButtonElement | null>(null);
@@ -196,7 +211,7 @@ onUnmounted(() => {
   generateButtonTween = null;
 });
 // 오브젝트 선택 토글
-function toggleObject(objectId: string): void {
+function toggleObject(objectId: number): void {
   const idx = form.value.objectIds.indexOf(objectId);
   if (idx >= 0) {
     form.value.objectIds.splice(idx, 1);

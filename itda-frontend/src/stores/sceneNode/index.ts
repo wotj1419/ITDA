@@ -996,9 +996,9 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
             masterData.timeOfDay = resolveTimeOfDayLabel(timeValue) || masterData.timeOfDay;
             masterData.mood = resolveMoodLabel(moodValue) || masterData.mood;
             if (Array.isArray(objectIdsRaw)) {
-                masterData.objectIds = objectIdsRaw.filter(
-                    (item): item is string => typeof item === 'string'
-                );
+                masterData.objectIds = objectIdsRaw
+                    .map((item) => toFiniteNumber(item as string | number))
+                    .filter((item): item is number => item !== null);
             }
             return;
         }

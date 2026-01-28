@@ -1,6 +1,6 @@
 import { computed } from 'vue';
 import type { Component } from 'vue';
-import { AlertCircle, CheckCircle, Clock, Loader2 } from 'lucide-vue-next';
+import { AlertCircle, CheckCircle, Loader2 } from 'lucide-vue-next';
 import { JobStatus, type GenerationState } from '../types/ui/sceneNodes';
 
 type StatusKey = JobStatus | 'idle';
@@ -10,14 +10,14 @@ export function useNodeStatus(
   getGenerationState: () => GenerationState | null
 ) {
   const statusKey = computed<StatusKey>(() => getJobStatus() ?? 'idle');
-  const statusIcon = computed<Component>(() => {
-    const icons: Record<JobStatus, Component> = {
-      [JobStatus.PENDING]: Clock,
+  const statusIcon = computed<Component | null>(() => {
+    const icons: Record<JobStatus, Component | null> = {
+      [JobStatus.PENDING]: null,
       [JobStatus.RUNNING]: Loader2,
       [JobStatus.SUCCEEDED]: CheckCircle,
       [JobStatus.FAILED]: AlertCircle,
     };
-    return icons[getJobStatus() as JobStatus] ?? Clock;
+    return icons[getJobStatus() as JobStatus] ?? null;
   });
 
   const isRunning = computed(() => getJobStatus() === JobStatus.RUNNING);

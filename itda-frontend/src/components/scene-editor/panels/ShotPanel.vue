@@ -8,6 +8,7 @@ import type { MasterImageNodeData, ShotNodeData, StoryboardGridNodeData } from '
 import { JobStatus, NodeType, PromptStatus } from '../../../types/ui/sceneNodes';
 import BasePanel from './BasePanel.vue';
 import { useSceneNodeStore } from '../../../stores/sceneNode';
+import { useObjectStore } from '../../../stores/object';
 import { useUIStore } from '../../../stores/ui';
 import { useNodeGeneration } from '../../../composables/useNodeGeneration';
 import { Camera, Smile, PenLine, FileText, Sparkles, Check, RefreshCw, LayoutGrid, Loader2 } from 'lucide-vue-next';
@@ -21,6 +22,7 @@ interface Props {
 const props = defineProps<Props>();
 const nodeStore = useSceneNodeStore();
 const uiStore = useUIStore();
+const objectStore = useObjectStore();
 
 const form = ref({
   shotTypes: [] as string[],
@@ -64,6 +66,18 @@ const activeMasterData = computed(() => {
   return fallback?.data as MasterImageNodeData | undefined;
 });
 
+const objectNameMap = computed(() => {
+  const map = new Map<number, string>();
+  objectStore.objects.forEach((item) => map.set(item.objectId, item.name));
+  return map;
+});
+
+const activeMasterObjectNames = computed(() =>
+  (activeMasterData.value?.objectIds || [])
+    .map((id) => objectNameMap.value.get(id))
+    .filter((name): name is string => Boolean(name))
+);
+
 const {
   isGeneratingPrompt,
   isGeneratingJob: isGeneratingShot,
@@ -82,7 +96,7 @@ const {
     style: activeMasterData.value?.style,
     timeOfDay: activeMasterData.value?.timeOfDay,
     mood: activeMasterData.value?.mood,
-    objectIds: activeMasterData.value?.objectIds,
+    objects: activeMasterObjectNames.value,
     shotType: buildShotTypeValue(form.value.shotTypes),
     expression: form.value.expression,
     additionalDetail: form.value.additionalDetail,

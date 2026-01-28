@@ -118,7 +118,7 @@ function handleRetry(event: Event): void {
           <span class="node-glass__subtitle">{{ data.layout }} 레이아웃</span>
         </div>
       </div>
-      <div class="node-glass__status">
+      <div v-if="statusIcon" class="node-glass__status">
         <component 
           :is="statusIcon" 
           class="node-glass__status-icon" 
