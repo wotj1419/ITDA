@@ -48,6 +48,7 @@ function createBaseData(
         id,
         type,
         jobStatus,
+        generationState: null,
         promptStatus: PromptStatus.APPROVED,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),

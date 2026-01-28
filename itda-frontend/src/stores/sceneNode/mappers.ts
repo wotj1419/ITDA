@@ -65,6 +65,7 @@ export function createBaseNodeData(
     id,
     type,
     jobStatus: null,
+    generationState: null,
     promptStatus: PromptStatus.DRAFT,
     createdAt: now,
     updatedAt: now,
@@ -200,11 +201,12 @@ export function applyNodeResultUrl(node: SceneNode, url: string): void {
 export function createSceneNodeFromApi(
   node: NodeSummary,
   sceneId: string,
-  sceneInfo?: { title: string; description: string; order: number }
+  sceneInfo?: { title: string; description: string; order: number },
+  sceneHeaderId?: string | null
 ): SceneNode {
   const uiType = API_TO_UI_NODE_TYPE[node.type] ?? NodeType.VIDEO;
   const id = String(node.nodeId);
-  const fallbackHeaderId = String(-Number(sceneId));
+  const fallbackHeaderId = sceneHeaderId ?? String(-Number(sceneId));
   const resolvedParentId = node.parentNodeId
     ? String(node.parentNodeId)
     : uiType === NodeType.MASTER_IMAGE

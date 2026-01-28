@@ -27,6 +27,7 @@ import {
     confirmNode as apiConfirmNode,
     unconfirmNode as apiUnconfirmNode,
     activateMaster as apiActivateMaster,
+    updateNodePositions as apiUpdateNodePositions,
 } from '../../services/api/nodes';
 import {
     subscribeProjectEvents,
@@ -199,6 +200,61 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
         return `scene-nodes-${id}`;
     }
 
+    function loadFromLocalStorage(id: string): { nodes: SceneNode[]; edges: Edge[]; updatedAt?: string } | null {
+        try {
+            const raw = localStorage.getItem(getStorageKey(id));
+            if (!raw) return null;
+            const parsed = JSON.parse(raw) as { nodes?: SceneNode[]; edges?: Edge[]; updatedAt?: string } | null;
+            if (!parsed?.nodes || !parsed?.edges) return null;
+            if (!Array.isArray(parsed.nodes) || !Array.isArray(parsed.edges)) return null;
+            return { nodes: parsed.nodes, edges: parsed.edges, updatedAt: parsed.updatedAt };
+        } catch {
+            return null;
+        }
+    }
+
+    function restoreNodeLayoutFromStorage(loadedNodes: SceneNode[], storedNodes: SceneNode[]): void {
+        if (!loadedNodes.length || !storedNodes.length) return;
+
+        const storedById = new Map<string, SceneNode>(storedNodes.map((node) => [String(node.id), node]));
+
+        loadedNodes.forEach((node) => {
+            const stored = storedById.get(String(node.id));
+            if (!stored) return;
+
+            const hasApiPosition =
+                Number.isFinite(node.position?.x) &&
+                Number.isFinite(node.position?.y) &&
+                (node.position.x !== 0 || node.position.y !== 0);
+
+            if (!hasApiPosition && stored.position) {
+                const x = Number((stored.position as { x?: unknown }).x);
+                const y = Number((stored.position as { y?: unknown }).y);
+                if (Number.isFinite(x) && Number.isFinite(y)) {
+                    node.position = { x, y };
+                }
+            }
+
+            const storedWidth = Number((stored as { width?: unknown }).width);
+            const storedHeight = Number((stored as { height?: unknown }).height);
+            if (Number.isFinite(storedWidth) && storedWidth > 0) {
+                node.width = storedWidth;
+            }
+            if (Number.isFinite(storedHeight) && storedHeight > 0) {
+                node.height = storedHeight;
+            }
+
+            const storedStyle = (stored as { style?: unknown }).style;
+            if (storedStyle && typeof storedStyle === 'object') {
+                const styleObj = storedStyle as Record<string, unknown>;
+                const nextStyle: Record<string, unknown> = { ...(node.style ?? {}) };
+                if (styleObj.width !== undefined) nextStyle.width = styleObj.width;
+                if (styleObj.height !== undefined) nextStyle.height = styleObj.height;
+                node.style = nextStyle;
+            }
+        });
+    }
+
     function saveToLocalStorage(): void {
         if (!sceneId.value) return;
         isSaving.value = true;
@@ -225,6 +281,15 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
         saveTimeout = setTimeout(() => {
             saveToLocalStorage();
         }, 1000); // 1초 후 저장
+    }
+
+    function flushSave(): void {
+        if (!sceneId.value) return;
+        if (saveTimeout) {
+            clearTimeout(saveTimeout);
+            saveTimeout = null;
+        }
+        saveToLocalStorage();
     }
 
     // 노드/엣지 변경 감지하여 자동 저장
@@ -258,9 +323,12 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
             const numericSceneId = toFiniteNumber(sceneIdParam);
             if (numericSceneId === null) return;
 
+            const storedState = loadFromLocalStorage(sceneIdParam);
             const apiNodes = await fetchSceneNodes(numericSceneId);
+            const sceneHeaderNode = apiNodes.find((node) => node.type === 'SCENE_HEADER');
+            const sceneHeaderId = sceneHeaderNode ? String(sceneHeaderNode.nodeId) : null;
             nodes.value = apiNodes.map((node) =>
-                createSceneNodeFromApi(node, sceneIdParam, sceneInfo)
+                createSceneNodeFromApi(node, sceneIdParam, sceneInfo, sceneHeaderId)
             );
             await hydrateNodeMedia();
 
@@ -271,6 +339,10 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
             await ensureActiveMasterNode();
             edges.value = deriveEdges(nodes.value);
             ensureTimelineOrder();
+
+            if (storedState?.nodes?.length) {
+                restoreNodeLayoutFromStorage(nodes.value, storedState.nodes);
+            }
 
             const projectId = sceneStore.currentProjectId;
             if (projectId) {
@@ -283,6 +355,9 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
             console.error('Failed to load scene nodes:', error);
         } finally {
             isLoading.value = false;
+            if (sceneId.value && nodes.value.length) {
+                persistNodePositions();
+            }
         }
     }
 
@@ -307,7 +382,7 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
             const newNode: SceneNode = {
                 id: headerData.id,
                 type: 'sceneHeader',
-                position: { x: 0, y: 0 },
+                position: { x: 0, y: -200 },
                 width,
                 height,
                 data: headerData,
@@ -631,12 +706,7 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
 
     async function deleteNode(nodeId: string): Promise<void> {
         const targetNode = nodes.value.find((n) => n.id === nodeId);
-        if (
-            !targetNode ||
-            targetNode.data?.type === NodeType.SCENE_HEADER ||
-            targetNode.data?.type === NodeType.MASTER_IMAGE
-        )
-            return;
+        if (!targetNode || targetNode.data?.type === NodeType.SCENE_HEADER) return;
 
         // 하위 노드 재귀 삭제
         const descendants = getDescendantIds(nodeId);
@@ -681,10 +751,7 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
     function canDeleteNode(nodeId: string): boolean {
         const targetNode = nodes.value.find((n) => n.id === nodeId);
         if (!targetNode?.data) return false;
-        return (
-            targetNode.data.type !== NodeType.SCENE_HEADER &&
-            targetNode.data.type !== NodeType.MASTER_IMAGE
-        );
+        return targetNode.data.type !== NodeType.SCENE_HEADER;
     }
 
     // ==========================================================================
@@ -743,6 +810,52 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
         edges.value.push(nextEdge);
     }
 
+    // ==========================================================================
+    // Actions - Persist Positions
+    // ==========================================================================
+
+    let persistPositionsTimeout: ReturnType<typeof setTimeout> | null = null;
+    async function sendNodePositions(): Promise<void> {
+        if (!sceneId.value) return;
+        const numericSceneId = toFiniteNumber(sceneId.value);
+        if (numericSceneId === null) return;
+
+        const positions = nodes.value
+            .map((node) => {
+                const numericNodeId = toFiniteNumber(node.id);
+                if (numericNodeId === null || numericNodeId <= 0) return null;
+                return {
+                    nodeId: numericNodeId,
+                    x: node.position?.x ?? 0,
+                    y: node.position?.y ?? 0,
+                };
+            })
+            .filter(Boolean) as Array<{ nodeId: number; x: number; y: number }>;
+
+        if (!positions.length) return;
+
+        try {
+            await apiUpdateNodePositions(numericSceneId, positions);
+        } catch (error) {
+            console.error('Failed to persist node positions:', error);
+        }
+    }
+
+    function persistNodePositions(): void {
+        if (persistPositionsTimeout) clearTimeout(persistPositionsTimeout);
+        persistPositionsTimeout = setTimeout(() => {
+            void sendNodePositions();
+        }, 400);
+    }
+
+    function flushPersistNodePositions(): void {
+        if (persistPositionsTimeout) {
+            clearTimeout(persistPositionsTimeout);
+            persistPositionsTimeout = null;
+        }
+        void sendNodePositions();
+    }
+
     function deriveEdgesSnapshot(): Edge[] {
         return deriveEdges(nodes.value);
     }
@@ -765,7 +878,7 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
     function applyDetailSettings(targetNode: SceneNode, detail: Awaited<ReturnType<typeof fetchNodeDetail>>): void {
         if (!targetNode.data) return;
         if (targetNode.data.type === NodeType.SCENE_HEADER) return;
-        if (detail.prompt !== null && detail.prompt !== undefined) {
+        if (detail.prompt !== null && detail.prompt !== undefined && 'prompt' in targetNode.data) {
             targetNode.data.prompt = detail.prompt;
         }
 
@@ -1213,6 +1326,8 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
     // ==========================================================================
 
     function clearNodes(): void {
+        flushSave();
+        flushPersistNodePositions();
         nodes.value = [];
         edges.value = [];
         positionHistory.value = [];
@@ -1270,6 +1385,10 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
         deriveEdges: deriveEdgesSnapshot,
         canConnect: canConnectNode,
 
+        // Actions - Persist
+        persistNodePositions,
+        flushPersistNodePositions,
+
         // Actions - Selection
         selectNode,
 
@@ -1292,5 +1411,8 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
 
         // Actions - Clear
         clearNodes,
+
+        // Actions - Persistence
+        flushSave,
     };
 });
