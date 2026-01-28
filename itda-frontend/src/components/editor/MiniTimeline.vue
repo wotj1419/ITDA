@@ -5,7 +5,7 @@
 import { ref } from 'vue';
 import { RouterLink } from 'vue-router';
 import type { TimelineClip } from '../../types/ui';
-import { Star, ArrowRight, Play, X } from 'lucide-vue-next';
+import { Star, Play, X } from 'lucide-vue-next';
 
 // =============================================================================
 // Props
@@ -144,17 +144,6 @@ const progressPercent = Math.min(
       재생
     </button>
 
-    <RouterLink
-      :to="{
-        name: 'timeline',
-        params: { id: projectId },
-        query: sceneId ? { sceneId } : undefined,
-      }"
-      class="timeline-link"
-    >
-      <ArrowRight class="link-icon" />
-      Scene Timeline
-    </RouterLink>
   </div>
 </template>
 
@@ -313,25 +302,6 @@ const progressPercent = Math.min(
   transition: width 0.3s ease;
 }
 
-/* ==========================================================================
-   Timeline Link
-   ========================================================================== */
-
-.timeline-link {
-  display: flex;
-  align-items: center;
-  gap: 0.375rem;
-  padding: 0.5rem 0.75rem;
-  font-size: 0.75rem;
-  font-weight: 500;
-  color: var(--rose-500);
-  background: var(--rose-50);
-  border-radius: 6px;
-  text-decoration: none;
-  transition: all 0.2s ease;
-  white-space: nowrap;
-}
-
 .timeline-play {
   display: flex;
   align-items: center;
@@ -351,11 +321,6 @@ const progressPercent = Math.min(
 .timeline-play:hover {
   background: var(--gray-100);
   color: var(--gray-900);
-}
-
-.timeline-link:hover {
-  background: var(--rose-100);
-  color: var(--rose-600);
 }
 
 .link-icon {

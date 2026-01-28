@@ -62,7 +62,7 @@ interface NavItem {
 const navItems = computed<NavItem[]>(() => {
   const items: NavItem[] = [
     { key: 'story', icon: BookOpen, label: '스토리', to: null },
-    { key: 'scenes', icon: Clapperboard, label: '장면', badge: props.sceneCount, to: null },
+    { key: 'scenes', icon: Clapperboard, label: '씬', badge: props.sceneCount, to: null },
     { key: 'objects', icon: User, label: '오브젝트', to: null },
     { key: 'timeline', icon: Layers, label: '전체 타임라인', to: { name: 'timeline', params: { id: projectId.value } } },
     { key: 'settings', icon: Settings, label: '설정', to: null },
@@ -173,7 +173,7 @@ const progressPercentage = computed(() => {
           </button>
           
           <div class="breadcrumb">
-            <RouterLink to="/dashboard">홈</RouterLink>
+            <RouterLink to="/dashboard">내 프로젝트</RouterLink>
             <span class="separator">/</span>
             <span class="current">{{ project?.title || 'Project' }}</span>
           </div>
@@ -500,11 +500,11 @@ const progressPercentage = computed(() => {
 }
 
 .sidebar-collapsed .nav-item {
-  width: 44px;
+  width: 100%;
   height: 44px;
-  padding: 0;
-  justify-content: center;
-  align-self: center;
+  padding: 0.75rem 0.625rem;
+  justify-content: flex-start;
+  align-self: stretch;
   gap: 0;
 }
 

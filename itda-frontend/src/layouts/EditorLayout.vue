@@ -27,8 +27,8 @@ interface Props {
 
 const props = withDefaults(defineProps<Props>(), {
   projectTitle: 'Project',
-  sceneTitle: 'Scene',
-  sceneBadge: 'Scene Editor',
+  sceneTitle: '씬',
+  sceneBadge: '씬 편집',
 });
 
 // =============================================================================
@@ -58,7 +58,7 @@ const navItems = computed(() => [
   {
     key: 'scene-editor',
     icon: Clapperboard,
-    label: 'Scene Editor',
+    label: '씬 편집',
     to: null,
     active: true,
   },
@@ -270,11 +270,11 @@ const sidebarClasses = computed(() => [
 }
 
 .sidebar-collapsed .nav-item {
-  width: 44px;
+  width: 100%;
   height: 44px;
-  padding: 0;
-  justify-content: center;
-  align-self: center;
+  padding: 0.75rem 0.625rem;
+  justify-content: flex-start;
+  align-self: stretch;
   gap: 0;
 }
 
