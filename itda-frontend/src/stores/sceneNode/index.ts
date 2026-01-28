@@ -247,9 +247,13 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
             const storedStyle = (stored as { style?: unknown }).style;
             if (storedStyle && typeof storedStyle === 'object') {
                 const styleObj = storedStyle as Record<string, unknown>;
-                const nextStyle: Record<string, unknown> = { ...(node.style ?? {}) };
-                if (styleObj.width !== undefined) nextStyle.width = styleObj.width;
-                if (styleObj.height !== undefined) nextStyle.height = styleObj.height;
+                const nextStyle = { ...(node.style ?? {}) } as SceneNode['style'];
+                if (styleObj.width !== undefined) {
+                    (nextStyle as Record<string, unknown>).width = styleObj.width;
+                }
+                if (styleObj.height !== undefined) {
+                    (nextStyle as Record<string, unknown>).height = styleObj.height;
+                }
                 node.style = nextStyle;
             }
         });
@@ -308,6 +312,17 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
     // Actions - Load
     // ==========================================================================
 
+    function resetInteractionState(): void {
+        selectedNodeId.value = null;
+        selectionMode.value = 'none';
+        endShotTargetVideoId.value = null;
+    }
+
+    function resetHydrationState(): void {
+        hydratedNodeIds.value.clear();
+        hydrationRequests.clear();
+    }
+
     async function loadSceneNodes(
         sceneIdParam: string,
         sceneInfo?: { title: string; description: string; order: number }
@@ -317,8 +332,9 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
             sceneId.value = sceneIdParam;
             nodes.value = [];
             edges.value = [];
-            hydratedNodeIds.value.clear();
-            hydrationRequests.clear();
+            positionHistory.value = [];
+            resetInteractionState();
+            resetHydrationState();
 
             const numericSceneId = toFiniteNumber(sceneIdParam);
             if (numericSceneId === null) return;
@@ -733,14 +749,16 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
         }
     }
 
-    function getDescendantIds(nodeId: string): string[] {
+    function getDescendantIds(nodeId: string, visited = new Set<string>()): string[] {
+        if (visited.has(nodeId)) return [];
+        visited.add(nodeId);
         const directChildren = edges.value
             .filter((e) => e.source === nodeId)
             .map((e) => e.target);
 
         return directChildren.flatMap((childId) => [
             childId,
-            ...getDescendantIds(childId),
+            ...getDescendantIds(childId, visited),
         ]);
     }
 
@@ -789,6 +807,7 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
                 }
             }
         });
+        persistNodePositions();
     }
 
     // ==========================================================================
@@ -1205,13 +1224,15 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
         });
     }
 
-    function hasCollapsedAncestor(nodeId: string): boolean {
+    function hasCollapsedAncestor(nodeId: string, visited = new Set<string>()): boolean {
+        if (visited.has(nodeId)) return false;
+        visited.add(nodeId);
         const node = nodes.value.find((n) => n.id === nodeId);
         const parentId = node?.data?.parentNodeId;
         if (!parentId) return false;
         const parent = nodes.value.find((n) => n.id === parentId);
         if (!parent?.data) return false;
-        return parent.data.isCollapsed || hasCollapsedAncestor(parentId);
+        return parent.data.isCollapsed || hasCollapsedAncestor(parentId, visited);
     }
 
     function getMasterAncestor(nodeId: string): SceneNode | null {
@@ -1316,6 +1337,8 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
             nodes.value = mockData.nodes;
             edges.value = mockData.edges;
             positionHistory.value = [];
+            resetInteractionState();
+            resetHydrationState();
         } finally {
             isLoading.value = false;
         }
@@ -1331,8 +1354,9 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
         nodes.value = [];
         edges.value = [];
         positionHistory.value = [];
-        selectedNodeId.value = null;
+        resetInteractionState();
         sceneId.value = null;
+        resetHydrationState();
         if (unsubscribeProjectEvents) {
             unsubscribeProjectEvents();
             unsubscribeProjectEvents = null;
