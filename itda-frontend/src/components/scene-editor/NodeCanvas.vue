@@ -53,11 +53,13 @@ const edgeTypes = {
 const hasAppliedInitialLayout = ref(false);
 
 watch(
-  () => [nodeStore.isLoading, nodeStore.nodes.length, nodeStore.edges.length],
-  ([isLoading, nodeCount = 0, edgeCount = 0]) => {
+  () => [nodeStore.isLoading, nodeStore.nodes.length, nodeStore.edges.length] as const,
+  ([isLoading, nodeCount, edgeCount]) => {
+    const nodeTotal = typeof nodeCount === 'number' ? nodeCount : 0;
+    const edgeTotal = typeof edgeCount === 'number' ? edgeCount : 0;
     if (isLoading) return;
-    if (nodeCount <= 1) return;
-    if (edgeCount === 0) return;
+    if (nodeTotal <= 1) return;
+    if (edgeTotal === 0) return;
     if (hasAppliedInitialLayout.value) return;
 
     const hasSavedPositions = nodeStore.nodes.some(
