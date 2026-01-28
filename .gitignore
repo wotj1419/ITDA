@@ -30,3 +30,4 @@ build/
 
 # Image
 uploads
+/uploads/
