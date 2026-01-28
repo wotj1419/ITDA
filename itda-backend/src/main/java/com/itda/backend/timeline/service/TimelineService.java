@@ -7,6 +7,8 @@ import com.itda.backend.global.response.ErrorCode;
 import com.itda.backend.asset.service.AssetUrlResolver;
 import com.itda.backend.job.domain.Job;
 import com.itda.backend.job.domain.JobType;
+import com.itda.backend.job.domain.MergeSource;
+import com.itda.backend.job.service.JobCreateRequest;
 import com.itda.backend.job.service.JobService;
 import com.itda.backend.project.repository.ProjectMapper;
 import com.itda.backend.project.repository.ProjectMemberMapper;
@@ -19,6 +21,8 @@ import com.itda.backend.timeline.controller.dto.response.ProjectTimelineResponse
 import com.itda.backend.timeline.controller.dto.response.SceneTimelineItemResponse;
 import com.itda.backend.timeline.controller.dto.response.SceneTimelineResponse;
 import com.itda.backend.timeline.repository.TimelineMapper;
+import com.itda.backend.timeline.repository.dto.ProjectTimelineItem;
+import com.itda.backend.timeline.repository.dto.SceneTimelineItem;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -37,6 +41,7 @@ public class TimelineService {
     private final JobService jobService;
     private final ObjectMapper objectMapper;
     private final AssetUrlResolver assetUrlResolver;
+    private final MergeSignatureService mergeSignatureService;
 
     @Transactional(readOnly = true)
     public SceneTimelineResponse getSceneTimeline(Long userId, Long sceneId) {
@@ -75,20 +80,27 @@ public class TimelineService {
         Scene scene = requireScene(sceneId);
         ensureMember(scene.getProjectId(), userId);
 
-        if (timelineMapper.findSceneTimelineItems(sceneId).isEmpty()) {
+        List<SceneTimelineItem> timelineItems = timelineMapper.findSceneTimelineItems(sceneId);
+        if (timelineItems.isEmpty()) {
             throw new BusinessException(ErrorCode.INVALID_REQUEST);
         }
 
         boolean includeMusic = request != null && request.includeMusicOrFalse();
         String requestJson = serializePayload(Map.of("includeMusic", includeMusic));
+        String mergeSignature = mergeSignatureService.sceneSignature(sceneId, includeMusic, timelineItems);
 
         Job job = jobService.createAndEnqueue(
-                JobType.SCENE_MERGE,
-                scene.getProjectId(),
-                sceneId,
-                null,
-                requestJson,
-                null
+                new JobCreateRequest(
+                        JobType.SCENE_MERGE,
+                        scene.getProjectId(),
+                        sceneId,
+                        null,
+                        requestJson,
+                        null,
+                        mergeSignature,
+                        MergeSource.SCENE
+                ),
+                true
         );
 
         return MergeResponse.from(job);
@@ -99,20 +111,27 @@ public class TimelineService {
         requireProject(projectId);
         ensureMember(projectId, userId);
 
-        if (timelineMapper.findProjectTimelineItems(projectId).isEmpty()) {
+        List<ProjectTimelineItem> timelineItems = timelineMapper.findProjectTimelineItems(projectId);
+        if (timelineItems.isEmpty()) {
             throw new BusinessException(ErrorCode.INVALID_REQUEST);
         }
 
         boolean includeMusic = request != null && request.includeMusicOrFalse();
         String requestJson = serializePayload(Map.of("includeMusic", includeMusic));
+        String mergeSignature = mergeSignatureService.projectSignature(projectId, includeMusic, timelineItems);
 
         Job job = jobService.createAndEnqueue(
-                JobType.PROJECT_MERGE,
-                projectId,
-                null,
-                null,
-                requestJson,
-                null
+                new JobCreateRequest(
+                        JobType.PROJECT_MERGE,
+                        projectId,
+                        null,
+                        null,
+                        requestJson,
+                        null,
+                        mergeSignature,
+                        MergeSource.PROJECT
+                ),
+                true
         );
 
         return MergeResponse.from(job);

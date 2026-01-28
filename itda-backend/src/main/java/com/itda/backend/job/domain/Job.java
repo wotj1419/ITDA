@@ -29,6 +29,12 @@ public class Job {
     /** 중복 요청 방지 키 (클라이언트 제공 또는 시스템 생성) */
     private String idempotencyKey;
 
+    /** 병합 요청 서명 (timeline_items 기반 해시) */
+    private String mergeSignature;
+
+    /** 병합 요청 소스 (SCENE / PROJECT) */
+    private MergeSource mergeSource;
+
     @Builder.Default
     private JobStatus status = JobStatus.PENDING;
 

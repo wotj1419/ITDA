@@ -5,6 +5,7 @@ import com.itda.backend.global.response.ErrorCode;
 import com.itda.backend.job.domain.Job;
 import com.itda.backend.job.domain.JobStatus;
 import com.itda.backend.job.domain.JobType;
+import com.itda.backend.job.domain.MergeSource;
 import com.itda.backend.job.event.JobCreatedEventPublisher;
 import com.itda.backend.job.repository.JobMapper;
 import lombok.RequiredArgsConstructor;
@@ -100,7 +101,9 @@ public class JobService {
                     request.sceneId(),
                     request.nodeId(),
                     request.requestJson(),
-                    finalKey);
+                    finalKey,
+                    request.mergeSignature(),
+                    request.mergeSource());
         } catch (DuplicateKeyException e) {
             Job raced = findByIdempotencyKeyReadCommitted(finalKey);
             if (raced == null) {
@@ -141,13 +144,17 @@ public class JobService {
             Long sceneId,
             Long nodeId,
             String requestJson,
-            String idempotencyKey) {
+            String idempotencyKey,
+            String mergeSignature,
+            MergeSource mergeSource) {
         Job job = Job.builder()
                 .type(type)
                 .projectId(projectId)
                 .sceneId(sceneId)
                 .nodeId(nodeId)
                 .idempotencyKey(idempotencyKey)
+                .mergeSignature(mergeSignature)
+                .mergeSource(mergeSource)
                 .requestJson(requestJson)
                 .status(JobStatus.PENDING)
                 .retryCount(0)
@@ -165,14 +172,23 @@ public class JobService {
 
     private String resolveIdempotencyKey(JobCreateRequest request) {
         String normalized = normalizeIdempotencyKey(request.idempotencyKey());
-        String finalKey = normalized != null
-                ? normalized
-                : JobIdempotencyKey.of(
-                        request.projectId(),
-                        request.type(),
-                        request.nodeId(),
-                        request.sceneId(),
-                        request.requestJson());
+        String finalKey;
+        if (normalized != null) {
+            finalKey = normalized;
+        } else if (request.mergeSignature() != null && !request.mergeSignature().isBlank()) {
+            finalKey = JobIdempotencyKey.forMerge(
+                    request.projectId(),
+                    request.type(),
+                    request.mergeSource(),
+                    request.mergeSignature());
+        } else {
+            finalKey = JobIdempotencyKey.of(
+                    request.projectId(),
+                    request.type(),
+                    request.nodeId(),
+                    request.sceneId(),
+                    request.requestJson());
+        }
         validateIdempotencyKeyLength(finalKey);
         return finalKey;
     }
