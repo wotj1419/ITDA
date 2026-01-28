@@ -16,6 +16,8 @@ export const useProjectStore = defineStore('project', () => {
   const currentProject = ref<ProjectDetail | null>(null)
   const { isLoading, error, run } = useAsyncAction()
   const favoriteIds = ref<Set<number>>(new Set([1, 2])) // Mock default favorites
+  const highlightedProjectId = ref<number | null>(null)
+  let highlightTimeout: ReturnType<typeof setTimeout> | null = null
 
   // Local Storage for Last Accessed Time
   const lastAccessedMap = ref<Record<number, number>>({})
@@ -83,6 +85,20 @@ export const useProjectStore = defineStore('project', () => {
     } catch (e) {
       console.error('Failed to save last accessed projects', e)
     }
+  }
+
+  function highlightProject(projectId: number): void {
+    highlightedProjectId.value = projectId
+
+    if (highlightTimeout) {
+      clearTimeout(highlightTimeout)
+    }
+
+    highlightTimeout = setTimeout(() => {
+      if (highlightedProjectId.value === projectId) {
+        highlightedProjectId.value = null
+      }
+    }, 1400)
   }
 
   async function loadProjects(): Promise<void> {
@@ -188,10 +204,12 @@ export const useProjectStore = defineStore('project', () => {
     favoriteProjects,
     recentProjects,
     sortedProjects,
+    highlightedProjectId,
     // Actions
     isFavorite,
     toggleFavorite,
     touchProject,
+    highlightProject,
     loadProjects,
     loadProject,
     addProject,

@@ -30,6 +30,7 @@ const isMenuOpen = ref(false)
 const menuRef = ref<HTMLElement | null>(null)
 
 const progress = computed(() => getProjectProgress(props.project.projectId))
+const isHighlighted = computed(() => projectStore.highlightedProjectId === props.project.projectId)
 
 const progressPercent = computed(() => {
   if (progress.value.total === 0) return 0
@@ -102,7 +103,8 @@ const handleDeleteRequest = (e: Event) => {
 <template>
   <RouterLink
     :to="`/projects/${project.projectId}`"
-    :class="['project-card', { 'project-card--list': viewMode === 'list' }]"
+    :class="['project-card', { 'project-card--list': viewMode === 'list', 'project-card--flash': isHighlighted }]"
+    :data-project-id="project.projectId"
     @click="handleCardClick"
   >
     <!-- Favorite Icon (Top-Left) -->
@@ -143,15 +145,15 @@ const handleDeleteRequest = (e: Event) => {
           xmlns="http://www.w3.org/2000/svg"
           class="svg-celebrate"
           viewBox="0 0 100 100"
+          width="100"
+          height="100"
         >
-          <circle r="2" cy="50" cx="50" class="particle"></circle>
-          <circle r="2" cy="50" cx="50" class="particle"></circle>
-          <circle r="2" cy="50" cx="50" class="particle"></circle>
-          <circle r="2" cy="50" cx="50" class="particle"></circle>
-          <circle r="2" cy="50" cx="50" class="particle"></circle>
-          <circle r="2" cy="50" cx="50" class="particle"></circle>
-          <circle r="2" cy="50" cx="50" class="particle"></circle>
-          <circle r="2" cy="50" cx="50" class="particle"></circle>
+          <polygon points="10,10 20,20"></polygon>
+          <polygon points="10,50 20,50"></polygon>
+          <polygon points="20,80 30,70"></polygon>
+          <polygon points="90,10 80,20"></polygon>
+          <polygon points="90,50 80,50"></polygon>
+          <polygon points="80,80 70,70"></polygon>
         </svg>
       </div>
     </label>
@@ -246,6 +248,14 @@ const handleDeleteRequest = (e: Event) => {
   border-color: var(--rose-200);
   box-shadow: 0 8px 24px -4px rgba(255, 133, 161, 0.12);
   transform: translateY(-2px);
+}
+
+.project-card--flash {
+  border-color: var(--rose-400);
+  box-shadow:
+    0 0 0 3px rgba(255, 133, 161, 0.2),
+    0 12px 30px -6px rgba(255, 133, 161, 0.35);
+  animation: project-flash 1.2s ease;
 }
 
 .project-card--list {
@@ -390,7 +400,7 @@ const handleDeleteRequest = (e: Event) => {
 
 /* Favorite */
 .star {
-  --star-color: #FFDAF6;
+  --star-color: #FF5B89;
   display: inline-flex;
   position: absolute;
   top: 0.75rem;
@@ -429,46 +439,35 @@ const handleDeleteRequest = (e: Event) => {
   filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.2));
 }
 
+.star .svg-outline {
+  z-index: 2;
+}
+
 .star .svg-filled {
-  opacity: 0;
-  transform: scale(0);
+  z-index: 1;
+  display: none;
+  animation: keyframes-svg-filled 2s;
 }
 
 .star .svg-celebrate {
   position: absolute;
+  animation: keyframes-svg-celebrate 0.5s;
+  animation-fill-mode: forwards;
   width: 100%;
   height: 100%;
   display: none;
   stroke: var(--star-color);
   fill: var(--star-color);
   stroke-width: 2px;
-}
-
-.star .particle {
-  position: absolute;
-  animation-fill-mode: forwards;
-  display: none;
-}
-
-.star .checkbox:checked ~ .svg-container .svg-outline {
-  opacity: 0;
+  z-index: 3;
+  pointer-events: none;
 }
 
 .star .checkbox:checked ~ .svg-container .svg-filled {
-  opacity: 1;
-  transform: scale(1);
-  animation: keyframes-svg-filled 0.9s;
-}
-
-.star .checkbox:not(:checked) ~ .svg-container .svg-filled {
-  animation: keyframes-svg-unfilled 0.3s forwards;
-}
-
-.star .checkbox:checked ~ .svg-container .svg-celebrate {
   display: block;
 }
 
-.star .checkbox:checked ~ .svg-container .particle {
+.star .checkbox:checked ~ .svg-container .svg-celebrate {
   display: block;
 }
 
@@ -476,39 +475,12 @@ const handleDeleteRequest = (e: Event) => {
   transform: scale(1.1);
 }
 
-.star .particle:nth-child(1) {
-  animation: particle-1 1s cubic-bezier(0.25, 0.1, 0.25, 1);
-}
-.star .particle:nth-child(2) {
-  animation: particle-2 1s ease-out;
-}
-.star .particle:nth-child(3) {
-  animation: particle-3 1s ease-out;
-}
-.star .particle:nth-child(4) {
-  animation: particle-4 1s ease-out;
-}
-.star .particle:nth-child(5) {
-  animation: particle-5 1s ease-out;
-}
-.star .particle:nth-child(6) {
-  animation: particle-6 1s ease-out;
-}
-.star .particle:nth-child(7) {
-  animation: particle-7 1s ease-out;
-}
-.star .particle:nth-child(8) {
-  animation: particle-8 1s ease-out;
-}
-
 @keyframes keyframes-svg-filled {
   0% {
     transform: scale(0);
-    opacity: 0;
   }
   25% {
     transform: scale(1.2);
-    opacity: 1;
   }
   50% {
     transform: scale(1);
@@ -516,134 +488,32 @@ const handleDeleteRequest = (e: Event) => {
   }
 }
 
-@keyframes keyframes-svg-unfilled {
+@keyframes keyframes-svg-celebrate {
   0% {
-    transform: scale(1);
-    opacity: 1;
-  }
-  100% {
     transform: scale(0);
+  }
+  50% {
+    opacity: 1;
+    filter: brightness(1.5);
+  }
+  100% {
+    transform: scale(1.4);
     opacity: 0;
+    display: none;
   }
 }
 
-@keyframes particle-1 {
+@keyframes project-flash {
   0% {
-    transform: translate(0, 0) scale(1);
-    opacity: 1;
+    box-shadow: 0 0 0 0 rgba(255, 133, 161, 0.35);
   }
-  40% {
-    transform: translate(-9px, -12px) scale(0.6);
-    opacity: 0.6;
+  50% {
+    box-shadow:
+      0 0 0 6px rgba(255, 133, 161, 0.25),
+      0 12px 30px -6px rgba(255, 133, 161, 0.35);
   }
   100% {
-    transform: translate(-18px, 18px) scale(0);
-    opacity: 0;
-  }
-}
-
-@keyframes particle-2 {
-  0% {
-    transform: translate(0, 0) scale(1);
-    opacity: 1;
-  }
-  40% {
-    transform: translate(9px, -12px) scale(0.6);
-    opacity: 0.6;
-  }
-  100% {
-    transform: translate(18px, 18px) scale(0);
-    opacity: 0;
-  }
-}
-
-@keyframes particle-3 {
-  0% {
-    transform: translate(0, 0) scale(1);
-    opacity: 1;
-  }
-  40% {
-    transform: translate(-13px, -9px) scale(0.6);
-    opacity: 0.6;
-  }
-  100% {
-    transform: translate(-21px, 20px) scale(0);
-    opacity: 0;
-  }
-}
-
-@keyframes particle-4 {
-  0% {
-    transform: translate(0, 0) scale(1);
-    opacity: 1;
-  }
-  40% {
-    transform: translate(13px, -9px) scale(0.6);
-    opacity: 0.6;
-  }
-  100% {
-    transform: translate(21px, 20px) scale(0);
-    opacity: 0;
-  }
-}
-
-@keyframes particle-5 {
-  0% {
-    transform: translate(0, 0) scale(1);
-    opacity: 1;
-  }
-  45% {
-    transform: translate(0, -13px) scale(0.6);
-    opacity: 0.6;
-  }
-  100% {
-    transform: translate(0, 18px) scale(0);
-    opacity: 0;
-  }
-}
-
-@keyframes particle-6 {
-  0% {
-    transform: translate(0, 0) scale(1);
-    opacity: 1;
-  }
-  35% {
-    transform: translate(-15px, -7px) scale(0.6);
-    opacity: 0.6;
-  }
-  100% {
-    transform: translate(-26px, 22px) scale(0);
-    opacity: 0;
-  }
-}
-
-@keyframes particle-7 {
-  0% {
-    transform: translate(0, 0) scale(1);
-    opacity: 1;
-  }
-  35% {
-    transform: translate(15px, -7px) scale(0.6);
-    opacity: 0.6;
-  }
-  100% {
-    transform: translate(26px, 22px) scale(0);
-    opacity: 0;
-  }
-}
-
-@keyframes particle-8 {
-  0% {
-    transform: translate(0, 0) scale(1);
-    opacity: 1;
-  }
-  45% {
-    transform: translate(0, -16px) scale(0.6);
-    opacity: 0.6;
-  }
-  100% {
-    transform: translate(0, 20px) scale(0);
-    opacity: 0;
+    box-shadow: 0 0 0 0 rgba(255, 133, 161, 0.2);
   }
 }
 

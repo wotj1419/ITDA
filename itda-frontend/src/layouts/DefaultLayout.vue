@@ -4,12 +4,10 @@ import AppHeader from '../components/common/AppHeader.vue'
 
 interface Props {
   showHeader?: boolean
-  showCollaborators?: boolean
 }
 
 withDefaults(defineProps<Props>(), {
   showHeader: true,
-  showCollaborators: true,
 })
 </script>
 
@@ -20,7 +18,6 @@ withDefaults(defineProps<Props>(), {
     <main class="main-wrapper">
       <AppHeader
         v-if="showHeader"
-        :show-collaborators="showCollaborators"
       >
         <template #left-after-divider>
           <slot name="header-left-after-divider" />

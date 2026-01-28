@@ -96,9 +96,23 @@ const toggleViewMode = () => {
       </h2>
     </template>
     <template #header-actions>
-      <button class="btn btn-primary" :disabled="isCreatingProject" @click="createEmptyProject">
-        <Plus class="icon-sm" />
-        New Project
+      <button
+        class="button"
+        type="button"
+        :disabled="isCreatingProject"
+        @click="createEmptyProject"
+      >
+        <span class="button__text">새 프로젝트</span>
+        <span class="button__icon">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 24 24"
+            class="svg"
+            aria-hidden="true"
+          >
+            <path d="M11 5h2v14h-2zM5 11h14v2H5z"></path>
+          </svg>
+        </span>
       </button>
     </template>
     <div class="dashboard-container">
@@ -252,9 +266,9 @@ const toggleViewMode = () => {
   --secondary-glow: rgba(255, 197, 210, 0.9);
   --inactive-color: var(--gray-400);
   --bg-dark: var(--rose-50);
-  --switch-width: 100px;
-  --switch-height: 52px;
-  --padding: 6px;
+  --switch-width: 84px;
+  --switch-height: 42px;
+  --padding: 5px;
   --item-width: calc((var(--switch-width) - (var(--padding) * 2)) / 2);
 
   display: flex;
@@ -269,11 +283,8 @@ const toggleViewMode = () => {
   width: var(--switch-width);
   height: var(--switch-height);
   background: var(--bg-dark);
-  border-radius: 18px;
-  box-shadow:
-    inset 0 2px 4px rgba(255, 133, 161, 0.12),
-    inset 0 -1px 2px rgba(255, 255, 255, 0.6),
-    0 12px 24px -8px rgba(255, 133, 161, 0.25);
+  border-radius: 14px;
+  box-shadow: none;
   display: flex;
   align-items: center;
   padding: var(--padding);
@@ -309,8 +320,8 @@ const toggleViewMode = () => {
 }
 
 .cyber-label .icon {
-  width: 22px;
-  height: 22px;
+  width: 18px;
+  height: 18px;
   color: var(--inactive-color);
   transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
   filter: drop-shadow(0 1px 2px rgba(255, 133, 161, 0.2));
@@ -331,16 +342,14 @@ const toggleViewMode = () => {
 .highlight-inner {
   width: 100%;
   height: 100%;
-  border-radius: 14px;
+  border-radius: 10px;
   background: linear-gradient(
     145deg,
     rgba(255, 255, 255, 0.9) 0%,
     rgba(255, 245, 249, 0.7) 100%
   );
   border: 1px solid rgba(255, 133, 161, 0.25);
-  box-shadow:
-    0 0 16px var(--primary-glow),
-    inset 0 0 12px rgba(255, 133, 161, 0.15);
+  box-shadow: none;
   backdrop-filter: blur(4px);
   position: relative;
 }
@@ -400,7 +409,7 @@ const toggleViewMode = () => {
   left: 0;
   width: 100%;
   height: 100%;
-  border-radius: 14px;
+  border-radius: 10px;
   background: radial-gradient(
     circle at 50% -20%,
     rgba(255, 255, 255, 0.35),
@@ -417,14 +426,10 @@ const toggleViewMode = () => {
 @keyframes neon-pulse {
   0%,
   100% {
-    box-shadow:
-      0 0 16px var(--primary-glow),
-      inset 0 0 12px rgba(255, 133, 161, 0.15);
+    box-shadow: none;
   }
   50% {
-    box-shadow:
-      0 0 22px var(--secondary-glow),
-      inset 0 0 16px rgba(255, 133, 161, 0.2);
+    box-shadow: none;
   }
 }
 
@@ -547,5 +552,75 @@ const toggleViewMode = () => {
 .icon-lg {
   width: 32px;
   height: 32px;
+}
+
+/* New Project Button Animation */
+.button {
+  position: relative;
+  width: 150px;
+  height: 40px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  border: 1px solid var(--rose-500);
+  background-color: var(--rose-500);
+  overflow: hidden;
+  border-radius: 12px;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  box-shadow: var(--shadow-md);
+}
+
+.button,
+.button__icon,
+.button__text {
+  transition: all 0.3s;
+}
+
+.button__text {
+  transform: translateX(20px);
+  color: #fff;
+  font-weight: 600;
+}
+
+.button__icon {
+  position: absolute;
+  transform: translateX(105px);
+  height: 100%;
+  width: 38px;
+  background-color: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.button .svg {
+  width: 22px;
+  height: 22px;
+  fill: #fff;
+}
+
+.button:hover {
+  background: var(--rose-600);
+}
+
+.button:hover .button__text {
+  color: transparent;
+}
+
+.button:hover .button__icon {
+  width: 148px;
+  transform: translateX(0);
+}
+
+.button:active {
+  transform: scale(0.95);
+}
+
+.button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+  box-shadow: none;
 }
 </style>
