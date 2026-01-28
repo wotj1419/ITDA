@@ -4,6 +4,7 @@ import { useCollabStore } from '../../stores/collab';
 import { useDraggable } from '../../composables/useDraggable';
 import CollabPanel from './CollabPanel.vue';
 import CollabPill from './CollabPill.vue';
+import CollabAudioSinks from './CollabAudioSinks.vue'
 
 const collabStore = useCollabStore();
 
@@ -41,6 +42,7 @@ function handleContainerClick() {
       @mousedown="onMouseDown"
       @click="handleContainerClick"
     >
+      <CollabAudioSinks />
       <!-- Expanded Panel -->
       <Transition name="scale" mode="out-in">
         <CollabPanel v-if="collabStore.isPanelOpen" key="panel" />

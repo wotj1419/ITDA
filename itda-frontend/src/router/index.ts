@@ -48,6 +48,11 @@ const routes: RouteRecordRaw[] = [
     component: () => import('../pages/TimelinePage.vue'),
     meta: { requiresAuth: true },
   },
+  {
+    path: '/poc/collab',
+    name: 'poc-collab',
+    component: () => import('../pages/PocCollabPage.vue'),
+  },
   // Catch-all 404
   {
     path: '/:pathMatch(.*)*',
