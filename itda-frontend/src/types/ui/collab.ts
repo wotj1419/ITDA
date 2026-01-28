@@ -11,6 +11,8 @@ export interface CollabParticipant {
   isVideoOff?: boolean;
   isScreenSharing?: boolean;
   currentLocation?: string;
+  sceneId?: number | null;
+  nodeId?: number | null;
   cursor?: {
     x: number;
     y: number;

@@ -40,7 +40,7 @@ onMounted(async () => {
     
     // 협업 방 입장
     collabStore.joinRoom(projectId.value)
-    collabStore.updateLocation('Timeline 편집 중')
+    collabStore.updateLocation('TIMELINE')
   }
 })
 

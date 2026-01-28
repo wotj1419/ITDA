@@ -14,16 +14,19 @@ socketManager.connect();
 const collabStore = useCollabStore()
 const route = useRoute()
 
-const hideCollabUI = computed(() => route.name === 'landing' || route.name === 'auth')
+const showCollabUI = computed(() => {
+  if (!route.name) return false
+  return route.path.startsWith('/projects')
+})
 
 onMounted(() => {
-  if (!hideCollabUI.value) {
+  if (showCollabUI.value) {
     collabStore.rejoinIfNeeded()
   }
 })
 
-watch(hideCollabUI, (hide) => {
-  if (!hide) {
+watch(showCollabUI, (show) => {
+  if (show) {
     collabStore.rejoinIfNeeded()
   }
 })
@@ -32,8 +35,8 @@ watch(hideCollabUI, (hide) => {
 <template>
   <RouterView />
   <ToastContainer />
-  <CollabContainer v-if="!hideCollabUI" />
-  <FloatingControlBar v-if="!hideCollabUI" />
+  <CollabContainer v-if="showCollabUI" />
+  <FloatingControlBar v-if="showCollabUI" />
 </template>
 
 <style>

@@ -7,21 +7,20 @@ import { useSidebarShortcut } from '../composables/useSidebarShortcut'
 import type { ProjectDetail } from '../types/api/projects'
 import Badge from '../components/common/Badge.vue'
 import Button from '../components/common/Button.vue'
+import ShareButton from '../components/common/ShareButton.vue'
 import ShareProjectModal from '../components/project/ShareProjectModal.vue'
 import PresencePanel from '../components/collab/PresencePanel.vue'
 import {
   BookOpen,
   Clapperboard,
   User,
-  Users,
   Layers,
   Settings,
   Phone,
-  Share2,
   Play,
   ArrowLeft,
 } from 'lucide-vue-next'
-import { useCollabStore } from '../stores/collab'
+
 
 interface Props {
   project: ProjectDetail | null
@@ -43,7 +42,6 @@ const emit = defineEmits<{
 
 const router = useRouter()
 const route = useRoute()
-const collabStore = useCollabStore()
 const uiStore = useUIStore()
 
 // Keyboard shortcut (Ctrl+B)
@@ -199,15 +197,7 @@ const progressPercentage = computed(() => {
             <span v-if="extraCount > 0" class="member-more">+{{ extraCount }}</span>
           </div>
 
-          <Button variant="secondary" @click="uiStore.openModal('share-project')">
-            <Share2 class="icon-sm" />
-            Share
-          </Button>
-
-          <Button variant="secondary" @click="collabStore.showFloatingBar()">
-            <Users class="icon-sm" />
-            협업 시작
-          </Button>
+          <ShareButton @click="uiStore.openModal('share-project')" />
 
           <Button variant="primary">
             <Play class="icon-sm" />

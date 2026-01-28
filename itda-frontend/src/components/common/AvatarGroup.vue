@@ -3,6 +3,8 @@ interface AvatarItem {
   src?: string
   alt?: string
   fallback?: string
+  title?: string
+  onClick?: () => void
 }
 
 interface Props {
@@ -22,11 +24,15 @@ const remaining = props.avatars.length - props.max
 
 <template>
   <div class="avatar-group">
-    <div
+    <component
       v-for="(avatar, index) in visibleAvatars"
       :key="index"
-      :class="['avatar', `avatar-${size}`]"
+      :is="avatar.onClick ? 'button' : 'div'"
+      :type="avatar.onClick ? 'button' : undefined"
+      :class="['avatar', `avatar-${size}`, { 'avatar-clickable': !!avatar.onClick }]"
       :style="{ zIndex: visibleAvatars.length - index }"
+      :title="avatar.title"
+      @click="avatar.onClick && avatar.onClick()"
     >
       <img
         v-if="avatar.src"
@@ -37,7 +43,7 @@ const remaining = props.avatars.length - props.max
       <span v-else class="avatar-fallback">
         {{ avatar.fallback || (avatar.alt?.[0] || '?').toUpperCase() }}
       </span>
-    </div>
+    </component>
     <div
       v-if="remaining > 0"
       :class="['avatar', `avatar-${size}`, 'avatar-more']"
@@ -73,6 +79,18 @@ const remaining = props.avatars.length - props.max
   font-weight: 600;
   overflow: hidden;
   flex-shrink: 0;
+  border: none;
+  padding: 0;
+}
+
+.avatar-clickable {
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.avatar-clickable:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
 }
 
 /* Sizes */

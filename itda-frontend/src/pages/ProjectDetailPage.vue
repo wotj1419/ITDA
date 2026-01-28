@@ -57,7 +57,7 @@ const visibleTabs = computed(() =>
 onMounted(() => {
   if (projectId.value) {
     collabStore.joinRoom(Number(projectId.value))
-    collabStore.updateLocation('Project')
+    collabStore.updateLocation('SCENE_LIST')
   }
 })
 
@@ -65,24 +65,16 @@ onMounted(() => {
 watch(projectId, (newId) => {
     if (newId) {
         collabStore.joinRoom(Number(newId))
-        collabStore.updateLocation('Project')
+        collabStore.updateLocation('SCENE_LIST')
     }
 })
 
-const tabLabelMap: Record<string, string> = {
-  story: 'Story',
-  scenes: 'Scenes',
-  objects: 'Objects',
-  timeline: 'Timeline',
-  settings: 'Settings',
-}
-
-const projectLocation = computed(() => {
-  const label = tabLabelMap[activeTab.value] || 'Project'
-  return project.value?.title ? `${project.value.title} · ${label}` : label
+const presenceLocation = computed(() => {
+  if (activeTab.value === 'timeline') return 'TIMELINE'
+  return 'SCENE_LIST'
 })
 
-watch([projectLocation], ([nextLocation]) => {
+watch([presenceLocation], ([nextLocation]) => {
   collabStore.updateLocation(nextLocation)
 }, { immediate: true })
 
