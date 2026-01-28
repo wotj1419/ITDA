@@ -32,6 +32,7 @@ public class GeminiImageClient {
     private static final String DEFAULT_IMAGE_MIME = "image/png";
     private static final String ERROR_PREFIX = "GEMINI_CALL_FAILED";
     private static final List<String> RESPONSE_MODALITIES = List.of("TEXT", "IMAGE");
+    private static final String CONTENT_ROLE = "user";
     private static final long DEFAULT_TIMEOUT_MS = 60_000;
 
     private final GeminiImageProperties imageProperties;
@@ -105,6 +106,7 @@ public class GeminiImageClient {
         Part imagePart = Part.fromBytes(referenceImageBytes, mimeType);
         Part textPart = Part.fromText(prompt);
         Content content = Content.builder()
+                .role(CONTENT_ROLE)
                 .parts(List.of(imagePart, textPart))
                 .build();
         return clientProvider.getClient()
