@@ -25,6 +25,17 @@ export const useSceneStore = defineStore('scene', () => {
   const { isLoading, error, run } = useAsyncAction()
   const isGenerating = ref(false)
   const currentProjectId = ref<number | null>(null)
+  const completedCountByProject = ref<Record<number, number>>({})
+  const COMPLETED_COUNT_STORAGE_KEY = 'completed_scene_count_by_project'
+
+  try {
+    const stored = localStorage.getItem(COMPLETED_COUNT_STORAGE_KEY)
+    if (stored) {
+      completedCountByProject.value = JSON.parse(stored)
+    }
+  } catch (e) {
+    console.error('Failed to parse completed scene count cache', e)
+  }
 
   // Getters
   const sceneCount = computed(() => scenes.value.length)
@@ -45,6 +56,23 @@ export const useSceneStore = defineStore('scene', () => {
       : 0,
   }))
 
+  function setCompletedCount(projectId: number, scenesForProject: Scene[]): void {
+    const completed = scenesForProject.filter((scene) => scene.status === 'COMPLETED').length
+    completedCountByProject.value[projectId] = completed
+    try {
+      localStorage.setItem(
+        COMPLETED_COUNT_STORAGE_KEY,
+        JSON.stringify(completedCountByProject.value)
+      )
+    } catch (e) {
+      console.error('Failed to persist completed scene count cache', e)
+    }
+  }
+
+  function getCompletedSceneCount(projectId: number): number {
+    return completedCountByProject.value[projectId] ?? 0
+  }
+
   // Actions
   async function loadScenes(projectId: number): Promise<void> {
     currentProjectId.value = projectId
@@ -52,6 +80,7 @@ export const useSceneStore = defineStore('scene', () => {
     await run(async () => {
       const fetched = await fetchScenes(projectId)
       scenes.value = fetched.map((scene) => normalizeScene(scene))
+      setCompletedCount(projectId, scenes.value)
     }, { errorMessage: 'Failed to load scenes' })
   }
 
@@ -67,6 +96,9 @@ export const useSceneStore = defineStore('scene', () => {
     }, { errorMessage: 'Failed to create scene' })
     if (newScene) {
       scenes.value.push(newScene)
+      if (currentProjectId.value) {
+        setCompletedCount(currentProjectId.value, scenes.value)
+      }
     }
     return newScene
   }
@@ -83,6 +115,9 @@ export const useSceneStore = defineStore('scene', () => {
     }, { errorMessage: 'Failed to create scenes' })
     if (newScenes) {
       scenes.value.push(...newScenes)
+      if (currentProjectId.value) {
+        setCompletedCount(currentProjectId.value, scenes.value)
+      }
       return newScenes
     }
     return []
@@ -104,6 +139,9 @@ export const useSceneStore = defineStore('scene', () => {
       if (index !== -1) {
         scenes.value[index] = normalized
       }
+      if (currentProjectId.value) {
+        setCompletedCount(currentProjectId.value, scenes.value)
+      }
       return true
     }
     return false
@@ -121,6 +159,9 @@ export const useSceneStore = defineStore('scene', () => {
       scenes.value.forEach((scene, idx) => {
         scene.order = idx + 1
       })
+      if (currentProjectId.value) {
+        setCompletedCount(currentProjectId.value, scenes.value)
+      }
       return true
     }, { errorMessage: 'Failed to delete scene' })
     return Boolean(success)
@@ -176,6 +217,7 @@ export const useSceneStore = defineStore('scene', () => {
     completedScenes,
     orderedScenes,
     progress,
+    getCompletedSceneCount,
     // Actions
     loadScenes,
     addScene,

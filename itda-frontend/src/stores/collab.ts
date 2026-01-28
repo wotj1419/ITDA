@@ -30,9 +30,11 @@ export const useCollabStore = defineStore('collab', () => {
     const isFloatingBarVisible = ref(false);
     const isMediaConnected = ref(false);
     const floatingBarResetToken = ref(0);
+    const speakingMap = reactive(new Map<string, boolean>());
+    const localStream = ref<MediaStream | null>(null);
 
     // Local User State
-    const isMuted = ref(true);
+    const isMuted = ref(false);
     const isVideoOff = ref(true);
     const isScreenSharing = ref(false);
     const currentLocation = ref('');
@@ -80,6 +82,78 @@ export const useCollabStore = defineStore('collab', () => {
         isScreenSharing: isScreenSharing.value,
         currentLocation: currentLocation.value,
     }));
+
+    const speakingMonitors = new Map<
+        string,
+        { ctx: AudioContext; source: MediaStreamAudioSourceNode; analyser: AnalyserNode; data: Uint8Array; rafId: number }
+    >();
+
+    const SPEAKING_THRESHOLD_ON = 0.06;
+    const SPEAKING_THRESHOLD_OFF = 0.045;
+    const SPEAKING_DECAY = 0.85;
+    const SPEAKING_HOLD_MS = 180;
+
+    const startSpeakingMonitor = async (id: string, stream: MediaStream) => {
+        if (speakingMonitors.has(id)) return;
+        try {
+            const ctx = new AudioContext();
+            const source = ctx.createMediaStreamSource(stream);
+            const analyser = ctx.createAnalyser();
+            analyser.fftSize = 512;
+            const data = new Uint8Array(analyser.fftSize);
+            source.connect(analyser);
+            let smoothed = 0;
+            let lastSpokeAt = 0;
+
+            const tick = () => {
+                analyser.getByteTimeDomainData(data);
+                let sum = 0;
+                for (let i = 0; i < data.length; i++) {
+                    const v = (data[i] - 128) / 128;
+                    sum += v * v;
+                }
+                const rms = Math.sqrt(sum / data.length);
+                smoothed = smoothed * SPEAKING_DECAY + rms * (1 - SPEAKING_DECAY);
+                const prev = speakingMap.get(id) ?? false;
+                const now = Date.now();
+                if (prev) {
+                    if (smoothed < SPEAKING_THRESHOLD_OFF && now - lastSpokeAt > SPEAKING_HOLD_MS) {
+                        speakingMap.set(id, false);
+                    }
+                } else if (smoothed > SPEAKING_THRESHOLD_ON) {
+                    speakingMap.set(id, true);
+                    lastSpokeAt = now;
+                }
+                const monitor = speakingMonitors.get(id);
+                if (monitor) {
+                    monitor.rafId = requestAnimationFrame(tick);
+                }
+            };
+
+            speakingMonitors.set(id, {
+                ctx,
+                source,
+                analyser,
+                data,
+                rafId: requestAnimationFrame(tick),
+            });
+
+            await ctx.resume();
+        } catch (error) {
+            console.warn('Failed to start speaking monitor', error);
+        }
+    };
+
+    const stopSpeakingMonitor = (id: string) => {
+        const monitor = speakingMonitors.get(id);
+        if (!monitor) return;
+        cancelAnimationFrame(monitor.rafId);
+        monitor.source.disconnect();
+        monitor.analyser.disconnect();
+        monitor.ctx.close().catch(() => null);
+        speakingMonitors.delete(id);
+        speakingMap.delete(id);
+    };
 
     // ================================
     // Actions: Room Management
@@ -143,7 +217,11 @@ export const useCollabStore = defineStore('collab', () => {
 
         try {
             // 1. Get Local Stream
-            await peerConnectionService.getLocalStream({ video: false, audio: true });
+            const stream = await peerConnectionService.getLocalStream({ video: false, audio: true });
+            localStream.value = stream;
+            if (stream) {
+                await startSpeakingMonitor(localUserId.value, stream);
+            }
 
             // 2. Initialize Peer Connections for existing participants
             // (In a mesh, we need to offer to everyone who is already here? 
@@ -189,7 +267,9 @@ export const useCollabStore = defineStore('collab', () => {
 
         isMediaConnected.value = false;
         isFloatingBarVisible.value = false; // Hide bar as requested
-        isMuted.value = true;
+        isMuted.value = false;
+        localStream.value = null;
+        stopSpeakingMonitor(localUserId.value);
     }
 
     /**
@@ -363,6 +443,7 @@ export const useCollabStore = defineStore('collab', () => {
             document.body.appendChild(audio);
         }
         audio.srcObject = stream;
+        void startSpeakingMonitor(peerId, stream);
     }
 
     function handleConnectionStateChange(state: RTCPeerConnectionState, peerId: string) {
@@ -451,6 +532,7 @@ export const useCollabStore = defineStore('collab', () => {
         participants.value = participants.value.filter(p => p.odps !== peerId);
         cursors.delete(peerId);
         cursorColorByUser.delete(peerId);
+        stopSpeakingMonitor(peerId);
         // Cleanup audio
         const audio = document.getElementById(`audio-${peerId}`);
         if (audio) audio.remove();
@@ -512,11 +594,16 @@ export const useCollabStore = defineStore('collab', () => {
 
         const parsedId = Number(savedRoomId);
         if (!Number.isFinite(parsedId)) {
-            localStorage.removeItem(STORAGE_KEY);
+        localStorage.removeItem(STORAGE_KEY);
+        stopSpeakingMonitor(localUserId.value);
             return;
         }
 
         joinRoom(parsedId);
+    }
+
+    function isSpeaking(peerId: string): boolean {
+        return speakingMap.get(peerId) ?? false;
     }
 
     return {
@@ -537,6 +624,7 @@ export const useCollabStore = defineStore('collab', () => {
         isConnected,
         hasUnreadMessages,
         participantCount,
+        isSpeaking,
         // Actions
         joinRoom,
         leaveRoom,

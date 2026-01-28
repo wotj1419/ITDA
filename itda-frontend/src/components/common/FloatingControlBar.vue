@@ -301,7 +301,7 @@ onBeforeUnmount(() => {
 <style scoped>
 .floating-wrap {
   position: fixed;
-  z-index: 9999; /* Always on top */
+  z-index: 900; /* Below modal overlay (1000) */
   touch-action: none;
   display: inline-block;
 }

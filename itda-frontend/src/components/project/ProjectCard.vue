@@ -5,8 +5,8 @@ import { Star, MoreVertical, Trash2, Pencil, Share2 } from 'lucide-vue-next'
 import type { Project } from '../../types/api/projects'
 import Badge from '../common/Badge.vue'
 import TimeAgo from '../common/TimeAgo.vue'
-import { getProjectProgress } from '../../services/mock/projects'
 import { useProjectStore } from '../../stores/project'
+import { useSceneStore } from '../../stores/scene'
 
 interface Props {
   project: Project
@@ -20,6 +20,7 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 const projectStore = useProjectStore()
+const sceneStore = useSceneStore()
 
 const handleCardClick = () => {
   projectStore.touchProject(props.project.projectId)
@@ -28,7 +29,11 @@ const handleCardClick = () => {
 const isMenuOpen = ref(false)
 const menuRef = ref<HTMLElement | null>(null)
 
-const progress = computed(() => getProjectProgress(props.project.projectId))
+const progress = computed(() => {
+  const completed = sceneStore.getCompletedSceneCount(props.project.projectId)
+  const total = Math.max(props.project.sceneCount ?? 0, completed)
+  return { completed, total }
+})
 
 const progressPercent = computed(() => {
   if (progress.value.total === 0) return 0
