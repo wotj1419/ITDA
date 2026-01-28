@@ -12,8 +12,10 @@ const {
   project,
   scenes,
   sceneProgress,
-  characters,
-  isGeneratingCharacter,
+  objects,
+  isSavingObject,
+  isUpdatingObject,
+  editingObject,
   scenarioStore,
   resolveSceneStatusConfig,
   handleTabChange,
@@ -36,10 +38,13 @@ const {
   handleDragEnd,
   handleDragOver,
   handleAddScene,
-  openAddCharacterModal,
-  handleAddCharacter,
-  handleEditCharacter,
-  handleDeleteCharacter,
+  handleDeleteScene,
+  openAddObjectModal,
+  openEditObjectModal,
+  handleAddObject,
+  handleUpdateObject,
+  handleDeleteObject,
+  handleDownloadObjectImage,
 } = useProjectDetail()
 
 import { computed, onMounted, watch } from 'vue'
@@ -71,7 +76,7 @@ watch(projectId, (newId) => {
 
 const tabLabelMap: Record<string, string> = {
   story: '스토리',
-  scenes: '장면',
+  scenes: '씬',
   objects: '오브젝트',
   timeline: 'Timeline',
   settings: '설정',
@@ -127,6 +132,7 @@ const openScenarioDrawer = () => scenarioStore.openDrawer()
         :toggle-storyboard="toggleStoryboard"
         :handle-storyboard-wheel="handleStoryboardWheel"
         :handle-add-scene="handleAddScene"
+        :handle-delete-scene="handleDeleteScene"
         :handle-drag-start="handleDragStart"
         :handle-drag-end="handleDragEnd"
         :handle-drag-over="handleDragOver"
@@ -154,12 +160,16 @@ const openScenarioDrawer = () => scenarioStore.openDrawer()
 
       <ObjectsTab
         v-if="activeTab === 'objects'"
-        :characters="characters"
-        :is-generating-character="isGeneratingCharacter"
-        :open-add-character-modal="openAddCharacterModal"
-        :handle-add-character="handleAddCharacter"
-        :handle-edit-character="handleEditCharacter"
-        :handle-delete-character="handleDeleteCharacter"
+        :objects="objects"
+        :editing-object="editingObject"
+        :is-saving-object="isSavingObject"
+        :is-updating-object="isUpdatingObject"
+        :open-add-object-modal="openAddObjectModal"
+        :open-edit-object-modal="openEditObjectModal"
+        :handle-add-object="handleAddObject"
+        :handle-update-object="handleUpdateObject"
+        :handle-delete-object="handleDeleteObject"
+        :handle-download-object-image="handleDownloadObjectImage"
       />
     </div>
 </ProjectLayout>
@@ -672,14 +682,14 @@ img, video {
   object-fit: contain;
 }
 
-/* Character Grid */
-.character-grid {
+/* Object Grid */
+.object-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); /* smaller min size for mobile */
   gap: 1rem;
 }
 
-.add-character-card {
+.add-object-card {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -690,7 +700,7 @@ img, video {
   min-height: 200px;
 }
 
-.add-character-icon {
+.add-object-icon {
   width: 80px;
   height: 80px;
   border-radius: 50%;
@@ -700,12 +710,12 @@ img, video {
   justify-content: center;
 }
 
-.add-character-icon .add-icon {
+.add-object-icon .add-icon {
   width: 24px;
   height: 24px;
 }
 
-.add-character-text {
+.add-object-text {
   color: var(--gray-500);
   font-size: 0.875rem;
 }

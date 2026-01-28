@@ -2,7 +2,7 @@ import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { useRoute, onBeforeRouteLeave } from 'vue-router';
 import { useProjectStore } from '../../../stores/project';
 import { useSceneStore } from '../../../stores/scene';
-import { useCharacterStore } from '../../../stores/character';
+import { useObjectStore } from '../../../stores/object';
 import { useUIStore } from '../../../stores/ui';
 import { useScenarioStore } from '../../../stores/scenario';
 import type { Scene, SceneStatus } from '../../../types/api/scenes';
@@ -27,7 +27,7 @@ export function useProjectDetail() {
   const route = useRoute();
   const projectStore = useProjectStore();
   const sceneStore = useSceneStore();
-  const characterStore = useCharacterStore();
+  const objectStore = useObjectStore();
   const uiStore = useUIStore();
   const scenarioStore = useScenarioStore();
 
@@ -43,15 +43,17 @@ export function useProjectDetail() {
 
   const tabItems: { key: ProjectTab; label: string }[] = [
     { key: 'story', label: '스토리' },
-    { key: 'scenes', label: '장면' },
+    { key: 'scenes', label: '씬' },
     { key: 'objects', label: '오브젝트' },
   ];
 
   const projectId = computed(() => Number(route.params.id));
   const project = computed(() => projectStore.currentProject);
   const scenes = computed(() => sceneStore.orderedScenes);
-  const characters = computed(() => characterStore.characters);
-  const isGeneratingCharacter = computed(() => characterStore.isGenerating);
+  const objects = computed(() => objectStore.objects);
+  const isSavingObject = computed(() => objectStore.isSaving);
+  const isUpdatingObject = computed(() => objectStore.isUpdating);
+  const editingObject = ref<ObjectSheet | null>(null);
   const sceneProgress = computed(() => sceneStore.progress);
 
   const isUntouchedProject = computed(() => {
@@ -81,10 +83,8 @@ export function useProjectDetail() {
       await Promise.all([
         projectStore.loadProject(projectId.value),
         sceneStore.loadScenes(projectId.value),
-        characterStore.loadCharacters(projectId.value),
+        objectStore.loadObjects(projectId.value),
       ]);
-
-      scenarioStore.switchProject(projectId.value);
 
       scenarioStore.switchProject(projectId.value);
 
@@ -118,8 +118,17 @@ export function useProjectDetail() {
         await Promise.all([
           projectStore.loadProject(id),
           sceneStore.loadScenes(id),
-          characterStore.loadCharacters(id),
+        objectStore.loadObjects(id),
         ]);
+      }
+    }
+  );
+
+  watch(
+    () => uiStore.activeModal,
+    (modalId) => {
+      if (modalId !== 'edit-object-modal') {
+        editingObject.value = null;
       }
     }
   );
@@ -301,7 +310,7 @@ export function useProjectDetail() {
 
   const handleAddScene = async () => {
     const newScene = await sceneStore.addScene({
-      title: `New Scene ${scenes.value.length + 1}`,
+      title: `새 씬 ${scenes.value.length + 1}`,
       description: '',
     });
     if (newScene) {
@@ -313,42 +322,104 @@ export function useProjectDetail() {
     }
   };
 
-  const openAddCharacterModal = () => {
-    uiStore.openModal('add-character-modal');
+  const openAddObjectModal = () => {
+    uiStore.openModal('add-object-modal');
   };
 
-  const handleAddCharacter = async (data: { name: string; description: string; style: string }) => {
-    const newCharacter = await characterStore.generateCharacter({
-      name: data.name,
-      description: data.description,
-      style: data.style,
-    });
+  const openEditObjectModal = (object: ObjectSheet) => {
+    editingObject.value = object;
+    uiStore.openModal('edit-object-modal');
+  };
 
-    if (newCharacter) {
+  const handleDeleteScene = async (scene: Scene): Promise<boolean> => {
+    const success = await sceneStore.removeScene(scene.sceneId);
+    if (success) {
+      uiStore.showToast({
+        type: 'success',
+        title: '씬 삭제',
+        message: `"${scene.title}" 씬이 삭제되었습니다.`,
+      });
+      return true;
+    }
+    uiStore.showToast({
+      type: 'error',
+      title: '씬 삭제 실패',
+      message: '잠시 후 다시 시도해주세요.',
+    });
+    return false;
+  };
+
+  const handleAddObject = async (data: { name: string; type: ObjectSheet['type']; description: string; style: string; file: File }) => {
+    const created = await objectStore.addObject(
+      {
+        name: data.name,
+        type: data.type,
+        description: data.description,
+        style: data.style,
+      },
+      data.file
+    );
+
+    if (created) {
       uiStore.closeModal();
       uiStore.showToast({
         type: 'success',
-        title: '캐릭터 생성 완료',
-        message: `${data.name} 캐릭터가 추가되었습니다.`,
+        title: '오브젝트 생성 완료',
+        message: `${data.name} 오브젝트가 추가되었습니다.`,
       });
     }
   };
 
-  const handleEditCharacter = (character: ObjectSheet) => {
-    console.log('Edit character:', character);
+  const handleUpdateObject = async (data: { objectId: number; name: string; type: ObjectSheet['type']; description: string; style: string; file?: File | null }) => {
+    const updated = await objectStore.updateObject(
+      data.objectId,
+      {
+        name: data.name,
+        type: data.type,
+        description: data.description,
+        style: data.style,
+      },
+      data.file
+    );
+    if (updated) {
+      uiStore.closeModal();
+      uiStore.showToast({
+        type: 'success',
+        title: '오브젝트 수정 완료',
+        message: `${data.name} 오브젝트가 수정되었습니다.`,
+      });
+    }
   };
 
-  const handleDeleteCharacter = async (character: ObjectSheet) => {
-    if (confirm(`"${character.name}" 캐릭터를 삭제하시겠습니까?`)) {
-      const success = await characterStore.removeCharacter(character.objectId);
-      if (success) {
-        uiStore.showToast({
-          type: 'success',
-          title: '캐릭터 삭제',
-          message: `${character.name}이(가) 삭제되었습니다.`,
-        });
-      }
+  const handleDeleteObject = async (object: ObjectSheet) => {
+    const success = await objectStore.removeObject(object.objectId);
+    if (success) {
+      uiStore.showToast({
+        type: 'success',
+        title: '오브젝트 삭제',
+        message: `${object.name}이(가) 삭제되었습니다.`,
+      });
     }
+  };
+
+  const handleDownloadObjectImage = async (object: ObjectSheet) => {
+    const blob = await objectStore.downloadObjectImage(object.objectId);
+    if (!blob) {
+      uiStore.showToast({
+        type: 'error',
+        title: '다운로드 실패',
+        message: '이미지를 다운로드할 수 없습니다.',
+      });
+      return;
+    }
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${object.name || 'object'}.png`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
   };
 
   return {
@@ -358,8 +429,10 @@ export function useProjectDetail() {
     project,
     scenes,
     sceneProgress,
-    characters,
-    isGeneratingCharacter,
+    objects,
+    isSavingObject,
+    isUpdatingObject,
+    editingObject,
     scenarioStore,
     sceneStatusConfig,
     resolveSceneStatusConfig,
@@ -384,9 +457,12 @@ export function useProjectDetail() {
     handleDragEnd,
     handleDragOver,
     handleAddScene,
-    openAddCharacterModal,
-    handleAddCharacter,
-    handleEditCharacter,
-    handleDeleteCharacter,
+    handleDeleteScene,
+    openAddObjectModal,
+    openEditObjectModal,
+    handleAddObject,
+    handleUpdateObject,
+    handleDeleteObject,
+    handleDownloadObjectImage,
   };
 }

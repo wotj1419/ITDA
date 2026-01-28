@@ -8,6 +8,7 @@ import { useRoute } from 'vue-router';
 import { useProjectStore } from '../stores/project';
 import { useSceneStore } from '../stores/scene';
 import { useSceneNodeStore } from '../stores/sceneNode';
+import { useObjectStore } from '../stores/object';
 import { useUIStore } from '../stores/ui';
 import { useCollabStore } from '../stores/collab';
 import { TIMELINE_PLAYBACK_MODAL_ID } from '../constants/ui';
@@ -33,6 +34,7 @@ const route = useRoute();
 const projectStore = useProjectStore();
 const sceneStore = useSceneStore();
 const nodeStore = useSceneNodeStore();
+const objectStore = useObjectStore();
 const uiStore = useUIStore();
 const collabStore = useCollabStore();
 
@@ -67,8 +69,8 @@ const currentScene = computed(() =>
 
 const sceneTitle = computed(() => {
   const scene = currentScene.value;
-  if (!scene) return 'Scene';
-  return `Scene ${scene.order}: ${scene.title}`;
+  if (!scene) return '씬';
+  return `씬 ${scene.order}: ${scene.title}`;
 });
 
 // Timeline clips from confirmed videos
@@ -134,7 +136,7 @@ onMounted(async () => {
       sceneStore.scenes = [
         {
           sceneId: Number(sceneId.value) || 1,
-          title: 'New Scene 1',
+          title: '새 씬 1',
           description: '설명 없음',
           order: 1,
           status: 'IN_PROGRESS',
@@ -142,11 +144,16 @@ onMounted(async () => {
         },
       ];
 
+      await objectStore.loadObjects(projectId.value);
       nodeStore.loadMockSceneNodes(sceneId.value, true);
       return;
     }
 
-    await Promise.all([projectStore.loadProject(projectId.value), sceneStore.loadScenes(projectId.value)]);
+    await Promise.all([
+      projectStore.loadProject(projectId.value),
+      sceneStore.loadScenes(projectId.value),
+      objectStore.loadObjects(projectId.value),
+    ]);
 
     // Vue Flow 노드 로드 (씬 정보 함께 전달)
     const scene = currentScene.value;
@@ -183,6 +190,9 @@ watch([projectId, sceneId], async ([, newSceneId]) => {
       nodeStore.flushSave();
     }
     if (isMockMode.value) {
+      if (projectId.value) {
+        await objectStore.loadObjects(projectId.value);
+      }
       nodeStore.loadMockSceneNodes(newSceneId as string, true);
       return;
     }
@@ -275,7 +285,7 @@ const { handleBeforeUnload, handleEditorKeydown } = useSceneEditorEvents({
   <EditorLayout
     :project-title="project?.title || 'Project'"
     :scene-title="sceneTitle"
-    scene-badge="Scene Editor"
+    scene-badge="씬 편집"
   >
     <!-- Header Slot -->
     <template #header>

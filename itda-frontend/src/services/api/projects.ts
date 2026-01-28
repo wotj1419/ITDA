@@ -1,6 +1,8 @@
 import apiClient from './client'
 import type { ApiResponse } from '../../types/api/common'
 import type { Project, ProjectDetail, CreateProjectRequest } from '../../types/api/projects'
+import type { ObjectSheet, CreateObjectRequest } from '../../types/api/objects'
+import { createObject, fetchObjectsByProjectId, fetchObjectById as fetchObjectByIdApi } from './objects'
 
 type ProjectListResponse = {
     items: Project[];
@@ -77,29 +79,21 @@ export async function updateMemberRole(projectId: number, memberId: number, role
 }
 
 // ============================================================================
-// Object Sheets
+// Object Sheets (deprecated: use services/api/objects.ts)
 // ============================================================================
 
-export interface ObjectSheet {
-    objectId: number
-    name: string
-    description: string
-    imageUrl?: string
-}
-
 export async function fetchProjectObjects(projectId: number): Promise<ObjectSheet[]> {
-    const response = await apiClient.get<ApiResponse<ObjectSheet[]>>(`/projects/${projectId}/objects`)
-    return response.data.data || []
+    return fetchObjectsByProjectId(projectId)
 }
 
-export async function createProjectObject(projectId: number, data: { name: string; description: string }): Promise<ObjectSheet> {
-    const response = await apiClient.post<ApiResponse<ObjectSheet>>(`/projects/${projectId}/objects`, data)
-    if (!response.data.data) throw new Error('Failed to create object')
-    return response.data.data
+export async function createProjectObject(
+    projectId: number,
+    data: CreateObjectRequest,
+    file: File
+): Promise<ObjectSheet> {
+    return createObject(projectId, data, file)
 }
 
 export async function fetchObjectById(objectId: number): Promise<ObjectSheet> {
-    const response = await apiClient.get<ApiResponse<ObjectSheet>>(`/objects/${objectId}`)
-    if (!response.data.data) throw new Error('Object not found')
-    return response.data.data
+    return fetchObjectByIdApi(objectId)
 }
