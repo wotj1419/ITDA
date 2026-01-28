@@ -5,7 +5,7 @@
  */
 import { RouterLink } from 'vue-router';
 import Button from '../common/Button.vue';
-import { ArrowLeft, Layers } from 'lucide-vue-next';
+import { ArrowLeft, Layers, Upload } from 'lucide-vue-next';
 
 // =============================================================================
 // Props
@@ -35,7 +35,7 @@ defineProps<Props>();
 
       <nav class="breadcrumb" aria-label="Breadcrumb">
         <RouterLink to="/dashboard" class="breadcrumb-link">
-          홈
+          내 프로젝트
         </RouterLink>
         <span class="separator">/</span>
         <RouterLink
@@ -51,7 +51,6 @@ defineProps<Props>();
 
     <!-- Right: Zoom & Actions -->
     <div class="header-right">
-      <span class="zoom-indicator">{{ zoomLevel }}</span>
 
       <RouterLink
         :to="{
@@ -62,10 +61,13 @@ defineProps<Props>();
         class="header-action"
       >
         <Layers class="icon-sm" />
-        Scene Timeline
+        <span class="header-action-text">씬 타임라인</span>
       </RouterLink>
 
-      <Button variant="primary" size="sm" class="export-btn">Export Scene</Button>
+      <Button variant="primary" size="sm" class="export-btn">
+        <Upload class="icon-sm" />
+        <span class="export-btn-text">씬 내보내기</span>
+      </Button>
     </div>
   </header>
 </template>
@@ -153,16 +155,6 @@ defineProps<Props>();
   gap: 0.75rem;
 }
 
-.zoom-indicator {
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 0.02em;
-  background: var(--gray-50);
-  border: 1px solid var(--gray-100);
-  padding: 0.25rem 0.5rem;
-  border-radius: 0.5rem;
-  color: var(--gray-400);
-}
 
 .icon {
   width: 20px;
@@ -189,5 +181,37 @@ defineProps<Props>();
 
 .export-btn {
   box-shadow: var(--shadow-lg);
+}
+
+@media (max-width: 770px) {
+  .header-left {
+    gap: 0;
+  }
+
+  .breadcrumb {
+    display: none;
+  }
+}
+
+@media (max-width: 470px) {
+  .header-action {
+    padding: 0.375rem 0.625rem;
+    gap: 0.25rem;
+  }
+
+  .header-action-text,
+  .export-btn-text {
+    display: none;
+  }
+
+  .export-btn {
+    padding: 0.375rem 0.625rem;
+  }
+
+  .header-action .icon-sm,
+  .export-btn .icon-sm {
+    width: 20px;
+    height: 20px;
+  }
 }
 </style>
