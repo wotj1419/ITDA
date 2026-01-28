@@ -30,6 +30,14 @@ export const JobStatus = {
 
 export type JobStatus = (typeof JobStatus)[keyof typeof JobStatus];
 
+/** UI 전용 생성 상태 (버튼 클릭 시점/실패 표시) */
+export const GenerationState = {
+    REQUESTED: 'requested',
+    FAILED: 'failed',
+} as const;
+
+export type GenerationState = (typeof GenerationState)[keyof typeof GenerationState];
+
 /** 프롬프트 승인 상태 (UI/업무 로직용) */
 export const PromptStatus = {
     DRAFT: 'draft',
@@ -65,6 +73,7 @@ export interface BaseNodeData {
     id: string;
     type: NodeType;
     jobStatus: JobStatus | null;
+    generationState: GenerationState | null;
     promptStatus: PromptStatus;
     createdAt: string;
     updatedAt: string;
@@ -204,20 +213,20 @@ export const VALID_CONNECTIONS: Record<NodeType, NodeType[]> = {
 
 /** 노드 타입별 너비 */
 export const NODE_WIDTHS: Record<NodeType, number> = {
-    [NodeType.SCENE_HEADER]: 280,
-    [NodeType.MASTER_IMAGE]: 200,
-    [NodeType.STORYBOARD_GRID]: 200,
-    [NodeType.SHOT]: 200,
-    [NodeType.VIDEO]: 200,
+    [NodeType.SCENE_HEADER]: 420,
+    [NodeType.MASTER_IMAGE]: 420,
+    [NodeType.STORYBOARD_GRID]: 520,
+    [NodeType.SHOT]: 420,
+    [NodeType.VIDEO]: 360,
 };
 
 /** 노드 타입별 높이 */
 export const NODE_HEIGHTS: Record<NodeType, number> = {
-    [NodeType.SCENE_HEADER]: 120,
-    [NodeType.MASTER_IMAGE]: 200,
-    [NodeType.STORYBOARD_GRID]: 250,
-    [NodeType.SHOT]: 250,
-    [NodeType.VIDEO]: 180,
+    [NodeType.SCENE_HEADER]: 160,
+    [NodeType.MASTER_IMAGE]: 360,
+    [NodeType.STORYBOARD_GRID]: 440,
+    [NodeType.SHOT]: 360,
+    [NodeType.VIDEO]: 260,
 };
 
 /** 노드 타입별 아이콘 */
