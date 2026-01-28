@@ -49,7 +49,7 @@ const createEmptyProject = async () => {
     <div class="dashboard-container">
       <div class="toolbar">
         <div class="toolbar-left">
-          <h1 class="page-title">Favorites</h1>
+          <h1 class="page-title">즐겨찾기</h1>
           <p class="project-count">{{ projectStore.favoriteProjects.length }} saved projects</p>
         </div>
       </div>

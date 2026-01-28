@@ -9,6 +9,12 @@ interface Props {
 withDefaults(defineProps<Props>(), {
   showHeader: true,
 })
+
+const emit = defineEmits<{
+  (e: 'start-collab'): void
+  (e: 'share'): void
+  (e: 'search', query: string): void
+}>()
 </script>
 
 <template>
@@ -18,6 +24,7 @@ withDefaults(defineProps<Props>(), {
     <main class="main-wrapper">
       <AppHeader
         v-if="showHeader"
+        @search="emit('search', $event)"
       >
         <template #left-after-divider>
           <slot name="header-left-after-divider" />

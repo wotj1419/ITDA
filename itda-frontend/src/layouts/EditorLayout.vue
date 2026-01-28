@@ -8,6 +8,7 @@ import { RouterLink, useRoute } from 'vue-router';
 import { useUIStore } from '../stores/ui';
 import { useSidebarShortcut } from '../composables/useSidebarShortcut';
 import Badge from '../components/common/Badge.vue';
+import PresencePanel from '../components/collab/PresencePanel.vue';
 import {
   BookOpen,
   Clapperboard,
@@ -50,7 +51,7 @@ const navItems = computed(() => [
   {
     key: 'story',
     icon: BookOpen,
-    label: 'Story',
+    label: '스토리',
     to: { name: 'project-detail', params: { id: projectId.value } },
     active: false,
   },
@@ -64,7 +65,7 @@ const navItems = computed(() => [
   {
     key: 'timeline',
     icon: Layers,
-    label: 'Full Timeline',
+    label: '전체 타임라인',
     to: { name: 'timeline', params: { id: projectId.value } },
     active: false,
   },
@@ -125,7 +126,14 @@ const sidebarClasses = computed(() => [
         </template>
       </nav>
 
-      <!-- Footer with Toggle -->
+      <!-- Presence -->
+      <div class="sidebar-section border-top">
+        <div class="sidebar-text">
+          <PresencePanel />
+        </div>
+      </div>
+
+      <!-- Footer -->
       <div class="sidebar-section border-top">
         <div class="sidebar-text text-xs text-muted">{{ sceneTitle }}</div>
       </div>
@@ -236,6 +244,7 @@ const sidebarClasses = computed(() => [
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
+  overflow: visible;
 }
 
 .nav-item {
@@ -253,6 +262,8 @@ const sidebarClasses = computed(() => [
   font-size: 0.875rem;
   font-weight: 500;
   transition: all 0.2s ease;
+  position: relative;
+  height: 44px;
 }
 
 .sidebar-collapsed .nav-item {
@@ -282,6 +293,29 @@ const sidebarClasses = computed(() => [
   width: 20px;
   height: 20px;
   flex-shrink: 0;
+}
+
+/* Collapsed tooltips */
+.sidebar-collapsed .nav-item::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  left: 100%;
+  margin-left: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--gray-900);
+  color: white;
+  font-size: 0.75rem;
+  border-radius: 6px;
+  white-space: nowrap;
+  opacity: 0;
+  visibility: hidden;
+  transition: all 0.2s ease;
+  z-index: 100;
+}
+
+.sidebar-collapsed .nav-item:hover::after {
+  opacity: 1;
+  visibility: visible;
 }
 
 /* ==========================================================================

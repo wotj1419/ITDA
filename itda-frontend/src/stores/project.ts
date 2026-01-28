@@ -78,6 +78,22 @@ export const useProjectStore = defineStore('project', () => {
   function touchProject(projectId: number): void {
     const now = Date.now()
     lastAccessedMap.value[projectId] = now
+    const updatedAt = new Date(now).toISOString()
+
+    const index = projects.value.findIndex((p) => p.projectId === projectId)
+    if (index > -1) {
+      projects.value[index] = {
+        ...projects.value[index],
+        updatedAt,
+      }
+    }
+
+    if (currentProject.value?.projectId === projectId) {
+      currentProject.value = {
+        ...currentProject.value,
+        updatedAt,
+      }
+    }
 
     // Persist to localStorage
     try {
@@ -103,7 +119,20 @@ export const useProjectStore = defineStore('project', () => {
 
   async function loadProjects(): Promise<void> {
     await run(async () => {
-      projects.value = await fetchProjects()
+      const fetched = await fetchProjects()
+      projects.value = fetched.map((project) => {
+        const lastAccessed = lastAccessedMap.value[project.projectId]
+        if (lastAccessed) {
+          const updatedAt = new Date(project.updatedAt).getTime()
+          if (lastAccessed > updatedAt) {
+            return {
+              ...project,
+              updatedAt: new Date(lastAccessed).toISOString(),
+            }
+          }
+        }
+        return project
+      })
     }, { errorMessage: 'Failed to load projects' })
   }
 
@@ -189,6 +218,25 @@ export const useProjectStore = defineStore('project', () => {
     await run(() => deleteProject(projectId), { errorMessage: 'Failed to permanently delete project' })
   }
 
+  async function inviteMember(projectId: number, email: string, role: 'EDITOR' | 'VIEWER'): Promise<void> {
+    await run(async () => {
+      // Dynamic import to avoid circular dependency if any, though explicit import is better if safe
+      const api = await import('../services/api/projects')
+      await api.inviteMember(projectId, email, role)
+      // Refresh project to get updated member list
+      await loadProject(projectId)
+    }, { errorMessage: 'Failed to invite member' })
+  }
+
+  async function updateMemberRole(projectId: number, memberId: number, role: 'EDITOR' | 'VIEWER'): Promise<void> {
+    await run(async () => {
+      const api = await import('../services/api/projects')
+      await api.updateMemberRole(projectId, memberId, role)
+      // Refresh project to get updated member list
+      await loadProject(projectId)
+    }, { errorMessage: 'Failed to update member role' })
+  }
+
   function clearCurrentProject(): void {
     currentProject.value = null
   }
@@ -219,5 +267,7 @@ export const useProjectStore = defineStore('project', () => {
     getDeletedProjects,
     restoreProject,
     permanentDeleteProject,
+    inviteMember,
+    updateMemberRole,
   }
 })

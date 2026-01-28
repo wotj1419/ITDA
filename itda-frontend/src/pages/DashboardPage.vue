@@ -4,15 +4,19 @@ import { useRouter } from 'vue-router'
 import { Plus, LayoutGrid, List } from 'lucide-vue-next'
 import { useProjectStore } from '../stores/project'
 import { useUIStore } from '../stores/ui'
+import { useCollabStore } from '../stores/collab'
 import { useAuthStore } from '../stores/auth'
 import DefaultLayout from '../layouts/DefaultLayout.vue'
 import ProjectCard from '../components/project/ProjectCard.vue'
+import NewProjectModal from '../components/project/NewProjectModal.vue'
+import StartCollabModal from '../components/project/StartCollabModal.vue'
 import ConfirmModal from '../components/common/ConfirmModal.vue'
 import TimeAgo from '../components/common/TimeAgo.vue'
 
 const router = useRouter()
 const projectStore = useProjectStore()
 const uiStore = useUIStore()
+const collabStore = useCollabStore()
 const authStore = useAuthStore()
 const isCreatingProject = ref(false)
 const viewMode = ref<'grid' | 'list'>('grid')
@@ -60,6 +64,15 @@ const createEmptyProject = async () => {
   })
 }
 
+const openStartCollabModal = () => {
+  uiStore.openModal('start-collab')
+}
+
+const handleStartCollab = async (projectId: number) => {
+  await collabStore.joinRoom(projectId)
+  collabStore.showFloatingBar(true)
+}
+
 // Delete Handlers
 const handleRequestDelete = (projectId: number) => {
   const project = projectStore.projects.find(p => p.projectId === projectId)
@@ -89,7 +102,10 @@ const toggleViewMode = () => {
 </script>
 
 <template>
-  <DefaultLayout>
+  <DefaultLayout
+    :show-collaborators="false"
+    @start-collab="openStartCollabModal"
+  >
     <template #header-left-after-divider>
       <h2 class="welcome-title">
         반가워요<span v-if="authStore.user?.name">, {{ authStore.user.name }}님</span> ✨
@@ -119,7 +135,7 @@ const toggleViewMode = () => {
       <!-- Toolbar -->
       <div class="toolbar">
         <div class="toolbar-left">
-          <h1 class="page-title">My Projects</h1>
+          <h1 class="page-title">내 프로젝트</h1>
           <p class="project-count">{{ projectStore.projectCount }} projects</p>
         </div>
         <div class="toolbar-right">
@@ -192,7 +208,7 @@ const toggleViewMode = () => {
 
       <!-- All Projects Section -->
       <section class="section">
-        <h3 class="section-title">All Projects</h3>
+        <h3 class="section-title">모든 프로젝트</h3>
         <div :class="['projects-grid', { 'list-view': viewMode === 'list' }]">
           <!-- Project Cards -->
           <ProjectCard
@@ -210,11 +226,15 @@ const toggleViewMode = () => {
             <div class="add-project-icon">
               <Plus class="icon-lg" />
             </div>
-            <span class="add-project-text">Create New Project</span>
+            <span class="add-project-text">새로운 프로젝트 생성</span>
           </button>
         </div>
       </section>
     </div>
+
+    <!-- New Project Modal -->
+    <NewProjectModal />
+    <StartCollabModal @start="handleStartCollab" />
 
     <!-- Confirm Modal -->
     <ConfirmModal

@@ -149,6 +149,10 @@ onMounted(() => {
   window.addEventListener('pointermove', onPointerMove)
   window.addEventListener('pointerup', onPointerUp)
   window.addEventListener('resize', handleResize)
+
+  nextTick(() => {
+    position.value = clampPosition(position.value.x, position.value.y)
+  })
 })
 
 watch(
@@ -157,6 +161,43 @@ watch(
     if (!open) return
     await nextTick()
     updatePanelPlacement()
+  }
+)
+
+watch(
+  () => collabStore.isFloatingBarVisible,
+  async (visible) => {
+    if (!visible) return
+    await nextTick()
+    setDefaultPosition()
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(position.value))
+    if (collabStore.isPanelOpen) {
+      updatePanelPlacement()
+    }
+  }
+)
+
+watch(
+  () => collabStore.floatingBarResetToken,
+  async () => {
+    await nextTick()
+    setDefaultPosition()
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(position.value))
+    if (collabStore.isPanelOpen) {
+      updatePanelPlacement()
+    }
+  }
+)
+
+watch(
+  [() => collabStore.isMediaConnected, () => collabStore.status, () => collabStore.isFloatingBarVisible],
+  async () => {
+    if (!collabStore.isFloatingBarVisible) return
+    await nextTick()
+    position.value = clampPosition(position.value.x, position.value.y)
+    if (collabStore.isPanelOpen) {
+      updatePanelPlacement()
+    }
   }
 )
 
@@ -169,6 +210,7 @@ onBeforeUnmount(() => {
 
 <template>
   <div
+    v-if="collabStore.isFloatingBarVisible"
     ref="floatRef"
     class="floating-wrap"
     :style="{ left: `${position.x}px`, top: `${position.y}px` }"
@@ -186,7 +228,35 @@ onBeforeUnmount(() => {
       <CollabPanel v-show="collabStore.isPanelOpen" />
     </div>
 
-    <div class="floating-bar" :class="{ hidden: collabStore.isPanelOpen }">
+    <!-- Standby Mode (No Media) -->
+    <div v-if="!collabStore.isMediaConnected" class="floating-bar">
+         <!-- Status -->
+         <div class="status-indicator">
+            <div class="status-dot bg-yellow-500"></div>
+            <span class="status-text">Ready</span>
+         </div>
+         <div class="divider"></div>
+         
+         <Button 
+            class="go-live-btn"
+            @click="collabStore.enableMedia()"
+         >
+            <Mic class="icon-sm" />
+            <span>Go Live</span>
+         </Button>
+         
+         <div class="divider"></div>
+         <button
+            class="control-btn"
+            @click="collabStore.hideFloatingBar()"
+            title="Hide Control Bar"
+         >
+            <PhoneOff class="icon" />
+         </button>
+    </div>
+
+    <!-- Live Mode (Media Connected) -->
+    <div v-else class="floating-bar" :class="{ hidden: collabStore.isPanelOpen }">
       <!-- Status Indicator -->
       <div class="status-indicator" :title="statusText">
         <div class="status-dot" :class="statusColor"></div>
@@ -198,7 +268,7 @@ onBeforeUnmount(() => {
       <!-- Controls -->
       <button
         class="control-btn"
-        :class="{ 'is-muted': collabStore.isMuted && isConnected }"
+        :class="{ 'is-muted-active': collabStore.isMuted && isConnected }"
         @click="toggleMute"
         :disabled="!isConnected"
         :title="!isConnected ? 'Connect first' : (collabStore.isMuted ? 'Unmute' : 'Mute')"
@@ -218,7 +288,7 @@ onBeforeUnmount(() => {
 
       <button
         class="control-btn danger"
-        @click="collabStore.leaveRoom"
+        @click="collabStore.disableMedia()"
         :disabled="!isConnected"
         title="End Call"
       >
@@ -231,7 +301,7 @@ onBeforeUnmount(() => {
 <style scoped>
 .floating-wrap {
   position: fixed;
-  z-index: 9999; /* Always on top */
+  z-index: 900; /* Below modal overlay (1000) */
   touch-action: none;
   display: inline-block;
 }
@@ -329,13 +399,13 @@ onBeforeUnmount(() => {
   background: var(--gray-100);
 }
 
-.control-btn.is-muted {
-  background: var(--rose-100);
-  color: var(--rose-600);
+.control-btn.is-muted-active {
+  background: var(--rose-500);
+  color: white;
 }
 
-.control-btn.is-muted:hover {
-  background: var(--rose-100);
+.control-btn.is-muted-active:hover {
+  background: var(--rose-600);
 }
 
 .control-btn.danger {
@@ -348,6 +418,30 @@ onBeforeUnmount(() => {
 }
 
 .icon {
+  width: 14px;
+  height: 14px;
+}
+
+.go-live-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.25rem 0.75rem;
+  background: var(--rose-500);
+  color: white;
+  border: none;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.go-live-btn:hover {
+  background: var(--rose-600);
+}
+
+.icon-sm {
   width: 14px;
   height: 14px;
 }

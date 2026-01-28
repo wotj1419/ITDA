@@ -44,9 +44,9 @@ export function useProjectDetail() {
   const previewVisibleLimit = 6;
 
   const tabItems: { key: ProjectTab; label: string }[] = [
-    { key: 'story', label: 'Story' },
-    { key: 'scenes', label: 'Scenes' },
-    { key: 'objects', label: 'Objects' },
+    { key: 'story', label: '스토리' },
+    { key: 'scenes', label: '장면' },
+    { key: 'objects', label: '오브젝트' },
   ];
 
   const projectId = computed(() => Number(route.params.id));

@@ -239,10 +239,10 @@ const handleOpenScenario = async () => {
     <ScenarioDrawer />
 
     <div class="section-header">
-      <h3 class="section-title">Scenes</h3>
+      <h3 class="section-title">장면</h3>
       <Button variant="secondary" size="sm" @click="handleAddScene">
         <Plus class="icon-sm" />
-        Add Scene
+        장면 추가
       </Button>
     </div>
 
@@ -282,7 +282,7 @@ const handleOpenScenario = async () => {
               </template>
               <template v-else-if="getScenePreview(scene.sceneId).clips.length === 0">
                 <div class="storyboard-empty">
-                  <img src="/icon.png" alt="No Preview" class="storyboard-empty-icon" />
+                  <img src="/icon.png" alt="아직 미리보기가 없어요" class="storyboard-empty-icon" />
                   <span>생성된 영상이 없습니다.</span>
                 </div>
               </template>
@@ -367,7 +367,7 @@ const handleOpenScenario = async () => {
             :alt="activePreviewClip.label || 'preview'"
           />
           <template v-else>
-            <img src="/icon.png" alt="No Preview" class="preview-modal-empty-icon" />
+            <img src="/icon.png" alt="아직 미리보기가 없어요" class="preview-modal-empty-icon" />
             <span>?? ????? ?? ????.</span>
           </template>
         </div>

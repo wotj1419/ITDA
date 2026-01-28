@@ -10,27 +10,24 @@ import {
   Send,
   Plus,
 } from 'lucide-vue-next';
-
 const collabStore = useCollabStore();
 const messageInput = ref('');
 const chatMessagesRef = ref<HTMLElement | null>(null);
-
+const isLocalSpeaking = () => collabStore.isSpeaking(collabStore.localParticipant.odps);
+const isRemoteSpeaking = (id: string) => collabStore.isSpeaking(id);
 /**
  * 메시지 전송 핸들러
  */
 async function handleSendMessage() {
   if (!messageInput.value.trim()) return;
-  
   collabStore.sendMessage(messageInput.value);
   messageInput.value = '';
-  
   // 스크롤을 아래로 이동
   await nextTick();
   if (chatMessagesRef.value) {
     chatMessagesRef.value.scrollTop = chatMessagesRef.value.scrollHeight;
   }
 }
-
 /**
  * 시간 포맷팅
  */
@@ -42,7 +39,6 @@ function formatTime(timestamp: number): string {
   });
 }
 </script>
-
 <template>
   <div class="collab-panel">
     <!-- Header -->
@@ -51,27 +47,29 @@ function formatTime(timestamp: number): string {
         <span class="live-dot"></span>
         브레인스토밍 허들
       </div>
-      <button class="close-btn" @click="collabStore.togglePanel" title="최소화">
+      <button class="close-btn" @click="collabStore.togglePanel" title="닫기">
         <X class="icon" />
       </button>
     </div>
-
     <!-- Participants -->
     <div class="participants">
       <ParticipantAvatar
         :participant="collabStore.localParticipant"
+        :is-speaking="isLocalSpeaking()"
+        :is-muted="collabStore.localParticipant.isMuted"
         is-me
       />
       <ParticipantAvatar
         v-for="p in collabStore.participants"
         :key="p.odps"
         :participant="p"
+        :is-speaking="isRemoteSpeaking(p.odps)"
+        :is-muted="p.isMuted"
       />
       <button class="add-participant" title="참여자 초대">
         <Plus class="icon" />
       </button>
     </div>
-
     <!-- Chat Area -->
     <div class="chat-area">
       <div class="chat-label">실시간 대화</div>
@@ -90,7 +88,6 @@ function formatTime(timestamp: number): string {
         </div>
       </div>
     </div>
-
     <!-- Input -->
     <div class="input-area">
       <form class="input-row" @submit.prevent="handleSendMessage">
@@ -104,13 +101,12 @@ function formatTime(timestamp: number): string {
           <Send class="icon-sm" />
         </Button>
       </form>
-
       <div class="controls">
         <div class="media-controls">
           <button
-            :class="['media-btn', { active: !collabStore.isMuted }]"
+            :class="['media-btn', { muted: collabStore.isMuted }]"
             @click="collabStore.toggleMute"
-            :title="collabStore.isMuted ? 'Unmute' : 'Mute'"
+            :title="collabStore.isMuted ? '마이크 켜기' : '마이크 끄기'"
           >
             <MicOff v-if="collabStore.isMuted" class="icon" />
             <Mic v-else class="icon" />
@@ -123,7 +119,6 @@ function formatTime(timestamp: number): string {
     </div>
   </div>
 </template>
-
 <style scoped>
 .collab-panel {
   width: 320px;
@@ -133,7 +128,6 @@ function formatTime(timestamp: number): string {
   overflow: hidden;
   animation: slideUp 0.2s ease-out;
 }
-
 @keyframes slideUp {
   from {
     opacity: 0;
@@ -144,7 +138,6 @@ function formatTime(timestamp: number): string {
     transform: translateY(0);
   }
 }
-
 /* Header */
 .panel-header {
   display: flex;
@@ -154,11 +147,9 @@ function formatTime(timestamp: number): string {
   border-bottom: 1px solid var(--rose-100);
   background: linear-gradient(135deg, var(--rose-50), white);
 }
-
 .drag-handle {
   cursor: grab;
 }
-
 .panel-title {
   display: flex;
   align-items: center;
@@ -167,7 +158,6 @@ function formatTime(timestamp: number): string {
   font-size: 0.875rem;
   color: var(--gray-800);
 }
-
 .live-dot {
   width: 8px;
   height: 8px;
@@ -175,12 +165,10 @@ function formatTime(timestamp: number): string {
   border-radius: 50%;
   animation: pulse 2s infinite;
 }
-
 @keyframes pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.5; }
 }
-
 .close-btn {
   background: none;
   border: none;
@@ -190,17 +178,14 @@ function formatTime(timestamp: number): string {
   border-radius: 4px;
   transition: all 0.2s;
 }
-
 .close-btn:hover {
   background: var(--rose-100);
   color: var(--rose-500);
 }
-
 .icon {
   width: 16px;
   height: 16px;
 }
-
 /* Participants */
 .participants {
   display: flex;
@@ -209,11 +194,10 @@ function formatTime(timestamp: number): string {
   border-bottom: 1px solid var(--rose-100);
   overflow-x: auto;
 }
-
 .add-participant {
-  width: 40px;
-  height: 40px;
-  min-width: 40px;
+  width: 48px;
+  height: 48px;
+  min-width: 48px;
   border: 2px dashed var(--gray-200);
   border-radius: 50%;
   background: transparent;
@@ -224,20 +208,17 @@ function formatTime(timestamp: number): string {
   color: var(--gray-300);
   transition: all 0.2s;
 }
-
 .add-participant:hover {
   border-color: var(--rose-300);
   color: var(--rose-400);
   background: var(--rose-50);
 }
-
 /* Chat */
 .chat-area {
   height: 150px;
   padding: 0.75rem 1rem;
   border-bottom: 1px solid var(--rose-100);
 }
-
 .chat-label {
   font-size: 0.625rem;
   font-weight: 600;
@@ -246,7 +227,6 @@ function formatTime(timestamp: number): string {
   letter-spacing: 0.05em;
   margin-bottom: 0.5rem;
 }
-
 .chat-messages {
   height: calc(100% - 20px);
   overflow-y: auto;
@@ -254,14 +234,12 @@ function formatTime(timestamp: number): string {
   flex-direction: column;
   gap: 0.5rem;
 }
-
 .no-messages {
   color: var(--gray-400);
   font-size: 0.75rem;
   text-align: center;
   padding: 1rem 0;
 }
-
 .message {
   font-size: 0.75rem;
   display: flex;
@@ -269,34 +247,28 @@ function formatTime(timestamp: number): string {
   gap: 0.25rem;
   align-items: baseline;
 }
-
 .message-sender {
   font-weight: 600;
   color: var(--rose-500);
 }
-
 .message-content {
   color: var(--gray-700);
   flex: 1;
 }
-
 .message-time {
   font-size: 0.625rem;
   color: var(--gray-400);
 }
-
 /* Input */
 .input-area {
   padding: 0.75rem 1rem;
   background: var(--gray-50);
 }
-
 .input-row {
   display: flex;
   gap: 0.5rem;
   margin-bottom: 0.75rem;
 }
-
 .message-input {
   flex: 1;
   padding: 0.5rem 0.75rem;
@@ -305,26 +277,21 @@ function formatTime(timestamp: number): string {
   font-size: 0.875rem;
   transition: all 0.2s;
 }
-
 .message-input:focus {
   outline: none;
   border-color: var(--rose-400);
   box-shadow: 0 0 0 3px rgba(255, 133, 161, 0.1);
 }
-
 /* Uses global .icon-sm from base.css */
-
 .controls {
   display: flex;
   align-items: center;
   justify-content: space-between;
 }
-
 .media-controls {
   display: flex;
   gap: 0.5rem;
 }
-
 .media-btn {
   width: 32px;
   height: 32px;
@@ -338,18 +305,15 @@ function formatTime(timestamp: number): string {
   color: var(--gray-500);
   transition: all 0.2s;
 }
-
 .media-btn:hover {
   border-color: var(--rose-300);
   background: var(--rose-50);
 }
-
-.media-btn.active {
+.media-btn.muted {
   background: var(--rose-500);
   border-color: var(--rose-500);
   color: white;
 }
-
 .leave-btn {
   padding: 0.375rem 0.75rem;
   background: var(--error-bg);
@@ -361,7 +325,6 @@ function formatTime(timestamp: number): string {
   cursor: pointer;
   transition: all 0.2s;
 }
-
 .leave-btn:hover {
   background: var(--error-soft);
 }

@@ -1,4 +1,3 @@
-```
 <script setup lang="ts">
 import { computed, type Component } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
@@ -7,9 +6,9 @@ import { useUIStore } from '../stores/ui'
 import { useSidebarShortcut } from '../composables/useSidebarShortcut'
 import type { ProjectDetail } from '../types/api/projects'
 import Badge from '../components/common/Badge.vue'
-import AvatarGroup from '../components/common/AvatarGroup.vue'
 import Button from '../components/common/Button.vue'
 import ShareProjectModal from '../components/project/ShareProjectModal.vue'
+import PresencePanel from '../components/collab/PresencePanel.vue'
 import {
   BookOpen,
   Clapperboard,
@@ -62,23 +61,22 @@ interface NavItem {
 
 const navItems = computed<NavItem[]>(() => {
   const items: NavItem[] = [
-    { key: 'story', icon: BookOpen, label: 'Story', to: null },
-    { key: 'scenes', icon: Clapperboard, label: 'Scenes', badge: props.sceneCount, to: null },
-    { key: 'objects', icon: User, label: 'Objects', to: null },
-    { key: 'timeline', icon: Layers, label: 'Full Timeline', to: { name: 'timeline', params: { id: projectId.value } } },
-    { key: 'settings', icon: Settings, label: 'Settings', to: null },
+    { key: 'story', icon: BookOpen, label: '스토리', to: null },
+    { key: 'scenes', icon: Clapperboard, label: '장면', badge: props.sceneCount, to: null },
+    { key: 'objects', icon: User, label: '오브젝트', to: null },
+    { key: 'timeline', icon: Layers, label: '전체 타임라인', to: { name: 'timeline', params: { id: projectId.value } } },
+    { key: 'settings', icon: Settings, label: '설정', to: null },
   ]
   return props.hideScenes ? items.filter((item) => item.key !== 'scenes') : items
 })
 
-const avatarItems = computed(() =>
+const memberBadges = computed(() =>
   (props.project?.members || []).slice(0, 3).map((member) => ({
-    src: member.profileImage,
-    alt: member.name,
-    fallback: member.name?.[0]?.toUpperCase() || '?',
+    initials: member.name?.[0]?.toUpperCase() || '?',
   }))
 )
-const memberCount = computed(() => props.project?.memberCount ?? props.project?.members?.length ?? 0)
+const totalMembers = computed(() => props.project?.members?.length ?? props.project?.memberCount ?? 0)
+const extraCount = computed(() => Math.max(totalMembers.value - memberBadges.value.length, 0))
 
 
 const sidebarClasses = computed(() => [
@@ -154,13 +152,10 @@ const progressPercentage = computed(() => {
       <!-- Online Now -->
       <div class="sidebar-section border-top">
         <div class="sidebar-text">
-          <div class="section-label">ONLINE NOW</div>
-          <div class="online-users">
-            <AvatarGroup :avatars="avatarItems" :max="3" size="sm" />
-          </div>
+          <PresencePanel />
           <Button variant="secondary" class="start-call-btn">
             <Phone class="icon-sm" />
-            <span class="nav-label">Start Call</span>
+            <span class="nav-label">통화 시작</span>
           </Button>
         </div>
       </div>
@@ -178,7 +173,7 @@ const progressPercentage = computed(() => {
           </button>
           
           <div class="breadcrumb">
-            <RouterLink to="/dashboard">AI Movie Studio</RouterLink>
+            <RouterLink to="/dashboard">홈</RouterLink>
             <span class="separator">/</span>
             <span class="current">{{ project?.title || 'Project' }}</span>
           </div>
@@ -186,31 +181,37 @@ const progressPercentage = computed(() => {
 
         <div class="header-actions">
           <div class="progress-section">
-            <span class="progress-label">Progress</span>
+            <span class="progress-label">제작 진행도</span>
             <div class="progress-bar">
               <div class="progress-fill" :style="{ width: `${progressPercentage}%` }"></div>
             </div>
             <span class="progress-text">{{ progress.completed }}/{{ progress.total }}</span>
           </div>
 
-          <div class="member-summary">
-            <AvatarGroup :avatars="avatarItems" :max="3" size="sm" />
-            <span class="member-count">{{ memberCount }} members</span>
+          <div class="member-pill" v-if="totalMembers > 0">
+            <span
+              v-for="(member, index) in memberBadges"
+              :key="`${member.initials}-${index}`"
+              class="member-initial"
+            >
+              {{ member.initials }}
+            </span>
+            <span v-if="extraCount > 0" class="member-more">+{{ extraCount }}</span>
           </div>
 
           <Button variant="secondary" @click="uiStore.openModal('share-project')">
             <Share2 class="icon-sm" />
-            Share
+            공유
           </Button>
 
-          <Button variant="secondary" @click="collabStore.joinRoom(projectId)">
+          <Button variant="secondary" @click="collabStore.showFloatingBar()">
             <Users class="icon-sm" />
             협업 시작
           </Button>
 
           <Button variant="primary">
             <Play class="icon-sm" />
-            Preview
+            미리보기
           </Button>
         </div>
       </header>
@@ -420,8 +421,7 @@ const progressPercentage = computed(() => {
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
-  overflow-y: auto;
-  overflow-x: hidden;
+  overflow: visible;
 }
 
 .nav-item {
@@ -546,8 +546,11 @@ const progressPercentage = computed(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 2rem;
-  height: 64px;
+  padding: 0.5rem 2rem;
+  min-height: 64px;
+  height: auto;
+  flex-wrap: wrap;
+  row-gap: 0.5rem;
   background: white;
   border-bottom: 1px solid var(--rose-100);
   flex-shrink: 0;
@@ -616,6 +619,9 @@ const progressPercentage = computed(() => {
   display: flex;
   align-items: center;
   gap: 0.75rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  row-gap: 0.5rem;
 }
 
 .progress-section {
@@ -650,20 +656,33 @@ const progressPercentage = computed(() => {
   color: var(--rose-500);
 }
 
-.member-summary {
-  display: flex;
+.member-pill {
+  display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.25rem;
   padding: 0.25rem 0.5rem;
   border: 1px solid var(--rose-100);
   border-radius: 999px;
   background: var(--rose-50);
+  color: var(--rose-600);
+  font-size: 0.75rem;
+  font-weight: 600;
 }
 
-.member-count {
-  font-size: 0.75rem;
-  color: var(--gray-600);
-  white-space: nowrap;
+.member-initial {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 0.25rem;
+  border-radius: 999px;
+  background: white;
+  border: 1px solid var(--rose-100);
+}
+
+.member-more {
+  padding-left: 0.125rem;
 }
 
 /* Content */

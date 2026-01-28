@@ -44,7 +44,7 @@ defineProps<Props>();
           v-slot="{ navigate }"
         >
           <Button variant="secondary" size="sm" @click="navigate">
-            Full Timeline
+            전체 타임라인
           </Button>
         </RouterLink>
       </div>
@@ -134,7 +134,7 @@ defineProps<Props>();
                   :alt="scene.title"
                 />
                 <template v-else>
-                  <img src="/icon.png" alt="No Preview" class="preview-empty-icon" />
+                  <img src="/icon.png" alt="아직 미리보기가 없어요" class="preview-empty-icon" />
                   <span>??? ??? ????</span>
                 </template>
               </div>
@@ -199,7 +199,7 @@ defineProps<Props>();
             :alt="activePreviewClip.label || 'preview'"
           />
           <template v-else>
-            <img src="/icon.png" alt="No Preview" class="preview-modal-empty-icon" />
+            <img src="/icon.png" alt="아직 미리보기가 없어요" class="preview-modal-empty-icon" />
             <span>?? ????? ?? ????.</span>
           </template>
         </div>

@@ -4,10 +4,9 @@ import { RouterLink } from 'vue-router'
 import { MoreVertical, Trash2, Pencil, Share2 } from 'lucide-vue-next'
 import type { Project } from '../../types/api/projects'
 import Badge from '../common/Badge.vue'
-import AvatarGroup from '../common/AvatarGroup.vue'
 import TimeAgo from '../common/TimeAgo.vue'
-import { getProjectProgress } from '../../services/mock/projects'
 import { useProjectStore } from '../../stores/project'
+import { useSceneStore } from '../../stores/scene'
 
 interface Props {
   project: Project
@@ -21,6 +20,7 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 const projectStore = useProjectStore()
+const sceneStore = useSceneStore()
 
 const handleCardClick = () => {
   projectStore.touchProject(props.project.projectId)
@@ -29,7 +29,11 @@ const handleCardClick = () => {
 const isMenuOpen = ref(false)
 const menuRef = ref<HTMLElement | null>(null)
 
-const progress = computed(() => getProjectProgress(props.project.projectId))
+const progress = computed(() => {
+  const completed = sceneStore.getCompletedSceneCount(props.project.projectId)
+  const total = Math.max(props.project.sceneCount ?? 0, completed)
+  return { completed, total }
+})
 const isHighlighted = computed(() => projectStore.highlightedProjectId === props.project.projectId)
 
 const progressPercent = computed(() => {
@@ -48,18 +52,6 @@ const badgeVariant = computed(() => {
     default:
       return 'default'
   }
-})
-
-// Mock member avatars based on member count
-const memberAvatars = computed(() => {
-  const avatars = []
-  for (let i = 0; i < Math.min(props.project.memberCount, 3); i++) {
-    avatars.push({
-      src: `https://i.pravatar.cc/150?u=${props.project.projectId}-${i}`,
-      alt: `Member ${i + 1}`,
-    })
-  }
-  return avatars
 })
 
 const toggleMenu = (e: Event) => {
@@ -189,8 +181,8 @@ const handleDeleteRequest = (e: Event) => {
         class="thumbnail-image"
       />
       <div v-else class="thumbnail-placeholder">
-        <img src="/icon.png" alt="No Preview" class="preview-icon" />
-        <span>No Preview</span>
+        <img src="/icon.png" alt="아직 미리보기가 없어요" class="preview-icon" />
+        <span>아직 미리보기가 없어요</span>
       </div>
     </div>
 
@@ -224,8 +216,7 @@ const handleDeleteRequest = (e: Event) => {
 
       <!-- Footer -->
       <div class="card-footer">
-        <AvatarGroup :avatars="memberAvatars" :max="2" size="sm" />
-        <span class="card-time">Edited <TimeAgo :date="project.updatedAt" /></span>
+        <span class="card-time"><TimeAgo :date="project.updatedAt" /></span>
       </div>
     </div>
   </RouterLink>

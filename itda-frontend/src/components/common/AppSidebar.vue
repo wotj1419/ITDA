@@ -21,10 +21,10 @@ const authStore = useAuthStore()
 useSidebarShortcut()
 
 const navItems = [
-  { to: '/dashboard', icon: Folder, label: 'All Projects', tooltip: 'All Projects' },
-  { to: '/favorites', icon: Star, label: 'Favorites', tooltip: 'Favorites' },
-  { to: '/shared', icon: Users, label: 'Shared with Me', tooltip: 'Shared with Me' },
-  { to: '/trash', icon: Trash2, label: 'Trash', tooltip: 'Trash' },
+  { to: '/dashboard', icon: Folder, label: '모든 프로젝트', tooltip: '모든 프로젝트' },
+  { to: '/favorites', icon: Star, label: '즐겨찾기', tooltip: '즐겨찾기' },
+  { to: '/shared', icon: Users, label: '공유받은 프로젝트', tooltip: '공유받은 프로젝트' },
+  { to: '/trash', icon: Trash2, label: '휴지통', tooltip: '휴지통' },
 ]
 
 const showProfileMenu = ref(false)
@@ -42,7 +42,7 @@ const closeProfileMenu = (e: MouseEvent) => {
 
 const handleLogout = () => {
   authStore.logout()
-  router.push('/auth')
+  router.push('/')
 }
 
 onMounted(() => {
@@ -97,17 +97,6 @@ const sidebarClasses = computed(() => [
         <span class="nav-label">{{ item.label }}</span>
       </RouterLink>
     </nav>
-
-    <!-- Credit Info -->
-    <div class="sidebar-credit credit-info">
-      <div class="credit-card">
-        <div class="credit-plan">PRO PLAN</div>
-        <div class="credit-amount sidebar-text">Credits: 850 / 1000</div>
-        <div class="progress-bar">
-          <div class="progress-bar-fill" style="width: 85%"></div>
-        </div>
-      </div>
-    </div>
 
     <!-- User Info & Dropdown -->
     <div class="sidebar-user" ref="profileMenuRef">
@@ -188,8 +177,7 @@ const sidebarClasses = computed(() => [
 /* Text elements - smooth fade transition */
 .sidebar-text,
 .nav-label,
-.user-info-text,
-.credit-info {
+.user-info-text {
   opacity: 1;
   transition: opacity 0.15s ease 0.2s; /* Fade in after sidebar expands */
   white-space: nowrap;
@@ -197,8 +185,7 @@ const sidebarClasses = computed(() => [
 }
 
 .sidebar-collapsed .sidebar-text,
-.sidebar-collapsed .nav-label,
-.sidebar-collapsed .credit-info {
+.sidebar-collapsed .nav-label {
   opacity: 0;
   transition: opacity 0.1s ease; /* Fade out quickly when collapsing */
   pointer-events: none;
@@ -407,44 +394,6 @@ const sidebarClasses = computed(() => [
 
 .sidebar-collapsed .nav-icon {
   margin: 0;
-}
-
-/* Credit Info */
-.sidebar-credit {
-  padding: 1rem;
-  border-top: 1px solid var(--rose-100);
-}
-
-.credit-card {
-  background: linear-gradient(135deg, var(--rose-50), var(--rose-100));
-  border-radius: 12px;
-  padding: 1rem;
-}
-
-.credit-plan {
-  font-size: 0.625rem;
-  font-weight: 600;
-  color: var(--rose-500);
-  margin-bottom: 0.25rem;
-}
-
-.credit-amount {
-  font-size: 0.75rem;
-  color: var(--gray-500);
-  margin-bottom: 0.5rem;
-}
-
-.progress-bar {
-  height: 4px;
-  background: rgba(255, 255, 255, 0.5);
-  border-radius: 2px;
-  overflow: hidden;
-}
-
-.progress-bar-fill {
-  height: 100%;
-  background: linear-gradient(90deg, var(--rose-400), var(--rose-500));
-  border-radius: 2px;
 }
 
 /* User Info */
