@@ -739,6 +739,7 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
             videoUrl: null,
             thumbnailUrl: null,
             duration: DEFAULT_VIDEO_DURATION,
+            aspectRatio: DEFAULT_VIDEO_ASPECT_RATIO,
             isConfirmed: false,
             prompt: '',
             cameraMotion: DEFAULT_VIDEO_CAMERA_MOTION,
