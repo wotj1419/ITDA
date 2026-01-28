@@ -11,6 +11,8 @@ export interface TimelineItem {
 export interface TimelineClip {
   clipId: string;
   nodeId: number | string;
+  videoNodeId?: number;
+  sceneVideoId?: number;
   sceneId?: number;
   sourceNodeId?: string;
   thumbnailUrl: string;

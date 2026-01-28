@@ -12,6 +12,18 @@ export async function fetchSceneTimeline(sceneId: number): Promise<SceneTimeline
     return response.data.data || { items: [], totalDuration: 0 }
 }
 
+export async function reorderSceneTimeline(sceneId: number, orderedVideoNodeIds: number[]): Promise<void> {
+    await apiClient.put<ApiResponse<void>>(`/scenes/${sceneId}/timeline/order`, {
+        orderedVideoNodeIds,
+    })
+}
+
+export async function reorderProjectTimeline(projectId: number, orderedSceneVideoIds: number[]): Promise<void> {
+    await apiClient.put<ApiResponse<void>>(`/projects/${projectId}/timeline/order`, {
+        orderedSceneVideoIds,
+    })
+}
+
 export async function requestProjectMerge(projectId: number): Promise<{ jobId: number; status: string }> {
     const response = await apiClient.post<ApiResponse<{ jobId: number; status: string }>>(`/projects/${projectId}/merge`)
     if (!response.data.data) {

@@ -8,6 +8,8 @@ import {
     requestProjectMerge,
     requestSceneMerge,
     fetchProjectExport,
+    reorderProjectTimeline,
+    reorderSceneTimeline,
 } from '../services/api/timeline'
 import { fetchProtectedBlobUrl } from '../services/api/media'
 import { unconfirmNode } from '../services/api/nodes'
@@ -46,6 +48,8 @@ async function mapTimelineItemsToClips(items: TimelineItem[]): Promise<TimelineC
             return {
                 clipId: `clip-${clipKey}`,
                 nodeId: item.videoNodeId ?? `scene-video-${item.sceneVideoId ?? item.order}`,
+                videoNodeId: item.videoNodeId,
+                sceneVideoId: item.sceneVideoId,
                 sceneId: item.sceneId,
                 thumbnailUrl: resolvedUrl || '',
                 videoUrl: isVideoClip ? (resolvedUrl || undefined) : undefined,
@@ -180,6 +184,36 @@ export const useTimelineStore = defineStore('timeline', () => {
     async function reorderClips(clipIds: string[]): Promise<boolean> {
         if (!currentProjectId.value) return false
         try {
+            const orderedClips = clipIds
+                .map((clipId) => clips.value.find((clip) => clip.clipId === clipId))
+                .filter((clip): clip is TimelineClip => Boolean(clip))
+
+            if (orderedClips.length !== clipIds.length) {
+                return false
+            }
+
+            if (currentSceneId.value) {
+                const orderedVideoNodeIds = orderedClips
+                    .map((clip) => clip.videoNodeId)
+                    .filter((id): id is number => typeof id === 'number')
+
+                if (orderedVideoNodeIds.length !== orderedClips.length) {
+                    return false
+                }
+
+                await reorderSceneTimeline(currentSceneId.value, orderedVideoNodeIds)
+            } else {
+                const orderedSceneVideoIds = orderedClips
+                    .map((clip) => clip.sceneVideoId)
+                    .filter((id): id is number => typeof id === 'number')
+
+                if (orderedSceneVideoIds.length !== orderedClips.length) {
+                    return false
+                }
+
+                await reorderProjectTimeline(currentProjectId.value, orderedSceneVideoIds)
+            }
+
             const orderMap = new Map(clipIds.map((id, index) => [id, index + 1]))
             clips.value = clips.value.map((clip) => ({
                 ...clip,
@@ -222,7 +256,24 @@ export const useTimelineStore = defineStore('timeline', () => {
                 ? await requestSceneMerge(currentSceneId.value)
                 : await requestProjectMerge(currentProjectId.value)
             mergeJobId.value = result.jobId
-            mergeStatusText.value = '병합 진행 중'
+
+            // 이미 완료된 잡(Cache Hit)인 경우 즉시 상태 반영
+            if (result.status === 'SUCCEEDED') {
+                mergeStatus.value = 'done'
+                mergeProgress.value = 100
+                mergeStatusText.value = '병합 완료 (캐시됨)'
+
+                // 프로젝트 병합이라면 다운로드 URL도 바로 조회
+                if (!currentSceneId.value && currentProjectId.value) {
+                    downloadUrl.value = await fetchProjectExport(currentProjectId.value)
+                }
+            } else if (result.status === 'FAILED') {
+                mergeStatus.value = 'error'
+                mergeStatusText.value = '병합 실패'
+            } else {
+                mergeStatusText.value = '병합 진행 중'
+            }
+
             return true
         } catch (e) {
             mergeStatus.value = 'error'
