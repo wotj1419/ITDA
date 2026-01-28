@@ -33,6 +33,17 @@ public class LocalFileStorage {
         }
     }
 
+    public void delete(String relativePath) {
+        try {
+            requireRelativePath(relativePath);
+            String storageKey = normalizeRelativePath(relativePath);
+            Path targetPath = resolveTargetPath(storageKey);
+            Files.deleteIfExists(targetPath);
+        } catch (IOException e) {
+            throw new IllegalStateException("Failed to delete file", e);
+        }
+    }
+
     private void requireRelativePath(String relativePath) {
         if (relativePath == null || relativePath.trim().isEmpty()) {
             throw new IllegalArgumentException("relativePath is required");
