@@ -4,7 +4,6 @@ import { useProjectStore } from '../../../stores/project';
 import { useSceneStore } from '../../../stores/scene';
 import { useCharacterStore } from '../../../stores/character';
 import { useUIStore } from '../../../stores/ui';
-import { useCollabStore } from '../../../stores/collab';
 import { useScenarioStore } from '../../../stores/scenario';
 import type { Scene, SceneStatus } from '../../../types/api/scenes';
 import type { ObjectSheet } from '../../../types/api/objects';
@@ -30,7 +29,6 @@ export function useProjectDetail() {
   const sceneStore = useSceneStore();
   const characterStore = useCharacterStore();
   const uiStore = useUIStore();
-  const collabStore = useCollabStore();
   const scenarioStore = useScenarioStore();
 
   const activeTab = ref<ProjectTab>('story');

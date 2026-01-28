@@ -60,7 +60,7 @@ const cameraMotionHelpItems = [
 ];
 
 const durationOptions = [4, 6, 8];
-const defaultDuration = durationOptions[0];
+const defaultDuration = durationOptions[0] ?? 4;
 
 function normalizeDuration(value?: number | null): number {
   if (value == null) return defaultDuration;

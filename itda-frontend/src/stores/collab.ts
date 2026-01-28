@@ -109,7 +109,8 @@ export const useCollabStore = defineStore('collab', () => {
                 analyser.getByteTimeDomainData(data);
                 let sum = 0;
                 for (let i = 0; i < data.length; i++) {
-                    const v = (data[i] - 128) / 128;
+                    const sample = data[i] ?? 128;
+                    const v = (sample - 128) / 128;
                     sum += v * v;
                 }
                 const rms = Math.sqrt(sum / data.length);
@@ -545,7 +546,7 @@ export const useCollabStore = defineStore('collab', () => {
         const used = new Set(cursorColorByUser.values());
         const available = cursorColors.filter((c) => !used.has(c));
         const pool = available.length > 0 ? available : cursorColors;
-        const color = pool[Math.floor(Math.random() * pool.length)];
+        const color = pool[Math.floor(Math.random() * pool.length)] ?? cursorColors[0] ?? '#9CA3AF';
         cursorColorByUser.set(peerId, color);
         return color;
     }
