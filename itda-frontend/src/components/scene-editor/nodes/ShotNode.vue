@@ -9,17 +9,11 @@ import { computed } from 'vue';
 import { Handle, Position } from '@vue-flow/core';
 import { NodeResizer } from '@vue-flow/node-resizer';
 import { useSceneNodeStore } from '../../../stores/sceneNode';
-import { JobStatus, NODE_HEIGHTS, NODE_WIDTHS } from '../../../types/ui/sceneNodes';
 import type { ShotNodeData } from '../../../types/ui/sceneNodes';
-import { useThumbnailGuard } from '../../../composables/useThumbnailGuard';
-import { 
-  Camera, 
-  Loader2, 
-  CheckCircle, 
-  AlertCircle, 
-  Clock,
-  Plus
-} from 'lucide-vue-next';
+import { useNodeStatus } from '../../../composables/useNodeStatus';
+import { useNodeThumbnail } from '../../../composables/useNodeThumbnail';
+import { getNodeMinSize, NODE_RESIZER_STYLE } from '../../../utils/nodeUi';
+import { Camera, Plus } from 'lucide-vue-next';
 
 // =============================================================================
 // Props & Emits
@@ -34,10 +28,8 @@ interface Props {
 const props = defineProps<Props>();
 const store = useSceneNodeStore();
 
-const nodeStyle = { '--node-resizer-color': 'var(--rose-500, #FF85A1)' } as Record<string, string>;
-
-const minWidth = NODE_WIDTHS[props.data.type] ?? 200;
-const minHeight = NODE_HEIGHTS[props.data.type] ?? 140;
+const nodeStyle = NODE_RESIZER_STYLE;
+const { minWidth, minHeight } = getNodeMinSize(props.data.type);
 
 const emit = defineEmits<{
   (e: 'add-child'): void;
@@ -59,41 +51,25 @@ const nodeClasses = computed(() => [
   },
 ]);
 
-const statusKey = computed(() => {
-  if (props.data.jobStatus === null) return 'idle';
-  return props.data.jobStatus;
-});
-
-const statusIcon = computed(() => {
-  const icons = {
-    [JobStatus.PENDING]: Clock,
-    [JobStatus.RUNNING]: Loader2,
-    [JobStatus.SUCCEEDED]: CheckCircle,
-    [JobStatus.FAILED]: AlertCircle,
-  };
-  return icons[props.data.jobStatus as JobStatus] ?? Clock;
-});
-
-const isRunning = computed(() => props.data.jobStatus === JobStatus.RUNNING);
-const isGenerationRequested = computed(() => props.data.generationState === 'requested');
-const isGenerationFailed = computed(() => props.data.generationState === 'failed');
-const hasGenerationFailure = computed(
-  () => isGenerationFailed.value || props.data.jobStatus === JobStatus.FAILED
-);
+const { statusKey, statusIcon, isRunning, isGenerationRequested, hasGenerationFailure } =
+  useNodeStatus(
+    () => props.data.jobStatus,
+    () => props.data.generationState
+  );
 const {
   hasSource: hasThumbnailSource,
   isVisible: isThumbnailVisible,
-  isLoading: isThumbnailGuardLoading,
   isBlocked: isThumbnailBlocked,
+  isThumbnailLoading,
+  showFailureOverlay,
   handleLoad: handleThumbnailLoad,
   handleError: handleThumbnailError,
-} = useThumbnailGuard(() => props.data.thumbnailUrl);
-const isThumbnailLoading = computed(
-  () => isGenerationRequested.value || isRunning.value || isThumbnailGuardLoading.value
-);
-const showFailureOverlay = computed(
-  () => hasGenerationFailure.value && !isThumbnailVisible.value && !isThumbnailLoading.value
-);
+} = useNodeThumbnail({
+  getThumbnailUrl: () => props.data.thumbnailUrl,
+  isRunning: () => isRunning.value,
+  isGenerationRequested: () => isGenerationRequested.value,
+  hasGenerationFailure: () => hasGenerationFailure.value,
+});
 
 // =============================================================================
 // Handlers

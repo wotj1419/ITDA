@@ -9,18 +9,12 @@ import { computed, ref } from 'vue';
 import { Handle, Position } from '@vue-flow/core';
 import { NodeResizer } from '@vue-flow/node-resizer';
 import { useSceneNodeStore } from '../../../stores/sceneNode';
-import { JobStatus, NODE_HEIGHTS, NODE_WIDTHS } from '../../../types/ui/sceneNodes';
+import { JobStatus } from '../../../types/ui/sceneNodes';
 import type { VideoNodeData } from '../../../types/ui/sceneNodes';
-import { useThumbnailGuard } from '../../../composables/useThumbnailGuard';
-import { 
-  Video, 
-  Star, 
-  Loader2, 
-  CheckCircle, 
-  AlertCircle, 
-  Clock, 
-  Play
-} from 'lucide-vue-next';
+import { useNodeStatus } from '../../../composables/useNodeStatus';
+import { useNodeThumbnail } from '../../../composables/useNodeThumbnail';
+import { getNodeMinSize, NODE_RESIZER_STYLE } from '../../../utils/nodeUi';
+import { Video, Star, Play } from 'lucide-vue-next';
 
 // =============================================================================
 // Props & Emits
@@ -36,10 +30,8 @@ const props = defineProps<Props>();
 const store = useSceneNodeStore();
 const videoRef = ref<HTMLVideoElement | null>(null);
 
-const nodeStyle = { '--node-resizer-color': 'var(--rose-500, #FF85A1)' } as Record<string, string>;
-
-const minWidth = NODE_WIDTHS[props.data.type] ?? 200;
-const minHeight = NODE_HEIGHTS[props.data.type] ?? 140;
+const nodeStyle = NODE_RESIZER_STYLE;
+const { minWidth, minHeight } = getNodeMinSize(props.data.type);
 
 const emit = defineEmits<{
   (e: 'confirm'): void;
@@ -48,11 +40,6 @@ const emit = defineEmits<{
 // =============================================================================
 // Computed
 // =============================================================================
-
-const statusKey = computed(() => {
-  if (props.data.jobStatus === null) return 'idle';
-  return props.data.jobStatus;
-});
 
 const isUnderInactiveMaster = computed(() => store.isUnderInactiveMaster(props.id));
 
@@ -67,40 +54,26 @@ const nodeClasses = computed(() => [
   },
 ]);
 
-const statusIcon = computed(() => {
-  const icons = {
-    [JobStatus.PENDING]: Clock,
-    [JobStatus.RUNNING]: Loader2,
-    [JobStatus.SUCCEEDED]: CheckCircle,
-    [JobStatus.FAILED]: AlertCircle,
-  };
-  return icons[props.data.jobStatus as JobStatus] ?? Clock;
-});
-
-const isRunning = computed(() => props.data.jobStatus === JobStatus.RUNNING);
-const isGenerationRequested = computed(() => props.data.generationState === 'requested');
-const isGenerationFailed = computed(() => props.data.generationState === 'failed');
-const hasGenerationFailure = computed(
-  () => isGenerationFailed.value || props.data.jobStatus === JobStatus.FAILED
-);
+const { statusKey, statusIcon, isRunning, isGenerationRequested, hasGenerationFailure } =
+  useNodeStatus(
+    () => props.data.jobStatus,
+    () => props.data.generationState
+  );
 const {
   hasSource: hasThumbnailSource,
   isVisible: isThumbnailVisible,
-  isLoading: isThumbnailGuardLoading,
   isBlocked: isThumbnailBlocked,
+  isThumbnailLoading,
+  showFailureOverlay,
   handleLoad: handleThumbnailLoad,
   handleError: handleThumbnailError,
-} = useThumbnailGuard(() => props.data.thumbnailUrl);
-const isThumbnailLoading = computed(
-  () => isGenerationRequested.value || isRunning.value || isThumbnailGuardLoading.value
-);
-const showFailureOverlay = computed(
-  () =>
-    hasGenerationFailure.value &&
-    !isThumbnailVisible.value &&
-    !props.data.videoUrl &&
-    !isThumbnailLoading.value
-);
+} = useNodeThumbnail({
+  getThumbnailUrl: () => props.data.thumbnailUrl,
+  getPrimaryMediaUrl: () => props.data.videoUrl,
+  isRunning: () => isRunning.value,
+  isGenerationRequested: () => isGenerationRequested.value,
+  hasGenerationFailure: () => hasGenerationFailure.value,
+});
 const hasPreview = computed(() => Boolean(props.data.videoUrl || isThumbnailVisible.value));
 
 /** Camera motion labels in Korean */

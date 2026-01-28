@@ -8,7 +8,7 @@
 import { computed } from 'vue';
 import { Handle, Position } from '@vue-flow/core';
 import { NodeResizer } from '@vue-flow/node-resizer';
-import { NODE_HEIGHTS, NODE_WIDTHS } from '../../../types/ui/sceneNodes';
+import { getNodeMinSize, NODE_RESIZER_STYLE } from '../../../utils/nodeUi';
 import type { SceneHeaderNodeData } from '../../../types/ui/sceneNodes';
 import { BookOpen, Plus } from 'lucide-vue-next';
 import { useSceneNodeStore } from '../../../stores/sceneNode';
@@ -30,10 +30,8 @@ const emit = defineEmits<{
 }>();
 
 const store = useSceneNodeStore();
-const nodeStyle = { '--node-resizer-color': 'var(--rose-500, #FF85A1)' } as Record<string, string>;
-
-const minWidth = NODE_WIDTHS[props.data.type] ?? 200;
-const minHeight = NODE_HEIGHTS[props.data.type] ?? 140;
+const nodeStyle = NODE_RESIZER_STYLE;
+const { minWidth, minHeight } = getNodeMinSize(props.data.type);
 
 // =============================================================================
 // Computed
@@ -50,7 +48,7 @@ const truncatedDescription = computed(() => {
   return desc.length > 80 ? `${desc.substring(0, 80)}...` : desc;
 });
 
-function addMasterImage(event: Event) {
+function handleAddChild(event: Event) {
   event.stopPropagation();
   emit('add-child');
 }
@@ -97,7 +95,7 @@ function addMasterImage(event: Event) {
     <button
       class="node-glass__add-btn"
       title="마스터 이미지 추가"
-      @click="addMasterImage"
+      @click="handleAddChild"
     >
       <Plus :size="32" />
     </button>
