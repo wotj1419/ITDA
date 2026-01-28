@@ -136,7 +136,7 @@ const toggleViewMode = () => {
       <div class="toolbar">
         <div class="toolbar-left">
           <h1 class="page-title">내 프로젝트</h1>
-          <p class="project-count">{{ projectStore.projectCount }} projects</p>
+          <p class="project-count">{{ projectStore.projectCount }}개의 프로젝트</p>
         </div>
         <div class="toolbar-right">
           <div class="cyber-signboard">
@@ -458,7 +458,7 @@ const toggleViewMode = () => {
 }
 
 .page-title {
-  font-size: 1.5rem;
+  font-size: 2.5rem;
   font-weight: 700;
   color: var(--gray-900);
   margin: 0 0 0.25rem;

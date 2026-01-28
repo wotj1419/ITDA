@@ -141,9 +141,8 @@ async function handleRegister() {
 
 <template>
   <div class="auth-page">
-    <!-- Decorative Background -->
-    <div class="auth-bg-blob auth-bg-blob-1"></div>
-    <div class="auth-bg-blob auth-bg-blob-2"></div>
+    <!-- From Uiverse.io by sunn_2633 -->
+    <div class="cyber-pattern"></div>
 
     <main class="auth-container">
       <!-- Logo -->
@@ -385,30 +384,48 @@ async function handleRegister() {
   overflow: hidden;
 }
 
-.auth-bg-blob {
+/* From Uiverse.io by sunn_2633 */
+.cyber-pattern {
   position: fixed;
-  border-radius: 50%;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: var(--rose-canvas);
+  background-image:
+    radial-gradient(circle at center, transparent 30%, var(--rose-100) 90%),
+    linear-gradient(rgba(255, 133, 161, 0.18) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 133, 161, 0.18) 1px, transparent 1px),
+    linear-gradient(rgba(255, 179, 198, 0.12) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 179, 198, 0.12) 1px, transparent 1px);
+  background-size:
+    100% 100%,
+    60px 60px,
+    60px 60px,
+    20px 20px,
+    20px 20px;
+  animation: cyber-move 10s linear infinite;
   z-index: -1;
+  pointer-events: none;
 }
 
-.auth-bg-blob-1 {
-  top: -20%;
-  left: -10%;
-  width: 500px;
-  height: 500px;
-  background: var(--rose-200);
-  filter: blur(100px);
-  opacity: 0.5;
-}
-
-.auth-bg-blob-2 {
-  bottom: -20%;
-  right: -10%;
-  width: 600px;
-  height: 600px;
-  background: var(--rose-300);
-  filter: blur(120px);
-  opacity: 0.4;
+@keyframes cyber-move {
+  0% {
+    background-position:
+      0 0,
+      0 0,
+      0 0,
+      0 0,
+      0 0;
+  }
+  100% {
+    background-position:
+      0 0,
+      60px 60px,
+      60px 60px,
+      40px 40px,
+      40px 40px;
+  }
 }
 
 .auth-container {

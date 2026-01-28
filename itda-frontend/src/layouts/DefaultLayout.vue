@@ -46,6 +46,7 @@ const emit = defineEmits<{
   display: flex;
   min-height: 100vh;
   background: var(--rose-canvas);
+  --layout-fade-duration: 600ms;
 }
 
 .main-wrapper {
@@ -59,5 +60,22 @@ const emit = defineEmits<{
   flex: 1;
   padding: 2rem;
   overflow-y: auto;
+  animation: layout-fade var(--layout-fade-duration) ease;
+  will-change: opacity;
+}
+
+@keyframes layout-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .main-content {
+    animation: none;
+  }
 }
 </style>

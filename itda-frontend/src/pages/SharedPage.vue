@@ -10,10 +10,9 @@ import { Users } from 'lucide-vue-next'
         <div class="icon-wrapper">
           <Users class="icon-lg" />
         </div>
-        <h1 class="title">공유받은 프로젝트</h1>
+        <h1 class="title">공유 프로젝트</h1>
         <p class="description">
-          Projects shared with you by other team members will appear here.<br />
-          This feature is coming soon!
+          아직 공유 받은 프로젝트가 없습니다.<br />
         </p>
       </div>
     </div>
