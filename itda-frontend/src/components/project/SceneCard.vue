@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref, onMounted, onUnmounted } from 'vue'
 import { RouterLink } from 'vue-router'
-import { GripVertical, Image, Pencil, Check, Loader2 } from 'lucide-vue-next'
+import { GripVertical, Image, Pencil, Check, Loader2, MoreVertical, Trash2 } from 'lucide-vue-next'
 import type { Scene, SceneStatus } from '../../types/api/scenes'
 import Badge from '../common/Badge.vue'
 import Button from '../common/Button.vue'
@@ -18,6 +18,10 @@ const props = withDefaults(defineProps<Props>(), {
   showThumbnail: true,
 })
 
+const emit = defineEmits<{
+  (e: 'delete', scene: Scene): void
+}>()
+
 const statusConfig = computed(() => {
   const configs: Record<SceneStatus, { label: string; variant: 'success' | 'info' | 'default'; showIcon: boolean }> = {
     COMPLETED: { label: '완료', variant: 'success', showIcon: true },
@@ -25,6 +29,32 @@ const statusConfig = computed(() => {
     DRAFT: { label: '초안', variant: 'default', showIcon: false },
   }
   return configs[props.scene?.status] ?? configs.DRAFT
+})
+
+const showMenu = ref(false)
+const menuRef = ref<HTMLElement | null>(null)
+
+const toggleMenu = () => {
+  showMenu.value = !showMenu.value
+}
+
+const closeMenu = (event: MouseEvent) => {
+  if (menuRef.value && !menuRef.value.contains(event.target as Node)) {
+    showMenu.value = false
+  }
+}
+
+const requestDelete = () => {
+  showMenu.value = false
+  emit('delete', props.scene)
+}
+
+onMounted(() => {
+  document.addEventListener('click', closeMenu)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('click', closeMenu)
 })
 
 const editLink = computed(() => ({
@@ -43,11 +73,12 @@ const editLink = computed(() => ({
       'scene-card-draggable': draggable,
       'scene-card-compact': !showThumbnail,
     }"
-    :draggable="draggable"
   >
     <div class="scene-card-content">
       <!-- Drag Handle -->
-      <GripVertical v-if="draggable" class="drag-handle" />
+      <div v-if="draggable" class="drag-handle" draggable="true" aria-label="씬 순서 이동">
+        <GripVertical class="drag-handle-icon" />
+      </div>
 
       <!-- Thumbnail -->
       <div v-if="showThumbnail" class="scene-thumbnail">
@@ -65,7 +96,7 @@ const editLink = computed(() => ({
       <!-- Info -->
       <div class="scene-info">
         <div class="scene-header">
-          <Badge variant="default" size="sm">SCENE {{ scene.order }}</Badge>
+          <Badge variant="default" size="sm">씬 {{ scene.order }}</Badge>
           <h4 class="scene-title">{{ scene.title }}</h4>
           <Badge :variant="statusConfig.variant" size="sm" class="status-badge">
             <Check v-if="statusConfig.showIcon && scene.status === 'COMPLETED'" class="status-icon" />
@@ -86,9 +117,34 @@ const editLink = computed(() => ({
             @click="navigate"
           >
             <Pencil class="icon-sm" />
-            Edit
+            편집
           </Button>
         </RouterLink>
+        <div class="scene-menu" ref="menuRef">
+          <Button
+            variant="ghost"
+            size="sm"
+            icon
+            type="button"
+            class="scene-menu-trigger"
+            aria-label="씬 메뉴"
+            @click.stop="toggleMenu"
+          >
+            <MoreVertical class="icon-sm" />
+          </Button>
+          <transition name="fade">
+            <div v-if="showMenu" class="scene-menu-dropdown">
+              <button
+                type="button"
+                class="scene-menu-item text-danger"
+                @click.stop="requestDelete"
+              >
+                <Trash2 class="icon-sm" />
+                삭제
+              </button>
+            </div>
+          </transition>
+        </div>
       </div>
     </div>
 
@@ -108,7 +164,7 @@ const editLink = computed(() => ({
 }
 
 .scene-card-draggable {
-  cursor: grab;
+  cursor: default;
 }
 
 .scene-card-draggable:active {
@@ -133,9 +189,17 @@ const editLink = computed(() => ({
 .drag-handle {
   width: 16px;
   height: 16px;
-  color: var(--gray-300);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   cursor: grab;
   flex-shrink: 0;
+}
+
+.drag-handle-icon {
+  width: 16px;
+  height: 16px;
+  color: var(--gray-300);
 }
 
 .scene-thumbnail {
@@ -233,6 +297,51 @@ const editLink = computed(() => ({
   align-items: center;
   gap: 0.5rem;
   flex-shrink: 0;
+}
+
+.scene-menu {
+  position: relative;
+  display: inline-flex;
+}
+
+.scene-menu-trigger {
+  box-shadow: none;
+}
+
+.scene-menu-dropdown {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  min-width: 140px;
+  background: white;
+  border: 1px solid var(--rose-100);
+  border-radius: 10px;
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.08);
+  padding: 0.35rem;
+  z-index: 20;
+}
+
+.scene-menu-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.625rem;
+  border: none;
+  background: transparent;
+  color: var(--gray-700);
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.scene-menu-item:hover {
+  background: var(--rose-50);
+}
+
+.scene-menu-item.text-danger {
+  color: var(--error);
 }
 
 /* Uses global .icon-sm from base.css */
