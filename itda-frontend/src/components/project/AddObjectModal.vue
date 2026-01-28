@@ -1,14 +1,16 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { ref, watch, onUnmounted } from 'vue'
 import { Sparkles } from 'lucide-vue-next'
+import type { ObjectType } from '../../types/api/objects'
+import { OBJECT_STYLE_OPTIONS, OBJECT_TYPE_OPTIONS } from '../../constants/objects'
 import { useUIStore } from '../../stores/ui'
 import ModalBase from '../common/ModalBase.vue'
 import Button from '../common/Button.vue'
 
-const MODAL_ID = 'add-character-modal'
+const MODAL_ID = 'add-object-modal'
 
 interface Props {
-  isGenerating?: boolean
+  isSaving?: boolean
 }
 
 defineProps<Props>()
@@ -16,28 +18,49 @@ defineProps<Props>()
 const emit = defineEmits<{
   (e: 'submit', data: {
     name: string
+    type: ObjectType
     description: string
     style: string
+    file: File
   }): void
   (e: 'close'): void
 }>()
 
 const uiStore = useUIStore()
 
-// Form state
 const name = ref('')
 const description = ref('')
-const selectedStyle = ref('실사')
+const selectedStyle = ref(OBJECT_STYLE_OPTIONS[0])
+const selectedType = ref<ObjectType>(OBJECT_TYPE_OPTIONS[0].value)
+const file = ref<File | null>(null)
+const previewUrl = ref<string | null>(null)
 
-const styleOptions = ['실사', '만화', '애니메이션', '사이버펑크']
+const styleOptions = OBJECT_STYLE_OPTIONS
+const typeOptions = OBJECT_TYPE_OPTIONS
+
+const setPreview = (nextFile: File | null) => {
+  if (previewUrl.value) {
+    URL.revokeObjectURL(previewUrl.value)
+  }
+  previewUrl.value = nextFile ? URL.createObjectURL(nextFile) : null
+}
+
+const handleFileChange = (event: Event) => {
+  const target = event.target as HTMLInputElement | null
+  const nextFile = target?.files?.[0] ?? null
+  file.value = nextFile
+  setPreview(nextFile)
+}
 
 const handleSubmit = () => {
-  if (!name.value.trim()) return
+  if (!name.value.trim() || !description.value.trim() || !file.value) return
 
   emit('submit', {
     name: name.value.trim(),
+    type: selectedType.value,
     description: description.value.trim(),
     style: selectedStyle.value,
+    file: file.value,
   })
 }
 
@@ -48,26 +71,31 @@ const handleClose = () => {
 const resetForm = () => {
   name.value = ''
   description.value = ''
-  selectedStyle.value = '실사'
+  selectedStyle.value = OBJECT_STYLE_OPTIONS[0]
+  selectedType.value = OBJECT_TYPE_OPTIONS[0].value
+  file.value = null
+  setPreview(null)
 }
 
-// Reset form when modal opens
 watch(() => uiStore.activeModal, (modalId) => {
   if (modalId === MODAL_ID) {
     resetForm()
   }
 })
 
-// Expose modal ID for parent to use
+onUnmounted(() => {
+  setPreview(null)
+})
+
 defineExpose({
   MODAL_ID,
 })
 </script>
 
 <template>
-  <ModalBase :modal-id="MODAL_ID" title="캐릭터 추가" @close="handleClose">
+  <ModalBase :modal-id="MODAL_ID" title="오브젝트 추가" @close="handleClose">
     <div class="form-group">
-      <label class="form-label required">캐릭터 이름</label>
+      <label class="form-label required">오브젝트 이름</label>
       <input
         v-model="name"
         type="text"
@@ -77,11 +105,20 @@ defineExpose({
     </div>
 
     <div class="form-group">
-      <label class="form-label">캐릭터 설명</label>
+      <label class="form-label required">오브젝트 유형</label>
+      <select v-model="selectedType" class="form-input">
+        <option v-for="opt in typeOptions" :key="opt.value" :value="opt.value">
+          {{ opt.label }}
+        </option>
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label required">오브젝트 설명</label>
       <textarea
         v-model="description"
         class="form-input form-textarea"
-        placeholder="성격, 외형, 의상, 배경 등을 입력하세요"
+        placeholder="외형, 특징, 소품 정보 등을 입력하세요"
         rows="3"
       ></textarea>
     </div>
@@ -101,18 +138,31 @@ defineExpose({
       </div>
     </div>
 
+    <div class="form-group">
+      <label class="form-label required">오브젝트 이미지</label>
+      <input
+        type="file"
+        accept="image/*"
+        class="form-input"
+        @change="handleFileChange"
+      />
+      <div v-if="previewUrl" class="image-preview">
+        <img :src="previewUrl" alt="preview" />
+      </div>
+    </div>
+
     <template #footer>
       <Button variant="secondary" @click="uiStore.closeModal()">
         취소
       </Button>
       <Button
         variant="primary"
-        :loading="isGenerating"
-        :disabled="isGenerating || !name.trim()"
+        :loading="isSaving"
+        :disabled="isSaving || !name.trim() || !description.trim() || !file"
         @click="handleSubmit"
       >
         <Sparkles class="icon-sm" />
-        캐릭터 생성
+        오브젝트 생성
       </Button>
     </template>
   </ModalBase>
@@ -162,6 +212,21 @@ defineExpose({
   min-height: 80px;
   resize: vertical;
   font-family: inherit;
+}
+
+.image-preview {
+  margin-top: 0.75rem;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid var(--rose-100);
+  background: var(--rose-50);
+}
+
+.image-preview img {
+  width: 100%;
+  display: block;
+  object-fit: cover;
+  max-height: 220px;
 }
 
 .chip-group {

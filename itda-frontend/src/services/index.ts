@@ -3,7 +3,7 @@ import { useMock } from './config'
 // Mock Services
 import * as mockProjects from './mock/projects'
 import * as mockAuth from './mock/auth'
-import * as mockCharacters from './mock/characters' // Maps to objects
+import * as mockObjects from './mock/objects'
 import * as mockScenes from './mock/scenes'
 import * as mockNodes from './mock/nodes' // Maps to nodes
 import * as mockTimeline from './mock/timeline'
@@ -25,7 +25,7 @@ export const projectService = useMock ? mockProjects : apiProjects
 // mockAuth exports { mockAuthService }, apiAuth exports { apiAuthService }
 export const authService = useMock ? mockAuth.mockAuthService : apiAuth.apiAuthService
 
-export const objectService = useMock ? mockCharacters : apiObjects // Character & Object mapped
+export const objectService = useMock ? mockObjects : apiObjects
 export const sceneService = useMock ? mockScenes : apiScenes
 export const nodeService = useMock ? mockNodes : apiNodes
 
