@@ -35,7 +35,7 @@ defineProps<Props>();
 
       <nav class="breadcrumb" aria-label="Breadcrumb">
         <RouterLink to="/dashboard" class="breadcrumb-link">
-          AI Movie Studio
+          홈
         </RouterLink>
         <span class="separator">/</span>
         <RouterLink

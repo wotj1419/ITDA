@@ -121,6 +121,85 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
         });
     });
 
+    const videoDurationCache = new Map<string, number>();
+
+    const readDurationFromUrl = (url: string): Promise<number | null> =>
+        new Promise((resolve) => {
+            const video = document.createElement('video');
+            let settled = false;
+            const timeoutId = setTimeout(() => {
+                if (settled) return;
+                settled = true;
+                resolve(null);
+            }, 8000);
+
+            const cleanup = () => {
+                clearTimeout(timeoutId);
+                video.removeAttribute('src');
+                video.load();
+            };
+
+            video.preload = 'metadata';
+            video.muted = true;
+            video.playsInline = true;
+            video.onloadedmetadata = () => {
+                if (settled) return;
+                settled = true;
+                cleanup();
+                const duration = Number.isFinite(video.duration) ? Math.round(video.duration) : null;
+                resolve(duration);
+            };
+            video.onerror = () => {
+                if (settled) return;
+                settled = true;
+                cleanup();
+                resolve(null);
+            };
+            video.src = url;
+        });
+
+    const fetchVideoDuration = async (url: string): Promise<number | null> => {
+        const cached = videoDurationCache.get(url);
+        if (cached) return Promise.resolve(cached);
+        const resolved = resolveApiUrl(url) ?? url;
+        let duration = await readDurationFromUrl(resolved);
+
+        if (!duration) {
+            const blobUrl = await fetchProtectedBlobUrl(url).catch(() => null);
+            if (blobUrl) {
+                duration = await readDurationFromUrl(blobUrl);
+                if (blobUrl.startsWith('blob:')) {
+                    URL.revokeObjectURL(blobUrl);
+                }
+            }
+        }
+
+        if (duration && duration > 0) {
+            videoDurationCache.set(url, duration);
+            return duration;
+        }
+
+        return null;
+    };
+
+    const updateVideoDurationForNode = async (node: SceneNode): Promise<void> => {
+        if (!node.data || node.data.type !== NodeType.VIDEO) return;
+        const data = node.data as VideoNodeData;
+        if (!data.videoUrl) return;
+        const duration = await fetchVideoDuration(data.videoUrl);
+        if (duration && duration !== data.duration) {
+            data.duration = duration;
+            data.updatedAt = new Date().toISOString();
+        }
+    };
+
+    const hydrateVideoDurations = async (): Promise<void> => {
+        const targets = nodes.value.filter(
+            (node) => node.data?.type === NodeType.VIDEO && (node.data as VideoNodeData).videoUrl
+        );
+        await Promise.all(targets.map((node) => updateVideoDurationForNode(node)));
+    };
+
     const childNodes = computed(() => (parentId: string) =>
         edges.value
             .filter((e) => e.source === parentId)
@@ -164,6 +243,7 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
                 const blobUrl = await fetchProtectedBlobUrl(payload.resultUrl).catch(() => null);
                 const resolvedUrl = blobUrl ?? resolveApiUrl(payload.resultUrl ?? null) ?? '';
                 applyNodeResultUrl(targetNode, resolvedUrl);
+                await updateVideoDurationForNode(targetNode);
             })();
         }
     };
@@ -238,6 +318,7 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
                 createSceneNodeFromApi(node, sceneIdParam, sceneInfo)
             );
             await hydrateNodeMedia();
+            await hydrateVideoDurations();
 
             if (!nodes.value.find((n) => n.data?.type === NodeType.SCENE_HEADER)) {
                 ensureSceneHeaderNode(sceneInfo);
@@ -540,7 +621,7 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
             endShotId: null,
             videoUrl: null,
             thumbnailUrl: null,
-            duration: 5,
+            duration: 4,
             isConfirmed: false,
             prompt: '',
             cameraMotion: 'staticCamera',

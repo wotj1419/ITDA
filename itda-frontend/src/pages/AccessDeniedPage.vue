@@ -22,7 +22,7 @@ const handleBack = () => {
 </script>
 
 <template>
-  <DefaultLayout :show-collaborators="false" :show-share-button="false" :show-collab-button="false">
+  <DefaultLayout :show-collaborators="false">
     <div class="access-denied">
       <div class="access-card">
         <div class="access-icon">

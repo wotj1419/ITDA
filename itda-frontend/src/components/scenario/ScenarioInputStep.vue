@@ -49,7 +49,7 @@ const handleGeneratePrompt = () => {
           v-for="genre in genres"
           :key="genre.value"
           :class="['chip', { selected: scenarioStore.input.genre === genre.value }]"
-          @click="scenarioStore.input.genre = genre.value"
+          @click="scenarioStore.setGenre(genre.value)"
         >
           {{ genre.label }}
         </button>

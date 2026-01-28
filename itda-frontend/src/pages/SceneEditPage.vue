@@ -78,7 +78,7 @@ const timelineClips = computed(() => {
       sourceNodeId: n.id,
       thumbnailUrl: data.thumbnailUrl || '',
       videoUrl: data.videoUrl || undefined,
-      duration: data.duration || 5,
+      duration: data.duration || 4,
       order,
       label: `영상 ${data.version || 1}`,
     };
@@ -127,8 +127,6 @@ onMounted(async () => {
 
 onUnmounted(() => {
   window.removeEventListener('keydown', handleEditorKeydown);
-  // 페이지 이탈 시 협업 방 퇴장
-  collabStore.leaveRoom();
   nodeStore.clearNodes();
 });
 

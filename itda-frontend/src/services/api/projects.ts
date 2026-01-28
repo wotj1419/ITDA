@@ -68,8 +68,8 @@ export async function fetchProjectMembers(projectId: number): Promise<ProjectMem
     return response.data.data || []
 }
 
-export async function inviteMember(projectId: number, email: string): Promise<void> {
-    await apiClient.post(`/projects/${projectId}/members`, { email })
+export async function inviteMember(projectId: number, email: string, role: 'EDITOR' | 'VIEWER'): Promise<void> {
+    await apiClient.post(`/projects/${projectId}/members`, { email, role })
 }
 
 export async function updateMemberRole(projectId: number, memberId: number, role: string): Promise<void> {

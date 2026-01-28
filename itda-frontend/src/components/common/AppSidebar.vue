@@ -9,7 +9,6 @@ import {
   Star,
   Users,
   Trash2,
-  Menu,
   LogOut,
 } from 'lucide-vue-next'
 
@@ -22,10 +21,10 @@ const authStore = useAuthStore()
 useSidebarShortcut()
 
 const navItems = [
-  { to: '/dashboard', icon: Folder, label: 'All Projects', tooltip: 'All Projects' },
-  { to: '/favorites', icon: Star, label: 'Favorites', tooltip: 'Favorites' },
-  { to: '/shared', icon: Users, label: 'Shared with Me', tooltip: 'Shared with Me' },
-  { to: '/trash', icon: Trash2, label: 'Trash', tooltip: 'Trash' },
+  { to: '/dashboard', icon: Folder, label: '모든 프로젝트', tooltip: '모든 프로젝트' },
+  { to: '/favorites', icon: Star, label: '즐겨찾기', tooltip: '즐겨찾기' },
+  { to: '/shared', icon: Users, label: '공유받은 프로젝트', tooltip: '공유받은 프로젝트' },
+  { to: '/trash', icon: Trash2, label: '휴지통', tooltip: '휴지통' },
 ]
 
 const showProfileMenu = ref(false)
@@ -43,7 +42,7 @@ const closeProfileMenu = (e: MouseEvent) => {
 
 const handleLogout = () => {
   authStore.logout()
-  router.push('/auth')
+  router.push('/')
 }
 
 onMounted(() => {
@@ -73,10 +72,15 @@ const sidebarClasses = computed(() => [
     <div class="sidebar-header">
       <button
         class="menu-btn"
+        :class="{ 'menu-btn--open': uiStore.sidebarExpanded }"
         @click="uiStore.toggleSidebar"
         :title="uiStore.sidebarExpanded ? 'Collapse' : 'Expand'"
       >
-        <Menu class="icon-md" />
+        <span class="toggle" aria-hidden="true">
+          <span class="bars bar1"></span>
+          <span class="bars bar2"></span>
+          <span class="bars bar3"></span>
+        </span>
       </button>
     </div>
 
@@ -93,17 +97,6 @@ const sidebarClasses = computed(() => [
         <span class="nav-label">{{ item.label }}</span>
       </RouterLink>
     </nav>
-
-    <!-- Credit Info -->
-    <div class="sidebar-credit credit-info">
-      <div class="credit-card">
-        <div class="credit-plan">PRO PLAN</div>
-        <div class="credit-amount sidebar-text">Credits: 850 / 1000</div>
-        <div class="progress-bar">
-          <div class="progress-bar-fill" style="width: 85%"></div>
-        </div>
-      </div>
-    </div>
 
     <!-- User Info & Dropdown -->
     <div class="sidebar-user" ref="profileMenuRef">
@@ -184,8 +177,7 @@ const sidebarClasses = computed(() => [
 /* Text elements - smooth fade transition */
 .sidebar-text,
 .nav-label,
-.user-info-text,
-.credit-info {
+.user-info-text {
   opacity: 1;
   transition: opacity 0.15s ease 0.2s; /* Fade in after sidebar expands */
   white-space: nowrap;
@@ -193,11 +185,14 @@ const sidebarClasses = computed(() => [
 }
 
 .sidebar-collapsed .sidebar-text,
-.sidebar-collapsed .nav-label,
-.sidebar-collapsed .credit-info {
+.sidebar-collapsed .nav-label {
   opacity: 0;
   transition: opacity 0.1s ease; /* Fade out quickly when collapsing */
   pointer-events: none;
+}
+
+.sidebar-collapsed .nav-label {
+  display: none;
 }
 
 /* Hide user info in the sidebar trigger, BUT keep it visible in the popup menu */
@@ -225,23 +220,62 @@ const sidebarClasses = computed(() => [
 }
 
 .menu-btn {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 40px; /* Aligns with nav-item icon center */
+  width: 40px;
   height: 40px;
   border: none;
   background: transparent;
-  color: var(--gray-500);
   border-radius: 50%;
   cursor: pointer;
-  transition: all 0.2s ease;
+  padding: 0;
+  transition: background 0.2s ease;
   flex-shrink: 0;
 }
 
 .menu-btn:hover {
   background: var(--rose-50);
-  color: var(--rose-600);
+}
+
+.menu-btn .toggle {
+  position: relative;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition-duration: 0.3s;
+}
+
+.menu-btn .bars {
+  width: 24px;
+  height: 3px;
+  background-color: var(--rose-500);
+  border-radius: 4px;
+  transition-duration: 0.3s;
+}
+
+.menu-btn--open .bars {
+  margin-left: 8px;
+}
+
+.menu-btn--open .bar2 {
+  transform: rotate(135deg);
+  margin-left: 0;
+  transform-origin: center;
+}
+
+.menu-btn--open .bar1 {
+  transform: rotate(45deg);
+  transform-origin: left center;
+}
+
+.menu-btn--open .bar3 {
+  transform: rotate(-45deg);
+  transform-origin: left center;
 }
 
 .sidebar-logo {
@@ -332,8 +366,9 @@ const sidebarClasses = computed(() => [
   left: 100%;
   margin-left: 0.5rem;
   padding: 0.5rem 0.75rem;
-  background: var(--gray-900);
-  color: white;
+  background: var(--rose-50);
+  color: var(--gray-900);
+  border: 1px solid var(--rose-100);
   font-size: 0.75rem;
   border-radius: 6px;
   white-space: nowrap;
@@ -348,42 +383,17 @@ const sidebarClasses = computed(() => [
   visibility: visible;
 }
 
-/* Credit Info */
-.sidebar-credit {
-  padding: 1rem;
-  border-top: 1px solid var(--rose-100);
+.sidebar-collapsed .nav-item {
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  justify-content: center;
+  align-self: center;
+  gap: 0;
 }
 
-.credit-card {
-  background: linear-gradient(135deg, var(--rose-50), var(--rose-100));
-  border-radius: 12px;
-  padding: 1rem;
-}
-
-.credit-plan {
-  font-size: 0.625rem;
-  font-weight: 600;
-  color: var(--rose-500);
-  margin-bottom: 0.25rem;
-}
-
-.credit-amount {
-  font-size: 0.75rem;
-  color: var(--gray-500);
-  margin-bottom: 0.5rem;
-}
-
-.progress-bar {
-  height: 4px;
-  background: rgba(255, 255, 255, 0.5);
-  border-radius: 2px;
-  overflow: hidden;
-}
-
-.progress-bar-fill {
-  height: 100%;
-  background: linear-gradient(90deg, var(--rose-400), var(--rose-500));
-  border-radius: 2px;
+.sidebar-collapsed .nav-icon {
+  margin: 0;
 }
 
 /* User Info */

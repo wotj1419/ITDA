@@ -91,6 +91,8 @@ const editLink = computed(() => ({
         </RouterLink>
       </div>
     </div>
+
+    <slot name="extra-inside" />
   </div>
 
   <slot name="extra-content" />

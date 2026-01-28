@@ -27,6 +27,8 @@ const registerForm = ref({
   agreeTerms: false,
 })
 
+const loginError = ref('')
+
 // Password visibility
 const showLoginPassword = ref(false)
 const showRegisterPassword = ref(false)
@@ -39,10 +41,28 @@ const passwordsMatch = computed(() => {
   return registerForm.value.password === registerForm.value.passwordConfirm
 })
 
+const nameErrorMessage = computed(() => {
+  if (!registerForm.value.name) return ''
+  if (registerForm.value.name.length < 2) return '이름은 2글자 이상이어야 합니다.'
+  if (!/^[가-힣a-zA-Z]+$/.test(registerForm.value.name)) return '이름을 정확히 입력하세요.'
+  return ''
+})
+
+const isNameValid = computed(() => !nameErrorMessage.value)
+
+const isEmailValid = computed(() => {
+  if (!registerForm.value.email) return true
+  // User logic: Allow .kr (2 chars) OR other TLDs with 3+ chars (e.g., .com, .net)
+  // Rejects 2-char TLDs that are not .kr (e.g., .io, .us) based on user request
+  const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+(\.kr|\.[a-zA-Z]{3,})$/
+  return emailRegex.test(registerForm.value.email)
+})
+
 async function handleLogin() {
   if (isLoading.value) return
 
   isLoading.value = true
+  loginError.value = '' // Reset error
   try {
     await authStore.login({
       email: loginForm.value.email,
@@ -54,35 +74,42 @@ async function handleLogin() {
       message: '환영합니다.',
     })
     router.push('/dashboard')
-  } catch (error) {
-    uiStore.showToast({
-      type: 'error',
-      title: '로그인 실패',
-      message: '이메일 또는 비밀번호를 확인해주세요.',
-    })
+  } catch (error: any) {
+    // User requested specific message
+    loginError.value = '아이디 또는 비밀번호가 잘못 되었습니다. 아이디와 비밀번호를 정확히 입력해 주세요.'
   } finally {
     isLoading.value = false
   }
 }
 
+const registerError = ref('')
+const termsError = ref(false)
+
+// ...
+
 async function handleRegister() {
   if (isLoading.value) return
 
+  // Reset errors
+  registerError.value = ''
+  termsError.value = false
+
+  if (registerForm.value.name && !isNameValid.value) {
+    // Already showing inline error via (registerForm.name && !isNameValid)
+    return
+  }
+
+  if (registerForm.value.email && !isEmailValid.value) {
+    return
+  }
+
   if (!passwordsMatch.value) {
-    uiStore.showToast({
-      type: 'error',
-      title: '오류',
-      message: '비밀번호가 일치하지 않습니다.',
-    })
+    // Already showing inline error via (registerForm.passwordConfirm && !passwordsMatch)
     return
   }
 
   if (!registerForm.value.agreeTerms) {
-    uiStore.showToast({
-      type: 'error',
-      title: '오류',
-      message: '이용약관에 동의해주세요.',
-    })
+    termsError.value = true
     return
   }
 
@@ -99,12 +126,13 @@ async function handleRegister() {
       message: '로그인 해주세요.',
     })
     activeTab.value = 'login'
-  } catch (error) {
-    uiStore.showToast({
-      type: 'error',
-      title: '회원가입 실패',
-      message: '회원가입에 실패했습니다.',
-    })
+  } catch (error: any) {
+    if (error.response?.status === 409) {
+      registerError.value = '이미 가입된 이메일입니다.'
+    } else {
+      const errorMessage = error.response?.data?.message || '회원가입에 실패했습니다.'
+      registerError.value = errorMessage
+    }
   } finally {
     isLoading.value = false
   }
@@ -119,10 +147,12 @@ async function handleRegister() {
 
     <main class="auth-container">
       <!-- Logo -->
-      <div class="auth-logo">
-        <div class="logo-icon"></div>
-        <h1 class="h2">AI Movie Studio</h1>
-        <p class="text-muted text-sm">Turn your ideas into AI-generated films</p>
+      <div class="auth-logo" @click="router.push('/')" style="cursor: pointer">
+        <div class="logo-container">
+          <img src="/icon.png" alt="Itda Logo" class="logo-icon" />
+          <h1 class="h2">잇다</h1>
+        </div>
+        <p class="text-muted text-sm">오늘도 잇다와 함께</p>
       </div>
 
       <!-- Auth Card -->
@@ -171,8 +201,10 @@ async function handleRegister() {
                 v-model="loginForm.password"
                 :type="showLoginPassword ? 'text' : 'password'"
                 class="form-input with-icon with-right-icon"
+                :class="{ 'input-error': loginError }"
                 placeholder="비밀번호"
                 required
+                @input="loginError = ''"
               />
               <button
                 type="button"
@@ -182,6 +214,10 @@ async function handleRegister() {
                 <component :is="showLoginPassword ? EyeOff : Eye" class="w-5 h-5" />
               </button>
             </div>
+          </div>
+
+          <div v-if="loginError" class="form-error mb-4" style="text-align: center;">
+            {{ loginError }}
           </div>
 
           <div class="flex items-center justify-between mb-6">
@@ -211,9 +247,13 @@ async function handleRegister() {
               v-model="registerForm.name"
               type="text"
               class="form-input"
-              placeholder="이름을 입력하세요"
+              :class="{ 'input-error': registerForm.name && !isNameValid }"
+              placeholder="이름을 입력하세요."
               required
             />
+            <div v-if="registerForm.name && !isNameValid" class="form-error">
+              {{ nameErrorMessage }}
+            </div>
           </div>
 
           <div class="form-group">
@@ -224,9 +264,13 @@ async function handleRegister() {
                 v-model="registerForm.email"
                 type="email"
                 class="form-input with-icon"
+                :class="{ 'input-error': registerForm.email && !isEmailValid }"
                 placeholder="your@email.com"
                 required
               />
+            </div>
+            <div v-if="registerForm.email && !isEmailValid" class="form-error">
+              유효한 이메일 주소를 입력해주세요.
             </div>
           </div>
 
@@ -260,7 +304,7 @@ async function handleRegister() {
               type="password"
               class="form-input"
               :class="{ 'input-error': registerForm.passwordConfirm && !passwordsMatch }"
-              placeholder="비밀번호 다시 입력"
+              placeholder="비밀번호를 다시 입력하세요"
               required
             />
             <div v-if="registerForm.passwordConfirm && !passwordsMatch" class="form-error">
@@ -270,12 +314,19 @@ async function handleRegister() {
 
           <div class="form-group mb-6">
             <label class="form-check">
-              <input v-model="registerForm.agreeTerms" type="checkbox" class="form-checkbox" />
+              <input v-model="registerForm.agreeTerms" type="checkbox" class="form-checkbox" @change="termsError = false" />
               <span class="form-check-label">
                 <a href="#" class="link">이용약관</a> 및
-                <a href="#" class="link">개인정보처리방침</a>에 동의합니다
+                <a href="#" class="link">개인정보처리방침</a>에 동의합니다.
               </span>
             </label>
+            <div v-if="termsError" class="form-error">
+              약관에 동의해주세요.
+            </div>
+          </div>
+
+          <div v-if="registerError" class="form-error mb-4" style="text-align: center;">
+            {{ registerError }}
           </div>
 
           <button
@@ -314,12 +365,12 @@ async function handleRegister() {
               d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
             />
           </svg>
-          Google로 계속하기 (P1)
+          Google로 계속하기
         </button>
       </div>
 
       <!-- Footer -->
-      <p class="auth-footer">© 2026 AI Movie Studio. All rights reserved.</p>
+      <p class="auth-footer">© 2026 ITDA. All rights reserved.</p>
     </main>
   </div>
 </template>
@@ -371,12 +422,25 @@ async function handleRegister() {
   margin-bottom: 2rem;
 }
 
+.auth-logo .logo-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.auth-logo .logo-container h1 {
+  margin: 1rem 0 0 0 !important; /* Move down by 1rem */
+  line-height: 1;
+  display: inline-block;
+}
+
 .auth-logo .logo-icon {
-  width: 48px;
-  height: 48px;
-  background: linear-gradient(135deg, var(--rose-400), var(--rose-500));
-  border-radius: 12px;
-  margin: 0 auto 1rem;
+  width: 64px;
+  height: 64px;
+  object-fit: contain;
+  margin: 0;
 }
 
 .auth-card {

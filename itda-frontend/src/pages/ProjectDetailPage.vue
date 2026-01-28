@@ -42,6 +42,50 @@ const {
   handleDeleteCharacter,
 } = useProjectDetail()
 
+import { computed, onMounted, watch } from 'vue'
+import { useCollabStore } from '../stores/collab'
+
+const collabStore = useCollabStore()
+// Hide Scenes tab UI (page disabled for now).
+const isScenesTabHidden = true
+const visibleTabs = computed(() =>
+  tabItems.filter((tab) => (isScenesTabHidden ? tab.key !== 'scenes' : true))
+)
+
+// ... existing code ...
+
+onMounted(() => {
+  if (projectId.value) {
+    collabStore.joinRoom(Number(projectId.value))
+    collabStore.updateLocation('Project')
+  }
+})
+
+// Watch for ID changes (e.g. reload or route update)
+watch(projectId, (newId) => {
+    if (newId) {
+        collabStore.joinRoom(Number(newId))
+        collabStore.updateLocation('Project')
+    }
+})
+
+const tabLabelMap: Record<string, string> = {
+  story: '스토리',
+  scenes: '장면',
+  objects: '오브젝트',
+  timeline: 'Timeline',
+  settings: '설정',
+}
+
+const projectLocation = computed(() => {
+  const label = tabLabelMap[activeTab.value] || 'Project'
+  return project.value?.title ? `${project.value.title} · ${label}` : label
+})
+
+watch([projectLocation], ([nextLocation]) => {
+  collabStore.updateLocation(nextLocation)
+}, { immediate: true })
+
 const openScenarioDrawer = () => scenarioStore.openDrawer()
 </script>
 
@@ -51,13 +95,14 @@ const openScenarioDrawer = () => scenarioStore.openDrawer()
     :active-tab="activeTab"
     :scene-count="scenes.length"
     :progress="sceneProgress"
+    :hide-scenes="isScenesTabHidden"
     @tab-change="handleTabChange"
   >
     <div class="project-content">
       <!-- Tabs -->
       <div class="tabs">
         <button
-          v-for="tab in tabItems"
+        v-for="tab in visibleTabs"
           :key="tab.key"
           :class="['tab', { active: activeTab === tab.key }]"
           type="button"
@@ -70,10 +115,15 @@ const openScenarioDrawer = () => scenarioStore.openDrawer()
       <StoryTab
         v-if="activeTab === 'story'"
         :scenes="scenes"
+        :project="project"
         :project-id="projectId"
         :storyboard-open-map="storyboardOpenMap"
         :get-scene-preview="getScenePreview"
         :is-preview-loading="isPreviewLoading"
+        :open-preview="openPreview"
+        :close-preview="closePreview"
+        :active-preview-clip="activePreviewClip"
+        :active-preview-scene="activePreviewScene"
         :toggle-storyboard="toggleStoryboard"
         :handle-storyboard-wheel="handleStoryboardWheel"
         :handle-add-scene="handleAddScene"
@@ -84,7 +134,7 @@ const openScenarioDrawer = () => scenarioStore.openDrawer()
       />
 
       <ScenesTab
-        v-if="activeTab === 'scenes'"
+        v-if="activeTab === 'scenes' && !isScenesTabHidden"
         :scenes="scenes"
         :project-id="projectId"
         :resolve-scene-status-config="resolveSceneStatusConfig"
@@ -112,13 +162,16 @@ const openScenarioDrawer = () => scenarioStore.openDrawer()
         :handle-delete-character="handleDeleteCharacter"
       />
     </div>
-  </ProjectLayout>
+</ProjectLayout>
 </template>
 
 <style>
+/* Project Content */
 .project-content {
   max-width: 900px;
+  width: 100%;
   margin: 0 auto;
+  box-sizing: border-box; /* Maintain padding within width */
 }
 
 /* Tabs */
@@ -128,6 +181,17 @@ const openScenarioDrawer = () => scenarioStore.openDrawer()
   margin-bottom: 1.5rem;
   border-bottom: 1px solid var(--rose-100);
   padding-bottom: 0.5rem;
+  overflow-x: auto; /* Enable horizontal scrolling */
+  white-space: nowrap; /* Prevent wrapping */
+  -webkit-overflow-scrolling: touch; /* Smooth scroll on iOS */
+  padding-right: 1rem; /* Padding for scroll end */
+}
+
+/* Hide scrollbar for cleaner UI */
+.tabs::-webkit-scrollbar {
+  height: 0;
+  width: 0;
+  display: none;
 }
 
 .tab {
@@ -140,6 +204,7 @@ const openScenarioDrawer = () => scenarioStore.openDrawer()
   cursor: pointer;
   border-radius: 6px;
   transition: all 0.2s ease;
+  flex-shrink: 0; /* Don't shrink tabs */
 }
 
 .tab:hover {
@@ -158,6 +223,8 @@ const openScenarioDrawer = () => scenarioStore.openDrawer()
   align-items: center;
   justify-content: space-between;
   margin-bottom: 1rem;
+  flex-wrap: wrap; /* Allow wrapping on small screens */
+  gap: 0.5rem;
 }
 
 .section-title {
@@ -171,6 +238,7 @@ const openScenarioDrawer = () => scenarioStore.openDrawer()
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  margin-left: auto; /* Push to right */
 }
 
 /* Scene List */
@@ -228,6 +296,10 @@ const openScenarioDrawer = () => scenarioStore.openDrawer()
   font-size: 0.75rem;
   color: var(--gray-500);
   padding: 0.5rem 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
 }
 
 .add-scene-card {
@@ -270,6 +342,7 @@ const openScenarioDrawer = () => scenarioStore.openDrawer()
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
+  min-width: 0; /* Allow flex shrinking for ellipses */
 }
 
 .preview-media {
@@ -393,6 +466,8 @@ const openScenarioDrawer = () => scenarioStore.openDrawer()
   display: flex;
   align-items: center;
   justify-content: center;
+  flex-direction: column;
+  gap: 0.5rem;
   color: var(--gray-500);
   font-size: 0.75rem;
   background: white;
@@ -403,6 +478,18 @@ const openScenarioDrawer = () => scenarioStore.openDrawer()
   height: 100%;
   object-fit: cover;
   border-radius: 10px;
+}
+
+.preview-empty img.preview-empty-icon {
+  width: 36px;
+  height: 36px;
+  object-fit: contain;
+}
+
+.preview-empty-icon {
+  width: 36px;
+  height: 36px;
+  object-fit: contain;
 }
 
 .preview-loading {
@@ -420,6 +507,7 @@ const openScenarioDrawer = () => scenarioStore.openDrawer()
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  flex-wrap: wrap; /* Allow wrapping */
 }
 
 .preview-title {
@@ -462,7 +550,19 @@ const openScenarioDrawer = () => scenarioStore.openDrawer()
 @media (max-width: 960px) {
   .scene-preview-row {
     grid-template-columns: 1fr;
+    gap: 1rem;
   }
+  
+  .preview-media {
+    min-height: 80px;
+    padding: 0.5rem;
+  }
+}
+
+/* Ensure images/videos are responsive */
+img, video {
+    max-width: 100%;
+    height: auto;
 }
 
 /* Preview Modal */
@@ -486,6 +586,8 @@ const openScenarioDrawer = () => scenarioStore.openDrawer()
   flex-direction: column;
   gap: 1rem;
   padding: 1.5rem;
+  max-height: 90vh; /* Don't overflow screen */
+  overflow-y: auto;
 }
 
 .preview-modal-header {
@@ -519,6 +621,7 @@ const openScenarioDrawer = () => scenarioStore.openDrawer()
   align-items: center;
   justify-content: center;
   cursor: pointer;
+  flex-shrink: 0;
 }
 
 .preview-modal-close:hover {
@@ -534,7 +637,7 @@ const openScenarioDrawer = () => scenarioStore.openDrawer()
 
 .preview-modal-body video {
   width: 100%;
-  max-height: 60vh;
+  max-height: 50vh; /* limit height more on mobile */
   border-radius: 12px;
   background: black;
 }
@@ -557,10 +660,22 @@ const openScenarioDrawer = () => scenarioStore.openDrawer()
   border-radius: 12px;
 }
 
+.preview-modal-empty-icon {
+  width: 48px;
+  height: 48px;
+  object-fit: contain;
+}
+
+.storyboard-empty-icon {
+  width: 32px;
+  height: 32px;
+  object-fit: contain;
+}
+
 /* Character Grid */
 .character-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); /* smaller min size for mobile */
   gap: 1rem;
 }
 
