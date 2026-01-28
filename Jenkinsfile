@@ -40,11 +40,12 @@ def sendMMNotify(boolean success, Map info) {
         ])
 
         withCredentials([string(credentialsId: 'mattermost-webhook', variable: 'MM_WEBHOOK')]) {
-            sh """
-            curl -sS -X POST -H 'Content-Type: application/json' \
-            --data-binary @payload.json \
-            "$MM_WEBHOOK" || true
-            """
+            sh '''
+              set +x
+              curl -sS -H 'Content-Type: application/json' \
+                --data-binary @payload.json \
+                "$MM_WEBHOOK" || true
+            '''
         }
     } catch (err) {
         echo "Mattermost notify failed: ${err}"
