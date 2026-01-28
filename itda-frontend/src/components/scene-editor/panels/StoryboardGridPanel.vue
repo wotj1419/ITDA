@@ -8,8 +8,9 @@ import type { StoryboardGridNodeData, GridLayout, GridMode } from '../../../type
 import { JobStatus, NodeType, PromptStatus } from '../../../types/ui/sceneNodes';
 import BasePanel from './BasePanel.vue';
 import { useSceneNodeStore } from '../../../stores/sceneNode';
+import { useUIStore } from '../../../stores/ui';
 import { useNodeGeneration } from '../../../composables/useNodeGeneration';
-import { LayoutGrid, Camera, Target, FileText, Sparkles, Check, RefreshCw } from 'lucide-vue-next';
+import { LayoutGrid, Camera, Target, FileText, Sparkles, Check, RefreshCw, Loader2 } from 'lucide-vue-next';
 import { mapShotTypeLabelsToKeys } from '../../../utils/nodeSettings';
 import { DEFAULT_GRID_LAYOUT, DEFAULT_GRID_SHOT_TYPES } from '../../../utils/nodeDefaults';
 
@@ -19,6 +20,7 @@ interface Props {
 
 const props = defineProps<Props>();
 const nodeStore = useSceneNodeStore();
+const uiStore = useUIStore();
 const shotTypeHelpRef = ref<HTMLElement | null>(null);
 const isShotTypeHelpOpen = ref(false);
 
@@ -33,6 +35,7 @@ const form = ref({
 });
 
 const {
+  isGeneratingPrompt,
   isGeneratingJob: isGeneratingGrid,
   clearError,
   generatePrompt,
@@ -137,9 +140,6 @@ const isParentReady = computed(() => {
   const hasImage = Boolean(parent?.thumbnailUrl || parent?.imageUrl);
   return parent?.jobStatus === JobStatus.SUCCEEDED && hasImage;
 });
-const canGenerate = computed(() =>
-  isPromptApproved.value && isParentReady.value && !isGeneratingGrid.value
-);
 
 function buildSceneOneLine(): string {
   const parts: string[] = [];
@@ -276,6 +276,31 @@ function handleDocumentKeydown(event: KeyboardEvent): void {
   }
 }
 
+function notifyBlocked(title: string, message: string): void {
+  uiStore.showToast({
+    type: 'warning',
+    title,
+    message,
+  });
+}
+
+function handleGenerateGrid(): void {
+  if (isGeneratingGrid.value) return;
+  if (!isParentReady.value) {
+    notifyBlocked('그리드 생성 불가', '상위 MASTER 이미지가 준비되어야 그리드를 생성할 수 있습니다.');
+    return;
+  }
+  if (!isPromptGenerated.value) {
+    notifyBlocked('프롬프트 필요', '먼저 프롬프트를 생성해 주세요.');
+    return;
+  }
+  if (!isPromptApproved.value) {
+    notifyBlocked('프롬프트 승인 필요', '승인 후 그리드를 생성할 수 있습니다.');
+    return;
+  }
+  generateGrid();
+}
+
 onMounted(() => {
   document.addEventListener('click', handleDocumentClick);
   document.addEventListener('keydown', handleDocumentKeydown);
@@ -291,9 +316,6 @@ onUnmounted(() => {
 <template>
   <BasePanel title="스토리보드 그리드 생성" :icon="LayoutGrid">
     <template v-if="data">
-      <p v-if="!isParentReady" class="panel-hint">
-        상위 MASTER 이미지가 준비되어야 그리드를 생성할 수 있습니다.
-      </p>
       <!-- Grid Mode -->
       <div class="panel-section">
         <label class="panel-label">
@@ -358,14 +380,14 @@ onUnmounted(() => {
             </div>
           </div>
         </div>
-        <div class="panel-checkbox-group">
-          <label v-for="opt in shotTypeOptions" :key="opt" class="panel-checkbox">
+        <div class="panel-radio-group panel-pill-group panel-pill-group--accent">
+          <label v-for="opt in shotTypeOptions" :key="opt" class="panel-radio panel-pill">
             <input
               type="checkbox"
               :checked="form.shotTypes.includes(opt)"
               @change="toggleShotType(opt)"
             />
-            <span class="panel-checkbox-label">{{ opt }}</span>
+            <span class="panel-radio-label">{{ opt }}</span>
           </label>
         </div>
       </div>
@@ -416,21 +438,29 @@ onUnmounted(() => {
       </div>
 
       <!-- Generate Prompt -->
-      <button class="panel-btn panel-btn--secondary panel-btn--full" @click="generatePrompt">
-        <Sparkles class="panel-btn-icon" />
-        프롬프트 생성
+      <button
+        class="panel-btn panel-btn--secondary panel-btn--full panel-btn--prompt-generate"
+        :disabled="isGeneratingPrompt"
+        @click="generatePrompt"
+      >
+        <Loader2 v-if="isGeneratingPrompt" class="panel-btn-icon panel-btn-icon--spin" />
+        <Sparkles v-else class="panel-btn-icon" />
+        {{ isGeneratingPrompt ? '생성 중...' : '프롬프트 생성' }}
       </button>
 
       <!-- Generated Prompt -->
-      <div v-if="isPromptGenerated" class="panel-section">
+      <div v-if="isPromptGenerated" class="panel-section panel-section--prompt">
         <label class="panel-label">
           <FileText class="panel-label-icon" />
           AI 프롬프트
+          <span class="panel-label-badge">생성됨</span>
         </label>
         <textarea v-model="form.prompt" class="panel-textarea panel-textarea--prompt" rows="3"></textarea>
-        <div class="panel-prompt-actions">
-          <button class="panel-btn panel-btn--text" @click="generatePrompt">
-            <RefreshCw class="panel-btn-icon" /> 재생성
+        <div class="panel-prompt-actions panel-prompt-actions--right">
+          <button class="panel-btn panel-btn--text" :disabled="isGeneratingPrompt" @click="generatePrompt">
+            <Loader2 v-if="isGeneratingPrompt" class="panel-btn-icon panel-btn-icon--spin" />
+            <RefreshCw v-else class="panel-btn-icon" />
+            재생성
           </button>
           <button v-if="!isPromptApproved" class="panel-btn panel-btn--success" @click="approvePrompt">
             <Check class="panel-btn-icon" /> 승인
@@ -446,8 +476,8 @@ onUnmounted(() => {
     <template #footer>
       <button
         class="panel-btn panel-btn--primary panel-btn--full"
-        :disabled="!canGenerate"
-        @click="generateGrid"
+        :disabled="isGeneratingGrid"
+        @click="handleGenerateGrid"
       >
         <LayoutGrid class="panel-btn-icon" />
         그리드 생성

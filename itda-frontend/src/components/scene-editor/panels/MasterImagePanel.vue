@@ -174,6 +174,7 @@ function toggleObject(objectId: string): void {
 
 
 function setActive(): void {
+  if (data.value?.isActive) return;
   nodeStore.setActiveMaster(props.node.id);
 }
 </script>
@@ -185,10 +186,14 @@ function setActive(): void {
         룩 변경됨 → MASTER 재생성 필요
       </div>
       <!-- Active Status -->
-      <div v-if="!data.isActive" class="panel-alert">
-        <button class="panel-btn panel-btn--secondary" @click="setActive">
+      <div class="panel-alert panel-alert--center">
+        <button
+          class="panel-btn"
+          :class="data.isActive ? 'panel-btn--confirmed' : 'panel-btn--secondary'"
+          @click="setActive"
+        >
           <Star class="panel-btn-icon" />
-          Active로 설정
+          {{ data.isActive ? '현재 Active' : 'Active로 설정' }}
         </button>
       </div>
 
@@ -198,8 +203,12 @@ function setActive(): void {
           <Palette class="panel-label-icon" />
           스타일
         </label>
-        <div class="panel-radio-group">
-          <label v-for="opt in styleOptions" :key="opt" class="panel-radio">
+        <div class="panel-radio-group panel-style-grid">
+          <label
+            v-for="opt in styleOptions"
+            :key="opt"
+            :class="['panel-radio', 'panel-style-card', { 'panel-style-card--primary': opt === '실사' }]"
+          >
             <input type="radio" v-model="form.style" :value="opt" />
             <span class="panel-radio-label">{{ opt }}</span>
           </label>
@@ -212,8 +221,8 @@ function setActive(): void {
           <Sun class="panel-label-icon" />
           시간대
         </label>
-        <div class="panel-radio-group">
-          <label v-for="opt in timeOptions" :key="opt" class="panel-radio">
+        <div class="panel-radio-group panel-pill-group panel-pill-group--accent">
+          <label v-for="opt in timeOptions" :key="opt" class="panel-radio panel-pill">
             <input type="radio" v-model="form.timeOfDay" :value="opt" />
             <span class="panel-radio-label">{{ opt }}</span>
           </label>
@@ -226,17 +235,14 @@ function setActive(): void {
           <Users class="panel-label-icon" />
           등장 오브젝트
         </label>
-        <div class="panel-checkbox-group">
-          <label v-for="obj in objectOptions" :key="obj.id" class="panel-checkbox">
-            <input 
-              type="checkbox" 
+        <div class="panel-radio-group panel-pill-group panel-pill-group--accent">
+          <label v-for="obj in objectOptions" :key="obj.id" class="panel-radio panel-pill">
+            <input
+              type="checkbox"
               :checked="form.objectIds.includes(obj.id)"
               @change="toggleObject(obj.id)"
             />
-            <span class="panel-checkbox-label">
-              {{ obj.name }}
-              <span class="panel-checkbox-tag">{{ obj.type === 'character' ? '캐릭터' : '오브젝트' }}</span>
-            </span>
+            <span class="panel-radio-label">{{ obj.name }}</span>
           </label>
         </div>
       </div>
@@ -247,8 +253,8 @@ function setActive(): void {
           <Smile class="panel-label-icon" />
           분위기
         </label>
-        <div class="panel-radio-group">
-          <label v-for="opt in moodOptions" :key="opt" class="panel-radio">
+        <div class="panel-radio-group panel-pill-group panel-pill-group--accent">
+          <label v-for="opt in moodOptions" :key="opt" class="panel-radio panel-pill">
             <input type="radio" v-model="form.mood" :value="opt" />
             <span class="panel-radio-label">{{ opt }}</span>
           </label>
@@ -262,7 +268,7 @@ function setActive(): void {
 
       <!-- Generate Prompt -->
       <button 
-        class="panel-btn panel-btn--secondary panel-btn--full" 
+        class="panel-btn panel-btn--secondary panel-btn--full panel-btn--prompt-generate" 
         :disabled="isGeneratingPrompt"
         @click="generatePrompt"
       >
@@ -272,15 +278,18 @@ function setActive(): void {
       </button>
 
       <!-- Generated Prompt -->
-      <div v-if="isPromptGenerated" class="panel-section">
+      <div v-if="isPromptGenerated" class="panel-section panel-section--prompt">
         <label class="panel-label">
           <FileText class="panel-label-icon" />
           AI 프롬프트
+          <span class="panel-label-badge">생성됨</span>
         </label>
         <textarea v-model="form.prompt" class="panel-textarea panel-textarea--prompt" rows="4"></textarea>
-        <div class="panel-prompt-actions">
-          <button class="panel-btn panel-btn--text" @click="generatePrompt">
-            <RefreshCw class="panel-btn-icon" /> 재생성
+        <div class="panel-prompt-actions panel-prompt-actions--right">
+          <button class="panel-btn panel-btn--text" :disabled="isGeneratingPrompt" @click="generatePrompt">
+            <Loader2 v-if="isGeneratingPrompt" class="panel-btn-icon panel-btn-icon--spin" />
+            <RefreshCw v-else class="panel-btn-icon" />
+            재생성
           </button>
           <button v-if="!isPromptApproved" class="panel-btn panel-btn--success" @click="approvePrompt">
             <Check class="panel-btn-icon" /> 승인
@@ -308,13 +317,4 @@ function setActive(): void {
 </template>
 
 <style scoped>
-/* 체크박스 태그 스타일 */
-.panel-checkbox-tag {
-  font-size: 0.65rem;
-  padding: 0.125rem 0.375rem;
-  background: var(--rose-100, #FFF0F5);
-  color: var(--rose-600, #DB2777);
-  border-radius: 0.25rem;
-  margin-left: 0.5rem;
-}
 </style>

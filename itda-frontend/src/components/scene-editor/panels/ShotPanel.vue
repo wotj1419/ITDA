@@ -8,8 +8,9 @@ import type { MasterImageNodeData, ShotNodeData, StoryboardGridNodeData } from '
 import { JobStatus, NodeType, PromptStatus } from '../../../types/ui/sceneNodes';
 import BasePanel from './BasePanel.vue';
 import { useSceneNodeStore } from '../../../stores/sceneNode';
+import { useUIStore } from '../../../stores/ui';
 import { useNodeGeneration } from '../../../composables/useNodeGeneration';
-import { Camera, Smile, PenLine, FileText, Sparkles, Check, RefreshCw, LayoutGrid } from 'lucide-vue-next';
+import { Camera, Smile, PenLine, FileText, Sparkles, Check, RefreshCw, LayoutGrid, Loader2 } from 'lucide-vue-next';
 import { resolveExpressionKey, resolveShotTypeKey } from '../../../utils/nodeSettings';
 import { DEFAULT_GRID_LAYOUT } from '../../../utils/nodeDefaults';
 
@@ -19,6 +20,7 @@ interface Props {
 
 const props = defineProps<Props>();
 const nodeStore = useSceneNodeStore();
+const uiStore = useUIStore();
 
 const form = ref({
   shotTypes: [] as string[],
@@ -63,6 +65,7 @@ const activeMasterData = computed(() => {
 });
 
 const {
+  isGeneratingPrompt,
   isGeneratingJob: isGeneratingShot,
   clearError,
   generatePrompt,
@@ -112,9 +115,6 @@ const isParentReady = computed(() => {
   const hasImage = Boolean(parent?.thumbnailUrl || parent?.imageUrl);
   return parent?.jobStatus === JobStatus.SUCCEEDED && hasImage;
 });
-const canGenerate = computed(() =>
-  isPromptApproved.value && isParentReady.value && !isGeneratingShot.value
-);
 
 function normalizeShotTypes(value?: string | null): string[] {
   if (!value) return [];
@@ -199,14 +199,36 @@ watch(
 function selectGridCell(index: number): void {
   nodeStore.updateNode(props.node.id, { gridCellIndex: index });
 }
+
+function notifyBlocked(title: string, message: string): void {
+  uiStore.showToast({
+    type: 'warning',
+    title,
+    message,
+  });
+}
+
+function handleGenerateShot(): void {
+  if (isGeneratingShot.value) return;
+  if (!isParentReady.value) {
+    notifyBlocked('샷 생성 불가', '상위 GRID 이미지가 준비되어야 샷을 생성할 수 있습니다.');
+    return;
+  }
+  if (!isPromptGenerated.value) {
+    notifyBlocked('프롬프트 필요', '먼저 프롬프트를 생성해 주세요.');
+    return;
+  }
+  if (!isPromptApproved.value) {
+    notifyBlocked('프롬프트 승인 필요', '승인 후 샷을 생성할 수 있습니다.');
+    return;
+  }
+  generateShot();
+}
 </script>
 
 <template>
   <BasePanel :title="`샷 ${shotLabel} 생성`" :icon="Camera">
     <template v-if="data">
-      <p v-if="!isParentReady" class="panel-hint">
-        상위 GRID 이미지가 준비되어야 샷을 생성할 수 있습니다.
-      </p>
       <!-- Grid Cell Info -->
       <div class="panel-info">
         <span class="panel-info-label">그리드 셀:</span>
@@ -230,7 +252,6 @@ function selectGridCell(index: number): void {
             {{ idx + 1 }}
           </button>
         </div>
-        <p class="panel-hint">레이아웃: {{ gridLayout }}</p>
       </div>
 
       <!-- Shot Type -->
@@ -239,14 +260,14 @@ function selectGridCell(index: number): void {
           <Camera class="panel-label-icon" />
           샷 타입 (다중 선택)
         </label>
-        <div class="panel-checkbox-group">
-          <label v-for="opt in shotTypeOptions" :key="opt" class="panel-checkbox">
+        <div class="panel-radio-group panel-pill-group panel-pill-group--accent">
+          <label v-for="opt in shotTypeOptions" :key="opt" class="panel-radio panel-pill">
             <input
               type="checkbox"
               :checked="form.shotTypes.includes(opt)"
               @change="toggleShotType(opt)"
             />
-            <span class="panel-checkbox-label">{{ opt }}</span>
+            <span class="panel-radio-label">{{ opt }}</span>
           </label>
         </div>
       </div>
@@ -257,8 +278,8 @@ function selectGridCell(index: number): void {
           <Smile class="panel-label-icon" />
           표정/분위기
         </label>
-        <div class="panel-radio-group">
-          <label v-for="opt in expressionOptions" :key="opt" class="panel-radio">
+        <div class="panel-radio-group panel-pill-group panel-pill-group--accent">
+          <label v-for="opt in expressionOptions" :key="opt" class="panel-radio panel-pill">
             <input type="radio" v-model="form.expression" :value="opt" />
             <span class="panel-radio-label">{{ opt }}</span>
           </label>
@@ -280,21 +301,29 @@ function selectGridCell(index: number): void {
       </div>
 
       <!-- Generate Prompt -->
-      <button class="panel-btn panel-btn--secondary panel-btn--full" @click="generatePrompt">
-        <Sparkles class="panel-btn-icon" />
-        프롬프트 생성
+      <button
+        class="panel-btn panel-btn--secondary panel-btn--full panel-btn--prompt-generate"
+        :disabled="isGeneratingPrompt"
+        @click="generatePrompt"
+      >
+        <Loader2 v-if="isGeneratingPrompt" class="panel-btn-icon panel-btn-icon--spin" />
+        <Sparkles v-else class="panel-btn-icon" />
+        {{ isGeneratingPrompt ? '생성 중...' : '프롬프트 생성' }}
       </button>
 
       <!-- Generated Prompt -->
-      <div v-if="isPromptGenerated" class="panel-section">
+      <div v-if="isPromptGenerated" class="panel-section panel-section--prompt">
         <label class="panel-label">
           <FileText class="panel-label-icon" />
           AI 프롬프트
+          <span class="panel-label-badge">생성됨</span>
         </label>
         <textarea v-model="form.prompt" class="panel-textarea panel-textarea--prompt" rows="3"></textarea>
-        <div class="panel-prompt-actions">
-          <button class="panel-btn panel-btn--text" @click="generatePrompt">
-            <RefreshCw class="panel-btn-icon" /> 재생성
+        <div class="panel-prompt-actions panel-prompt-actions--right">
+          <button class="panel-btn panel-btn--text" :disabled="isGeneratingPrompt" @click="generatePrompt">
+            <Loader2 v-if="isGeneratingPrompt" class="panel-btn-icon panel-btn-icon--spin" />
+            <RefreshCw v-else class="panel-btn-icon" />
+            재생성
           </button>
           <button v-if="!isPromptApproved" class="panel-btn panel-btn--success" @click="approvePrompt">
             <Check class="panel-btn-icon" /> 승인
@@ -310,8 +339,8 @@ function selectGridCell(index: number): void {
     <template #footer>
       <button
         class="panel-btn panel-btn--primary panel-btn--full"
-        :disabled="!canGenerate"
-        @click="generateShot"
+        :disabled="isGeneratingShot"
+        @click="handleGenerateShot"
       >
         <Camera class="panel-btn-icon" />
         샷 생성

@@ -9,8 +9,9 @@ import type { VideoNodeData, CameraMotion, ShotNodeData } from '../../../types/u
 import { PromptStatus, JobStatus, NodeType } from '../../../types/ui/sceneNodes';
 import BasePanel from './BasePanel.vue';
 import { useSceneNodeStore } from '../../../stores/sceneNode';
+import { useUIStore } from '../../../stores/ui';
 import { useNodeGeneration } from '../../../composables/useNodeGeneration';
-import { Video, Repeat, Move, Timer, Text, FileText, Sparkles, Check, RefreshCw, Target, ZoomIn, ZoomOut, ArrowRight, ArrowUp, Circle, Crop } from 'lucide-vue-next';
+import { Video, Repeat, Move, Timer, Text, FileText, Sparkles, Check, RefreshCw, Target, ZoomIn, ZoomOut, ArrowRight, ArrowUp, Circle, Crop, Loader2 } from 'lucide-vue-next';
 import { resolveCameraMotionKey } from '../../../utils/nodeSettings';
 import {
   DEFAULT_VIDEO_ASPECT_RATIO,
@@ -26,6 +27,7 @@ interface Props {
 
 const props = defineProps<Props>();
 const nodeStore = useSceneNodeStore();
+const uiStore = useUIStore();
 const cameraMotionHelpRef = ref<HTMLElement | null>(null);
 const isCameraMotionHelpOpen = ref(false);
 
@@ -75,7 +77,6 @@ const aspectRatioLabels: Record<string, string> = {
 };
 
 const data = computed(() => props.node.data as VideoNodeData | undefined);
-const hasEndShot = computed(() => !!data.value?.endShotId);
 const startShotData = computed(() => {
   const startId = data.value?.startShotId;
   if (!startId) return undefined;
@@ -143,14 +144,9 @@ const endShotOptions = computed<EndShotOption[]>(() => {
     });
 });
 
-const transitionBlockMessage = computed(() => {
-  if (!form.value.isTransition) return null;
-  if (!data.value?.endShotId) return '끝 샷을 선택해야 트랜지션 영상을 생성할 수 있습니다.';
-  if (!isEndShotReady.value) return '선택한 끝 SHOT 이미지가 준비되어야 트랜지션 영상을 생성할 수 있습니다.';
-  return null;
-});
 
 const {
+  isGeneratingPrompt,
   isGeneratingJob: isGeneratingVideo,
   clearError,
   generatePrompt,
@@ -195,13 +191,6 @@ const {
   },
 });
 
-const canGenerate = computed(() =>
-  isPromptApproved.value &&
-  (!form.value.isTransition || hasEndShot.value) &&
-  isStartShotReady.value &&
-  isEndShotReady.value &&
-  !isGeneratingVideo.value
-);
 
 function normalizeCameraMotion(value?: CameraMotion | string | null): CameraMotion {
   if (!value) return 'staticCamera';
@@ -333,17 +322,44 @@ function handleEndShotChange(event: Event): void {
 function toggleConfirm(): void {
   nodeStore.toggleVideoConfirm(props.node.id);
 }
+
+function notifyBlocked(title: string, message: string): void {
+  uiStore.showToast({
+    type: 'warning',
+    title,
+    message,
+  });
+}
+
+function handleGenerateVideo(): void {
+  if (isGeneratingVideo.value) return;
+  if (!isStartShotReady.value) {
+    notifyBlocked('영상 생성 불가', '시작 SHOT 이미지가 준비되어야 영상을 생성할 수 있습니다.');
+    return;
+  }
+  if (form.value.isTransition && !data.value?.endShotId) {
+    notifyBlocked('끝 샷 필요', '트랜지션 영상을 위해 끝 샷을 선택해 주세요.');
+    return;
+  }
+  if (form.value.isTransition && !isEndShotReady.value) {
+    notifyBlocked('끝 샷 준비 필요', '선택한 끝 SHOT 이미지가 준비되어야 합니다.');
+    return;
+  }
+  if (!isPromptGenerated.value) {
+    notifyBlocked('프롬프트 필요', '먼저 프롬프트를 생성해 주세요.');
+    return;
+  }
+  if (!isPromptApproved.value) {
+    notifyBlocked('프롬프트 승인 필요', '승인 후 영상을 생성할 수 있습니다.');
+    return;
+  }
+  generateVideo();
+}
 </script>
 
 <template>
   <BasePanel title="영상 생성" :icon="Video">
     <template v-if="data">
-      <p v-if="!isStartShotReady" class="panel-hint">
-        시작 SHOT 이미지가 준비되어야 영상을 생성할 수 있습니다.
-      </p>
-      <p v-else-if="transitionBlockMessage" class="panel-hint">
-        {{ transitionBlockMessage }}
-      </p>
       <!-- Transition Toggle -->
       <div class="panel-section">
         <div class="panel-toggle-row">
@@ -353,7 +369,6 @@ function toggleConfirm(): void {
           </label>
           <input type="checkbox" v-model="form.isTransition" class="panel-toggle" />
         </div>
-        <p class="panel-hint">시작 샷과 끝 샷 사이를 연결하는 영상</p>
       </div>
 
       <!-- End Shot Selection (Transition) -->
@@ -454,21 +469,29 @@ function toggleConfirm(): void {
       </div>
 
       <!-- Generate Prompt -->
-      <button class="panel-btn panel-btn--secondary panel-btn--full" @click="generatePrompt">
-        <Sparkles class="panel-btn-icon" />
-        프롬프트 생성
+      <button
+        class="panel-btn panel-btn--secondary panel-btn--full panel-btn--prompt-generate"
+        :disabled="isGeneratingPrompt"
+        @click="generatePrompt"
+      >
+        <Loader2 v-if="isGeneratingPrompt" class="panel-btn-icon panel-btn-icon--spin" />
+        <Sparkles v-else class="panel-btn-icon" />
+        {{ isGeneratingPrompt ? '생성 중...' : '프롬프트 생성' }}
       </button>
 
       <!-- Generated Prompt -->
-      <div v-if="isPromptGenerated" class="panel-section">
+      <div v-if="isPromptGenerated" class="panel-section panel-section--prompt">
         <label class="panel-label">
           <FileText class="panel-label-icon" />
           AI 프롬프트
+          <span class="panel-label-badge">생성됨</span>
         </label>
         <textarea v-model="form.prompt" class="panel-textarea panel-textarea--prompt" rows="3"></textarea>
-        <div class="panel-prompt-actions">
-          <button class="panel-btn panel-btn--text" @click="generatePrompt">
-            <RefreshCw class="panel-btn-icon" /> 재생성
+        <div class="panel-prompt-actions panel-prompt-actions--right">
+          <button class="panel-btn panel-btn--text" :disabled="isGeneratingPrompt" @click="generatePrompt">
+            <Loader2 v-if="isGeneratingPrompt" class="panel-btn-icon panel-btn-icon--spin" />
+            <RefreshCw v-else class="panel-btn-icon" />
+            재생성
           </button>
           <button v-if="!isPromptApproved" class="panel-btn panel-btn--success" @click="approvePrompt">
             <Check class="panel-btn-icon" /> 승인
@@ -486,8 +509,8 @@ function toggleConfirm(): void {
       <div class="panel-actions panel-actions--footer">
         <button
           class="panel-btn panel-btn--primary panel-btn--full"
-          :disabled="!canGenerate"
-          @click="generateVideo"
+          :disabled="isGeneratingVideo"
+          @click="handleGenerateVideo"
         >
           <Video class="panel-btn-icon" />
           영상 생성
