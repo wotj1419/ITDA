@@ -34,11 +34,12 @@
 
 .vue-flow__edge {
     /* Reference colors */
-    --edge-track: #FFD6E5;      /* connector-line background */
+    /*--edge-track: #FFD6E5;*/
+    --edge-track: #FFC1D6;      /* connector-line background */
 
     /* Reference geometry */
-    --edge-track-width: 2;
-    --edge-highlight-width: 2;
+    --edge-track-width: 3.8;
+    --edge-highlight-width: 4.2;
 }
 
 /* Base line (increase specificity to override Vue Flow default edge styles, which may load later) */
@@ -65,6 +66,7 @@
     stroke-width: var(--edge-highlight-width);
     stroke-linecap: butt;
     stroke-linejoin: round;
+    filter: drop-shadow(0 0 2px rgba(255, 77, 141, 0.35));
     pointer-events: none;
     will-change: opacity;
 }
