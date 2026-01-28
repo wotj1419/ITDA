@@ -84,19 +84,33 @@ public class NodeService {
     }
 
     /**
-     * 씬 노드 목록 조회 (scene_header 가상 노드 포함)
+     * 씬 노드 목록 조회 (scene_header 포함)
      */
-    @Transactional(readOnly = true)
+    @Transactional
     public NodeTreeResponse listNodes(Long userId, Long sceneId) {
         Scene scene = getSceneAndEnsureMember(sceneId, userId);
         List<Node> nodes = nodeMapper.findAllBySceneId(sceneId);
-        List<NodeSummaryResponse> responses = new ArrayList<>(nodes.size() + 1);
+        Node sceneHeader = nodes.stream()
+                .filter(node -> node.getNodeType() == NodeType.SCENE_HEADER)
+                .findFirst()
+                .orElse(null);
+        if (sceneHeader == null) {
+            sceneHeader = createSceneHeaderNode(sceneId, userId);
+            nodes.add(0, sceneHeader);
+        }
 
-        // 가상 SCENE_HEADER 노드 추가
-        responses.add(createSceneHeaderResponse(scene, sceneId));
+        List<NodeSummaryResponse> responses = new ArrayList<>(nodes.size());
 
+        boolean headerIncluded = false;
         // 실제 노드들 변환
         for (Node node : nodes) {
+            if (node.getNodeType() == NodeType.SCENE_HEADER) {
+                if (!headerIncluded) {
+                    responses.add(createSceneHeaderResponse(scene, node));
+                    headerIncluded = true;
+                }
+                continue;
+            }
             String contentUrl = mediaUrlResolver.nodeContentUrl(node);
             responses.add(NodeSummaryResponse.from(node, contentUrl));
         }
@@ -126,7 +140,7 @@ public class NodeService {
         getSceneAndEnsureMember(node.getSceneId(), userId);
         NodeType nodeType = node.getNodeType();
 
-        // SCENE_HEADER 수정 금지 (가상 노드이므로 DB에 없지만 방어적 체크)
+        // SCENE_HEADER 수정 금지
         assertNotSceneHeader(nodeType);
 
         VideoShotIds shotIds = resolveUpdatedVideoShotIds(node, request);
@@ -402,20 +416,43 @@ public class NodeService {
     }
 
     /**
-     * 가상 SCENE_HEADER 노드 생성
+     * 씬 헤더 노드 생성 (없으면 DB에 저장)
      */
-    private NodeSummaryResponse createSceneHeaderResponse(Scene scene, Long sceneId) {
+    private Node createSceneHeaderNode(Long sceneId, Long userId) {
+        Node node = Node.builder()
+                .sceneId(sceneId)
+                .nodeType(NodeType.SCENE_HEADER)
+                .parentNodeId(null)
+                .orderIndex(0)
+                .positionX(SCENE_HEADER_POSITION_X)
+                .positionY(SCENE_HEADER_POSITION_Y)
+                .createdBy(userId)
+                .build();
+        nodeMapper.insertNode(node);
+        return node;
+    }
+
+    /**
+     * 씬 헤더 응답 생성 (씬 메타 포함)
+     */
+    private NodeSummaryResponse createSceneHeaderResponse(Scene scene, Node headerNode) {
+        Float positionX = headerNode.getPositionX();
+        Float positionY = headerNode.getPositionY();
+        if (positionX == null || positionY == null) {
+            positionX = SCENE_HEADER_POSITION_X;
+            positionY = SCENE_HEADER_POSITION_Y;
+        }
         return new NodeSummaryResponse(
-                -sceneId,  // 음수 ID 규칙
+                headerNode.getId(),
                 NodeType.SCENE_HEADER,
                 scene.getTitle(),
                 scene.getDescription(),
-                null,  // 부모 없음
-                null,  // 상태 없음
                 null,
                 null,
                 null,
-                new NodeSummaryResponse.PositionDto(SCENE_HEADER_POSITION_X, SCENE_HEADER_POSITION_Y)
+                null,
+                null,
+                new NodeSummaryResponse.PositionDto(positionX, positionY)
         );
     }
 
@@ -601,7 +638,7 @@ public class NodeService {
     }
 
     private List<NodePosition> filterSceneHeaderPositions(List<NodePosition> positions) {
-        // SCENE_HEADER 위치 변경 요청 필터링 (음수 ID 규칙)
+        // 유효하지 않은 노드 ID 필터링 (호환용)
         return positions.stream()
                 .filter(p -> p.nodeId() > 0)
                 .toList();

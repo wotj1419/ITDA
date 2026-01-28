@@ -152,7 +152,7 @@ CREATE TABLE assets (
 CREATE TABLE nodes (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,
     scene_id BIGINT NOT NULL,
-    node_type VARCHAR(20) NOT NULL,  -- MASTER, GRID, SHOT, VIDEO (SCENE_HEADER는 가상 노드)
+    node_type VARCHAR(20) NOT NULL,  -- SCENE_HEADER, MASTER, GRID, SHOT, VIDEO
     parent_node_id BIGINT,
     order_index INT NOT NULL DEFAULT 0,
     position_x FLOAT,                -- 캔버스 X 좌표
