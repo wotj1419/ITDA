@@ -20,6 +20,7 @@ public class ObjectSheet {
     private String description;
     private String style;
     private String sheetImageUrl;
+    private Long sheetImageAssetId;
     private ObjectStatus status;
     private Long createdBy;
     private LocalDateTime createdAt;
