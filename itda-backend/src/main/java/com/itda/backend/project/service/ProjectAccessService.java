@@ -25,4 +25,10 @@ public class ProjectAccessService {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
     }
+
+    // 협업 WS 등 다른 모듈에서 사용할 공용 체크 API
+    @SuppressWarnings("unused")
+    public boolean isProjectMember(Long projectId, Long userId) {
+        return projectMemberMapper.existsMember(projectId, userId);
+    }
 }

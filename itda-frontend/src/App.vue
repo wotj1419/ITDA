@@ -4,12 +4,7 @@ import { RouterView, useRoute } from 'vue-router'
 import ToastContainer from './components/common/ToastContainer.vue'
 import CollabContainer from './components/collab/CollabContainer.vue'
 import FloatingControlBar from './components/common/FloatingControlBar.vue'
-import { socketManager } from './services/ws/socket'
 import { useCollabStore } from './stores/collab'
-
-// Initialize WebSocket connection (Singleton)
-// In a real app, you might want to wait until login
-socketManager.connect();
 
 const collabStore = useCollabStore()
 const route = useRoute()
@@ -25,7 +20,9 @@ onMounted(() => {
 watch(hideCollabUI, (hide) => {
   if (!hide) {
     collabStore.rejoinIfNeeded()
+    return
   }
+  collabStore.leaveRoom()
 })
 </script>
 
