@@ -5,6 +5,12 @@
 > 기준 일정: W4 D2 이후
 > 전제: OBJ-1 CRUD + 씬-오브젝트 연동 완료 (Swagger 테스트 완료)
 
+## 0) 결정 사항 (OBJ-2 생성 Job/Streams 제외 사유)
+
+- PRD에서는 오브젝트 시트 이미지를 AI 생성 Job으로 처리하는 흐름을 가정하나, 현재는 **사용자 직접 업로드(서버 업로드)** 방식으로 확정
+- 업로드는 동기 처리이므로 **Job/Streams 발행이 필요 없음** (상태 전이도 즉시 SUCCEEDED)
+- 추후 오브젝트 이미지 자동 생성/후처리 파이프라인이 도입되면 Job/Streams 재도입 검토
+
 ## 1) 목적
 
 AI 생성 없이, **단일 이미지 업로드가 필수인 오브젝트 시트**를 제공하고
@@ -18,6 +24,7 @@ AI 생성 없이, **단일 이미지 업로드가 필수인 오브젝트 시트*
 - ObjectSheet 상태 전이: 이미지 미보유(PENDING) → 이미지 보유(SUCCEEDED)
 - ObjectSheet 기본 이미지(`sheet_image_url`) 설정
 - 노드 이미지 생성 요청에 **레퍼런스 오브젝트 연동**
+- 노드 AI 호출 시 **레퍼런스 이미지 실제 전달(Worker/AI 연결)**
 
 ### 🚫 제외 (차후)
 - 오브젝트 이미지 버전 관리/히스토리
@@ -36,9 +43,11 @@ AI 생성 없이, **단일 이미지 업로드가 필수인 오브젝트 시트*
 
 ## 4) 현 상태 요약
 
-- 오브젝트 CRUD 및 scene_objects 연동 완료
-- ObjectSheet는 `sheet_image_url`, `status` 필드만 존재 (업로드 로직 없음)
-- 노드 AI 생성 요청은 prompt/settings만 전달 (레퍼런스 미지원)
+- 오브젝트 이미지 업로드/교체/조회 API 구현 완료
+- ObjectSheet에 `sheet_image_url`, `sheet_image_asset_id` 저장
+- GenerateNodeRequest에 `referenceObjectIds` 포함 및 request_json 저장 완료
+- JobRequestParser/ParsedJobRequest는 referenceObjectIds를 **파싱하지 않음**
+- ImageGenerationWorker/GeminiImageClient는 **prompt/settings만 사용**
 
 ## 5) 목표 동작 흐름
 
@@ -48,7 +57,7 @@ AI 생성 없이, **단일 이미지 업로드가 필수인 오브젝트 시트*
 4) `sheet_image_url` 설정 및 `status=SUCCEEDED`
 5) FE가 노드 생성/편집 시 오브젝트 선택
 6) 노드 AI 생성 요청에 레퍼런스 오브젝트 IDs 포함
-7) BE가 레퍼런스 이미지로 변환하여 AI 호출
+7) Worker가 레퍼런스 이미지를 조회/변환하여 AI 호출
 
 ## 6) API 계약 변경 (OBJ-2)
 
@@ -128,13 +137,28 @@ AI 생성 없이, **단일 이미지 업로드가 필수인 오브젝트 시트*
 
 ## 9) 노드 AI 레퍼런스 연동 방식 (확정안)
 
-- GenerateNodeRequest의 `referenceObjectIds`를 기반으로
-  - Object (`sheet_image_asset_id`) → Asset → storageKey/URL 조회
-  - 필요 시 `sheet_image_url` 직접 사용 (fallback)
-- 레퍼런스 이미지는 **단일 이미지 1장**만 사용
-- AI 호출 방식
-  - 1순위: 이미지 bytes를 **inline data**로 전달 (Gemini 지원 범위 확인 후 적용)
-  - 2순위: 임시 URL을 prompt에 포함 (fallback)
+### 9.1 전달 흐름
+- NodeService: request_json에 `referenceObjectIds` 포함 (완료)
+- JobRequestParser: request_json에서 `referenceObjectIds` 파싱 → ParsedJobRequest에 포함
+- ImageGenerationWorker: referenceObjectIds로 **오브젝트 이미지 조회 → Gemini 호출**
+
+### 9.2 이미지 해석 로직
+- ObjectSheet → `sheet_image_asset_id` → Asset(storageKey, contentType) 조회
+- StorageProvider별 처리
+  - S3: `S3Client.getObject`로 bytes 로드
+  - LOCAL: `LocalFileStorage`에 read 메서드 추가 후 bytes 로드
+- 레퍼런스 이미지는 **오브젝트당 1장**만 사용
+- 최대 참조 개수는 N개로 제한(권장 3) 후 나머지는 무시
+
+### 9.3 Gemini 호출 방식
+- 1순위: 이미지 bytes를 **inline data**로 전달
+- 2순위: (선택) 임시 URL을 prompt에 포함 (fallback)
+- referenceObjectIds가 비어있으면 기존 prompt/settings 호출 유지
+
+### 9.4 오류 정책 (권장)
+- referenceObjectIds 검증 실패: INVALID_REQUEST (NodeService)
+- Asset/파일 누락: 내부 오류로 처리하거나, **해당 참조만 제외하고 진행**
+- 모든 참조 실패 시: prompt 단독 생성으로 fallback
 
 ## 10) 코드 변경 포인트
 
@@ -147,11 +171,16 @@ AI 생성 없이, **단일 이미지 업로드가 필수인 오브젝트 시트*
   - 오브젝트 업로드용 Asset 등록 경로 추가 (ownerId = userId 권장)
 - `node` 도메인
   - `GenerateNodeRequest`에 `referenceObjectIds` 추가
-  - NodeService에서 레퍼런스 이미지 조회 및 Job request_json 확장
+  - NodeService에서 referenceObjectIds 검증 및 request_json 포함
+- `worker`
+  - JobRequestParser/ParsedJobRequest에 referenceObjectIds 추가
+  - ObjectSheet/Asset 기반 **레퍼런스 이미지 로더** 신규
+  - ImageGenerationWorker에서 레퍼런스 이미지 전달
 - `ai/gemini`
-  - 레퍼런스 이미지 inline 전달 지원 (필요 시 클라이언트 확장)
-- `docs/APIdocs.md`
-  - 오브젝트 단일 이미지 업로드/삭제 API 계약 반영
+  - GeminiImageClient에 reference images 입력 지원 (text + inline image)
+- `asset/object`
+  - AssetMapper/ObjectMapper 조회 확장(배치 조회 시)
+  - LocalFileStorage에 read 기능 추가 (LOCAL 스토리지)
 
 ## 11) 테스트 계획
 
@@ -159,11 +188,12 @@ AI 생성 없이, **단일 이미지 업로드가 필수인 오브젝트 시트*
 - 오브젝트 생성 → 이미지 단일 업로드 → 대표 이미지 확인
 - 이미지 교체 후 상태/URL 갱신 확인
 - 이미지 삭제 후 status 전이 확인
-- 노드 AI 생성 요청에 referenceObjectIds 포함 시 정상 동작 확인
+- 노드 AI 생성 요청에 referenceObjectIds 포함 시 **레퍼런스 이미지 전달 여부** 확인
 
 ### 11.2 통합 테스트(가능하면)
 - 단일 이미지 업로드 → Asset 연동 → 조회 결과 일관성
-- 레퍼런스 이미지 1장 적용 확인
+- 레퍼런스 이미지 1장 적용 확인 (inline data)
+- referenceObjectIds 일부 누락/삭제 시 fallback 동작 확인
 
 ## 12) OBJ-1 충돌 점검 체크리스트
 
@@ -179,9 +209,10 @@ AI 생성 없이, **단일 이미지 업로드가 필수인 오브젝트 시트*
 3) ObjectSheet status/sheet_image_url 갱신 로직 추가
 4) 저장 경로 및 Asset 등록 정책 적용
 5) GenerateNodeRequest에 referenceObjectIds 추가 및 Job request_json 확장
-6) NodeService에서 레퍼런스 이미지 조회/적용
-7) Gemini 클라이언트 레퍼런스 이미지 전달 확장(필요 시)
-8) 문서(APIdocs) 갱신 + Swagger 테스트
+6) JobRequestParser/ParsedJobRequest에 referenceObjectIds 파싱 추가
+7) Object/Asset 기반 레퍼런스 이미지 로더 구현
+8) ImageGenerationWorker → GeminiImageClient 레퍼런스 전달
+9) 문서(APIdocs) 갱신 + Swagger 테스트
 
 ## 14) 변경 완료
 

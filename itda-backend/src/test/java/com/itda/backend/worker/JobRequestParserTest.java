@@ -5,6 +5,7 @@ import com.itda.backend.global.exception.BusinessException;
 import com.itda.backend.global.response.ErrorCode;
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -35,6 +36,7 @@ class JobRequestParserTest {
         ParsedJobRequest parsed = parser.parse("  hello  ");
         assertThat(parsed.prompt()).isEqualTo("hello");
         assertThat(parsed.settings()).isNull();
+        assertThat(parsed.referenceObjectIds()).isEmpty();
     }
 
     @Test
@@ -42,6 +44,7 @@ class JobRequestParserTest {
         ParsedJobRequest parsed = parser.parse("\"hello\"");
         assertThat(parsed.prompt()).isEqualTo("hello");
         assertThat(parsed.settings()).isNull();
+        assertThat(parsed.referenceObjectIds()).isEmpty();
     }
 
     @Test
@@ -49,11 +52,13 @@ class JobRequestParserTest {
         ParsedJobRequest parsed = parser.parse("""
                 {
                   "prompt": " hello ",
-                  "settings": { "steps": 25, "style": "cinematic" }
+                  "settings": { "steps": 25, "style": "cinematic" },
+                  "referenceObjectIds": [1, 2, 3]
                 }
                 """);
         assertThat(parsed.prompt()).isEqualTo("hello");
         assertThat(parsed.settings()).isEqualTo(Map.of("steps", 25, "style", "cinematic"));
+        assertThat(parsed.referenceObjectIds()).containsExactly(1L, 2L, 3L);
     }
 
     @Test
@@ -74,6 +79,7 @@ class JobRequestParserTest {
                 """);
         assertThat(parsed.prompt()).isEqualTo("hello");
         assertThat(parsed.settings()).isNull();
+        assertThat(parsed.referenceObjectIds()).isEmpty();
     }
 
     @Test
@@ -81,5 +87,6 @@ class JobRequestParserTest {
         ParsedJobRequest parsed = parser.parse("{");
         assertThat(parsed.prompt()).isEqualTo("{");
         assertThat(parsed.settings()).isNull();
+        assertThat(parsed.referenceObjectIds()).isEmpty();
     }
 }

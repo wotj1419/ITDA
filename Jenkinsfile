@@ -151,10 +151,12 @@ pipeline {
                     set -e
                     mkdir -p "$DEPLOY_DIR/nginx/conf.d" "$DEPLOY_DIR/prometheus" "$DEPLOY_DIR/grafana/provisioning"
                     mkdir -p "$DEPLOY_DIR/nginx/html"
+                    mkdir -p "$DEPLOY_DIR/db"
                     cp deploy/docker-compose.yml "$DEPLOY_DIR/"
                     cp deploy/nginx/conf.d/app.conf "$DEPLOY_DIR/nginx/conf.d/"
                     cp deploy/prometheus/prometheus.yml "$DEPLOY_DIR/prometheus/" || true
                     cp -r itda-frontend/dist/. "$DEPLOY_DIR/nginx/html/"
+                    cp itda-backend/src/main/resources/sql/schema-local.sql "$DEPLOY_DIR/db/"
                     if [ ! -f "$DEPLOY_DIR/.env" ]; then
                       if [ -f deploy/.env ]; then
                         cp deploy/.env "$DEPLOY_DIR/.env"
