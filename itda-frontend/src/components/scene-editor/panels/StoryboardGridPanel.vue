@@ -265,7 +265,7 @@ function notifyBlocked(title: string, message: string): void {
 }
 
 function handleGenerateGrid(): void {
-  if (isGeneratingGrid.value) return;
+  if (isGeneratingGrid.value || isGeneratingPrompt.value) return;
   if (!isParentReady.value) {
     notifyBlocked('그리드 생성 불가', '상위 MASTER 이미지가 준비되어야 그리드를 생성할 수 있습니다.');
     return;
@@ -432,7 +432,12 @@ function handleGenerateGrid(): void {
             <RefreshCw v-else class="panel-btn-icon" />
             재생성
           </button>
-          <button v-if="!isPromptApproved" class="panel-btn panel-btn--success" @click="approvePrompt">
+          <button
+            v-if="!isPromptApproved"
+            class="panel-btn panel-btn--success"
+            :disabled="isGeneratingPrompt || isGeneratingGrid"
+            @click="approvePrompt"
+          >
             <Check class="panel-btn-icon" /> 승인
           </button>
           <span v-else class="panel-status panel-status--success">

@@ -334,7 +334,12 @@ function setActive(): void {
             <RefreshCw v-else class="panel-btn-icon" />
             재생성
           </button>
-          <button v-if="!isPromptApproved" class="panel-btn panel-btn--success" @click="approvePrompt">
+          <button
+            v-if="!isPromptApproved"
+            class="panel-btn panel-btn--success"
+            :disabled="isGeneratingPrompt || isGeneratingImage"
+            @click="approvePrompt"
+          >
             <Check class="panel-btn-icon" /> 승인
           </button>
           <span v-else class="panel-status panel-status--success">

@@ -223,7 +223,7 @@ function notifyBlocked(title: string, message: string): void {
 }
 
 function handleGenerateShot(): void {
-  if (isGeneratingShot.value) return;
+  if (isGeneratingShot.value || isGeneratingPrompt.value) return;
   if (!isParentReady.value) {
     notifyBlocked('샷 생성 불가', '상위 GRID 이미지가 준비되어야 샷을 생성할 수 있습니다.');
     return;
@@ -333,7 +333,12 @@ function handleGenerateShot(): void {
             <RefreshCw v-else class="panel-btn-icon" />
             재생성
           </button>
-          <button v-if="!isPromptApproved" class="panel-btn panel-btn--success" @click="approvePrompt">
+          <button
+            v-if="!isPromptApproved"
+            class="panel-btn panel-btn--success"
+            :disabled="isGeneratingPrompt || isGeneratingShot"
+            @click="approvePrompt"
+          >
             <Check class="panel-btn-icon" /> 승인
           </button>
           <span v-else class="panel-status panel-status--success">

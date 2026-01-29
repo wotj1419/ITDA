@@ -296,7 +296,7 @@ function notifyBlocked(title: string, message: string): void {
 }
 
 function handleGenerateVideo(): void {
-  if (isGeneratingVideo.value) return;
+  if (isGeneratingVideo.value || isGeneratingPrompt.value) return;
   if (!isStartShotReady.value) {
     notifyBlocked('영상 생성 불가', '시작 SHOT 이미지가 준비되어야 영상을 생성할 수 있습니다.');
     return;
@@ -444,7 +444,12 @@ function handleGenerateVideo(): void {
             <RefreshCw v-else class="panel-btn-icon" />
             재생성
           </button>
-          <button v-if="!isPromptApproved" class="panel-btn panel-btn--success" @click="approvePrompt">
+          <button
+            v-if="!isPromptApproved"
+            class="panel-btn panel-btn--success"
+            :disabled="isGeneratingPrompt || isGeneratingVideo"
+            @click="approvePrompt"
+          >
             <Check class="panel-btn-icon" /> 승인
           </button>
           <span v-else class="panel-status panel-status--success">
