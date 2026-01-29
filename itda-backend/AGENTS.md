@@ -34,6 +34,11 @@ Only proceed once requirements are clear.
 - `./gradlew bootRun`
 - `./gradlew test`
 
+## Git Safety (MANDATORY)
+- Do NOT run any git command that discards working-tree changes without explicit developer instruction.
+- Forbidden commands (non-exhaustive): `git reset --hard`, `git checkout -- <path>`, `git checkout -- .`, `git restore <path>`, `git restore .`, `git clean -fd`, `git clean -fdx`.
+- Prefer reverting via `apply_patch` with a minimal, explicit patch.
+
 ## Implementation Guidelines
 - Follow existing package structure (controller/service/mapper/domain/dto).
 - Keep validation consistent with existing patterns (`@Valid`, `@NotNull`, etc.).
