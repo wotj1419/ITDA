@@ -64,7 +64,7 @@ const getScenePresenceAvatars = (sceneId: number) =>
 <template>
   <div class="tab-content">
     <div class="section-header">
-      <h2 class="section-title">Scene Preview</h2>
+      <h2 class="section-title">씬 미리보기</h2>
       <div class="section-actions">
         <RouterLink
           :to="{ name: 'timeline', params: { id: projectId } }"
@@ -90,7 +90,7 @@ const getScenePresenceAvatars = (sceneId: number) =>
         <div class="scene-preview-row">
           <div class="preview-info">
             <div class="preview-header">
-              <Badge variant="default" size="sm">SCENE {{ scene.order }}</Badge>
+              <Badge variant="default" size="sm">씬 {{ scene.order }}</Badge>
               <Badge
                 :variant="resolveSceneStatusConfig(scene.status).variant"
                 size="sm"
@@ -122,7 +122,7 @@ const getScenePresenceAvatars = (sceneId: number) =>
                 v-slot="{ navigate }"
               >
                 <Button variant="primary" size="sm" @click="navigate">
-                  Scene Timeline
+                  씬 타임라인
                 </Button>
               </RouterLink>
             </div>
@@ -206,7 +206,7 @@ const getScenePresenceAvatars = (sceneId: number) =>
       <div class="preview-modal-header">
         <div>
           <p class="preview-modal-title">
-            {{ activePreviewScene?.title || 'Scene Preview' }}
+            {{ activePreviewScene?.title || '씬 미리보기' }}
           </p>
           <p v-if="activePreviewClip.label" class="preview-modal-subtitle">
             {{ activePreviewClip.label }}

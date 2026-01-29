@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.itda.backend.object.repository.ObjectMapper">
+
+    <resultMap id="ObjectSheetResultMap" type="com.itda.backend.object.domain.ObjectSheet">
+        <id property="id" column="id"/>
+        <result property="projectId" column="project_id"/>
+        <result property="name" column="name"/>
+        <result property="type" column="type" javaType="com.itda.backend.object.domain.ObjectType"/>
+        <result property="description" column="description"/>
+        <result property="style" column="style"/>
+        <result property="sheetImageUrl" column="sheet_image_url"/>
+        <result property="sheetImageAssetId" column="sheet_image_asset_id"/>
+        <result property="status" column="status" javaType="com.itda.backend.object.domain.ObjectStatus"/>
+        <result property="createdBy" column="created_by"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="updatedAt" column="updated_at"/>
+    </resultMap>
+
+    <sql id="objectColumns">
+        id, project_id, name, type, description, style, sheet_image_url, sheet_image_asset_id,
+        status, created_by, created_at, updated_at
+    </sql>
+
+    <insert id="insertObject" parameterType="com.itda.backend.object.domain.ObjectSheet"
+            useGeneratedKeys="true" keyProperty="id" keyColumn="id">
+        INSERT INTO objects (
+            project_id, name, type, description, style, sheet_image_url, sheet_image_asset_id, status, created_by
+        ) VALUES (
+            #{projectId}, #{name}, #{type}, #{description}, #{style}, #{sheetImageUrl}, #{sheetImageAssetId}, #{status}, #{createdBy}
+        )
+    </insert>
+
+    <select id="findById" resultMap="ObjectSheetResultMap">
+        SELECT <include refid="objectColumns"/>
+        FROM objects
+        WHERE id = #{id}
+    </select>
+
+    <select id="findByProjectId" resultMap="ObjectSheetResultMap">
+        SELECT <include refid="objectColumns"/>
+        FROM objects
+        WHERE project_id = #{projectId}
+        ORDER BY id DESC
+    </select>
+
+    <select id="findByIds" resultMap="ObjectSheetResultMap">
+        SELECT <include refid="objectColumns"/>
+        FROM objects
+        <where>
+            <if test="ids != null and ids.size() > 0">
+                id IN
+                <foreach collection="ids" item="id" open="(" separator="," close=")">
+                    #{id}
+                </foreach>
+            </if>
+            <if test="ids == null or ids.size() == 0">
+                1 = 0
+            </if>
+        </where>
+    </select>
+
+    <select id="countByProjectIdAndIds" resultType="int">
+        SELECT COUNT(*)
+        FROM objects
+        WHERE project_id = #{projectId}
+          AND id IN
+          <foreach collection="ids" item="id" open="(" separator="," close=")">
+              #{id}
+          </foreach>
+    </select>
+
+    <update id="updateObject">
+        UPDATE objects
+        <set>
+            <if test="name != null">
+                name = #{name},
+            </if>
+            <if test="type != null">
+                type = #{type},
+            </if>
+            <if test="description != null">
+                description = #{description},
+            </if>
+            <if test="style != null">
+                style = #{style},
+            </if>
+            updated_at = CURRENT_TIMESTAMP
+        </set>
+        WHERE id = #{id}
+    </update>
+
+    <update id="updateSheetImage">
+        UPDATE objects
+        SET sheet_image_url = #{sheetImageUrl},
+            sheet_image_asset_id = #{sheetImageAssetId},
+            status = #{status},
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = #{id}
+    </update>
+
+    <delete id="deleteObject">
+        DELETE FROM objects
+        WHERE id = #{id}
+    </delete>
+
+</mapper>

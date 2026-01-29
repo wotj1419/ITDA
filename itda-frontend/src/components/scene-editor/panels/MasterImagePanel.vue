@@ -7,12 +7,19 @@
 import { ref, computed, watch, nextTick, onUnmounted } from 'vue';
 import type { Node } from '@vue-flow/core';
 import type { MasterImageNodeData } from '../../../types/ui/sceneNodes';
-import { PromptStatus } from '../../../types/ui/sceneNodes';
+import { NodeType, PromptStatus } from '../../../types/ui/sceneNodes';
 import BasePanel from './BasePanel.vue';
 import { useSceneNodeStore } from '../../../stores/sceneNode';
+import { useObjectStore } from '../../../stores/object';
 import { useNodeGeneration } from '../../../composables/useNodeGeneration';
 import { Film, Palette, Sun, Smile, Sparkles, FileText, Image, Check, RefreshCw, Star, Users, Loader2 } from 'lucide-vue-next';
 import { gsap } from 'gsap';
+import { resolveMoodKey, resolveStyleKey, resolveTimeOfDayKey } from '../../../utils/nodeSettings';
+import {
+  DEFAULT_MASTER_MOOD,
+  DEFAULT_MASTER_STYLE,
+  DEFAULT_MASTER_TIME_OF_DAY,
+} from '../../../utils/nodeDefaults';
 
 interface Props {
   node: Node<MasterImageNodeData>;
@@ -20,12 +27,13 @@ interface Props {
 
 const props = defineProps<Props>();
 const nodeStore = useSceneNodeStore();
+const objectStore = useObjectStore();
 // 폼 상태 - objectIds는 배열로 관리 (다중 선택)
 const form = ref({
-  style: '',
-  timeOfDay: '',
-  mood: '',
-  objectIds: [] as string[],  // 등장 오브젝트 IDs (캐릭터 포함)
+  style: DEFAULT_MASTER_STYLE,
+  timeOfDay: DEFAULT_MASTER_TIME_OF_DAY,
+  mood: DEFAULT_MASTER_MOOD,
+  objectIds: [] as number[],  // 등장 오브젝트 IDs (캐릭터 포함)
   prompt: '',
 });
 
@@ -44,10 +52,11 @@ const {
   getPrompt: () => form.value.prompt,
   getPromptPayload: () => ({
     nodeType: 'MASTER',
+    sceneOneLine: buildSceneOneLine(),
     style: form.value.style,
     timeOfDay: form.value.timeOfDay,
     mood: form.value.mood,
-    objectIds: form.value.objectIds,
+    objects: selectedObjectNames.value,
   }),
   getPromptUpdate: (prompt) => ({
     style: form.value.style,
@@ -58,9 +67,9 @@ const {
   }),
   getApprovedUpdate: () => ({ prompt: form.value.prompt }),
   getJobSettings: () => ({
-    style: form.value.style,
-    timeOfDay: form.value.timeOfDay,
-    mood: form.value.mood,
+    styleKey: resolveStyleKey(form.value.style),
+    timeOfDayKey: resolveTimeOfDayKey(form.value.timeOfDay),
+    moodKey: resolveMoodKey(form.value.mood) ?? 'NEUTRAL',
     objectIds: form.value.objectIds,
   }),
   getJobSuccessUpdate: ({ resultUrl, thumbnailUrl }) => ({
@@ -74,21 +83,60 @@ const {
 
 const styleOptions = ['실사', '애니메이션', '픽사', '수채화', '유화'];
 const timeOptions = ['아침', '낮', '저녁', '밤'];
-const moodOptions = ['편안', '고독', '긴장', '행복', '우울'];
+const moodOptions = ['중립', '편안', '고독', '긴장', '행복', '우울'];
 
-// TODO: 실제로는 Store/API에서 캐릭터/오브젝트 목록을 가져와야 함
-const objectOptions = [
-  { id: 'char-nahido', name: '나희도', type: 'character' },
-  { id: 'char-baekijin', name: '백이진', type: 'character' },
-  { id: 'char-goyurim', name: '고유림', type: 'character' },
-  { id: 'obj-robot-bell', name: '로봇 벨', type: 'object' },
-  { id: 'obj-spaceship', name: '우주선', type: 'object' },
-];
+const objectOptions = computed(() =>
+  objectStore.objects.map((item) => ({
+    id: item.objectId,
+    name: item.name,
+    type: item.type,
+  }))
+);
+
+const objectNameMap = computed(() => {
+  const map = new Map<number, string>();
+  objectOptions.value.forEach((item) => map.set(item.id, item.name));
+  return map;
+});
+
+const selectedObjectNames = computed(() =>
+  form.value.objectIds
+    .map((id) => objectNameMap.value.get(id))
+    .filter((name): name is string => Boolean(name))
+);
 
 const data = computed(() => props.node.data as MasterImageNodeData | undefined);
+const sceneHeaderData = computed(() =>
+  nodeStore.nodes.find((node) => node.data?.type === NodeType.SCENE_HEADER)?.data
+);
 const isPromptGenerated = computed(() => data.value?.promptStatus !== PromptStatus.DRAFT);
 const isPromptApproved = computed(() => data.value?.promptStatus === PromptStatus.APPROVED);
 const canGenerate = computed(() => isPromptApproved.value && !isGeneratingImage.value);
+const isLookChanged = computed(() => {
+  if (!data.value) return false;
+  const formIds = [...form.value.objectIds].sort((a, b) => a - b).join(',');
+  const dataIds = [...(data.value.objectIds || [])].sort((a, b) => a - b).join(',');
+  return (
+    form.value.style !== (data.value.style || '') ||
+    form.value.timeOfDay !== (data.value.timeOfDay || '') ||
+    form.value.mood !== (data.value.mood || '') ||
+    formIds !== dataIds
+  );
+});
+
+function buildSceneOneLine(): string {
+  const parts: string[] = [];
+  const header = sceneHeaderData.value as { title?: string; description?: string } | undefined;
+  if (header?.title) parts.push(`scene: ${header.title}`);
+  if (header?.description) parts.push(`description: ${header.description}`);
+  if (form.value.style) parts.push(`style: ${form.value.style}`);
+  if (form.value.timeOfDay) parts.push(`time: ${form.value.timeOfDay}`);
+  if (form.value.mood) parts.push(`mood: ${form.value.mood}`);
+  if (selectedObjectNames.value.length) {
+    parts.push(`objects: ${selectedObjectNames.value.join(', ')}`);
+  }
+  return parts.join(', ');
+}
 const generateButtonRef = ref<HTMLButtonElement | null>(null);
 let generateButtonTween: gsap.core.Tween | null = null;
 
@@ -96,9 +144,9 @@ let generateButtonTween: gsap.core.Tween | null = null;
 watch(() => props.node.id, () => {
   if (!data.value) return;
   form.value = {
-    style: data.value.style || '',
-    timeOfDay: data.value.timeOfDay || '',
-    mood: data.value.mood || '',
+    style: data.value.style || DEFAULT_MASTER_STYLE,
+    timeOfDay: data.value.timeOfDay || DEFAULT_MASTER_TIME_OF_DAY,
+    mood: data.value.mood || DEFAULT_MASTER_MOOD,
     objectIds: data.value.objectIds || [],
     prompt: data.value.prompt || '',
   };
@@ -112,6 +160,22 @@ watch(
     if (normalized !== form.value.prompt) {
       form.value.prompt = normalized;
     }
+  }
+);
+
+watch(
+  () => [
+    data.value?.style,
+    data.value?.timeOfDay,
+    data.value?.mood,
+    data.value?.objectIds,
+  ],
+  () => {
+    if (!data.value) return;
+    form.value.style = data.value.style || DEFAULT_MASTER_STYLE;
+    form.value.timeOfDay = data.value.timeOfDay || DEFAULT_MASTER_TIME_OF_DAY;
+    form.value.mood = data.value.mood || DEFAULT_MASTER_MOOD;
+    form.value.objectIds = [...(data.value.objectIds || [])];
   }
 );
 
@@ -146,9 +210,8 @@ onUnmounted(() => {
   generateButtonTween?.kill();
   generateButtonTween = null;
 });
-
 // 오브젝트 선택 토글
-function toggleObject(objectId: string): void {
+function toggleObject(objectId: number): void {
   const idx = form.value.objectIds.indexOf(objectId);
   if (idx >= 0) {
     form.value.objectIds.splice(idx, 1);
@@ -160,19 +223,33 @@ function toggleObject(objectId: string): void {
 
 
 function setActive(): void {
+  if (data.value?.isActive) return;
   nodeStore.setActiveMaster(props.node.id);
 }
 </script>
 
 <template>
-  <BasePanel title="마스터 이미지 생성" :icon="Film">
+  <BasePanel title="마스터 이미지 생성" :icon="Film" class="master-panel">
+    <template v-if="data" #header-actions>
+      <button
+        class="panel-btn master-panel__header-action"
+        :class="data.isActive ? 'panel-btn--confirmed' : 'panel-btn--secondary'"
+        @click="setActive"
+        :title="data.isActive ? '현재 Active' : 'Active로 설정'"
+      >
+        <Star class="panel-btn-icon" />
+        {{ data.isActive ? '마스터 활성' : '활성화' }}
+      </button>
+    </template>
     <template v-if="data">
-      <!-- Active Status -->
-      <div v-if="!data.isActive" class="panel-alert">
-        <button class="panel-btn panel-btn--secondary" @click="setActive">
-          <Star class="panel-btn-icon" />
-          Active로 설정
-        </button>
+      <div v-if="isLookChanged" class="panel-alert">
+        룩 변경됨 → MASTER 재생성 필요
+      </div>
+      <div v-if="!data.isActive" class="master-panel__inactive-hint">
+        <span class="master-panel__inactive-title">안내</span>
+        <p class="master-panel__inactive-text">
+          이 마스터가 활성화되어야 하위 생성이 정상 동작합니다.
+        </p>
       </div>
 
       <!-- Style Selection -->
@@ -181,8 +258,12 @@ function setActive(): void {
           <Palette class="panel-label-icon" />
           스타일
         </label>
-        <div class="panel-radio-group">
-          <label v-for="opt in styleOptions" :key="opt" class="panel-radio">
+        <div class="panel-radio-group panel-style-grid">
+          <label
+            v-for="opt in styleOptions"
+            :key="opt"
+            :class="['panel-radio', 'panel-style-card', { 'panel-style-card--primary': opt === '실사' }]"
+          >
             <input type="radio" v-model="form.style" :value="opt" />
             <span class="panel-radio-label">{{ opt }}</span>
           </label>
@@ -195,8 +276,8 @@ function setActive(): void {
           <Sun class="panel-label-icon" />
           시간대
         </label>
-        <div class="panel-radio-group">
-          <label v-for="opt in timeOptions" :key="opt" class="panel-radio">
+        <div class="panel-radio-group panel-pill-group panel-pill-group--accent">
+          <label v-for="opt in timeOptions" :key="opt" class="panel-radio panel-pill">
             <input type="radio" v-model="form.timeOfDay" :value="opt" />
             <span class="panel-radio-label">{{ opt }}</span>
           </label>
@@ -209,17 +290,14 @@ function setActive(): void {
           <Users class="panel-label-icon" />
           등장 오브젝트
         </label>
-        <div class="panel-checkbox-group">
-          <label v-for="obj in objectOptions" :key="obj.id" class="panel-checkbox">
-            <input 
-              type="checkbox" 
+        <div class="panel-radio-group panel-pill-group panel-pill-group--accent">
+          <label v-for="obj in objectOptions" :key="obj.id" class="panel-radio panel-pill">
+            <input
+              type="checkbox"
               :checked="form.objectIds.includes(obj.id)"
               @change="toggleObject(obj.id)"
             />
-            <span class="panel-checkbox-label">
-              {{ obj.name }}
-              <span class="panel-checkbox-tag">{{ obj.type === 'character' ? '캐릭터' : '오브젝트' }}</span>
-            </span>
+            <span class="panel-radio-label">{{ obj.name }}</span>
           </label>
         </div>
       </div>
@@ -230,8 +308,8 @@ function setActive(): void {
           <Smile class="panel-label-icon" />
           분위기
         </label>
-        <div class="panel-radio-group">
-          <label v-for="opt in moodOptions" :key="opt" class="panel-radio">
+        <div class="panel-radio-group panel-pill-group panel-pill-group--accent">
+          <label v-for="opt in moodOptions" :key="opt" class="panel-radio panel-pill">
             <input type="radio" v-model="form.mood" :value="opt" />
             <span class="panel-radio-label">{{ opt }}</span>
           </label>
@@ -245,7 +323,7 @@ function setActive(): void {
 
       <!-- Generate Prompt -->
       <button 
-        class="panel-btn panel-btn--secondary panel-btn--full" 
+        class="panel-btn panel-btn--secondary panel-btn--full panel-btn--prompt-generate" 
         :disabled="isGeneratingPrompt"
         @click="generatePrompt"
       >
@@ -255,15 +333,18 @@ function setActive(): void {
       </button>
 
       <!-- Generated Prompt -->
-      <div v-if="isPromptGenerated" class="panel-section">
+      <div v-if="isPromptGenerated" class="panel-section panel-section--prompt">
         <label class="panel-label">
           <FileText class="panel-label-icon" />
           AI 프롬프트
+          <span class="panel-label-badge">생성됨</span>
         </label>
         <textarea v-model="form.prompt" class="panel-textarea panel-textarea--prompt" rows="4"></textarea>
-        <div class="panel-prompt-actions">
-          <button class="panel-btn panel-btn--text" @click="generatePrompt">
-            <RefreshCw class="panel-btn-icon" /> 재생성
+        <div class="panel-prompt-actions panel-prompt-actions--right">
+          <button class="panel-btn panel-btn--text" :disabled="isGeneratingPrompt" @click="generatePrompt">
+            <Loader2 v-if="isGeneratingPrompt" class="panel-btn-icon panel-btn-icon--spin" />
+            <RefreshCw v-else class="panel-btn-icon" />
+            재생성
           </button>
           <button v-if="!isPromptApproved" class="panel-btn panel-btn--success" @click="approvePrompt">
             <Check class="panel-btn-icon" /> 승인
@@ -292,13 +373,54 @@ function setActive(): void {
 </template>
 
 <style scoped>
-/* 체크박스 태그 스타일 */
-.panel-checkbox-tag {
-  font-size: 0.65rem;
-  padding: 0.125rem 0.375rem;
-  background: var(--rose-100, #FFF0F5);
-  color: var(--rose-600, #DB2777);
-  border-radius: 0.25rem;
-  margin-left: 0.5rem;
+.master-panel__header-action {
+  padding: 0.4rem 0.65rem;
+  font-size: 0.75rem;
+  gap: 0.35rem;
+  border-radius: 0.65rem;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.master-panel__header-action .panel-btn-icon {
+  width: 14px;
+  height: 14px;
+}
+
+.master-panel :deep(.base-panel__actions) {
+  width: 100%;
+  flex: 1 1 100%;
+  margin-left: 0;
+  justify-content: flex-start;
+}
+
+.master-panel :deep(.base-panel__close) {
+  margin-left: auto;
+}
+
+.master-panel__inactive-hint {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin-bottom: 1rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--rose-50, #FFFAFC);
+  border: 1px solid var(--rose-200, #FFE8F2);
+  border-radius: 0.75rem;
+}
+
+.master-panel__inactive-title {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--rose-600, #FF6B8A);
+}
+
+.master-panel__inactive-text {
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--gray-700, #374151);
+  line-height: 1.4;
+  word-break: keep-all;
+  white-space: normal;
 }
 </style>

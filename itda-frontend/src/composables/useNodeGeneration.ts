@@ -82,7 +82,10 @@ export function useNodeGeneration(options: UseNodeGenerationOptions) {
     const toastId = startGenerationToast(options.toastType);
 
     try {
-      nodeStore.updateNode(options.nodeId, { jobStatus: JobStatus.RUNNING });
+      nodeStore.updateNodeLocal(options.nodeId, {
+        jobStatus: JobStatus.RUNNING,
+        generationState: 'requested',
+      });
 
       const jobId = await aiService.generateNode(options.nodeId, prompt, {
         nodeType: options.nodeType,
@@ -105,8 +108,9 @@ export function useNodeGeneration(options: UseNodeGenerationOptions) {
           options.nodeType === 'VIDEO'
             ? resolveApiUrl(result.thumbnailUrl ?? null)
             : blobUrl ?? resolveApiUrl(result.thumbnailUrl ?? result.resultUrl ?? null);
-        nodeStore.updateNode(options.nodeId, {
+        nodeStore.updateNodeLocal(options.nodeId, {
           jobStatus: JobStatus.SUCCEEDED,
+          generationState: null,
           ...options.getJobSuccessUpdate({
             resultUrl: resolvedResultUrl ?? undefined,
             thumbnailUrl: resolvedThumbnailUrl,
@@ -122,13 +126,17 @@ export function useNodeGeneration(options: UseNodeGenerationOptions) {
       const node = nodeStore.nodes.find((item) => item.id === options.nodeId);
       const hasUrl = Boolean(node?.data?.thumbnailUrl || node?.data?.imageUrl);
       if (options.nodeType === 'SHOT' && !hasUrl) {
-        nodeStore.updateNode(options.nodeId, {
+        nodeStore.updateNodeLocal(options.nodeId, {
           jobStatus: JobStatus.FAILED,
+          generationState: 'failed',
           imageUrl: SHOT_FALLBACK_THUMBNAIL,
           thumbnailUrl: SHOT_FALLBACK_THUMBNAIL,
         });
       } else {
-        nodeStore.updateNode(options.nodeId, { jobStatus: JobStatus.FAILED });
+        nodeStore.updateNodeLocal(options.nodeId, {
+          jobStatus: JobStatus.FAILED,
+          generationState: 'failed',
+        });
       }
       const reason = error instanceof Error ? error.message : '알 수 없는 오류';
       finishGenerationToast(toastId, options.toastType, 'error', { reason });

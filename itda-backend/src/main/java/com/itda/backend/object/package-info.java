@@ -1,3 +1,2 @@
-// 이 패키지는 향후 object 도메인 구현 시 사용됩니다.
-// 스키마 확정 후 구현 예정
+// 오브젝트 도메인 패키지
 package com.itda.backend.object;

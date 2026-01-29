@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
  * NodeCanvas - Vue Flow 기반 메인 캔버스
- * 
+ *
  * 설계 문서: docs/vue-flow-node-workflow-design.md Section 2
  */
 import { ref, watch } from 'vue';
@@ -9,6 +9,7 @@ import { VueFlow, useVueFlow } from '@vue-flow/core';
 import { Background } from '@vue-flow/background';
 import { Controls } from '@vue-flow/controls';
 import { nodeTypes } from './nodes';
+import FlowingEdge from './edges/FlowingEdge.vue';
 import { useSceneNodeStore } from '../../stores/sceneNode';
 import { useAutoLayout } from '../../composables/useAutoLayout';
 import { NodeType } from '../../types/ui/sceneNodes';
@@ -39,7 +40,25 @@ const emit = defineEmits<{
 
 const nodeStore = useSceneNodeStore();
 const { getLayoutedElements } = useAutoLayout();
-const { fitView, onNodeClick, onNodeDragStart, onSelectionDragStart } = useVueFlow();
+const { fitView, onNodeClick, onNodeDragStart, onNodeDragStop, onSelectionDragStart, onSelectionDragStop } = useVueFlow();
+
+type FitViewOptions = {
+  padding?: number;
+  minZoom?: number;
+  maxZoom?: number;
+};
+
+const DEFAULT_HEADER_POSITION = { x: 0, y: -200 };
+const INITIAL_ZOOM = 0.7;
+const INITIAL_FIT_OPTIONS: FitViewOptions = {
+  padding: 0.2,
+  minZoom: 0.25,
+  maxZoom: INITIAL_ZOOM,
+};
+
+const edgeTypes = {
+  flowing: FlowingEdge,
+} as const;
 
 // =============================================================================
 // Lifecycle
@@ -47,13 +66,33 @@ const { fitView, onNodeClick, onNodeDragStart, onSelectionDragStart } = useVueFl
 
 const hasAppliedInitialLayout = ref(false);
 
-watch(
-  () => [nodeStore.nodes.length, nodeStore.edges.length],
-  ([nodeCount = 0]) => {
-    if (nodeCount > 0 && !hasAppliedInitialLayout.value) {
-      hasAppliedInitialLayout.value = true;
-      applyLayout();
+function hasMeaningfulPositions(): boolean {
+  return nodeStore.nodes.some((node) => {
+    const position = node.position ?? { x: 0, y: 0 };
+    if (node.data?.type === NodeType.SCENE_HEADER) {
+      return position.x !== DEFAULT_HEADER_POSITION.x || position.y !== DEFAULT_HEADER_POSITION.y;
     }
+    return position.x !== 0 || position.y !== 0;
+  });
+}
+
+watch(
+  () => [nodeStore.isLoading, nodeStore.nodes.length, nodeStore.edges.length] as const,
+  ([isLoading, nodeCount, edgeCount]) => {
+    const nodeTotal = typeof nodeCount === 'number' ? nodeCount : 0;
+    const edgeTotal = typeof edgeCount === 'number' ? edgeCount : 0;
+    if (isLoading) return;
+    if (nodeTotal <= 1) return;
+    if (edgeTotal === 0) return;
+    if (hasAppliedInitialLayout.value) return;
+
+    if (hasMeaningfulPositions()) {
+      hasAppliedInitialLayout.value = true;
+      return;
+    }
+
+    hasAppliedInitialLayout.value = true;
+    applyLayout(INITIAL_FIT_OPTIONS);
   },
   { immediate: true }
 );
@@ -69,7 +108,7 @@ watch(
 // Layout
 // =============================================================================
 
-function applyLayout(): void {
+function applyLayout(fitOptions?: FitViewOptions): void {
   const { nodes: layoutedNodes } = getLayoutedElements(
     nodeStore.nodes,
     nodeStore.edges,
@@ -86,8 +125,14 @@ function applyLayout(): void {
 
   // 약간의 지연 후 fitView
   setTimeout(() => {
-    fitView({ padding: 0.2 });
+    const resolvedOptions = fitOptions ? { ...fitOptions } : { padding: 0.2 };
+    if (resolvedOptions.padding === undefined) {
+      resolvedOptions.padding = 0.2;
+    }
+    fitView(resolvedOptions);
   }, 100);
+
+  nodeStore.persistNodePositions();
 }
 
 // =============================================================================
@@ -113,8 +158,14 @@ const handleNodeDragStart = () => {
   nodeStore.pushPositionSnapshot();
 };
 
+const handleNodeDragStop = () => {
+  nodeStore.persistNodePositions();
+};
+
 onNodeDragStart(handleNodeDragStart);
+onNodeDragStop(handleNodeDragStop);
 onSelectionDragStart(handleNodeDragStart);
+onSelectionDragStop(handleNodeDragStop);
 
 function handlePaneClick(): void {
   // 캔버스 빈 영역 클릭 시 선택 해제
@@ -164,15 +215,15 @@ defineExpose({
       v-model:nodes="nodeStore.nodes"
       v-model:edges="nodeStore.edges"
       :node-types="nodeTypes"
-      :default-viewport="{ x: 0, y: 0, zoom: 1 }"
+      :edge-types="edgeTypes"
+      :default-viewport="{ x: 0, y: 0, zoom: INITIAL_ZOOM }"
       :min-zoom="0.25"
       :max-zoom="2"
-      fit-view-on-init
       @pane-click="handlePaneClick"
       @node-resize-start="handleNodeDragStart"
     >
       <!-- Background -->
-      <Background pattern-color="var(--rose-200)" :gap="24" />
+      <Background variant="dots" color="#FFD6E5" :gap="60" :size="5" />
 
       <!-- Controls -->
       <Controls position="bottom-left" />
@@ -220,8 +271,8 @@ defineExpose({
     </VueFlow>
 
     <!-- End Shot Selection Mode Overlay -->
-    <div 
-      v-if="nodeStore.selectionMode === 'selectEndShot'" 
+    <div
+      v-if="nodeStore.selectionMode === 'selectEndShot'"
       class="selection-mode-overlay"
     >
       <div class="selection-mode-message">

@@ -24,7 +24,7 @@ class WebSocketManager {
             heartbeatOutgoing: 4000,
         });
 
-        this.client.onConnect = (frame) => {
+        this.client.onConnect = () => {
             console.log('Connected to WebSocket');
             // Subscribe to topics
             this.subscribe();

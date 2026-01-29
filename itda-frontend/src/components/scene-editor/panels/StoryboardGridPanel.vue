@@ -2,30 +2,40 @@
 /**
  * StoryboardGridPanel - 스토리보드 그리드 생성/편집 패널
  */
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
+import { ref, computed, watch } from 'vue';
 import type { Node as VueFlowNode } from '@vue-flow/core';
-import type { StoryboardGridNodeData, GridLayout } from '../../../types/ui/sceneNodes';
-import { PromptStatus } from '../../../types/ui/sceneNodes';
+import type { StoryboardGridNodeData, GridLayout, GridMode } from '../../../types/ui/sceneNodes';
+import { JobStatus, NodeType, PromptStatus } from '../../../types/ui/sceneNodes';
 import BasePanel from './BasePanel.vue';
+import { useSceneNodeStore } from '../../../stores/sceneNode';
+import { useUIStore } from '../../../stores/ui';
 import { useNodeGeneration } from '../../../composables/useNodeGeneration';
-import { LayoutGrid, Camera, Target, FileText, Sparkles, Check, RefreshCw } from 'lucide-vue-next';
+import { useHelpPopover } from '../../../composables/useHelpPopover';
+import { LayoutGrid, Camera, Target, FileText, Sparkles, Check, RefreshCw, Loader2 } from 'lucide-vue-next';
+import { mapShotTypeLabelsToKeys } from '../../../utils/nodeSettings';
+import { DEFAULT_GRID_LAYOUT, DEFAULT_GRID_SHOT_TYPES } from '../../../utils/nodeDefaults';
 
 interface Props {
   node: VueFlowNode<StoryboardGridNodeData>;
 }
 
 const props = defineProps<Props>();
-const shotTypeHelpRef = ref<HTMLElement | null>(null);
-const isShotTypeHelpOpen = ref(false);
+const nodeStore = useSceneNodeStore();
+const uiStore = useUIStore();
+const shotTypeHelp = useHelpPopover();
 
 const form = ref({
-  layout: '2x3' as GridLayout,
-  shotTypes: [] as string[],
+  gridMode: 'SHOT_VARIATIONS' as GridMode,
+  layout: DEFAULT_GRID_LAYOUT as GridLayout,
+  shotTypes: [...DEFAULT_GRID_SHOT_TYPES] as string[],
   compositionHint: '',
+  beats: [] as string[],
+  continuityRules: '',
   prompt: '',
 });
 
 const {
+  isGeneratingPrompt,
   isGeneratingJob: isGeneratingGrid,
   clearError,
   generatePrompt,
@@ -38,22 +48,41 @@ const {
   getPrompt: () => form.value.prompt,
   getPromptPayload: () => ({
     nodeType: 'GRID',
+    sceneOneLine: buildSceneOneLine(),
     layout: form.value.layout,
-    shotTypes: form.value.shotTypes,
-    compositionHint: form.value.compositionHint,
+    ...(form.value.gridMode === 'SHOT_VARIATIONS'
+      ? {
+        shotTypes: form.value.shotTypes,
+        compositionHint: form.value.compositionHint,
+      }
+      : {}),
   }),
   getPromptUpdate: (prompt) => ({
+    gridMode: form.value.gridMode,
     layout: form.value.layout,
     shotTypes: form.value.shotTypes,
     compositionHint: form.value.compositionHint,
+    beats: form.value.beats,
+    continuityRules: form.value.continuityRules,
     prompt,
   }),
   getApprovedUpdate: () => ({ prompt: form.value.prompt }),
-  getJobSettings: () => ({
-    layout: form.value.layout,
-    shotTypes: form.value.shotTypes,
-    compositionHint: form.value.compositionHint,
-  }),
+  getJobSettings: () => {
+    if (form.value.gridMode === 'STORY_BEATS') {
+      return {
+        gridMode: 'STORY_BEATS',
+        layout: form.value.layout,
+        beatsKo: form.value.beats,
+        continuityRulesKo: form.value.continuityRules,
+      };
+    }
+    return {
+      gridMode: 'SHOT_VARIATIONS',
+      layout: form.value.layout,
+      shotTypes: mapShotTypeLabelsToKeys(form.value.shotTypes),
+      compositionHintKo: form.value.compositionHint,
+    };
+  },
   getJobSuccessUpdate: ({ resultUrl, thumbnailUrl }) => ({
     imageUrl: resultUrl || null,
     thumbnailUrl: thumbnailUrl || resultUrl || null,
@@ -64,6 +93,10 @@ const {
 });
 
 const layoutOptions: GridLayout[] = ['2x2', '2x3', '3x3'];
+const gridModeOptions = [
+  { value: 'SHOT_VARIATIONS', label: '샷 변주' },
+  { value: 'STORY_BEATS', label: '스토리 비트' },
+] as const;
 const shotTypeHelpItems = [
   {
     label: '와이드샷',
@@ -95,14 +128,67 @@ const shotTypeOptions = shotTypeHelpItems.map((item) => item.label);
 const data = computed(() => props.node.data as StoryboardGridNodeData | undefined);
 const isPromptGenerated = computed(() => data.value?.promptStatus !== PromptStatus.DRAFT);
 const isPromptApproved = computed(() => data.value?.promptStatus === PromptStatus.APPROVED);
-const canGenerate = computed(() => isPromptApproved.value && !isGeneratingGrid.value);
+const isStoryBeats = computed(() => form.value.gridMode === 'STORY_BEATS');
+const sceneHeaderData = computed(() =>
+  nodeStore.nodes.find((node) => node.data?.type === NodeType.SCENE_HEADER)?.data
+);
+const parentMasterData = computed(() =>
+  nodeStore.nodes.find((node) => node.id === data.value?.parentNodeId)?.data
+);
+const isParentReady = computed(() => {
+  const parent = parentMasterData.value as { jobStatus?: string; imageUrl?: string | null; thumbnailUrl?: string | null } | undefined;
+  const hasImage = Boolean(parent?.thumbnailUrl || parent?.imageUrl);
+  return parent?.jobStatus === JobStatus.SUCCEEDED && hasImage;
+});
+
+function buildSceneOneLine(): string {
+  const parts: string[] = [];
+  const header = sceneHeaderData.value as { title?: string; description?: string } | undefined;
+  if (header?.title) parts.push(`scene: ${header.title}`);
+  if (header?.description) parts.push(`description: ${header.description}`);
+  if (form.value.layout) parts.push(`layout: ${form.value.layout}`);
+  if (form.value.gridMode === 'SHOT_VARIATIONS') {
+    if (form.value.shotTypes.length) parts.push(`shotTypes: ${form.value.shotTypes.join(', ')}`);
+    if (form.value.compositionHint) parts.push(`composition: ${form.value.compositionHint}`);
+  } else {
+    const beats = form.value.beats.filter((beat) => beat.trim().length > 0);
+    if (beats.length) parts.push(`beats: ${beats.join(' | ')}`);
+    if (form.value.continuityRules) parts.push(`continuityRules: ${form.value.continuityRules}`);
+  }
+  return parts.join(', ');
+}
+
+function getPanelCount(layout: GridLayout): number {
+  const parts = layout.split('x');
+  if (parts.length !== 2) return 0;
+  const rows = Number(parts[0]);
+  const cols = Number(parts[1]);
+  if (!Number.isFinite(rows) || !Number.isFinite(cols)) return 0;
+  return rows * cols;
+}
+
+function normalizeBeats(beats: string[], layout: GridLayout): string[] {
+  const count = getPanelCount(layout);
+  const next = beats.slice(0, count);
+  while (next.length < count) {
+    next.push('');
+  }
+  return next;
+}
 
 watch(() => props.node.id, () => {
   if (!data.value) return;
+  const layout = data.value.layout || DEFAULT_GRID_LAYOUT;
+  const gridMode = data.value.gridMode ?? 'SHOT_VARIATIONS';
   form.value = {
-    layout: data.value.layout || '2x3',
-    shotTypes: data.value.shotTypes || [],
+    gridMode,
+    layout,
+    shotTypes: (data.value.shotTypes && data.value.shotTypes.length > 0)
+      ? data.value.shotTypes
+      : [...DEFAULT_GRID_SHOT_TYPES],
     compositionHint: data.value.compositionHint || '',
+    beats: normalizeBeats(data.value.beats || [], layout),
+    continuityRules: data.value.continuityRules || '',
     prompt: data.value.prompt || '',
   };
   clearError();
@@ -118,6 +204,45 @@ watch(
   }
 );
 
+watch(
+  () => [
+    data.value?.gridMode,
+    data.value?.layout,
+    data.value?.shotTypes,
+    data.value?.compositionHint,
+    data.value?.beats,
+    data.value?.continuityRules,
+  ],
+  () => {
+    if (!data.value) return;
+    const layout = data.value.layout || DEFAULT_GRID_LAYOUT;
+    form.value.gridMode = data.value.gridMode ?? 'SHOT_VARIATIONS';
+    form.value.layout = layout;
+    form.value.shotTypes = (data.value.shotTypes && data.value.shotTypes.length > 0)
+      ? [...data.value.shotTypes]
+      : [...DEFAULT_GRID_SHOT_TYPES];
+    form.value.compositionHint = data.value.compositionHint || '';
+    form.value.beats = normalizeBeats(data.value.beats || [], layout);
+    form.value.continuityRules = data.value.continuityRules || '';
+  }
+);
+
+watch(
+  () => form.value.layout,
+  (nextLayout) => {
+    form.value.beats = normalizeBeats(form.value.beats, nextLayout);
+  }
+);
+
+watch(
+  () => form.value.gridMode,
+  (nextMode) => {
+    if (nextMode === 'STORY_BEATS') {
+      form.value.beats = normalizeBeats(form.value.beats, form.value.layout);
+    }
+  }
+);
+
 function toggleShotType(type: string): void {
   const idx = form.value.shotTypes.indexOf(type);
   if (idx >= 0) {
@@ -127,45 +252,54 @@ function toggleShotType(type: string): void {
   }
 }
 
-function toggleShotTypeHelp(event: MouseEvent): void {
-  event.stopPropagation();
-  isShotTypeHelpOpen.value = !isShotTypeHelpOpen.value;
+function notifyBlocked(title: string, message: string): void {
+  uiStore.showToast({
+    type: 'warning',
+    title,
+    message,
+  });
 }
 
-function closeShotTypeHelp(): void {
-  isShotTypeHelpOpen.value = false;
-}
-
-function handleDocumentClick(event: MouseEvent): void {
-  if (!isShotTypeHelpOpen.value) return;
-  const target = event.target as Node | null;
-  if (!shotTypeHelpRef.value || !target) return;
-  if (!shotTypeHelpRef.value.contains(target)) {
-    closeShotTypeHelp();
+function handleGenerateGrid(): void {
+  if (isGeneratingGrid.value) return;
+  if (!isParentReady.value) {
+    notifyBlocked('그리드 생성 불가', '상위 MASTER 이미지가 준비되어야 그리드를 생성할 수 있습니다.');
+    return;
   }
-}
-
-function handleDocumentKeydown(event: KeyboardEvent): void {
-  if (event.key === 'Escape' && isShotTypeHelpOpen.value) {
-    closeShotTypeHelp();
+  if (!isPromptGenerated.value) {
+    notifyBlocked('프롬프트 필요', '먼저 프롬프트를 생성해 주세요.');
+    return;
   }
+  if (!isPromptApproved.value) {
+    notifyBlocked('프롬프트 승인 필요', '승인 후 그리드를 생성할 수 있습니다.');
+    return;
+  }
+  generateGrid();
 }
-
-onMounted(() => {
-  document.addEventListener('click', handleDocumentClick);
-  document.addEventListener('keydown', handleDocumentKeydown);
-});
-
-onUnmounted(() => {
-  document.removeEventListener('click', handleDocumentClick);
-  document.removeEventListener('keydown', handleDocumentKeydown);
-});
 
 </script>
 
 <template>
   <BasePanel title="스토리보드 그리드 생성" :icon="LayoutGrid">
     <template v-if="data">
+      <!-- Grid Mode -->
+      <div class="panel-section">
+        <label class="panel-label">
+          <LayoutGrid class="panel-label-icon" />
+          그리드 모드
+        </label>
+        <div class="panel-button-group">
+          <button
+            v-for="opt in gridModeOptions"
+            :key="opt.value"
+            :class="['panel-button-option', { active: form.gridMode === opt.value }]"
+            @click="form.gridMode = opt.value"
+          >
+            {{ opt.label }}
+          </button>
+        </div>
+      </div>
+
       <!-- Layout -->
       <div class="panel-section">
         <label class="panel-label">
@@ -185,23 +319,23 @@ onUnmounted(() => {
       </div>
 
       <!-- Shot Types -->
-      <div class="panel-section">
+      <div v-if="form.gridMode === 'SHOT_VARIATIONS'" class="panel-section">
         <div class="panel-label-row">
           <label class="panel-label">
             <Camera class="panel-label-icon" />
             샷 타입 (다중 선택)
           </label>
-          <div ref="shotTypeHelpRef" class="panel-info">
+          <div :ref="shotTypeHelp.popoverRef" class="panel-info">
             <button
               type="button"
               class="panel-info-button"
               aria-label="샷 타입 안내"
-              :aria-expanded="isShotTypeHelpOpen"
-              @click="toggleShotTypeHelp"
+              :aria-expanded="shotTypeHelp.isOpen.value"
+              @click="shotTypeHelp.toggle"
             >
               <span class="panel-info-icon">i</span>
             </button>
-            <div v-if="isShotTypeHelpOpen" class="panel-info-popover">
+            <div v-if="shotTypeHelp.isOpen" class="panel-info-popover">
               <div class="panel-info-title">샷 타입 안내</div>
               <ul class="panel-info-list">
                 <li v-for="item in shotTypeHelpItems" :key="item.label" class="panel-info-item">
@@ -212,20 +346,20 @@ onUnmounted(() => {
             </div>
           </div>
         </div>
-        <div class="panel-checkbox-group">
-          <label v-for="opt in shotTypeOptions" :key="opt" class="panel-checkbox">
+        <div class="panel-radio-group panel-pill-group panel-pill-group--accent">
+          <label v-for="opt in shotTypeOptions" :key="opt" class="panel-radio panel-pill">
             <input
               type="checkbox"
               :checked="form.shotTypes.includes(opt)"
               @change="toggleShotType(opt)"
             />
-            <span class="panel-checkbox-label">{{ opt }}</span>
+            <span class="panel-radio-label">{{ opt }}</span>
           </label>
         </div>
       </div>
 
       <!-- Composition Hint -->
-      <div class="panel-section">
+      <div v-if="form.gridMode === 'SHOT_VARIATIONS'" class="panel-section">
         <label class="panel-label">
           <Target class="panel-label-icon" />
           구도 힌트 (선택)
@@ -237,22 +371,62 @@ onUnmounted(() => {
         />
       </div>
 
+      <!-- Story Beats -->
+      <div v-if="isStoryBeats" class="panel-section">
+        <label class="panel-label">
+          <FileText class="panel-label-icon" />
+          비트 입력
+        </label>
+        <div class="panel-beats">
+          <div v-for="(_, index) in form.beats" :key="`beat-${index}`" class="panel-beat-item">
+            <div class="panel-beat-label">비트 {{ index + 1 }}</div>
+            <textarea
+              v-model="form.beats[index]"
+              class="panel-textarea panel-textarea--beat"
+              rows="2"
+              placeholder="예: 0~4s: 사건 설명"
+            ></textarea>
+          </div>
+        </div>
+      </div>
+
+      <!-- Continuity Rules -->
+      <div v-if="isStoryBeats" class="panel-section">
+        <label class="panel-label">
+          <Target class="panel-label-icon" />
+          연속성 규칙 (선택)
+        </label>
+        <input
+          v-model="form.continuityRules"
+          class="panel-input"
+          placeholder="예: 인물/의상/조명 유지"
+        />
+      </div>
+
       <!-- Generate Prompt -->
-      <button class="panel-btn panel-btn--secondary panel-btn--full" @click="generatePrompt">
-        <Sparkles class="panel-btn-icon" />
-        프롬프트 생성
+      <button
+        class="panel-btn panel-btn--secondary panel-btn--full panel-btn--prompt-generate"
+        :disabled="isGeneratingPrompt"
+        @click="generatePrompt"
+      >
+        <Loader2 v-if="isGeneratingPrompt" class="panel-btn-icon panel-btn-icon--spin" />
+        <Sparkles v-else class="panel-btn-icon" />
+        {{ isGeneratingPrompt ? '생성 중...' : '프롬프트 생성' }}
       </button>
 
       <!-- Generated Prompt -->
-      <div v-if="isPromptGenerated" class="panel-section">
+      <div v-if="isPromptGenerated" class="panel-section panel-section--prompt">
         <label class="panel-label">
           <FileText class="panel-label-icon" />
           AI 프롬프트
+          <span class="panel-label-badge">생성됨</span>
         </label>
         <textarea v-model="form.prompt" class="panel-textarea panel-textarea--prompt" rows="3"></textarea>
-        <div class="panel-prompt-actions">
-          <button class="panel-btn panel-btn--text" @click="generatePrompt">
-            <RefreshCw class="panel-btn-icon" /> 재생성
+        <div class="panel-prompt-actions panel-prompt-actions--right">
+          <button class="panel-btn panel-btn--text" :disabled="isGeneratingPrompt" @click="generatePrompt">
+            <Loader2 v-if="isGeneratingPrompt" class="panel-btn-icon panel-btn-icon--spin" />
+            <RefreshCw v-else class="panel-btn-icon" />
+            재생성
           </button>
           <button v-if="!isPromptApproved" class="panel-btn panel-btn--success" @click="approvePrompt">
             <Check class="panel-btn-icon" /> 승인
@@ -268,8 +442,8 @@ onUnmounted(() => {
     <template #footer>
       <button
         class="panel-btn panel-btn--primary panel-btn--full"
-        :disabled="!canGenerate"
-        @click="generateGrid"
+        :disabled="isGeneratingGrid"
+        @click="handleGenerateGrid"
       >
         <LayoutGrid class="panel-btn-icon" />
         그리드 생성
@@ -368,5 +542,23 @@ onUnmounted(() => {
   font-size: 0.6875rem;
   color: var(--gray-500, #6B7280);
   line-height: 1.4;
+}
+
+.panel-beats {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.panel-beat-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.panel-beat-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--gray-700, #374151);
 }
 </style>

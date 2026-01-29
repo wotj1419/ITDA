@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { Plus, LayoutGrid, List } from 'lucide-vue-next'
+import { Plus } from 'lucide-vue-next'
 import { useProjectStore } from '../stores/project'
 import { useUIStore } from '../stores/ui'
 import { useCollabStore } from '../stores/collab'
@@ -11,7 +11,6 @@ import ProjectCard from '../components/project/ProjectCard.vue'
 import NewProjectModal from '../components/project/NewProjectModal.vue'
 import StartCollabModal from '../components/project/StartCollabModal.vue'
 import ConfirmModal from '../components/common/ConfirmModal.vue'
-import TimeAgo from '../components/common/TimeAgo.vue'
 
 const router = useRouter()
 const projectStore = useProjectStore()
@@ -96,9 +95,6 @@ const cancelDelete = () => {
   projectToDelete.value = null
 }
 
-const toggleViewMode = () => {
-  viewMode.value = viewMode.value === 'grid' ? 'list' : 'grid'
-}
 </script>
 
 <template>

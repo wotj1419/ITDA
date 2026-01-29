@@ -2,14 +2,15 @@ package com.itda.backend.worker.image;
 
 import com.itda.backend.ai.gemini.GeminiImageClient;
 import com.itda.backend.ai.gemini.GeminiImageResult;
-import com.itda.backend.job.domain.Job;
+import com.itda.backend.asset.domain.AssetType;
+import com.itda.backend.asset.domain.StorageProvider;
 import com.itda.backend.global.exception.BusinessException;
 import com.itda.backend.global.response.ErrorCode;
+import com.itda.backend.job.domain.Job;
 import com.itda.backend.worker.AssetRegistrar;
 import com.itda.backend.worker.ExecutionResult;
 import com.itda.backend.worker.JobRequestParser;
 import com.itda.backend.worker.ParsedJobRequest;
-import com.itda.backend.worker.StoredAsset;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -29,7 +30,7 @@ class ImageGenerationWorkerTest {
     private GeminiImageClient geminiImageClient;
 
     @Mock
-    private LocalImageStorage localImageStorage;
+    private ImageStorage imageStorage;
 
     @Mock
     private AssetRegistrar assetRegistrar;
@@ -55,9 +56,21 @@ class ImageGenerationWorkerTest {
         when(geminiImageClient.generateImage("test prompt", parsed.settings()))
                 .thenReturn(new GeminiImageResult(imageBytes, "image/png"));
 
-        StoredAsset storedAsset = new StoredAsset("ai/images/1/job-10.png", imageBytes.length);
-        when(localImageStorage.save(1L, 10L, imageBytes)).thenReturn(storedAsset);
-        when(assetRegistrar.registerLocalAsset(job, storedAsset, com.itda.backend.asset.domain.AssetType.IMAGE, "image/png"))
+        ImageStorageResult storedImage = new ImageStorageResult(
+                "ai/images/1/job-10.png",
+                "image/png",
+                imageBytes.length,
+                StorageProvider.LOCAL
+        );
+        when(imageStorage.save(1L, 10L, imageBytes, "image/png")).thenReturn(storedImage);
+        when(assetRegistrar.registerAsset(
+                job,
+                storedImage.storageKey(),
+                storedImage.sizeBytes(),
+                AssetType.IMAGE,
+                storedImage.contentType(),
+                storedImage.storageProvider()
+        ))
                 .thenReturn(100L);
 
         ExecutionResult result = imageGenerationWorker.execute(job);
@@ -81,5 +94,16 @@ class ImageGenerationWorkerTest {
         assertThatThrownBy(() -> imageGenerationWorker.execute(job))
                 .isInstanceOf(com.itda.backend.global.exception.BusinessException.class)
                 .hasMessageContaining("Prompt is empty");
+    }
+
+    @Test
+    void execute_ShouldFailWhenIdentifiersMissing() {
+        Job job = Job.builder()
+                .requestJson("{\"prompt\":\"test\"}")
+                .build();
+
+        assertThatThrownBy(() -> imageGenerationWorker.execute(job))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("Job missing id/projectId");
     }
 }

@@ -20,12 +20,14 @@ import {
 import { generateMockSceneNodes, generateSimpleMockNodes } from '../../services/mock/sceneNodes';
 import {
     fetchSceneNodes,
+    fetchNodeDetail,
     createNode as apiCreateNode,
     updateNode as apiUpdateNode,
     deleteNode as apiDeleteNode,
     confirmNode as apiConfirmNode,
     unconfirmNode as apiUnconfirmNode,
     activateMaster as apiActivateMaster,
+    updateNodePositions as apiUpdateNodePositions,
 } from '../../services/api/nodes';
 import {
     subscribeProjectEvents,
@@ -46,9 +48,29 @@ import {
     toJobStatus,
     UI_TO_API_NODE_TYPE,
 } from './mappers';
+import {
+    mapShotTypeKeysToLabels,
+    normalizeCameraMotionValue,
+    resolveExpressionLabel,
+    resolveMoodLabel,
+    resolveShotTypeLabel,
+    resolveStyleLabel,
+    resolveTimeOfDayLabel,
+} from '../../utils/nodeSettings';
 import { fetchProtectedBlobUrl } from '../../services/api/media';
 import { resolveApiUrl } from '../../services/api/urls';
 import { SHOT_FALLBACK_THUMBNAIL } from '../../utils/fallbacks';
+import {
+    DEFAULT_GRID_LAYOUT,
+    DEFAULT_GRID_SHOT_TYPES,
+    DEFAULT_MASTER_MOOD,
+    DEFAULT_MASTER_STYLE,
+    DEFAULT_MASTER_TIME_OF_DAY,
+    DEFAULT_VIDEO_ASPECT_RATIO,
+    DEFAULT_VIDEO_CAMERA_MOTION,
+    DEFAULT_VIDEO_DURATION,
+    normalizeAspectRatio,
+} from '../../utils/nodeDefaults';
 
 const MAX_POSITION_HISTORY = 20;
 
@@ -72,6 +94,8 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
     }
     const selectedNodeId = ref<string | null>(null);
     const positionHistory = ref<NodePositionSnapshot[]>([]);
+    const hydratedNodeIds = ref<Set<string>>(new Set());
+    const hydrationRequests = new Map<string, Promise<void>>();
 
     // end shot 선택 모드 (트랜지션 영상용)
     const selectionMode = ref<'none' | 'selectEndShot'>('none');
@@ -256,6 +280,65 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
         return `scene-nodes-${id}`;
     }
 
+    function loadFromLocalStorage(id: string): { nodes: SceneNode[]; edges: Edge[]; updatedAt?: string } | null {
+        try {
+            const raw = localStorage.getItem(getStorageKey(id));
+            if (!raw) return null;
+            const parsed = JSON.parse(raw) as { nodes?: SceneNode[]; edges?: Edge[]; updatedAt?: string } | null;
+            if (!parsed?.nodes || !parsed?.edges) return null;
+            if (!Array.isArray(parsed.nodes) || !Array.isArray(parsed.edges)) return null;
+            return { nodes: parsed.nodes, edges: parsed.edges, updatedAt: parsed.updatedAt };
+        } catch {
+            return null;
+        }
+    }
+
+    function restoreNodeLayoutFromStorage(loadedNodes: SceneNode[], storedNodes: SceneNode[]): void {
+        if (!loadedNodes.length || !storedNodes.length) return;
+
+        const storedById = new Map<string, SceneNode>(storedNodes.map((node) => [String(node.id), node]));
+
+        loadedNodes.forEach((node) => {
+            const stored = storedById.get(String(node.id));
+            if (!stored) return;
+
+            const hasApiPosition =
+                Number.isFinite(node.position?.x) &&
+                Number.isFinite(node.position?.y) &&
+                (node.position.x !== 0 || node.position.y !== 0);
+
+            if (!hasApiPosition && stored.position) {
+                const x = Number((stored.position as { x?: unknown }).x);
+                const y = Number((stored.position as { y?: unknown }).y);
+                if (Number.isFinite(x) && Number.isFinite(y)) {
+                    node.position = { x, y };
+                }
+            }
+
+            const storedWidth = Number((stored as { width?: unknown }).width);
+            const storedHeight = Number((stored as { height?: unknown }).height);
+            if (Number.isFinite(storedWidth) && storedWidth > 0) {
+                node.width = storedWidth;
+            }
+            if (Number.isFinite(storedHeight) && storedHeight > 0) {
+                node.height = storedHeight;
+            }
+
+            const storedStyle = (stored as { style?: unknown }).style;
+            if (storedStyle && typeof storedStyle === 'object') {
+                const styleObj = storedStyle as Record<string, unknown>;
+                const nextStyle = { ...(node.style ?? {}) } as SceneNode['style'];
+                if (styleObj.width !== undefined) {
+                    (nextStyle as Record<string, unknown>).width = styleObj.width;
+                }
+                if (styleObj.height !== undefined) {
+                    (nextStyle as Record<string, unknown>).height = styleObj.height;
+                }
+                node.style = nextStyle;
+            }
+        });
+    }
+
     function saveToLocalStorage(): void {
         if (!sceneId.value) return;
         isSaving.value = true;
@@ -284,6 +367,15 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
         }, 1000); // 1초 후 저장
     }
 
+    function flushSave(): void {
+        if (!sceneId.value) return;
+        if (saveTimeout) {
+            clearTimeout(saveTimeout);
+            saveTimeout = null;
+        }
+        saveToLocalStorage();
+    }
+
     // 노드/엣지 변경 감지하여 자동 저장
     // (로드 중이나 초기화 중에는 불필요하게 저장되지 않도록 주의)
     watch(
@@ -300,6 +392,17 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
     // Actions - Load
     // ==========================================================================
 
+    function resetInteractionState(): void {
+        selectedNodeId.value = null;
+        selectionMode.value = 'none';
+        endShotTargetVideoId.value = null;
+    }
+
+    function resetHydrationState(): void {
+        hydratedNodeIds.value.clear();
+        hydrationRequests.clear();
+    }
+
     async function loadSceneNodes(
         sceneIdParam: string,
         sceneInfo?: { title: string; description: string; order: number }
@@ -309,13 +412,19 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
             sceneId.value = sceneIdParam;
             nodes.value = [];
             edges.value = [];
+            positionHistory.value = [];
+            resetInteractionState();
+            resetHydrationState();
 
             const numericSceneId = toFiniteNumber(sceneIdParam);
             if (numericSceneId === null) return;
 
+            const storedState = loadFromLocalStorage(sceneIdParam);
             const apiNodes = await fetchSceneNodes(numericSceneId);
+            const sceneHeaderNode = apiNodes.find((node) => node.type === 'SCENE_HEADER');
+            const sceneHeaderId = sceneHeaderNode ? String(sceneHeaderNode.nodeId) : null;
             nodes.value = apiNodes.map((node) =>
-                createSceneNodeFromApi(node, sceneIdParam, sceneInfo)
+                createSceneNodeFromApi(node, sceneIdParam, sceneInfo, sceneHeaderId)
             );
             await hydrateNodeMedia();
             await hydrateVideoDurations();
@@ -328,6 +437,10 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
             edges.value = deriveEdges(nodes.value);
             ensureTimelineOrder();
 
+            if (storedState?.nodes?.length) {
+                restoreNodeLayoutFromStorage(nodes.value, storedState.nodes);
+            }
+
             const projectId = sceneStore.currentProjectId;
             if (projectId) {
                 if (unsubscribeProjectEvents) {
@@ -339,6 +452,9 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
             console.error('Failed to load scene nodes:', error);
         } finally {
             isLoading.value = false;
+            if (sceneId.value && nodes.value.length) {
+                persistNodePositions();
+            }
         }
     }
 
@@ -363,7 +479,7 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
             const newNode: SceneNode = {
                 id: headerData.id,
                 type: 'sceneHeader',
-                position: { x: 0, y: 0 },
+                position: { x: 0, y: -200 },
                 width,
                 height,
                 data: headerData,
@@ -459,9 +575,9 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
             imageUrl: null,
             thumbnailUrl: null,
             prompt: '',
-            style: '',
-            timeOfDay: '',
-            mood: '',
+            style: DEFAULT_MASTER_STYLE,
+            timeOfDay: DEFAULT_MASTER_TIME_OF_DAY,
+            mood: DEFAULT_MASTER_MOOD,
             objectIds: [],
         };
 
@@ -511,9 +627,10 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
             imageUrl: null,
             thumbnailUrl: null,
             prompt: '',
-            layout: '2x3',
-            shotTypes: [],
+            layout: DEFAULT_GRID_LAYOUT,
+            shotTypes: [...DEFAULT_GRID_SHOT_TYPES],
             compositionHint: '',
+            gridMode: 'SHOT_VARIATIONS',
         };
 
         const newNode: SceneNode = {
@@ -621,10 +738,11 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
             endShotId: null,
             videoUrl: null,
             thumbnailUrl: null,
-            duration: 4,
+            duration: DEFAULT_VIDEO_DURATION,
+            aspectRatio: DEFAULT_VIDEO_ASPECT_RATIO,
             isConfirmed: false,
             prompt: '',
-            cameraMotion: 'staticCamera',
+            cameraMotion: DEFAULT_VIDEO_CAMERA_MOTION,
             motionDescription: '',
         };
 
@@ -646,7 +764,7 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
     // Actions - Update / Delete
     // ==========================================================================
 
-    async function updateNode(nodeId: string, updates: Partial<AnyNodeData>): Promise<void> {
+    function applyNodeUpdates(nodeId: string, updates: Partial<AnyNodeData>): AnyNodeData | null {
         const nodeIndex = nodes.value.findIndex((n) => n.id === nodeId);
         const targetNode = nodeIndex !== -1 ? nodes.value[nodeIndex] : undefined;
         if (targetNode && targetNode.data) {
@@ -657,29 +775,35 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
             } as AnyNodeData;
             targetNode.data = nextData;
             ensureSceneInProgress();
+            return nextData;
+        }
+        return null;
+    }
 
-            const numericNodeId = toFiniteNumber(nodeId);
-            if (numericNodeId !== null && nextData.type !== NodeType.SCENE_HEADER) {
-                try {
-                    await apiUpdateNode(numericNodeId, {
-                        prompt: 'prompt' in nextData ? nextData.prompt : undefined,
-                        settings: buildNodeSettings(nextData),
-                    });
-                } catch (error) {
-                    console.error('Failed to update node:', error);
-                }
+    function updateNodeLocal(nodeId: string, updates: Partial<AnyNodeData>): void {
+        applyNodeUpdates(nodeId, updates);
+    }
+
+    async function updateNode(nodeId: string, updates: Partial<AnyNodeData>): Promise<void> {
+        const nextData = applyNodeUpdates(nodeId, updates);
+        if (!nextData) return;
+
+        const numericNodeId = toFiniteNumber(nodeId);
+        if (numericNodeId !== null && nextData.type !== NodeType.SCENE_HEADER) {
+            try {
+                await apiUpdateNode(numericNodeId, {
+                    prompt: 'prompt' in nextData ? nextData.prompt : undefined,
+                    settings: buildNodeSettings(nextData),
+                });
+            } catch (error) {
+                console.error('Failed to update node:', error);
             }
         }
     }
 
     async function deleteNode(nodeId: string): Promise<void> {
         const targetNode = nodes.value.find((n) => n.id === nodeId);
-        if (
-            !targetNode ||
-            targetNode.data?.type === NodeType.SCENE_HEADER ||
-            targetNode.data?.type === NodeType.MASTER_IMAGE
-        )
-            return;
+        if (!targetNode || targetNode.data?.type === NodeType.SCENE_HEADER) return;
 
         // 하위 노드 재귀 삭제
         const descendants = getDescendantIds(nodeId);
@@ -706,14 +830,16 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
         }
     }
 
-    function getDescendantIds(nodeId: string): string[] {
+    function getDescendantIds(nodeId: string, visited = new Set<string>()): string[] {
+        if (visited.has(nodeId)) return [];
+        visited.add(nodeId);
         const directChildren = edges.value
             .filter((e) => e.source === nodeId)
             .map((e) => e.target);
 
         return directChildren.flatMap((childId) => [
             childId,
-            ...getDescendantIds(childId),
+            ...getDescendantIds(childId, visited),
         ]);
     }
 
@@ -724,10 +850,7 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
     function canDeleteNode(nodeId: string): boolean {
         const targetNode = nodes.value.find((n) => n.id === nodeId);
         if (!targetNode?.data) return false;
-        return (
-            targetNode.data.type !== NodeType.SCENE_HEADER &&
-            targetNode.data.type !== NodeType.MASTER_IMAGE
-        );
+        return targetNode.data.type !== NodeType.SCENE_HEADER;
     }
 
     // ==========================================================================
@@ -765,6 +888,7 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
                 }
             }
         });
+        persistNodePositions();
     }
 
     // ==========================================================================
@@ -786,6 +910,52 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
         edges.value.push(nextEdge);
     }
 
+    // ==========================================================================
+    // Actions - Persist Positions
+    // ==========================================================================
+
+    let persistPositionsTimeout: ReturnType<typeof setTimeout> | null = null;
+    async function sendNodePositions(): Promise<void> {
+        if (!sceneId.value) return;
+        const numericSceneId = toFiniteNumber(sceneId.value);
+        if (numericSceneId === null) return;
+
+        const positions = nodes.value
+            .map((node) => {
+                const numericNodeId = toFiniteNumber(node.id);
+                if (numericNodeId === null || numericNodeId <= 0) return null;
+                return {
+                    nodeId: numericNodeId,
+                    x: node.position?.x ?? 0,
+                    y: node.position?.y ?? 0,
+                };
+            })
+            .filter(Boolean) as Array<{ nodeId: number; x: number; y: number }>;
+
+        if (!positions.length) return;
+
+        try {
+            await apiUpdateNodePositions(numericSceneId, positions);
+        } catch (error) {
+            console.error('Failed to persist node positions:', error);
+        }
+    }
+
+    function persistNodePositions(): void {
+        if (persistPositionsTimeout) clearTimeout(persistPositionsTimeout);
+        persistPositionsTimeout = setTimeout(() => {
+            void sendNodePositions();
+        }, 400);
+    }
+
+    function flushPersistNodePositions(): void {
+        if (persistPositionsTimeout) {
+            clearTimeout(persistPositionsTimeout);
+            persistPositionsTimeout = null;
+        }
+        void sendNodePositions();
+    }
+
     function deriveEdgesSnapshot(): Edge[] {
         return deriveEdges(nodes.value);
     }
@@ -800,6 +970,166 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
 
     function selectNode(nodeId: string | null): void {
         selectedNodeId.value = nodeId;
+        if (nodeId) {
+            void hydrateNodeDetail(nodeId);
+        }
+    }
+
+    function applyDetailSettings(targetNode: SceneNode, detail: Awaited<ReturnType<typeof fetchNodeDetail>>): void {
+        if (!targetNode.data) return;
+        if (targetNode.data.type === NodeType.SCENE_HEADER) return;
+        if (detail.prompt !== null && detail.prompt !== undefined && 'prompt' in targetNode.data) {
+            targetNode.data.prompt = detail.prompt;
+        }
+
+        const settings = detail.settings ?? undefined;
+        if (!settings) return;
+
+        if (targetNode.data.type === NodeType.MASTER_IMAGE) {
+            const masterData = targetNode.data as MasterImageNodeData;
+            const styleValue = (settings.styleKey ?? settings.style) as string | undefined;
+            const timeValue = (settings.timeOfDayKey ?? settings.timeOfDay) as string | undefined;
+            const moodValue = (settings.moodKey ?? settings.mood) as string | undefined;
+            const objectIdsRaw = (settings.objectIds ?? settings.objects) as unknown;
+
+            masterData.style = resolveStyleLabel(styleValue) || masterData.style;
+            masterData.timeOfDay = resolveTimeOfDayLabel(timeValue) || masterData.timeOfDay;
+            masterData.mood = resolveMoodLabel(moodValue) || masterData.mood;
+            if (Array.isArray(objectIdsRaw)) {
+                masterData.objectIds = objectIdsRaw
+                    .map((item) => toFiniteNumber(item as string | number))
+                    .filter((item): item is number => item !== null);
+            }
+            return;
+        }
+
+        if (targetNode.data.type === NodeType.STORYBOARD_GRID) {
+            const gridData = targetNode.data as StoryboardGridNodeData;
+            const layoutValue = settings.layout as string | undefined;
+            const shotTypesRaw = settings.shotTypes as string[] | undefined;
+            const compositionHint =
+                (settings.compositionHintKo ?? settings.compositionHint) as string | undefined;
+
+            if (layoutValue) gridData.layout = layoutValue as StoryboardGridNodeData['layout'];
+            if (shotTypesRaw?.length) {
+                gridData.shotTypes = mapShotTypeKeysToLabels(shotTypesRaw);
+            }
+            if (compositionHint !== undefined) {
+                gridData.compositionHint = compositionHint ?? '';
+            }
+            return;
+        }
+
+        if (targetNode.data.type === NodeType.SHOT) {
+            const shotData = targetNode.data as ShotNodeData;
+            const gridCellIndex = settings.gridCellIndex as number | undefined;
+            const shotTypeValue = settings.shotType as string | undefined;
+            const expressionValue = settings.expressionKey as string | undefined;
+            const detailKo = settings.detailKo as string | undefined;
+
+            if (typeof gridCellIndex === 'number') {
+                shotData.gridCellIndex = gridCellIndex;
+            }
+            if (shotTypeValue) {
+                const resolved = resolveShotTypeLabel(shotTypeValue);
+                shotData.shotType = resolved || shotData.shotType;
+                if (resolved) {
+                    shotData.shotTypes = [resolved];
+                }
+            }
+            if (expressionValue) {
+                shotData.expression = resolveExpressionLabel(expressionValue) || shotData.expression;
+            }
+            if (detailKo !== undefined) {
+                shotData.additionalDetail = detailKo ?? '';
+            }
+            return;
+        }
+
+        if (targetNode.data.type === NodeType.VIDEO) {
+            const videoData = targetNode.data as VideoNodeData;
+            const durationValue = settings.duration as number | undefined;
+            const cameraMotionValue = settings.cameraMotionKey as string | undefined;
+            const motionDescription =
+                (settings.motionDescriptionKo ?? settings.motionDescription) as string | undefined;
+            const aspectRatioValue =
+                (settings.aspectRatio ?? settings.ratio) as string | undefined;
+            const startShotNodeId = settings.startShotNodeId as number | undefined;
+            const endShotNodeId = settings.endShotNodeId as number | null | undefined;
+
+            if (typeof durationValue === 'number') {
+                videoData.duration = durationValue;
+            }
+            if (aspectRatioValue) {
+                videoData.aspectRatio = normalizeAspectRatio(aspectRatioValue);
+            }
+            if (cameraMotionValue) {
+                videoData.cameraMotion = normalizeCameraMotionValue(cameraMotionValue);
+            }
+            if (motionDescription !== undefined) {
+                videoData.motionDescription = motionDescription ?? '';
+            }
+            if (typeof startShotNodeId === 'number') {
+                videoData.startShotId = String(startShotNodeId);
+            }
+            if (endShotNodeId !== undefined) {
+                videoData.endShotId = endShotNodeId === null ? null : String(endShotNodeId);
+            }
+        }
+    }
+
+    async function hydrateNodeDetail(nodeId: string): Promise<void> {
+        const targetNode = nodes.value.find((n) => n.id === nodeId);
+        if (!targetNode?.data || targetNode.data.type === NodeType.SCENE_HEADER) return;
+        if (hydratedNodeIds.value.has(nodeId)) return;
+
+        const existingRequest = hydrationRequests.get(nodeId);
+        if (existingRequest) return existingRequest;
+
+        const request = (async () => {
+            const numericId = toFiniteNumber(nodeId);
+            if (numericId === null) return;
+            try {
+                const detail = await fetchNodeDetail(numericId);
+                if (!targetNode.data || targetNode.data.type === NodeType.SCENE_HEADER) return;
+                applyDetailSettings(targetNode, detail);
+
+                const detailStatus = toJobStatus(detail.status ?? null);
+                if (!targetNode.data.jobStatus && detailStatus) {
+                    targetNode.data.jobStatus = detailStatus;
+                }
+
+                const detailUrl = resolveApiUrl(detail.contentUrl ?? null);
+                if (detailUrl && targetNode.data) {
+                    if (targetNode.data.type === NodeType.VIDEO) {
+                        const videoData = targetNode.data as VideoNodeData;
+                        if (!videoData.videoUrl) videoData.videoUrl = detailUrl;
+                        if (!videoData.thumbnailUrl) videoData.thumbnailUrl = detailUrl;
+                    } else if (targetNode.data.type === NodeType.MASTER_IMAGE) {
+                        const masterData = targetNode.data as MasterImageNodeData;
+                        if (!masterData.imageUrl) masterData.imageUrl = detailUrl;
+                        if (!masterData.thumbnailUrl) masterData.thumbnailUrl = detailUrl;
+                    } else if (targetNode.data.type === NodeType.STORYBOARD_GRID) {
+                        const gridData = targetNode.data as StoryboardGridNodeData;
+                        if (!gridData.imageUrl) gridData.imageUrl = detailUrl;
+                        if (!gridData.thumbnailUrl) gridData.thumbnailUrl = detailUrl;
+                    } else if (targetNode.data.type === NodeType.SHOT) {
+                        const shotData = targetNode.data as ShotNodeData;
+                        if (!shotData.imageUrl) shotData.imageUrl = detailUrl;
+                        if (!shotData.thumbnailUrl) shotData.thumbnailUrl = detailUrl;
+                    }
+                }
+
+                hydratedNodeIds.value.add(nodeId);
+            } catch (error) {
+                console.error('Failed to hydrate node detail:', error);
+            } finally {
+                hydrationRequests.delete(nodeId);
+            }
+        })();
+
+        hydrationRequests.set(nodeId, request);
+        return request;
     }
 
     // ==========================================================================
@@ -975,13 +1305,15 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
         });
     }
 
-    function hasCollapsedAncestor(nodeId: string): boolean {
+    function hasCollapsedAncestor(nodeId: string, visited = new Set<string>()): boolean {
+        if (visited.has(nodeId)) return false;
+        visited.add(nodeId);
         const node = nodes.value.find((n) => n.id === nodeId);
         const parentId = node?.data?.parentNodeId;
         if (!parentId) return false;
         const parent = nodes.value.find((n) => n.id === parentId);
         if (!parent?.data) return false;
-        return parent.data.isCollapsed || hasCollapsedAncestor(parentId);
+        return parent.data.isCollapsed || hasCollapsedAncestor(parentId, visited);
     }
 
     function getMasterAncestor(nodeId: string): SceneNode | null {
@@ -1086,6 +1418,8 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
             nodes.value = mockData.nodes;
             edges.value = mockData.edges;
             positionHistory.value = [];
+            resetInteractionState();
+            resetHydrationState();
         } finally {
             isLoading.value = false;
         }
@@ -1096,11 +1430,14 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
     // ==========================================================================
 
     function clearNodes(): void {
+        flushSave();
+        flushPersistNodePositions();
         nodes.value = [];
         edges.value = [];
         positionHistory.value = [];
-        selectedNodeId.value = null;
+        resetInteractionState();
         sceneId.value = null;
+        resetHydrationState();
         if (unsubscribeProjectEvents) {
             unsubscribeProjectEvents();
             unsubscribeProjectEvents = null;
@@ -1140,6 +1477,7 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
         addVideoNode,
 
         // Actions - Update/Delete
+        updateNodeLocal,
         updateNode,
         deleteNode,
         hasDescendants,
@@ -1151,6 +1489,10 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
         addEdge,
         deriveEdges: deriveEdgesSnapshot,
         canConnect: canConnectNode,
+
+        // Actions - Persist
+        persistNodePositions,
+        flushPersistNodePositions,
 
         // Actions - Selection
         selectNode,
@@ -1174,5 +1516,8 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
 
         // Actions - Clear
         clearNodes,
+
+        // Actions - Persistence
+        flushSave,
     };
 });

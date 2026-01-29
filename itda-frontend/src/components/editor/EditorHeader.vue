@@ -5,7 +5,7 @@
  */
 import { RouterLink } from 'vue-router';
 import Button from '../common/Button.vue';
-import { ArrowLeft, Layers } from 'lucide-vue-next';
+import { ArrowLeft, Layers, Upload } from 'lucide-vue-next';
 
 // =============================================================================
 // Props
@@ -35,7 +35,7 @@ defineProps<Props>();
 
       <nav class="breadcrumb" aria-label="Breadcrumb">
         <RouterLink to="/dashboard" class="breadcrumb-link">
-          홈
+          내 프로젝트
         </RouterLink>
         <span class="separator">/</span>
         <RouterLink
@@ -51,7 +51,6 @@ defineProps<Props>();
 
     <!-- Right: Zoom & Actions -->
     <div class="header-right">
-      <span class="zoom-indicator">{{ zoomLevel }}</span>
 
       <RouterLink
         :to="{
@@ -59,13 +58,16 @@ defineProps<Props>();
           params: { id: projectId },
           query: sceneId ? { sceneId } : undefined,
         }"
-        class="btn btn-secondary btn-sm"
+        class="header-action"
       >
         <Layers class="icon-sm" />
-        Scene Timeline
+        <span class="header-action-text">씬 타임라인</span>
       </RouterLink>
 
-      <Button variant="primary">Export Scene</Button>
+      <Button variant="primary" size="sm" class="export-btn">
+        <Upload class="icon-sm" />
+        <span class="export-btn-text">씬 내보내기</span>
+      </Button>
     </div>
   </header>
 </template>
@@ -79,10 +81,12 @@ defineProps<Props>();
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 1.5rem;
-  height: 64px; /* Align with sidebar header */
+  padding: 0.75rem 1.5rem;
+  height: 64px;
   background: white;
-  border-bottom: 1px solid var(--rose-100);
+  border-bottom: 1px solid var(--gray-100);
+  position: relative;
+  z-index: 20;
 }
 
 /* ==========================================================================
@@ -107,7 +111,7 @@ defineProps<Props>();
 }
 
 .back-btn:hover {
-  background: var(--gray-100);
+  background: var(--gray-50);
   color: var(--gray-900);
 }
 
@@ -138,7 +142,7 @@ defineProps<Props>();
 
 .breadcrumb-current {
   color: var(--gray-900);
-  font-weight: 500;
+  font-weight: 750;
 }
 
 /* ==========================================================================
@@ -151,19 +155,63 @@ defineProps<Props>();
   gap: 0.75rem;
 }
 
-.zoom-indicator {
-  font-size: 0.75rem;
-  font-family: 'JetBrains Mono', monospace;
-  background: var(--gray-100);
-  padding: 0.25rem 0.5rem;
-  border-radius: 0.25rem;
-  color: var(--gray-600);
-}
 
 .icon {
   width: 20px;
   height: 20px;
 }
 
-/* Uses global .icon-sm and button styles from base.css */
+.header-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.375rem 0.75rem;
+  border-radius: 0.75rem;
+  color: var(--gray-600);
+  text-decoration: none;
+  font-size: 0.75rem;
+  font-weight: 700;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.header-action:hover {
+  background: var(--gray-50);
+  color: var(--gray-900);
+}
+
+.export-btn {
+  box-shadow: var(--shadow-lg);
+}
+
+@media (max-width: 770px) {
+  .header-left {
+    gap: 0;
+  }
+
+  .breadcrumb {
+    display: none;
+  }
+}
+
+@media (max-width: 470px) {
+  .header-action {
+    padding: 0.375rem 0.625rem;
+    gap: 0.25rem;
+  }
+
+  .header-action-text,
+  .export-btn-text {
+    display: none;
+  }
+
+  .export-btn {
+    padding: 0.375rem 0.625rem;
+  }
+
+  .header-action .icon-sm,
+  .export-btn .icon-sm {
+    width: 20px;
+    height: 20px;
+  }
+}
 </style>

@@ -17,6 +17,26 @@ import {
 } from '../../types/ui/sceneNodes';
 import type { NodeSummary, ApiNodeType } from '../../services/api/nodes';
 import { resolveApiUrl } from '../../services/api/urls';
+import {
+  DEFAULT_GRID_LAYOUT,
+  DEFAULT_GRID_SHOT_TYPES,
+  DEFAULT_MASTER_MOOD,
+  DEFAULT_MASTER_STYLE,
+  DEFAULT_MASTER_TIME_OF_DAY,
+  DEFAULT_VIDEO_ASPECT_RATIO,
+  DEFAULT_VIDEO_CAMERA_MOTION,
+  DEFAULT_VIDEO_DURATION,
+  normalizeAspectRatio,
+} from '../../utils/nodeDefaults';
+import {
+  mapShotTypeLabelsToKeys,
+  resolveCameraMotionKey,
+  resolveExpressionKey,
+  resolveMoodKey,
+  resolveShotTypeKey,
+  resolveStyleKey,
+  resolveTimeOfDayKey,
+} from '../../utils/nodeSettings';
 
 export const API_TO_UI_NODE_TYPE: Record<ApiNodeType, NodeType> = {
   SCENE_HEADER: NodeType.SCENE_HEADER,
@@ -45,6 +65,7 @@ export function createBaseNodeData(
     id,
     type,
     jobStatus: null,
+    generationState: null,
     promptStatus: PromptStatus.DRAFT,
     createdAt: now,
     updatedAt: now,
@@ -88,35 +109,65 @@ export function toFiniteNumber(value: string | number): number | null {
 export function buildNodeSettings(data: AnyNodeData): Record<string, unknown> {
   switch (data.type) {
     case NodeType.MASTER_IMAGE:
-      return {
-        style: (data as MasterImageNodeData).style,
-        timeOfDay: (data as MasterImageNodeData).timeOfDay,
-        mood: (data as MasterImageNodeData).mood,
-        objectIds: (data as MasterImageNodeData).objectIds,
-      };
+      {
+        const styleKey = resolveStyleKey((data as MasterImageNodeData).style);
+        const timeOfDayKey = resolveTimeOfDayKey((data as MasterImageNodeData).timeOfDay);
+        const moodKey =
+          resolveMoodKey((data as MasterImageNodeData).mood) ?? 'NEUTRAL';
+        return {
+          styleKey,
+          timeOfDayKey,
+          moodKey,
+          objectIds: (data as MasterImageNodeData).objectIds,
+        };
+      }
     case NodeType.STORYBOARD_GRID:
-      return {
-        layout: (data as StoryboardGridNodeData).layout,
-        shotTypes: (data as StoryboardGridNodeData).shotTypes,
-        compositionHint: (data as StoryboardGridNodeData).compositionHint,
-      };
+      {
+        const gridData = data as StoryboardGridNodeData;
+        const gridMode = gridData.gridMode ?? 'SHOT_VARIATIONS';
+        if (gridMode === 'STORY_BEATS') {
+          return {
+            gridMode,
+            layout: gridData.layout,
+            beatsKo: gridData.beats ?? [],
+            continuityRulesKo: gridData.continuityRules ?? '',
+          };
+        }
+        return {
+          gridMode,
+          layout: gridData.layout,
+          shotTypes: mapShotTypeLabelsToKeys(gridData.shotTypes),
+          compositionHintKo: gridData.compositionHint,
+        };
+      }
     case NodeType.SHOT:
-      return {
-        gridCellIndex: (data as ShotNodeData).gridCellIndex,
-        shotTypes: (data as ShotNodeData).shotTypes,
-        shotType: (data as ShotNodeData).shotType,
-        expression: (data as ShotNodeData).expression,
-        additionalDetail: (data as ShotNodeData).additionalDetail,
-      };
+      {
+        const shotData = data as ShotNodeData;
+        const fallbackShotType =
+          shotData.shotType?.split(',')[0]?.trim() ||
+          shotData.shotTypes?.[0];
+        const shotTypeKey = resolveShotTypeKey(fallbackShotType);
+        const expressionKey = resolveExpressionKey(shotData.expression);
+        return {
+          gridCellIndex: shotData.gridCellIndex,
+          shotType: shotTypeKey,
+          expressionKey,
+          detailKo: shotData.additionalDetail,
+        };
+      }
     case NodeType.VIDEO:
-      return {
-        startShotNodeId: (data as VideoNodeData).startShotId,
-        endShotNodeId: (data as VideoNodeData).endShotId,
-        cameraMotion: (data as VideoNodeData).cameraMotion,
-        motionDescription: (data as VideoNodeData).motionDescription,
-        duration: (data as VideoNodeData).duration,
-        timelineOrder: (data as VideoNodeData).timelineOrder,
-      };
+      {
+        const videoData = data as VideoNodeData;
+        return {
+          startShotNodeId: Number(videoData.startShotId),
+          endShotNodeId: videoData.endShotId ? Number(videoData.endShotId) : null,
+          cameraMotionKey: resolveCameraMotionKey(videoData.cameraMotion),
+          motionDescriptionKo: videoData.motionDescription,
+          duration: videoData.duration,
+          aspectRatio: normalizeAspectRatio(videoData.aspectRatio),
+          timelineOrder: videoData.timelineOrder,
+        };
+      }
     default:
       return {};
   }
@@ -150,11 +201,12 @@ export function applyNodeResultUrl(node: SceneNode, url: string): void {
 export function createSceneNodeFromApi(
   node: NodeSummary,
   sceneId: string,
-  sceneInfo?: { title: string; description: string; order: number }
+  sceneInfo?: { title: string; description: string; order: number },
+  sceneHeaderId?: string | null
 ): SceneNode {
   const uiType = API_TO_UI_NODE_TYPE[node.type] ?? NodeType.VIDEO;
   const id = String(node.nodeId);
-  const fallbackHeaderId = String(-Number(sceneId));
+  const fallbackHeaderId = sceneHeaderId ?? String(-Number(sceneId));
   const resolvedParentId = node.parentNodeId
     ? String(node.parentNodeId)
     : uiType === NodeType.MASTER_IMAGE
@@ -186,9 +238,9 @@ export function createSceneNodeFromApi(
         imageUrl: resolvedContentUrl,
         thumbnailUrl: resolvedContentUrl,
         prompt: '',
-        style: '',
-        timeOfDay: '',
-        mood: '',
+        style: DEFAULT_MASTER_STYLE,
+        timeOfDay: DEFAULT_MASTER_TIME_OF_DAY,
+        mood: DEFAULT_MASTER_MOOD,
         objectIds: [],
       } as MasterImageNodeData;
       break;
@@ -199,9 +251,12 @@ export function createSceneNodeFromApi(
         imageUrl: resolvedContentUrl,
         thumbnailUrl: resolvedContentUrl,
         prompt: '',
-        layout: '2x2',
-        shotTypes: [],
+        layout: DEFAULT_GRID_LAYOUT,
+        shotTypes: [...DEFAULT_GRID_SHOT_TYPES],
         compositionHint: '',
+        gridMode: 'SHOT_VARIATIONS',
+        beats: [],
+        continuityRules: '',
       } as StoryboardGridNodeData;
       break;
     case NodeType.SHOT:
@@ -227,10 +282,11 @@ export function createSceneNodeFromApi(
         endShotId: null,
         videoUrl: resolvedContentUrl,
         thumbnailUrl: resolvedContentUrl,
-        duration: 4,
+        duration: DEFAULT_VIDEO_DURATION,
+        aspectRatio: DEFAULT_VIDEO_ASPECT_RATIO,
         isConfirmed: !!node.isConfirmed,
         prompt: '',
-        cameraMotion: 'staticCamera',
+        cameraMotion: DEFAULT_VIDEO_CAMERA_MOTION,
         motionDescription: '',
         timelineOrder: undefined,
       } as VideoNodeData;
