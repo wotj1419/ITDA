@@ -114,15 +114,20 @@ const handleGenerate = () => {
       ></textarea>
     </div>
 
-    <Button
-      variant="primary"
-      :loading="isGenerating"
-      :disabled="isGenerating"
-      @click="handleGenerate"
-    >
+  <Button
+    variant="primary"
+    :loading="isGenerating"
+    :disabled="isGenerating"
+    @click="handleGenerate"
+  >
+    <template v-if="isGenerating">
+      생성 중
+    </template>
+    <template v-else>
       <Sparkles class="icon-sm" />
       AI로 씬 생성
-    </Button>
+    </template>
+  </Button>
   </Card>
 </template>
 

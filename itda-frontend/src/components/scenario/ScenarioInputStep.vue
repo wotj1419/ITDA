@@ -2,7 +2,6 @@
 import { Sparkles, Info } from 'lucide-vue-next'
 import { useScenarioStore } from '../../stores/scenario'
 import Button from '../common/Button.vue'
-import FlowerLoader from '../common/FlowerLoader.vue'
 
 const scenarioStore = useScenarioStore()
 
@@ -139,23 +138,21 @@ const handleGeneratePrompt = () => {
 
     <!-- Generate Button -->
     <div class="step-footer">
-    <div class="step-footer">
       <Button
         variant="primary"
         size="lg"
-        :disabled="!scenarioStore.input.genre || !scenarioStore.input.mood || scenarioStore.isGenerating"
+        :loading="scenarioStore.isGenerating"
+        :disabled="!scenarioStore.input.genre || !scenarioStore.input.mood"
         @click="handleGeneratePrompt"
       >
         <template v-if="scenarioStore.isGenerating">
-          <FlowerLoader />
-          생성중
+          생성 중
         </template>
         <template v-else>
           <Sparkles class="icon-sm" />
           시나리오 프롬프트 생성
         </template>
       </Button>
-    </div>
     </div>
   </div>
 </template>

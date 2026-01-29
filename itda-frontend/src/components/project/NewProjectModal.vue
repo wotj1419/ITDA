@@ -3,6 +3,7 @@ import { ref, reactive } from 'vue'
 import { useRouter } from 'vue-router'
 import { Sparkles, ArrowRight, ChevronDown } from 'lucide-vue-next'
 import ModalBase from '../common/ModalBase.vue'
+import Button from '../common/Button.vue'
 import { useProjectStore } from '../../stores/project'
 import { useUIStore } from '../../stores/ui'
 
@@ -213,13 +214,16 @@ const handleClose = () => {
             ></textarea>
           </div>
 
-          <button
-            type="button"
-            class="btn btn-secondary w-full"
+          <Button
+            variant="secondary"
+            class="w-full"
+            :loading="isGenerating"
             :disabled="isGenerating"
             @click="generateScenario"
           >
-            <span v-if="isGenerating" class="btn-spinner"></span>
+            <template v-if="isGenerating">
+              생성 중
+            </template>
             <template v-else-if="aiGenerated">
               <span class="checkmark">✓</span>
               {{ form.sceneCount }}개 씬 생성 완료!
@@ -228,7 +232,7 @@ const handleClose = () => {
               <Sparkles class="icon-sm" />
               AI로 씬 생성하기
             </template>
-          </button>
+          </Button>
         </div>
       </div>
     </form>
