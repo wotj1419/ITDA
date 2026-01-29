@@ -1,66 +1,9 @@
 <script setup lang="ts">
 import { RouterLink } from 'vue-router'
 import {
-  // ArrowRight,
-  // PlayCircle,
-  // Play,
-  Pencil,
-  Palette,
-  Film,
-  GitBranch,
-  Users,
-  Layers,
+  ArrowRight,
+  PlayCircle,
 } from 'lucide-vue-next'
-
-const stats = [
-  { value: '1,200+', label: '크리에이터' },
-  { value: '5,000+', label: '생성된 영상' },
-  { value: '50K+', label: 'AI 이미지' },
-]
-
-const features = [
-  {
-    icon: Pencil,
-    title: 'AI 시나리오 생성',
-    description: '아이디어만 입력하면 AI가 씬별 시나리오를 자동으로 작성합니다.',
-  },
-  {
-    icon: Palette,
-    title: '스토리보드 생성',
-    description: 'Gemini로 마스터 이미지와 다양한 앵글의 샷을 생성합니다.',
-  },
-  {
-    icon: Film,
-    title: 'AI 영상 변환',
-    description: 'Veo 3.1로 스토리보드 이미지를 시네마틱 영상으로 변환합니다.',
-  },
-  {
-    icon: GitBranch,
-    title: '노드 기반 워크플로우',
-    description: '마스터 → 그리드 → 샷 → 영상 흐름을 시각적으로 관리합니다.',
-  },
-  {
-    icon: Users,
-    title: '실시간 협업',
-    description: 'WebRTC 화상통화로 팀원과 아이디어를 실시간으로 공유합니다.',
-  },
-  {
-    icon: Layers,
-    title: '타임라인 편집',
-    description: '확정된 영상 클립을 조합하여 최종 영화를 완성합니다.',
-  },
-]
-
-const workflowSteps = [
-  { number: 1, title: '기획', description: '시나리오 작성 및\n캐릭터 설정' },
-  { number: 2, title: '스토리보드', description: 'AI 이미지 생성 및\n샷 구성' },
-  { number: 3, title: '영상 생성', description: 'Image-to-Video\nAI 변환' },
-  { number: 4, title: '편집 & 완성', description: '타임라인 편집 및\n최종 병합' },
-]
-
-// function scrollToDemo() {
-//   document.querySelector('.demo-video')?.scrollIntoView({ behavior: 'smooth' })
-// }
 
 // GSAP Animation
 import { onMounted, onUnmounted, ref } from 'vue'
@@ -71,19 +14,55 @@ gsap.registerPlugin(ScrollTrigger)
 
 const mainContainer = ref<HTMLElement | null>(null)
 const heroSection = ref<HTMLElement | null>(null)
-const heroTitle = ref<HTMLElement | null>(null)
-// const heroDesc = ref<HTMLElement | null>(null)
+const heroContent = ref<HTMLElement | null>(null)
 const heroVideo = ref<HTMLElement | null>(null)
 const heroVideoElement = ref<HTMLVideoElement | null>(null)
-const featuresSection = ref<HTMLElement | null>(null)
-const workflowSection = ref<HTMLElement | null>(null)
+// const feature1Section = ref<HTMLElement | null>(null)
+// const feature2Section = ref<HTMLElement | null>(null)
 
 let ctx: gsap.Context
+let isVideoPinned = false
+let pinOffset = { top: 0, left: 0 }
+let scaleTarget = { x: 1, y: 1 }
 
 onMounted(() => {
   ctx = gsap.context(() => {
-    const navBarHeight =
-      document.querySelector('.landing-header')?.getBoundingClientRect().height ?? 64
+    const updatePinOffset = () => {
+      const videoWrap = heroVideo.value
+      const sectionEl = heroSection.value
+      if (!videoWrap || !sectionEl) return
+      const rect = videoWrap.getBoundingClientRect()
+      const sectionRect = sectionEl.getBoundingClientRect()
+      pinOffset = {
+        top: rect.top - sectionRect.top,
+        left: rect.left - sectionRect.left,
+      }
+      scaleTarget = {
+        x: rect.width ? Math.max(1, rect.right / rect.width) : 1,
+        y: rect.height ? Math.max(1, (window.innerHeight - rect.top) / rect.height) : 1,
+      }
+    }
+
+    updatePinOffset()
+
+    const clearPinnedStyles = () => {
+      const videoWrap = heroVideo.value
+      if (!videoWrap) return
+      videoWrap.classList.remove('is-pinned')
+      videoWrap.style.removeProperty('top')
+      videoWrap.style.removeProperty('left')
+      videoWrap.style.removeProperty('right')
+    }
+
+    const applyPinnedStyles = () => {
+      const videoWrap = heroVideo.value
+      if (!videoWrap) return
+      updatePinOffset()
+      videoWrap.style.top = `${pinOffset.top}px`
+      videoWrap.style.left = `${pinOffset.left}px`
+      videoWrap.style.right = 'auto'
+      videoWrap.classList.add('is-pinned')
+    }
 
     // 1. Hero Section Animation (Pin logic & Scale)
     const tlHero = gsap.timeline({
@@ -93,14 +72,29 @@ onMounted(() => {
         end: '+=150%',
         scrub: 1,
         pin: true,
-        onUpdate: () => {
+        invalidateOnRefresh: true,
+        onUpdate: (self) => {
           const videoEl = heroVideoElement.value
           const videoWrap = heroVideo.value
-          if (!videoEl || !videoWrap) return
+          const sectionEl = heroSection.value
+          if (!videoEl || !videoWrap || !sectionEl) return
 
-          const videoTop = videoWrap.getBoundingClientRect().top
-          const shouldPlay = videoTop <= navBarHeight + 1
+          const shouldPin = self.progress > 0.001
 
+          if (shouldPin && !isVideoPinned) {
+            applyPinnedStyles()
+            isVideoPinned = true
+          } else if (!shouldPin && isVideoPinned) {
+            clearPinnedStyles()
+            isVideoPinned = false
+          }
+
+          const currentScaleX = Number(gsap.getProperty(videoWrap, 'scaleX'))
+          const currentScaleY = Number(gsap.getProperty(videoWrap, 'scaleY'))
+          const epsilon = 0.02
+          const shouldPlay =
+            currentScaleX >= scaleTarget.x - epsilon &&
+            currentScaleY >= scaleTarget.y - epsilon
           if (shouldPlay) {
             if (videoEl.paused && !videoEl.ended) {
               void videoEl.play().catch(() => {})
@@ -112,6 +106,14 @@ onMounted(() => {
             videoEl.pause()
           }
         },
+        onRefresh: () => {
+          updatePinOffset()
+          const videoWrap = heroVideo.value
+          if (isVideoPinned && videoWrap) {
+            videoWrap.style.top = `${pinOffset.top}px`
+            videoWrap.style.left = `${pinOffset.left}px`
+          }
+        },
         onLeave: () => {
           const videoEl = heroVideoElement.value
           if (!videoEl || videoEl.paused) return
@@ -121,67 +123,59 @@ onMounted(() => {
     })
 
     // Init state for video
-    // Fix: Set explicit height instead of auto for smoother interpolation
+    // Initial state: small, positioned on the right
     gsap.set(heroVideo.value, { 
-      width: '20vw', 
-      height: '11.25vw', // 16:9 of 20vw
+      width: '35vw', 
+      height: 'auto', 
       aspectRatio: '16/9',
       borderRadius: '20px',
-      y: 50, 
+      x: 0,
+      y: 0,
+      xPercent: 0,
+      yPercent: 0,
+      scaleX: 1,
+      scaleY: 1,
+      transformOrigin: 'right top',
       opacity: 1,
-      maxWidth: '900px'
+      maxWidth: '800px'
     })
 
     // Animation sequences
     tlHero
       .to(
-        [heroTitle.value, '.hero-badge'],
-        { y: -100, opacity: 0, duration: 1 }, 
+        heroContent.value,
+        { x: -100, opacity: 0, duration: 1 }, 
         0,
       )
       .to(
         heroVideo.value,
         {
-          width: '100vw',
-          height: '100vh',
-          maxWidth: '100vw',
-          aspectRatio: 'auto', // Reset aspect ratio
+          scaleX: () => scaleTarget.x,
+          scaleY: () => scaleTarget.y,
           borderRadius: '0px',
-          scale: 1,
           opacity: 1,
           duration: 2.5,
-          y: 0,
         },
         '<',
       )
 
-    // 2. Features Section (Stagger)
-    gsap.from('.feature-card', {
-      scrollTrigger: {
-        trigger: featuresSection.value,
-        start: 'top 80%',
-        toggleActions: 'play none none reverse',
-      },
-      y: 50,
-      opacity: 0,
-      duration: 0.8,
-      stagger: 0.1,
-      ease: 'power2.out',
+    // Feature Sections Animation
+    const sections = gsap.utils.toArray('.feature-section') as HTMLElement[]
+    sections.forEach((section) => {
+      gsap.from(section.querySelectorAll('.fade-up'), {
+        scrollTrigger: {
+          trigger: section,
+          start: 'top 80%',
+          toggleActions: 'play none none reverse',
+        },
+        y: 50,
+        opacity: 0,
+        duration: 0.8,
+        stagger: 0.2,
+        ease: 'power2.out',
+      })
     })
 
-    // 3. Workflow Section (Stagger)
-    gsap.from('.workflow-step', {
-      scrollTrigger: {
-        trigger: workflowSection.value,
-        start: 'top 80%',
-        toggleActions: 'play none none reverse',
-      },
-      y: 30,
-      opacity: 0,
-      duration: 0.8,
-      stagger: 0.2,
-      ease: 'back.out(1.7)',
-    })
   }, mainContainer.value as Element) // Scope
 })
 
@@ -199,85 +193,83 @@ onUnmounted(() => {
         <span class="logo-text">잇다</span>
       </RouterLink>
       <nav class="landing-nav">
-        <RouterLink to="/auth" class="nav-link">로그인</RouterLink>
-        <RouterLink to="/auth" class="btn btn-primary">무료로 시작하기</RouterLink>
+        <!-- <RouterLink to="/auth" class="nav-link">로그인</RouterLink> -->
+        <!-- <RouterLink to="/auth" class="btn btn-primary">무료로 시작하기</RouterLink> -->
       </nav>
     </header>
 
     <!-- Hero Section -->
     <section class="hero-section" ref="heroSection">
       <!-- Decorative Background -->
-      <div class="hero-bg-blob hero-bg-blob-1"></div>
-      <div class="hero-bg-blob hero-bg-blob-2"></div>
+      <!-- <div class="hero-bg-blob hero-bg-blob-1"></div> -->
+      <!-- <div class="hero-bg-blob hero-bg-blob-2"></div> -->
 
-      <div class="badge badge-rose hero-badge">C205</div>
-
-      <h1 class="hero-title" ref="heroTitle">
-        끊어지는 맥락은 잊다,<br />영상의 흐름을 <span class="outline">잇다</span>
-      </h1>
-
-      <!-- Description, CTA removed as requested -->
-
-      <!-- Demo Video -->
-      <div class="demo-video" ref="heroVideo">
-        <video 
-          class="hero-video-content"
-          src="/web.firstpage.video.mp4" 
-          muted 
-          playsinline
-          ref="heroVideoElement"
-        ></video>
-      </div>
-
-      <!-- Social Proof -->
-      <div class="social-proof">
-        <div v-for="stat in stats" :key="stat.label" class="stat">
-          <div class="stat-value">{{ stat.value }}</div>
-          <div class="stat-label">{{ stat.label }}</div>
-        </div>
-      </div>
-    </section>
-
-    <!-- Features Section -->
-    <section class="features-section" ref="featuresSection">
-      <div class="section-header">
-        <h2 class="h1">All-in-One AI Filmmaking</h2>
-        <p class="text-muted section-subtitle">기획부터 완성까지, 하나의 플랫폼에서</p>
-      </div>
-
-      <div class="features-grid">
-        <div v-for="feature in features" :key="feature.title" class="feature-card">
-          <div class="feature-icon">
-            <component :is="feature.icon" class="w-8 h-8 icon" />
+      <div class="hero-container">
+        <!-- Left Text Content -->
+        <div class="hero-content" ref="heroContent">
+          <div class="badge badge-rose hero-badge mb-4">NEW VERSION 2.0 AVAILABLE</div>
+          <h1 class="hero-title">
+            Itda에서<br />
+            모든 영화 제작을<br />
+            <span class="text-highlight">한 번에.</span>
+          </h1>
+          <p class="hero-description">
+            당신이 상상하는 시나리오 - Itda가 영상, 오디오, 3D 캐릭터까지 완벽하게 구현합니다. 복잡한 툴 없이, 오직 아이디어만으로 나만의 영화를 완성하세요.
+          </p>
+          <div class="hero-actions">
+            <RouterLink to="/auth" class="btn btn-primary btn-lg">
+              지금 시작하기 <ArrowRight class="w-5 h-5 ml-2" />
+            </RouterLink>
+            <button class="btn btn-outline btn-lg">
+              <PlayCircle class="w-5 h-5 mr-2" /> 데모 영상 보기
+            </button>
           </div>
-          <h3 class="h3 feature-title">{{ feature.title }}</h3>
-          <p class="text-muted text-sm">{{ feature.description }}</p>
+        </div>
+
+        <!-- Right Video Content -->
+        <div class="hero-video-wrapper" ref="heroVideo">
+           <video 
+            class="hero-video-content"
+            src="/web.firstpage.video.mp4" 
+            muted 
+            loop
+            playsinline
+            ref="heroVideoElement"
+          ></video>
         </div>
       </div>
     </section>
 
-    <!-- Workflow Section -->
-    <section class="workflow-section" ref="workflowSection">
-      <h2 class="h1">Simple 4-Step Workflow</h2>
-      <p class="text-muted section-subtitle">아이디어에서 영화까지, 단 4단계</p>
-
-      <div class="workflow-steps">
-        <div v-for="step in workflowSteps" :key="step.number" class="workflow-step">
-          <div class="workflow-step-number">{{ step.number }}</div>
-          <h4 class="workflow-step-title">{{ step.title }}</h4>
-          <p class="text-muted text-sm workflow-step-desc" v-html="step.description.replace('\n', '<br>')"></p>
+    <!-- Section 2: Connect Ideas -->
+    <section class="feature-section section-connect">
+      <div class="container feature-container">
+        <div class="feature-image-wrapper fade-up">
+          <img src="/images/landing/node_feature.png" alt="Connect Ideas" class="feature-image" />
+        </div>
+        <div class="feature-content fade-up">
+          <h2 class="h1 mb-6">아이디어를<br/>노드로 잇다</h2>
+          <p class="feature-text">
+            시나리오부터 영상까지, 영화 제작의 모든 단계를 하나의 캔버스에 펼칩니다.<br/><br/>
+            잇다는 복잡한 과정을 눈에 보이는 노드 흐름으로 자연스럽게 연결합니다.
+          </p>
         </div>
       </div>
     </section>
 
-    <!-- CTA Section -->
-    <section class="cta-section">
-      <h2 class="h1">Ready to Create Your AI Film?</h2>
-      <p class="text-muted cta-subtitle">지금 무료로 시작하고 첫 번째 AI 영화를 만들어보세요.</p>
-      <RouterLink to="/auth" class="btn btn-primary btn-lg">
-        무료로 시작하기
-        <ArrowRight class="w-5 h-5" />
-      </RouterLink>
+    <!-- Section 3: Collaborate -->
+    <section class="feature-section section-collab bg-gray-50">
+      <div class="container feature-container reverse">
+        <div class="feature-content fade-up">
+          <h2 class="h1 mb-6">같은 캔버스에서<br/>함께 만들다</h2>
+          <p class="feature-text">
+            작업 화면 위에서 바로 대화하고, 보고, 함께 결정하세요.<br/><br/>
+            잇다는 협업을 노드 흐름 속에 자연스럽게 녹여냅니다.
+          </p>
+        </div>
+        <div class="feature-image-wrapper fade-up">
+          <img src="/images/landing/collab_feature.png" alt="Collaborate" class="feature-image" />
+        </div>
+      </div>
     </section>
 
     <!-- Footer -->
@@ -288,7 +280,7 @@ onUnmounted(() => {
         <a href="#">개인정보처리방침</a>
         <a href="#">문의하기</a>
       </div>
-      <p class="footer-copyright">© 2026 . All rights reserved.</p>
+      <p class="footer-copyright">© 2026 Itda. All rights reserved.</p>
     </footer>
   </div>
 </template>
@@ -296,6 +288,7 @@ onUnmounted(() => {
 <style scoped>
 .landing {
   min-height: 100vh;
+  font-family: 'Pretendard', sans-serif; /* Setup standard font */
 }
 
 /* Header */
@@ -305,9 +298,9 @@ onUnmounted(() => {
   left: 0;
   right: 0;
   height: 64px;
-  background: rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.8);
   backdrop-filter: blur(12px);
-  border-bottom: 1px solid var(--rose-200);
+  border-bottom: 1px solid rgba(0,0,0,0.05);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -330,265 +323,189 @@ onUnmounted(() => {
 }
 
 .logo-text {
-  font-weight: 700;
-}
-
-.landing-nav {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-}
-
-.nav-link {
-  color: var(--gray-600);
-  text-decoration: none;
-  font-size: 0.875rem;
-}
-
-.nav-link:hover {
-  color: var(--gray-900);
+  font-weight: 800;
+  font-size: 1.25rem;
 }
 
 /* Hero Section */
 .hero-section {
   min-height: 100vh;
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  text-align: center;
-  padding: 6rem 2rem 4rem;
   position: relative;
   overflow: hidden;
+  padding: 0;
+  background: #fff;
 }
 
-.hero-bg-blob {
-  position: fixed;
-  border-radius: 50%;
-  filter: blur(100px);
-  z-index: -1;
+.hero-container {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  justify-content: space-between;
+  width: 100%;
+  max-width: 1400px;
+  padding: 120px 4rem 0;
+  gap: 4rem;
+  height: 100vh;
 }
 
-.hero-bg-blob-1 {
-  top: -20%;
-  left: -10%;
-  width: 500px;
-  height: 500px;
-  background: var(--rose-200);
-  opacity: 0.5;
-}
-
-.hero-bg-blob-2 {
-  bottom: -20%;
-  right: -10%;
-  width: 600px;
-  height: 600px;
-  background: var(--rose-300);
-  opacity: 0.4;
-  filter: blur(120px);
+.hero-content {
+  flex: 1;
+  text-align: left;
+  z-index: 2;
+  min-width: 0;
 }
 
 .hero-badge {
+  display: inline-block;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--rose-600);
+  background: var(--rose-50);
+  padding: 0.25rem 0.5rem;
+  border-radius: 9999px;
+  border: 1px solid var(--rose-200);
   margin-bottom: 1rem;
 }
 
 .hero-title {
-  font-size: 4rem;
+  font-size: 4.5rem; /* Large scale */
   font-weight: 800;
   line-height: 1.1;
-  margin-bottom: 2.5rem;
-  background: linear-gradient(135deg, var(--gray-900), var(--rose-500));
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-  word-break: keep-all;
+  margin-bottom: 1.5rem;
+  color: #111827;
+  letter-spacing: -0.02em;
 }
 
-.hero-title .outline {
-  color: transparent;
-  -webkit-text-stroke: 2px var(--rose-500);
-  font-weight: 900;
+.text-highlight {
+  color: var(--rose-500);
 }
 
 .hero-description {
-  font-size: 1.5rem;
-  color: var(--gray-500);
-  max-width: 800px;
-  margin-bottom: 4rem;
+  font-size: 1.125rem;
+  color: #6B7280;
   line-height: 1.6;
+  margin-bottom: 2.5rem;
+  max-width: 500px;
 }
 
-.cta-group {
+.hero-actions {
   display: flex;
   gap: 1rem;
-  margin-bottom: 5rem; /* Reduced from 15rem to close gap */
 }
 
-/* Demo Video */
-.demo-video {
-  max-width: 900px;
-  width: 100%;
-  aspect-ratio: auto;
-  background: black; /* Video bg */
+.btn-primary {
+  background: var(--rose-500);
+  color: white;
+  border: none;
+  font-weight: 700;
 }
+.btn-primary:hover {
+  background: var(--rose-600);
+}
+
+.btn-outline {
+  background: white;
+  color: #374151;
+  border: 1px solid #E5E7EB;
+  font-weight: 600;
+}
+.btn-outline:hover {
+  background: #F9FAFB;
+}
+
+/* Hero Video */
+.hero-video-wrapper {
+  flex: 1;
+  display: flex;
+  justify-content: flex-end;
+  align-items: flex-start;
+  z-index: 2;
+  position: relative;
+  max-width: 50%;
+  margin-left: auto;
+}
+
+.hero-video-wrapper.is-pinned {
+  position: absolute;
+}
+
 
 .hero-video-content {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  border-radius: inherit;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
 }
 
-.play-icon {
-  color: var(--rose-500);
-}
-
-/* Social Proof */
-.social-proof {
+/* Connect / Collab Sections */
+.feature-section {
+  padding: 8rem 2rem;
+  min-height: 80vh;
   display: flex;
-  gap: 4rem;
-  margin-top: 4rem;
-  padding: 2rem;
-}
-
-.stat {
-  text-align: center;
-}
-
-.stat-value {
-  font-size: 2rem;
-  font-weight: 700;
-  color: var(--rose-500);
-}
-
-.stat-label {
-  font-size: 0.875rem;
-  color: var(--gray-500);
-}
-
-/* Features Section */
-.features-section {
-  padding: 6rem 2rem;
+  align-items: center;
+  justify-content: center;
   background: white;
 }
 
-.section-header {
-  text-align: center;
-  margin-bottom: 3rem;
-}
-
-.section-subtitle {
-  font-size: 1.125rem;
-  margin-top: 1rem;
-}
-
-.features-grid {
-  max-width: 1100px;
+.container {
+  max-width: 1200px;
   margin: 0 auto;
+  width: 100%;
+}
+
+.feature-container {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 2rem;
-}
-
-.feature-card {
-  text-align: center;
-  padding: 2rem;
-}
-
-.feature-icon {
-  width: 64px;
-  height: 64px;
-  background: var(--rose-50);
-  border-radius: 16px;
-  display: flex;
+  grid-template-columns: 1fr 1fr;
   align-items: center;
-  justify-content: center;
-  margin: 0 auto 1.5rem;
+  gap: 6rem;
 }
 
-.feature-icon .icon {
-  color: var(--rose-500);
+.feature-container.reverse {
+  /* No special grid reverse needed if we swap DOM order, but let's keep it flexible */
 }
 
-.feature-title {
-  margin-bottom: 0.75rem;
-}
-
-/* Workflow Section */
-.workflow-section {
-  padding: 6rem 2rem;
-  text-align: center;
-}
-
-.workflow-steps {
-  max-width: 900px;
-  margin: 3rem auto 0;
-  display: flex;
-  justify-content: space-between;
+.feature-image-wrapper {
   position: relative;
 }
 
-.workflow-steps::before {
-  content: '';
-  position: absolute;
-  top: 30px;
-  left: 15%;
-  right: 15%;
-  height: 2px;
-  background: var(--rose-200);
+.feature-image {
+  width: 100%;
+  height: auto;
+  border-radius: 24px;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.15);
+  border: 1px solid rgba(0,0,0,0.05);
 }
 
-.workflow-step {
-  flex: 1;
-  position: relative;
-  z-index: 1;
+.feature-content h2 {
+  font-size: 3.5rem;
+  font-weight: 800;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+  color: #111827;
 }
 
-.workflow-step-number {
-  width: 60px;
-  height: 60px;
-  background: var(--rose-500);
-  color: white;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1.5rem;
-  font-weight: 700;
-  margin: 0 auto 1rem;
-}
-
-.workflow-step-title {
-  font-weight: 600;
-  margin-bottom: 0.5rem;
-}
-
-.workflow-step-desc {
-  line-height: 1.4;
-}
-
-/* CTA Section */
-.cta-section {
-  padding: 6rem 2rem;
-  text-align: center;
-  background: linear-gradient(135deg, var(--rose-50), var(--rose-100));
-}
-
-.cta-subtitle {
-  font-size: 1.125rem;
-  margin: 1rem 0 2rem;
+.feature-text {
+  font-size: 1.25rem;
+  color: #4B5563;
+  line-height: 1.7;
+  white-space: pre-line;
 }
 
 /* Footer */
 .landing-footer {
   padding: 3rem 2rem;
-  background: var(--gray-900);
+  background: #111827;
   color: white;
   text-align: center;
 }
 
 .footer-logo {
   font-weight: 700;
-  font-size: 1.25rem;
+  font-size: 1.5rem;
   margin-bottom: 1.5rem;
 }
 
@@ -596,51 +513,55 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 1rem;
-  margin-bottom: 1.5rem;
+  gap: 1.5rem;
+  margin-bottom: 2rem;
 }
 
 .footer-links a {
-  color: var(--gray-400);
+  color: #9CA3AF;
   text-decoration: none;
   font-size: 0.875rem;
 }
 
-.footer-links a:hover {
-  color: white;
-}
-
 .footer-copyright {
-  color: var(--gray-500);
+  color: #6B7280;
   font-size: 0.75rem;
 }
 
 /* Responsive */
-@media (max-width: 768px) {
-  .hero-title {
-    font-size: 2rem;
-  }
-
-  .cta-group {
-    flex-direction: column;
-  }
-
-  .features-grid {
+@media (max-width: 1024px) {
+  .hero-container,
+  .feature-container {
     grid-template-columns: 1fr;
+    text-align: center;
+    gap: 3rem;
+    align-items: center;
   }
 
-  .workflow-steps {
-    flex-direction: column;
-    gap: 2rem;
+  .hero-content {
+    text-align: center;
+    order: 1;
+  }
+  
+  .hero-video-wrapper {
+    order: 2;
+    margin-top: 2rem;
+    justify-content: center;
+    align-items: center;
+    margin-left: 0;
+    max-width: 100%;
   }
 
-  .workflow-steps::before {
-    display: none;
+  .hero-actions {
+    justify-content: center;
   }
-
-  .social-proof {
-    flex-direction: column;
-    gap: 1.5rem;
+  
+  .hero-title {
+    font-size: 3rem;
+  }
+  
+  .feature-content h2 {
+    font-size: 2.5rem;
   }
 }
 </style>
