@@ -199,10 +199,6 @@ const progressPercentage = computed(() => {
 
           <ShareButton @click="uiStore.openModal('share-project')" />
 
-          <Button variant="secondary" @click="collabStore.showFloatingBar()">
-            <Users class="icon-sm" />
-            협업 시작
-          </Button>
           <Button variant="primary">
             <Play class="icon-sm" />
             미리보기
