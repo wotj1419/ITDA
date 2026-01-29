@@ -577,16 +577,6 @@
   justify-content: flex-end;
 }
 
-.panel-alert {
-  margin-bottom: 1rem;
-  padding: 0.5rem;
-}
-
-.panel-alert--center {
-  display: flex;
-  justify-content: center;
-}
-
 .panel-toggle {
   accent-color: var(--panel-accent-strong);
   width: 16px;
