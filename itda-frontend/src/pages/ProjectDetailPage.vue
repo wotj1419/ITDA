@@ -82,10 +82,6 @@ const projectLocation = computed(() => {
   return project.value?.title ? `${project.value.title} · ${label}` : label
 })
 
-watch([presenceLocation], ([nextLocation]) => {
-  collabStore.updateLocation(nextLocation)
-}, { immediate: true })
-
 const openScenarioDrawer = () => scenarioStore.openDrawer()
 </script>
 
