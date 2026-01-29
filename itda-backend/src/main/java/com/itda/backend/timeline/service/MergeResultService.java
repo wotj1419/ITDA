@@ -125,7 +125,7 @@ public class MergeResultService {
     }
 
     @Transactional
-    public Long recordSceneMergeResult(Job job,
+    public void recordSceneMergeResult(Job job,
                                        Long resultAssetId,
                                        Integer durationMs,
                                        String thumbnailUrl) {
@@ -133,18 +133,17 @@ public class MergeResultService {
         deactivateActiveSceneVideo(input.sceneId());
         Long sceneVideoId = insertSceneVideo(input);
         updateTimelineSceneVideoId(input.sceneId(), sceneVideoId);
-        return sceneVideoId;
     }
 
-    public Long recordSceneMergeResult(Job job, Long resultAssetId) {
-        return recordSceneMergeResult(job, resultAssetId, null, null);
+    public void recordSceneMergeResult(Job job, Long resultAssetId) {
+        recordSceneMergeResult(job, resultAssetId, null, null);
     }
 
     @Transactional
-    public Long recordProjectMergeResult(Job job, Long resultAssetId) {
+    public void recordProjectMergeResult(Job job, Long resultAssetId) {
         ProjectMergeInput input = resolveProjectMergeInput(job, resultAssetId);
         deactivateActiveProjectMerge(input.projectId());
-        return insertProjectMerge(input);
+        insertProjectMerge(input);
     }
 
     private String normalizeThumbnail(String thumbnailUrl) {
