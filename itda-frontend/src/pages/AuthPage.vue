@@ -3,7 +3,7 @@ import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { useUIStore } from '../stores/ui'
-import { Mail, Lock, Eye, EyeOff, ArrowRight } from 'lucide-vue-next'
+import { Mail, Lock, Eye, EyeOff, ArrowRight, Loader2 } from 'lucide-vue-next'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -234,7 +234,8 @@ async function handleRegister() {
             :disabled="isLoading"
             data-testid="auth-submit-login"
           >
-            {{ isLoading ? '로그인 중...' : '로그인' }}
+            <Loader2 v-if="isLoading" class="w-5 h-5 animate-spin" />
+            <span>{{ isLoading ? '로그인 중...' : '로그인' }}</span>
             <ArrowRight v-if="!isLoading" class="w-5 h-5" />
           </button>
         </form>
@@ -335,7 +336,8 @@ async function handleRegister() {
             :disabled="isLoading"
             data-testid="auth-submit-register"
           >
-            {{ isLoading ? '가입 중...' : '회원가입' }}
+            <Loader2 v-if="isLoading" class="w-5 h-5 animate-spin" />
+            <span>{{ isLoading ? '가입 중...' : '회원가입' }}</span>
             <ArrowRight v-if="!isLoading" class="w-5 h-5" />
           </button>
         </form>

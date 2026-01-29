@@ -22,7 +22,11 @@ interface Props {
 const props = defineProps<Props>();
 const nodeStore = useSceneNodeStore();
 const uiStore = useUIStore();
-const shotTypeHelp = useHelpPopover();
+const shotTypeHelp = useHelpPopover({
+  storageKey: 'scene-editor:shot-type-help',
+  defaultOpen: true,
+  openOnce: true,
+});
 
 const form = ref({
   gridMode: 'SHOT_VARIATIONS' as GridMode,
@@ -335,7 +339,7 @@ function handleGenerateGrid(): void {
             >
               <span class="panel-info-icon">i</span>
             </button>
-            <div v-if="shotTypeHelp.isOpen" class="panel-info-popover">
+            <div v-if="shotTypeHelp.isOpen.value" class="panel-info-popover">
               <div class="panel-info-title">샷 타입 안내</div>
               <ul class="panel-info-list">
                 <li v-for="item in shotTypeHelpItems" :key="item.label" class="panel-info-item">
@@ -406,7 +410,7 @@ function handleGenerateGrid(): void {
       <!-- Generate Prompt -->
       <button
         class="panel-btn panel-btn--secondary panel-btn--full panel-btn--prompt-generate"
-        :disabled="isGeneratingPrompt"
+        :disabled="isGeneratingPrompt || isGeneratingGrid"
         @click="generatePrompt"
       >
         <Loader2 v-if="isGeneratingPrompt" class="panel-btn-icon panel-btn-icon--spin" />
@@ -423,7 +427,7 @@ function handleGenerateGrid(): void {
         </label>
         <textarea v-model="form.prompt" class="panel-textarea panel-textarea--prompt" rows="3"></textarea>
         <div class="panel-prompt-actions panel-prompt-actions--right">
-          <button class="panel-btn panel-btn--text" :disabled="isGeneratingPrompt" @click="generatePrompt">
+          <button class="panel-btn panel-btn--text" :disabled="isGeneratingPrompt || isGeneratingGrid" @click="generatePrompt">
             <Loader2 v-if="isGeneratingPrompt" class="panel-btn-icon panel-btn-icon--spin" />
             <RefreshCw v-else class="panel-btn-icon" />
             재생성
@@ -442,7 +446,7 @@ function handleGenerateGrid(): void {
     <template #footer>
       <button
         class="panel-btn panel-btn--primary panel-btn--full"
-        :disabled="isGeneratingGrid"
+        :disabled="isGeneratingGrid || isGeneratingPrompt"
         @click="handleGenerateGrid"
       >
         <LayoutGrid class="panel-btn-icon" />

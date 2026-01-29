@@ -253,27 +253,6 @@ const handleGeneratePrompt = () => {
   flex-shrink: 0;
 }
 
-.form-input {
-  padding: 0.75rem 1rem;
-  background: var(--gray-50);
-  border: 1px solid var(--gray-200);
-  border-radius: 8px;
-  font-size: 0.875rem;
-  color: var(--gray-900);
-  transition: all 0.2s ease;
-}
-
-.form-input::placeholder {
-  color: var(--gray-400);
-}
-
-.form-input:focus {
-  outline: none;
-  background: white;
-  border-color: var(--rose-300);
-  box-shadow: 0 0 0 3px rgba(255, 133, 161, 0.1);
-}
-
 /* Advanced Options */
 .advanced-options {
   background: var(--gray-50);

@@ -84,9 +84,10 @@ const isConnected = computed(() => collabStore.isConnected)
 
 .presence-item {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 0.1rem;
   font-size: 0.75rem;
   color: var(--gray-600);
 }
@@ -98,6 +99,7 @@ const isConnected = computed(() => collabStore.isConnected)
   align-items: center;
   gap: 0.25rem;
   min-width: 0;
+  max-width: 100%;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -112,7 +114,9 @@ const isConnected = computed(() => collabStore.isConnected)
 .presence-location {
   color: var(--gray-500);
   font-size: 0.7rem;
-  white-space: nowrap;
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .presence-empty {

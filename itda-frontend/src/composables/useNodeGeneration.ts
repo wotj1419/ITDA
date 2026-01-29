@@ -40,6 +40,7 @@ export function useNodeGeneration(options: UseNodeGenerationOptions) {
   };
 
   const generatePrompt = async (): Promise<void> => {
+    if (isGeneratingPrompt.value || isGeneratingJob.value) return;
     isGeneratingPrompt.value = true;
     errorMessage.value = null;
 
@@ -74,6 +75,7 @@ export function useNodeGeneration(options: UseNodeGenerationOptions) {
   };
 
   const runGeneration = async (): Promise<void> => {
+    if (isGeneratingPrompt.value || isGeneratingJob.value) return;
     const prompt = options.getPrompt();
     if (!prompt) return;
 

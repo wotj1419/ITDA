@@ -311,7 +311,7 @@ function handleGenerateShot(): void {
       <!-- Generate Prompt -->
       <button
         class="panel-btn panel-btn--secondary panel-btn--full panel-btn--prompt-generate"
-        :disabled="isGeneratingPrompt"
+        :disabled="isGeneratingPrompt || isGeneratingShot"
         @click="generatePrompt"
       >
         <Loader2 v-if="isGeneratingPrompt" class="panel-btn-icon panel-btn-icon--spin" />
@@ -328,7 +328,7 @@ function handleGenerateShot(): void {
         </label>
         <textarea v-model="form.prompt" class="panel-textarea panel-textarea--prompt" rows="3"></textarea>
         <div class="panel-prompt-actions panel-prompt-actions--right">
-          <button class="panel-btn panel-btn--text" :disabled="isGeneratingPrompt" @click="generatePrompt">
+          <button class="panel-btn panel-btn--text" :disabled="isGeneratingPrompt || isGeneratingShot" @click="generatePrompt">
             <Loader2 v-if="isGeneratingPrompt" class="panel-btn-icon panel-btn-icon--spin" />
             <RefreshCw v-else class="panel-btn-icon" />
             재생성
@@ -347,7 +347,7 @@ function handleGenerateShot(): void {
     <template #footer>
       <button
         class="panel-btn panel-btn--primary panel-btn--full"
-        :disabled="isGeneratingShot"
+        :disabled="isGeneratingShot || isGeneratingPrompt"
         @click="handleGenerateShot"
       >
         <Camera class="panel-btn-icon" />

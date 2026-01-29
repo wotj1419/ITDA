@@ -3,12 +3,16 @@ import { ref } from 'vue'
 import { Film, Plus, Trash2, RefreshCw, GripVertical, Check, Info } from 'lucide-vue-next'
 import { useScenarioStore, type ScenarioScene } from '../../stores/scenario'
 import { useSceneStore } from '../../stores/scene'
+import { useProjectStore } from '../../stores/project'
 import { useUIStore } from '../../stores/ui'
 import Button from '../common/Button.vue'
 
 const scenarioStore = useScenarioStore()
 const sceneStore = useSceneStore()
+const projectStore = useProjectStore()
 const uiStore = useUIStore()
+
+const DEFAULT_PROJECT_TITLE = '새 프로젝트'
 
 const editingSceneId = ref<number | null>(null)
 const draggedId = ref<number | null>(null)
@@ -45,7 +49,7 @@ const handleDragEnd = () => {
 }
 
 const handleApplyToProject = async () => {
-  const projectId = sceneStore.currentProjectId
+  const projectId = scenarioStore.activeProjectId ?? sceneStore.currentProjectId
   if (!projectId) return
 
   await sceneStore.loadScenes(projectId)
@@ -77,6 +81,26 @@ const handleApplyToProject = async () => {
 
   if (orderedIds.length) {
     await sceneStore.reorderScenes(orderedIds)
+  }
+
+  const currentProject = projectStore.currentProject?.projectId === projectId
+    ? projectStore.currentProject
+    : projectStore.projects.find((project) => project.projectId === projectId)
+  const currentTitle = (currentProject?.title || '').trim()
+  const currentGenre = (currentProject?.genre || '').trim()
+  const autoTitle = [...scenarioStore.scenes]
+    .sort((a, b) => a.order - b.order)
+    .map((scene) => scene.title.trim())
+    .find(Boolean)
+  const genreForUpdate = currentGenre || scenarioStore.input.genre.trim()
+
+  if (
+    currentProject &&
+    autoTitle &&
+    genreForUpdate &&
+    (!currentTitle || currentTitle === DEFAULT_PROJECT_TITLE)
+  ) {
+    await projectStore.updateProject(projectId, { title: autoTitle, genre: genreForUpdate })
   }
 
   uiStore.showToast({

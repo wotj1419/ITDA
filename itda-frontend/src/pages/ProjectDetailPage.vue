@@ -178,19 +178,22 @@ const openScenarioDrawer = () => scenarioStore.openDrawer()
 <style>
 /* Project Content */
 .project-content {
-  max-width: 900px;
+  max-width: 980px;
   width: 100%;
   margin: 0 auto;
   box-sizing: border-box; /* Maintain padding within width */
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
 }
 
 /* Tabs */
 .tabs {
   display: flex;
-  gap: 0.5rem;
-  margin-bottom: 1.5rem;
+  gap: 1.5rem;
+  margin-bottom: 1rem;
   border-bottom: 1px solid var(--rose-100);
-  padding-bottom: 0.5rem;
+  padding-bottom: 0.75rem;
   overflow-x: auto; /* Enable horizontal scrolling */
   white-space: nowrap; /* Prevent wrapping */
   -webkit-overflow-scrolling: touch; /* Smooth scroll on iOS */
@@ -205,26 +208,44 @@ const openScenarioDrawer = () => scenarioStore.openDrawer()
 }
 
 .tab {
-  padding: 0.5rem 1rem;
+  padding: 0.25rem 0.25rem 0.75rem;
   border: none;
   background: transparent;
-  color: var(--gray-500);
+  color: var(--gray-400);
   font-size: 0.875rem;
-  font-weight: 500;
+  font-weight: 600;
   cursor: pointer;
-  border-radius: 6px;
+  border-radius: 0;
   transition: all 0.2s ease;
   flex-shrink: 0; /* Don't shrink tabs */
+  position: relative;
 }
 
 .tab:hover {
-  background: var(--rose-50);
-  color: var(--gray-700);
+  color: var(--gray-900);
 }
 
 .tab.active {
-  background: var(--rose-100);
   color: var(--rose-600);
+}
+
+.tab::after {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  width: 100%;
+  height: 3px;
+  background: var(--rose-500);
+  border-radius: 999px;
+  opacity: 0;
+  transform: scaleX(0.6);
+  transition: transform 0.2s ease, opacity 0.2s ease;
+}
+
+.tab.active::after {
+  opacity: 1;
+  transform: scaleX(1);
 }
 
 /* Section Header */
