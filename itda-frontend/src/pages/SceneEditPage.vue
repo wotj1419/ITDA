@@ -178,7 +178,6 @@ onUnmounted(() => {
   window.removeEventListener('keydown', handleEditorKeydown);
   window.removeEventListener('beforeunload', handleBeforeUnload);
   // 페이지 이탈 시 협업 방 퇴장
-  collabStore.leaveRoom();
   nodeStore.clearNodes();
 });
 

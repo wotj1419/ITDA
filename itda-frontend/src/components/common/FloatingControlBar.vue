@@ -13,11 +13,17 @@ const panelPlacement = ref<'up' | 'down'>('up')
 const panelMaxHeight = ref<number | null>(null)
 const panelOffsetX = ref(0)
 const route = useRoute()
+const DEFAULT_BOTTOM_OFFSET = 60
+const TRIGGER_RIGHT_OFFSET = 24
 
 const isProjectPage = computed(() => {
   // Only show on project-related pages, never on dashboard
   return route.path.startsWith('/projects')
 })
+
+const isStartAllowedPage = computed(() =>
+  route.name === 'project-detail' || route.name === 'scene-edit' || route.name === 'timeline'
+)
 
 const isDashboardPage = computed(() => route.path === '/dashboard')
 
@@ -82,8 +88,9 @@ function setDefaultPosition() {
   const width = collabStore.isFloatingBarVisible ? measuredWidth : defaultWidth
   const height = (rect?.height && rect.height > 0) ? rect.height : 64
   
-  const x = Math.max(8, window.innerWidth - width - 2)
-  const y = Math.max(8, window.innerHeight - height - 12)
+  const rightOffset = collabStore.isFloatingBarVisible ? 2 : 2 + TRIGGER_RIGHT_OFFSET
+  const x = Math.max(8, window.innerWidth - width - rightOffset)
+  const y = Math.max(8, window.innerHeight - height - DEFAULT_BOTTOM_OFFSET)
   position.value = { x, y }
 }
 
@@ -261,16 +268,17 @@ onBeforeUnmount(() => {
   <div
     class="floating-wrap"
     ref="floatRef"
+    :class="{ dragging: isDragging }"
     :style="{ left: `${position.x}px`, top: `${position.y}px` }"
     @pointerdown="onPointerDown"
   >
     <!-- Start Button (Collapsed State) -->
-    <div v-if="!collabStore.isFloatingBarVisible && isProjectPage" class="floating-trigger">
+    <div v-if="!collabStore.isFloatingBarVisible && isStartAllowedPage" class="floating-trigger">
       <CollabButton class="trigger-btn" @click="startFromTrigger" />
     </div>
 
     <!-- Active Bar (Expanded State) -->
-    <div v-else-if="!isDashboardPage" class="bar-container">
+    <div v-else-if="!isDashboardPage && collabStore.isFloatingBarVisible" class="bar-container">
     <div
       ref="panelWrapRef"
       class="panel-pop"
@@ -367,8 +375,12 @@ onBeforeUnmount(() => {
   background: transparent;
   border-radius: 8px;
   overflow: hidden;
+  cursor: grab;
 }
 
+.floating-wrap.dragging .floating-trigger {
+  cursor: grabbing;
+}
 
 .bar-container {
   position: relative;
@@ -417,6 +429,18 @@ onBeforeUnmount(() => {
   gap: 0.25rem;
   border: 1px solid var(--rose-200);
   width: fit-content;
+  cursor: grab;
+}
+
+.floating-wrap.dragging .floating-bar {
+  cursor: grabbing;
+}
+
+.floating-bar button,
+.floating-bar .control-btn,
+.floating-bar .go-live-btn,
+.floating-trigger button {
+  cursor: pointer;
 }
 
 .floating-bar.hidden {

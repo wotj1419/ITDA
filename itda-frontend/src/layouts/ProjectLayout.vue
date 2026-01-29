@@ -385,7 +385,7 @@ const progressPercentage = computed(() => {
 }
 
 .border-bottom {
-  border-bottom: 1px solid var(--rose-100);
+  border-bottom: 1px solid var(--gray-100);
 }
 
 .border-top {
@@ -536,13 +536,13 @@ const progressPercentage = computed(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0.5rem 2rem;
+  padding: 0.75rem 1.5rem;
   min-height: 64px;
   height: auto;
   flex-wrap: wrap;
   row-gap: 0.5rem;
   background: white;
-  border-bottom: 1px solid var(--rose-100);
+  border-bottom: 1px solid var(--gray-100);
   flex-shrink: 0;
 }
 
@@ -556,20 +556,25 @@ const progressPercentage = computed(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  width: 36px;
+  height: 36px;
   border: none;
   background: transparent;
-  color: var(--gray-500);
-  border-radius: 50%;
+  color: var(--gray-600);
+  border-radius: 8px;
   cursor: pointer;
   transition: all 0.2s ease;
   flex-shrink: 0;
 }
 
 .btn-icon-back:hover {
-  background: var(--rose-50);
-  color: var(--rose-600);
+  background: var(--gray-50);
+  color: var(--gray-900);
+}
+
+.btn-icon-back .icon-md {
+  width: 20px;
+  height: 20px;
 }
 
 .breadcrumb {

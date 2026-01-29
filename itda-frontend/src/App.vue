@@ -19,6 +19,11 @@ const showCollabUI = computed(() => {
   return route.path.startsWith('/projects')
 })
 
+const shouldLeaveOnRoute = computed(() => {
+  if (!route.name) return false
+  return !route.path.startsWith('/projects')
+})
+
 onMounted(() => {
   if (showCollabUI.value) {
     collabStore.rejoinIfNeeded()
@@ -28,6 +33,12 @@ onMounted(() => {
 watch(showCollabUI, (show) => {
   if (show) {
     collabStore.rejoinIfNeeded()
+  }
+})
+
+watch(shouldLeaveOnRoute, (shouldLeave) => {
+  if (shouldLeave && collabStore.isConnected) {
+    collabStore.leaveRoom()
   }
 })
 </script>
