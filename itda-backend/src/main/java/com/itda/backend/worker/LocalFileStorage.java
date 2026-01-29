@@ -5,6 +5,7 @@ import org.springframework.stereotype.Component;
 
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 
 @Component
@@ -31,6 +32,26 @@ public class LocalFileStorage {
         } catch (IOException e) {
             throw new IllegalStateException("Failed to store file", e);
         }
+    }
+
+    public byte[] readBytes(String relativePath) throws IOException {
+        requireRelativePath(relativePath);
+        String storageKey = normalizeRelativePath(relativePath);
+        Path targetPath = resolveTargetPath(storageKey);
+        if (!Files.exists(targetPath) || !Files.isReadable(targetPath)) {
+            throw new NoSuchFileException(targetPath.toString());
+        }
+        return Files.readAllBytes(targetPath);
+    }
+
+    public long size(String relativePath) throws IOException {
+        requireRelativePath(relativePath);
+        String storageKey = normalizeRelativePath(relativePath);
+        Path targetPath = resolveTargetPath(storageKey);
+        if (!Files.exists(targetPath) || !Files.isReadable(targetPath)) {
+            throw new NoSuchFileException(targetPath.toString());
+        }
+        return Files.size(targetPath);
     }
 
     public void delete(String relativePath) {
