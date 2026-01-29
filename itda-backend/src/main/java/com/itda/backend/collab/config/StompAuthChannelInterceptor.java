@@ -19,6 +19,9 @@ import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Component;
 
 import java.security.Principal;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -30,6 +33,7 @@ public class StompAuthChannelInterceptor implements ChannelInterceptor {
 
     private static final String AUTHORIZATION_HEADER = "Authorization";
     private static final String DEFAULT_ROLE = "USER";
+    private static final String AUTHORIZED_PROJECTS_KEY = "authorizedProjects";
 
     private static final List<Pattern> PROJECT_ID_PATTERNS = List.of(
             Pattern.compile("^/pub/chat/(\\d+)/?$"),
@@ -42,6 +46,7 @@ public class StompAuthChannelInterceptor implements ChannelInterceptor {
 
     private final JwtTokenProvider jwtTokenProvider;
     private final ProjectAccessService projectAccessService;
+    private final Map<String, Set<Long>> sessionProjectCache = new ConcurrentHashMap<>();
 
     @Override
     public Message<?> preSend(@NonNull Message<?> message, @NonNull MessageChannel channel) {
@@ -58,6 +63,9 @@ public class StompAuthChannelInterceptor implements ChannelInterceptor {
 
         if (command == StompCommand.SUBSCRIBE || command == StompCommand.SEND) {
             authorize(accessor);
+        }
+        if (command == StompCommand.DISCONNECT) {
+            clearSessionCache(accessor);
         }
 
         return message;
@@ -96,7 +104,45 @@ public class StompAuthChannelInterceptor implements ChannelInterceptor {
             return;
         }
 
+        Set<Long> authorizedProjects = getAuthorizedProjects(accessor);
+        if (authorizedProjects.contains(projectId)) {
+            return;
+        }
+
         projectAccessService.ensureProjectAccessible(projectId, userDetails.getUserId());
+        authorizedProjects.add(projectId);
+    }
+
+    private Set<Long> getAuthorizedProjects(StompHeaderAccessor accessor) {
+        Map<String, Object> sessionAttributes = accessor.getSessionAttributes();
+        if (sessionAttributes != null) {
+            Object value = sessionAttributes.get(AUTHORIZED_PROJECTS_KEY);
+            if (value instanceof Set<?> cachedSet) {
+                @SuppressWarnings("unchecked")
+                Set<Long> casted = (Set<Long>) cachedSet;
+                return casted;
+            }
+            Set<Long> created = ConcurrentHashMap.newKeySet();
+            sessionAttributes.put(AUTHORIZED_PROJECTS_KEY, created);
+            return created;
+        }
+
+        String sessionId = accessor.getSessionId();
+        if (sessionId == null) {
+            return ConcurrentHashMap.newKeySet();
+        }
+        return sessionProjectCache.computeIfAbsent(sessionId, key -> ConcurrentHashMap.newKeySet());
+    }
+
+    private void clearSessionCache(StompHeaderAccessor accessor) {
+        Map<String, Object> sessionAttributes = accessor.getSessionAttributes();
+        if (sessionAttributes != null) {
+            sessionAttributes.remove(AUTHORIZED_PROJECTS_KEY);
+        }
+        String sessionId = accessor.getSessionId();
+        if (sessionId != null) {
+            sessionProjectCache.remove(sessionId);
+        }
     }
 
     private Authentication getAuthentication(Principal principal) {

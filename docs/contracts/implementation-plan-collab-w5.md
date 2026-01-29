@@ -61,6 +61,12 @@
 - Publish: `/pub/rtc/{projectId}`
 - 개인 수신: `/user/queue/rtc`
 
+### 1.3 분산 처리(권장) — Redis Pub/Sub
+- API 서버 다중 인스턴스 운영 시 **Redis Pub/Sub**로 WS 메시지를 분산 브로드캐스트
+- 각 인스턴스는 Redis 채널 구독 → 수신 메시지를 로컬 `SimpMessagingTemplate`로 전달
+- 권장 채널명: `collab:ws` (환경 분리 시 `collab:ws:{env}`)
+- 로컬 브로커(SimpleBroker)는 **인스턴스 내부 전달용**으로만 유지
+
 ---
 
 ## 2) 공통 보안/인가(필수)
@@ -206,6 +212,7 @@ Response(서버→클라):
 - WS 경로 고정: `/ws`, App Prefix `/pub`, Topic `/topic`, User `/user`, Queue `/user/queue`
 - CONNECT JWT 인증 + Principal 세팅 (STOMP 인바운드 인터셉터)
 - SUBSCRIBE/SEND 시 destination에서 `projectId` 추출 → 멤버 체크
+- Redis Pub/Sub 기반 분산 브로드캐스트 골격 추가 (채널 `collab:ws`)
 - STOMP ERROR 프레임 핸들러 추가(에러 코드/메시지 반환)
 - `ProjectAccessService.isProjectMember` 공용 메서드 추가
 
@@ -252,6 +259,31 @@ Response(서버→클라):
   - `com.itda.backend.rtc.controller.dto.RtcSignalMessage`
 
 ---
+
+## 9) 프론트엔드 작업 항목(추가) — BE 체크리스트 대응
+### FE 필수 체크리스트 (BE 기능과 1:1 매칭)
+- [ ] **연결 시점 고정**: 협업 화면 진입 시점에만 WS 연결 생성(홈/로그인 금지)
+- [ ] **CONNECT 인증**: STOMP CONNECT 헤더에 `Authorization: Bearer <JWT>` 포함
+- [ ] **경로 정합성**: `publish=/pub`, `subscribe=/topic`, `user=/user/queue` 고정
+- [ ] **Chat 라우팅**: 송신 `/pub/chat/{projectId}`, 수신 `/topic/chat/{projectId}`
+- [ ] **Presence 라우팅**: 송신 `/pub/presence/{projectId}`, 수신 `/topic/presence/{projectId}`
+- [ ] **RTC 라우팅**: 송신 `/pub/rtc/{projectId}`, 수신 `/user/queue/rtc`
+- [ ] **에러 대응**: ERROR 프레임 수신 시 UI 표시 + 연결 종료 처리
+- [ ] **정원 정책**: RTC 6명 초과 거절 메시지 처리(UI 안내)
+- [ ] **멤버 권한 에러**: FORBIDDEN 수신 시 해당 프로젝트 협업 기능 비활성화
+
+### FE 구현 상세 체크리스트
+- [ ] **재접속 정책**: 네트워크 끊김 → 재연결 → room 재구독 + presence 재전송
+- [ ] **커서 throttle**: 50~100ms (sceneId 필수)
+- [ ] **Presence 변경 전송**: LOCATION/STATUS는 값 변경 시에만 전송
+- [ ] **RTC Glare 방지**: 신규 참가자가 offer 생성/전송
+- [ ] **연결 상태 UI**: 연결중/연결됨/끊김/재시도 상태 표시
+- [ ] **로그인 상태**: 토큰 없으면 WS 연결 자체를 막음
+
+### FE 메시지 스키마 정합성(최소 필드)
+- [ ] Chat: `content`, `type`(기본 TEXT)
+- [ ] Presence: `type`, `sceneId?`, `nodeId?`, `location/status/x/y` (타입별 필수값 준수)
+- [ ] RTC: `type`, `projectId`, `targetId?`, `payload` (OFFER/ANSWER/CANDIDATE 시 필수)
 
 ## 8) Contract Freeze (문서만 보고 구현 가능한 고정안)
 
