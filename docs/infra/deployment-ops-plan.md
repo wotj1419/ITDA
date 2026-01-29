@@ -26,6 +26,27 @@ PRD 7.3 아키텍처를 기준으로 CI/CD 파이프라인과 배포·운영 구
 - Worker/Observability는 compose `profiles`로 선택 실행
 - 프론트 정적 파일은 `deploy/nginx/html`로 복사하여 Nginx에서 서빙
 - TLS 인증서는 `deploy/nginx/certs/`에 배치 예정
+- Redis Streams: 기본 프로필에 `redis-streams` 포함 → **API 서버가 dispatcher + consumer 역할을 함께 수행**
+- 운영 컨테이너 기준으로 worker는 미기동(분리 미완)
+
+## Redis Streams 처리 현황
+
+- Redis Streams 활성 프로필이 API 서버에 포함되어 있어, 현재는 **API가 직접 소비**하는 구조
+- 컨슈머 ACK가 **성공/실패 관계없이 호출**되어 실패 메시지 재처리가 어렵다
+- Pending 메시지 회수(XPENDING/XCLAIM) 로직이 없어 소비자 장애 시 PEL에 쌓일 수 있다
+- 컨슈머 그룹 생성 시 `ReadOffset.latest()` 사용 → 기존 메시지 스킵 가능성 있음
+
+## 개선 방안(권장)
+
+1) 역할 분리
+   - API: enqueue 전용(Dispatcher만)
+   - Worker: consume/execute 전용(Consumer + JobExecutor)
+2) ACK 정책 개선
+   - 성공 시 ACK, 실패 시 미ACK(재처리 가능)
+3) Pending 회수 루프 추가
+   - XPENDING/XCLAIM 기반으로 오래 묶인 메시지 재처리
+4) 그룹 생성 오프셋 재검토
+   - 최초 생성 시 `0-0`부터 소비하도록 변경 고려
 
 ## 목표 아키텍처 요약
 

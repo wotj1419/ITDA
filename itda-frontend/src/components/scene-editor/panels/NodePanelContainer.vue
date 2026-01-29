@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
  * NodePanelContainer - 동적 패널 라우팅 컨테이너
- * 
+ *
  * 설계 문서: docs/vue-flow-node-workflow-design.md Section 6.1
  */
 import { computed, inject, nextTick, provide, ref, watch } from 'vue';
@@ -80,11 +80,11 @@ watch(
       <component
         v-if="panelComponent"
         :is="panelComponent"
-        :key="selectedNode.id"
+        :key="selectedNode?.id"
         :node="selectedNode"
         @close="handleClose"
       />
-      
+
       <div v-else class="node-panel__empty">
         <p>패널을 찾을 수 없습니다.</p>
       </div>
