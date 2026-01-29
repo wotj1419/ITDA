@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { onMounted, onUnmounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { Plus } from 'lucide-vue-next'
 import { useProjectStore } from '../stores/project'
@@ -20,6 +20,15 @@ const collabStore = useCollabStore()
 const authStore = useAuthStore()
 const isCreatingProject = ref(false)
 const viewMode = ref<'grid' | 'list'>('grid')
+const unreadNotifications = ref(0)
+const isNotificationOpen = ref(false)
+const notificationRef = ref<HTMLElement | null>(null)
+const notificationTitle = '\uc54c\ub9bc'
+const notificationFilterLabel = '\uc77d\uc9c0 \uc54a\uc740 \ud56d\ubaa9\ub9cc \ud45c\uc2dc'
+const notificationEmptyTitle = '\uc54c\ub9bc\uc774 \uc5c6\uc2b5\ub2c8\ub2e4'
+const notificationEmptyMeta = '\uc0c8 \uc54c\ub9bc\uc774 \uc624\uba74 \uc5ec\uae30\uc5d0 \ud45c\uc2dc\ub429\ub2c8\ub2e4.'
+const notificationAvatar = '\ud83d\ude42'
+const notificationCloseSymbol = '\u00d7'
 
 // Delete Confirmation State
 const showDeleteModal = ref(false)
@@ -28,6 +37,11 @@ const projectToDelete = ref<{ projectId: number; title: string } | null>(null)
 // Load projects on mount
 onMounted(async () => {
   await projectStore.loadProjects()
+  document.addEventListener('click', handleNotificationClickOutside)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('click', handleNotificationClickOutside)
 })
 
 // Quick access projects removed
@@ -62,6 +76,20 @@ const createEmptyProject = async () => {
     title: '프로젝트 생성 실패',
     message: '잠시 후 다시 시도해주세요.',
   })
+}
+
+const toggleNotifications = () => {
+  isNotificationOpen.value = !isNotificationOpen.value
+}
+
+const closeNotifications = () => {
+  isNotificationOpen.value = false
+}
+
+const handleNotificationClickOutside = (e: MouseEvent) => {
+  if (notificationRef.value && !notificationRef.value.contains(e.target as Node)) {
+    closeNotifications()
+  }
 }
 
 const openStartCollabModal = () => {
@@ -104,7 +132,44 @@ const cancelDelete = () => {
     @start-collab="openStartCollabModal"
   >
     <template #header-left-after-divider>
-      <UserWelcomeTitle :name="authStore.user?.name" />
+      <div class="header-greeting">
+        <UserWelcomeTitle :name="authStore.user?.name" />
+        <div class="notification-wrap" ref="notificationRef">
+          <button
+            class="notification"
+            type="button"
+            aria-label="Notifications"
+            @click.stop="toggleNotifications"
+          >
+            <span class="bell-container" aria-hidden="true">
+              <span class="bell"></span>
+            </span>
+            <span v-if="unreadNotifications > 0" class="notification-badge">
+              {{ unreadNotifications }}
+            </span>
+          </button>
+          <div v-if="isNotificationOpen" class="notification-panel">
+            <div class="notification-panel__header">
+              <h3>{{ notificationTitle }}</h3>
+              <button class="panel-close" type="button" @click="closeNotifications">{{ notificationCloseSymbol }}</button>
+            </div>
+            <div class="notification-panel__filter">
+              <span class="filter-label">{{ notificationFilterLabel }}</span>
+              <span class="filter-pill">OFF</span>
+            </div>
+            <div class="notification-panel__list">
+              <div class="notification-item">
+                <div class="notification-avatar">{{ notificationAvatar }}</div>
+                <div class="notification-content">
+                  <div class="notification-title">{{ notificationEmptyTitle }}</div>
+                  <div class="notification-meta">{{ notificationEmptyMeta }}</div>
+                </div>
+                <span class="notification-dot"></span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </template>
     <template #header-actions>
       <button
@@ -269,6 +334,12 @@ const cancelDelete = () => {
   margin: 0 auto;
 }
 
+
+.header-greeting {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
 
 /* Toolbar */
 .page-header {
@@ -761,6 +832,221 @@ const cancelDelete = () => {
 .icon-lg {
   width: 32px;
   height: 32px;
+}
+
+/* Notification bell */
+.notification-wrap {
+  position: relative;
+  margin-left: -6px;
+}
+
+.notification {
+  color: var(--gray-600);
+  background: transparent;
+  border: none;
+  padding: 15px 15px;
+  border-radius: 50px;
+  cursor: pointer;
+  transition: 300ms;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+
+
+.notification-badge {
+  color: white;
+  font-size: 10px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background-color: #ef4444;
+  position: absolute;
+  right: 8px;
+  top: 8px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1;
+}
+
+.notification:hover {
+  background: rgba(170, 170, 170, 0.062);
+}
+
+.notification:hover > .bell-container {
+  animation: bell-animation 650ms ease-out 0s 1 normal both;
+}
+
+.bell-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.bell {
+  border: 2.17px solid currentColor;
+  border-radius: 10px 10px 0 0;
+  width: 15px;
+  height: 17px;
+  background: transparent;
+  display: block;
+  position: relative;
+  top: -3px;
+}
+
+.bell::before,
+.bell::after {
+  content: "";
+  background: currentColor;
+  display: block;
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  height: 2.17px;
+}
+
+.bell::before {
+  top: 100%;
+  width: 20px;
+}
+
+.bell::after {
+  top: calc(100% + 4px);
+  width: 7px;
+}
+
+
+.notification-panel {
+  position: absolute;
+  top: calc(100% + 10px);
+  left: 0;
+  width: min(360px, 80vw);
+  background: white;
+  border: 1px solid var(--rose-100);
+  border-radius: 14px;
+  box-shadow: 0 20px 40px rgba(15, 23, 42, 0.12);
+  z-index: 40;
+  padding: 0.75rem 0;
+}
+
+.notification-panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 1rem 0.5rem;
+  border-bottom: 1px solid var(--rose-100);
+}
+
+.notification-panel__header h3 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--gray-900);
+}
+
+.panel-close {
+  border: none;
+  background: var(--rose-50);
+  color: var(--gray-500);
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.notification-panel__filter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--rose-100);
+  font-size: 0.75rem;
+  color: var(--gray-500);
+}
+
+.filter-pill {
+  padding: 0.125rem 0.5rem;
+  border-radius: 999px;
+  background: var(--gray-100);
+  color: var(--gray-600);
+  font-weight: 600;
+}
+
+.notification-panel__list {
+  max-height: 360px;
+  overflow-y: auto;
+  padding: 0.5rem 1rem;
+}
+
+.notification-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid var(--gray-100);
+}
+
+.notification-item:last-child {
+  border-bottom: none;
+}
+
+.notification-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--rose-50);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.notification-content {
+  flex: 1;
+}
+
+.notification-title {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--gray-900);
+}
+
+.notification-meta {
+  font-size: 0.75rem;
+  color: var(--gray-500);
+  margin-top: 0.25rem;
+}
+
+.notification-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--rose-400);
+  margin-top: 0.35rem;
+}
+
+@keyframes bell-animation {
+  20% {
+    transform: rotate(15deg);
+  }
+
+  40% {
+    transform: rotate(-15deg);
+    scale: 1.1;
+  }
+  60% {
+    transform: rotate(10deg);
+    scale: 1.1;
+  }
+  80% {
+    transform: rotate(-10deg);
+  }
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
 }
 
 /* New Project Button Animation */

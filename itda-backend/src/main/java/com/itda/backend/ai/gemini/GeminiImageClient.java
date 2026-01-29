@@ -19,6 +19,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -40,13 +41,27 @@ public class GeminiImageClient {
     private final GenAiClientProvider clientProvider;
 
     public GeminiImageResult generateImage(String prompt, Map<String, Object> settings) {
-        return generateImage(prompt, settings, null, null);
+        return generateImage(prompt, settings, List.of());
     }
 
-    public GeminiImageResult generateImage(String prompt,
-                                           Map<String, Object> settings,
-                                           byte[] referenceImageBytes,
-                                           String referenceContentType) {
+    public GeminiImageResult generateImage(
+            String prompt,
+            Map<String, Object> settings,
+            byte[] referenceImageBytes,
+            String referenceContentType
+    ) {
+        if (referenceImageBytes == null || referenceImageBytes.length == 0) {
+            return generateImage(prompt, settings);
+        }
+        String mimeType = normalizeImageMime(referenceContentType);
+        return generateImage(prompt, settings, List.of(new ReferenceImage(referenceImageBytes, mimeType)));
+    }
+
+    public GeminiImageResult generateImage(
+            String prompt,
+            Map<String, Object> settings,
+            List<ReferenceImage> referenceImages
+    ) {
         String resolvedPrompt = requirePrompt(prompt);
         if (imageProperties.isStub()) {
             log.info("[GeminiImageClient] Stub enabled. Returning stub image.");
@@ -65,7 +80,7 @@ public class GeminiImageClient {
         GenerateContentConfig config = buildRequestConfig(settings);
 
         try {
-            GenerateContentResponse response = generateContent(model, resolvedPrompt, referenceImageBytes, referenceContentType, config);
+            GenerateContentResponse response = generateContent(model, resolvedPrompt, referenceImages, config);
             logResponseDebug(response);
             return parseResponse(response);
         } catch (ApiException e) {
@@ -79,6 +94,41 @@ public class GeminiImageClient {
         }
     }
 
+    private GenerateContentResponse generateContent(
+            String model,
+            String prompt,
+            List<ReferenceImage> referenceImages,
+            GenerateContentConfig config
+    ) {
+        if (referenceImages == null || referenceImages.isEmpty()) {
+            return clientProvider.getClient()
+                    .models
+                    .generateContent(model, prompt, config);
+        }
+        Content content = buildContent(prompt, referenceImages);
+        return clientProvider.getClient()
+                .models
+                .generateContent(model, content, config);
+    }
+
+    private Content buildContent(String prompt, List<ReferenceImage> referenceImages) {
+        List<Part> parts = new ArrayList<>();
+        for (ReferenceImage referenceImage : referenceImages) {
+            if (referenceImage == null || referenceImage.bytes() == null || referenceImage.bytes().length == 0) {
+                throw new AiProviderException(ERROR_PREFIX + ": empty reference image");
+            }
+            String mimeType = referenceImage.mimeType() == null || referenceImage.mimeType().isBlank()
+                    ? DEFAULT_IMAGE_MIME
+                    : referenceImage.mimeType();
+            parts.add(Part.fromBytes(referenceImage.bytes(), mimeType));
+        }
+        parts.add(Part.fromText(prompt));
+        return Content.builder()
+                .role(CONTENT_ROLE)
+                .parts(parts)
+                .build();
+    }
+
     private GenerateContentConfig buildRequestConfig(Map<String, Object> settings) {
         long timeoutMs = imageProperties.resolvedTimeoutMs();
         GenerateContentConfig.Builder builder = GenerateContentConfig.builder()
@@ -90,28 +140,6 @@ public class GeminiImageClient {
             builder.imageConfig(ImageConfig.builder().aspectRatio(aspectRatio).build());
         }
         return builder.build();
-    }
-
-    private GenerateContentResponse generateContent(String model,
-                                                    String prompt,
-                                                    byte[] referenceImageBytes,
-                                                    String referenceContentType,
-                                                    GenerateContentConfig config) {
-        if (referenceImageBytes == null || referenceImageBytes.length == 0) {
-            return clientProvider.getClient()
-                    .models
-                    .generateContent(model, prompt, config);
-        }
-        String mimeType = normalizeImageMime(referenceContentType);
-        Part imagePart = Part.fromBytes(referenceImageBytes, mimeType);
-        Part textPart = Part.fromText(prompt);
-        Content content = Content.builder()
-                .role(CONTENT_ROLE)
-                .parts(List.of(imagePart, textPart))
-                .build();
-        return clientProvider.getClient()
-                .models
-                .generateContent(model, content, config);
     }
 
     private GeminiImageResult parseResponse(GenerateContentResponse response) {

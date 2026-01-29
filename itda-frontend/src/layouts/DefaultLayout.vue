@@ -8,6 +8,7 @@ interface Props {
 
 withDefaults(defineProps<Props>(), {
   showHeader: true,
+  showCollaborators: true,
 })
 
 const emit = defineEmits<{
@@ -24,6 +25,7 @@ const emit = defineEmits<{
     <main class="main-wrapper">
       <AppHeader
         v-if="showHeader"
+        :show-collaborators="showCollaborators"
         @search="emit('search', $event)"
       >
         <template #left-after-divider>

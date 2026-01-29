@@ -330,3 +330,20 @@ CREATE TABLE upload_requests (
     CONSTRAINT fk_upload_project FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
     CONSTRAINT fk_upload_owner FOREIGN KEY (owner_id) REFERENCES users(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ============================================
+-- 11. 채팅 메시지 (Chat Messages) - W5
+-- ============================================
+
+CREATE TABLE chat_messages (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    project_id BIGINT NOT NULL,
+    sender_id BIGINT NOT NULL,
+    content TEXT NOT NULL,
+    type VARCHAR(20) NOT NULL DEFAULT 'TEXT',
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    KEY idx_chat_project_id (project_id),
+    KEY idx_chat_project_id_id (project_id, id),
+    CONSTRAINT fk_chat_project FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+    CONSTRAINT fk_chat_sender FOREIGN KEY (sender_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

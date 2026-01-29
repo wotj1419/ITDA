@@ -62,7 +62,7 @@ const visibleTabs = computed(() =>
 onMounted(() => {
   if (projectId.value) {
     collabStore.joinRoom(Number(projectId.value))
-    collabStore.updateLocation('Project')
+    collabStore.updateLocation('SCENE_LIST')
   }
 })
 
@@ -70,7 +70,7 @@ onMounted(() => {
 watch(projectId, (newId) => {
     if (newId) {
         collabStore.joinRoom(Number(newId))
-        collabStore.updateLocation('Project')
+        collabStore.updateLocation('SCENE_LIST')
     }
 })
 
@@ -86,10 +86,6 @@ const projectLocation = computed(() => {
   const label = tabLabelMap[activeTab.value] || 'Project'
   return project.value?.title ? `${project.value.title} · ${label}` : label
 })
-
-watch([projectLocation], ([nextLocation]) => {
-  collabStore.updateLocation(nextLocation)
-}, { immediate: true })
 
 const openScenarioDrawer = () => scenarioStore.openDrawer()
 </script>

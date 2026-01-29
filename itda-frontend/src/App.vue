@@ -4,27 +4,38 @@ import { RouterView, useRoute } from 'vue-router'
 import ToastContainer from './components/common/ToastContainer.vue'
 import CollabContainer from './components/collab/CollabContainer.vue'
 import FloatingControlBar from './components/common/FloatingControlBar.vue'
-import { socketManager } from './services/ws/socket'
 import { useCollabStore } from './stores/collab'
-
-// Initialize WebSocket connection (Singleton)
-// In a real app, you might want to wait until login
-socketManager.connect();
 
 const collabStore = useCollabStore()
 const route = useRoute()
 
-const hideCollabUI = computed(() => route.name === 'landing' || route.name === 'auth')
+const showCollabUI = computed(() => {
+  if (!route.name) return false
+  return route.path.startsWith('/projects')
+})
+
+const shouldLeaveOnRoute = computed(() => {
+  if (!route.name) return false
+  return !route.path.startsWith('/projects')
+})
 
 onMounted(() => {
-  if (!hideCollabUI.value) {
+  if (showCollabUI.value) {
     collabStore.rejoinIfNeeded()
   }
 })
 
-watch(hideCollabUI, (hide) => {
-  if (!hide) {
+watch(showCollabUI, (show) => {
+  if (show) {
     collabStore.rejoinIfNeeded()
+    return
+  }
+  collabStore.leaveRoom()
+})
+
+watch(shouldLeaveOnRoute, (shouldLeave) => {
+  if (shouldLeave && collabStore.isConnected) {
+    collabStore.leaveRoom()
   }
 })
 </script>
@@ -32,8 +43,8 @@ watch(hideCollabUI, (hide) => {
 <template>
   <RouterView />
   <ToastContainer />
-  <CollabContainer v-if="!hideCollabUI" />
-  <FloatingControlBar v-if="!hideCollabUI" />
+  <CollabContainer v-if="showCollabUI" />
+  <FloatingControlBar v-if="showCollabUI" />
 </template>
 
 <style>

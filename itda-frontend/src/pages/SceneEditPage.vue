@@ -170,7 +170,7 @@ onMounted(async () => {
 
     // 협업 방 입장
     collabStore.joinRoom(projectId.value);
-    collabStore.updateLocation(sceneTitle.value);
+    collabStore.updateLocation('SCENE_EDIT', Number(sceneId.value));
   }
 });
 
@@ -178,7 +178,6 @@ onUnmounted(() => {
   window.removeEventListener('keydown', handleEditorKeydown);
   window.removeEventListener('beforeunload', handleBeforeUnload);
   // 페이지 이탈 시 협업 방 퇴장
-  collabStore.leaveRoom();
   nodeStore.clearNodes();
 });
 
@@ -202,6 +201,7 @@ watch([projectId, sceneId], async ([, newSceneId]) => {
       description: scene.description || '',
       order: scene.order,
     } : undefined);
+    collabStore.updateLocation('SCENE_EDIT', Number(newSceneId));
   }
 });
 

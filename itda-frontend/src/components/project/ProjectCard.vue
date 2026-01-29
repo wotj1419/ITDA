@@ -156,15 +156,6 @@ const handleDeleteRequest = (e: Event) => {
         <MoreVertical class="icon-sm" />
       </button>
       <div v-if="isMenuOpen" class="dropdown-menu">
-        <button class="menu-item" @click="closeMenu">
-          <Pencil class="icon-sm" />
-          수정
-        </button>
-        <button class="menu-item" @click="closeMenu">
-          <Share2 class="icon-sm" />
-          공유
-        </button>
-        <div class="menu-divider"></div>
         <button class="menu-item delete" @click="handleDeleteRequest">
           <Trash2 class="icon-sm" />
           삭제
@@ -581,17 +572,13 @@ const handleDeleteRequest = (e: Event) => {
   color: var(--gray-900);
 }
 
+
 .menu-item.delete {
-  color: var(--red-500);
+  color: #ef4444;
 }
 
 .menu-item.delete:hover {
-  background: var(--red-50);
-}
-
-.menu-divider {
-  height: 1px;
-  background: var(--gray-100);
-  margin: 0.25rem 0;
+  background: #fef2f2;
+  color: #dc2626;
 }
 </style>
