@@ -120,7 +120,7 @@ function handleActivate(event: Event): void {
     <!-- Active Badge -->
     <div v-if="data.isActive" class="node-glass__badge node-glass__badge--active">
       <Star class="node-glass__badge-icon" />
-      Active
+      활성화
     </div>
     <button
       v-else
@@ -130,7 +130,7 @@ function handleActivate(event: Event): void {
       @click="handleActivate"
     >
       <Star class="node-glass__badge-icon" />
-      활성화
+      활성화하기
     </button>
 
     <!-- Target Handle (top) -->
