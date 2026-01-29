@@ -3,7 +3,6 @@
  * MiniTimeline - 확정된 비디오 클립을 보여주는 미니 타임라인
  */
 import { ref } from 'vue';
-import { RouterLink } from 'vue-router';
 import type { TimelineClip } from '../../types/ui';
 import { Star, Play, X } from 'lucide-vue-next';
 

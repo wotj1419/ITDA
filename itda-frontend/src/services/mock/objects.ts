@@ -105,6 +105,7 @@ export async function updateObject(
     const index = objects.findIndex((item) => item.objectId === objectId)
     if (index >= 0) {
       const existingObject = objects[index]
+      if (!existingObject) return null
       const updatedObject: ObjectSheet = { ...existingObject, ...data }
       objects[index] = updatedObject
       return updatedObject
@@ -123,6 +124,7 @@ export async function replaceObjectImage(
     const index = objects.findIndex((item) => item.objectId === objectId)
     if (index >= 0) {
       const existingObject = objects[index]
+      if (!existingObject) continue
       const sheetImageUrl = await readFileAsDataUrl(file)
       const updatedObject: ObjectSheet = { ...existingObject, sheetImageUrl }
       objects[index] = updatedObject

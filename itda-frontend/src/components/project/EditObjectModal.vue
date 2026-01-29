@@ -32,10 +32,13 @@ const emit = defineEmits<{
 
 const uiStore = useUIStore()
 
+const defaultStyle = OBJECT_STYLE_OPTIONS[0] ?? '실사'
+const defaultType: ObjectType = OBJECT_TYPE_OPTIONS[0]?.value ?? 'CHARACTER'
+
 const name = ref('')
 const description = ref('')
-const selectedStyle = ref(OBJECT_STYLE_OPTIONS[0])
-const selectedType = ref<ObjectType>(OBJECT_TYPE_OPTIONS[0].value)
+const selectedStyle = ref<string>(defaultStyle)
+const selectedType = ref<ObjectType>(defaultType)
 const file = ref<File | null>(null)
 const previewUrl = ref<string | null>(null)
 
@@ -94,8 +97,8 @@ const handleFileChange = (event: Event) => {
 const resetForm = () => {
   name.value = props.object?.name || ''
   description.value = props.object?.description || ''
-  selectedStyle.value = props.object?.style || OBJECT_STYLE_OPTIONS[0]
-  selectedType.value = props.object?.type || OBJECT_TYPE_OPTIONS[0].value
+  selectedStyle.value = props.object?.style || defaultStyle
+  selectedType.value = props.object?.type || defaultType
   file.value = null
   setPreview(null)
 }

@@ -40,6 +40,7 @@ Only proceed once requirements are clear.
 ## Testing & QA
 - If there are no automated tests, validate changes manually in dev mode.
 - Check responsive behavior for common breakpoints.
+- Build check (TypeScript only): `npx vue-tsc -b`
 
 ## Local E2E Smoke (Playwright/MCP)
 - Ensure frontend dev server is running: `npm run dev -- --host` (default `http://localhost:5173`).
