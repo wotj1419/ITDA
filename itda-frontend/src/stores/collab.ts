@@ -228,6 +228,13 @@ export const useCollabStore = defineStore('collab', () => {
         if (!roomId.value || status.value !== 'connected') return;
         if (isMediaConnected.value) return;
 
+        // Backend spec: max 6 participants for audio mesh
+        if (participants.value.length >= 6) {
+            console.warn('[RTC] Room is full (max 6 participants)');
+            alert('협업 통화는 최대 6명까지 참여할 수 있습니다.');
+            return;
+        }
+
         try {
             // 1. Get Local Stream
             const stream = await peerConnectionService.getLocalStream({ video: false, audio: true });
@@ -481,6 +488,13 @@ export const useCollabStore = defineStore('collab', () => {
         if (!content.trim()) return;
         if (!roomId.value) return;
 
+        // Backend spec: max 2000 characters
+        if (content.length > 2000) {
+            console.warn('[Chat] Message too long');
+            alert('메시지는 최대 2000자까지 입력할 수 있습니다.');
+            return;
+        }
+
         const now = Date.now();
         const localId = `local-${now}`;
 
@@ -556,7 +570,7 @@ export const useCollabStore = defineStore('collab', () => {
         }
     }
 
-    function updateCursor(x: number, y: number) {
+    function updateCursor(x: number, y: number, sceneId?: number | null) {
         if (!authStore.isAuthenticated) return;
 
         const now = Date.now();

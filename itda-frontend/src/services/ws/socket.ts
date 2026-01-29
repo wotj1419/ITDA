@@ -12,6 +12,9 @@ class WebSocketManager {
     private chatHandlers = new Map<string, (message: any) => void>();
     private presenceSubscriptions = new Map<string, ReturnType<Client['subscribe']>>();
     private presenceHandlers = new Map<string, (message: any) => void>();
+    private rtcSubscription: ReturnType<Client['subscribe']> | null = null;
+    private rtcHandler: ((message: any) => void) | null = null;
+    private currentProjectId: string | null = null;
 
     constructor() {
         this.client = new Client({
@@ -30,6 +33,7 @@ class WebSocketManager {
             this.subscribe();
             this.resubscribeChats();
             this.resubscribePresence();
+            this.resubscribeRTC();
         };
 
         this.client.onStompError = (frame) => {
@@ -148,6 +152,46 @@ class WebSocketManager {
         });
     }
 
+    // RTC Signaling (Backend Spec: /pub/rtc/{projectId} + /user/queue/rtc)
+    public subscribeToRTC(projectId: string, handler: (message: any) => void) {
+        if (this.rtcSubscription) return; // Already subscribed
+        this.currentProjectId = projectId;
+        this.rtcHandler = handler;
+        if (!this.client.connected) return;
+
+        // Subscribe to personal queue for 1:1 RTC signals
+        const subscription = this.client.subscribe('/user/queue/rtc', (message) => {
+            try {
+                const payload = JSON.parse(message.body);
+                handler(payload);
+            } catch (error) {
+                console.error('Failed to parse RTC message', error);
+            }
+        });
+        this.rtcSubscription = subscription;
+        console.log('[RTC] Subscribed to /user/queue/rtc');
+    }
+
+    public unsubscribeRTC() {
+        if (this.rtcSubscription) {
+            this.rtcSubscription.unsubscribe();
+            this.rtcSubscription = null;
+        }
+        this.rtcHandler = null;
+        this.currentProjectId = null;
+    }
+
+    public sendRTC(projectId: string, payload: any) {
+        if (!this.client.connected) {
+            console.warn('Cannot send RTC signal: disconnected');
+            return;
+        }
+        this.client.publish({
+            destination: `/pub/rtc/${projectId}`,
+            body: JSON.stringify(payload),
+        });
+    }
+
     public sendSignal(signal: any) {
         if (!this.client.connected || !this.currentRoomId) {
             console.warn('Cannot send signal: disconnected or no room joined');
@@ -211,6 +255,25 @@ class WebSocketManager {
             });
             this.presenceSubscriptions.set(projectId, subscription);
         });
+    }
+
+    private resubscribeRTC() {
+        if (!this.client.connected || !this.rtcHandler || !this.currentProjectId) return;
+        if (this.rtcSubscription) {
+            this.rtcSubscription.unsubscribe();
+            this.rtcSubscription = null;
+        }
+        const handler = this.rtcHandler;
+        const subscription = this.client.subscribe('/user/queue/rtc', (message) => {
+            try {
+                const payload = JSON.parse(message.body);
+                handler(payload);
+            } catch (error) {
+                console.error('Failed to parse RTC message', error);
+            }
+        });
+        this.rtcSubscription = subscription;
+        console.log('[RTC] Resubscribed to /user/queue/rtc');
     }
 
     public getClient() {
