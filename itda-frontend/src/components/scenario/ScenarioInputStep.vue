@@ -2,7 +2,6 @@
 import { Sparkles, Info } from 'lucide-vue-next'
 import { useScenarioStore } from '../../stores/scenario'
 import Button from '../common/Button.vue'
-import FlowerLoader from '../common/FlowerLoader.vue'
 
 const scenarioStore = useScenarioStore()
 
@@ -139,23 +138,21 @@ const handleGeneratePrompt = () => {
 
     <!-- Generate Button -->
     <div class="step-footer">
-    <div class="step-footer">
       <Button
         variant="primary"
         size="lg"
-        :disabled="!scenarioStore.input.genre || !scenarioStore.input.mood || scenarioStore.isGenerating"
+        :loading="scenarioStore.isGenerating"
+        :disabled="!scenarioStore.input.genre || !scenarioStore.input.mood"
         @click="handleGeneratePrompt"
       >
         <template v-if="scenarioStore.isGenerating">
-          <FlowerLoader />
-          생성중
+          생성 중
         </template>
         <template v-else>
           <Sparkles class="icon-sm" />
           시나리오 프롬프트 생성
         </template>
       </Button>
-    </div>
     </div>
   </div>
 </template>
@@ -251,27 +248,6 @@ const handleGeneratePrompt = () => {
   width: 14px;
   height: 14px;
   flex-shrink: 0;
-}
-
-.form-input {
-  padding: 0.75rem 1rem;
-  background: var(--gray-50);
-  border: 1px solid var(--gray-200);
-  border-radius: 8px;
-  font-size: 0.875rem;
-  color: var(--gray-900);
-  transition: all 0.2s ease;
-}
-
-.form-input::placeholder {
-  color: var(--gray-400);
-}
-
-.form-input:focus {
-  outline: none;
-  background: white;
-  border-color: var(--rose-300);
-  box-shadow: 0 0 0 3px rgba(255, 133, 161, 0.1);
 }
 
 /* Advanced Options */

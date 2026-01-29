@@ -1,24 +1,30 @@
 <script setup lang="ts">
-import { computed, type Component } from 'vue'
+import { computed, onMounted, onUnmounted, ref, type Component } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import type { RouteLocationRaw } from 'vue-router'
 import { useUIStore } from '../stores/ui'
+import { useCollabStore } from '../stores/collab'
 import { useSidebarShortcut } from '../composables/useSidebarShortcut'
 import type { ProjectDetail } from '../types/api/projects'
 import Badge from '../components/common/Badge.vue'
 import Button from '../components/common/Button.vue'
 import ShareButton from '../components/common/ShareButton.vue'
 import ShareProjectModal from '../components/project/ShareProjectModal.vue'
+import ProjectInfoDrawer from '../components/project/ProjectInfoDrawer.vue'
 import PresencePanel from '../components/collab/PresencePanel.vue'
 import {
   BookOpen,
   Clapperboard,
   User,
+  Users,
   Layers,
   Settings,
   Phone,
+  Share2,
   Play,
   ArrowLeft,
+  MoreVertical,
+  Pencil,
 } from 'lucide-vue-next'
 
 
@@ -42,12 +48,40 @@ const emit = defineEmits<{
 
 const router = useRouter()
 const route = useRoute()
+const collabStore = useCollabStore()
 const uiStore = useUIStore()
 
 // Keyboard shortcut (Ctrl+B)
 useSidebarShortcut()
 
 const projectId = computed(() => props.project?.projectId || Number(route.params.id))
+const isProjectInfoOpen = ref(false)
+const isHeaderMenuOpen = ref(false)
+const headerMenuRef = ref<HTMLElement | null>(null)
+
+const closeHeaderMenu = () => {
+  isHeaderMenuOpen.value = false
+}
+
+const handleHeaderMenuToggle = () => {
+  isHeaderMenuOpen.value = !isHeaderMenuOpen.value
+}
+
+const handleClickOutside = (event: MouseEvent) => {
+  if (!isHeaderMenuOpen.value) return
+  if (!headerMenuRef.value) return
+  if (!headerMenuRef.value.contains(event.target as Node)) {
+    closeHeaderMenu()
+  }
+}
+
+onMounted(() => {
+  document.addEventListener('click', handleClickOutside)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('click', handleClickOutside)
+})
 
 interface NavItem {
   key: string
@@ -174,6 +208,14 @@ const progressPercentage = computed(() => {
             <RouterLink to="/dashboard">내 프로젝트</RouterLink>
             <span class="separator">/</span>
             <span class="current">{{ project?.title || 'Project' }}</span>
+            <button
+              type="button"
+              class="current-edit-trigger"
+              :disabled="!project"
+              @click="isProjectInfoOpen = true"
+            >
+              <Pencil class="icon-sm" />
+            </button>
           </div>
         </div>
 
@@ -197,12 +239,28 @@ const progressPercentage = computed(() => {
             <span v-if="extraCount > 0" class="member-more">+{{ extraCount }}</span>
           </div>
 
+          <Button variant="secondary" @click="collabStore.showFloatingBar()">
+            <Users class="icon-sm" />
+            ?? ??
+          </Button>
           <ShareButton @click="uiStore.openModal('share-project')" />
 
-          <Button variant="primary">
+          <Button variant="primary" class="btn-preview">
             <Play class="icon-sm" />
             미리보기
           </Button>
+
+          <div class="header-menu" ref="headerMenuRef">
+            <button class="header-menu-trigger" type="button" @click="handleHeaderMenuToggle">
+              <MoreVertical class="icon-sm" />
+            </button>
+            <div v-if="isHeaderMenuOpen" class="header-menu-dropdown">
+              <button class="menu-item" type="button" @click="uiStore.openModal('share-project'); closeHeaderMenu()">
+                <Share2 class="icon-sm" />
+                공유
+              </button>
+            </div>
+          </div>
         </div>
       </header>
 
@@ -214,6 +272,11 @@ const progressPercentage = computed(() => {
   </div>
 
   <ShareProjectModal :project-id="projectId" />
+  <ProjectInfoDrawer
+    :project="project"
+    :is-open="isProjectInfoOpen"
+    @close="isProjectInfoOpen = false"
+  />
 </template>
 
 <style scoped>
@@ -227,7 +290,7 @@ const progressPercentage = computed(() => {
 .sidebar {
   width: 260px;
   height: 100vh;
-  background: white;
+  background: rgba(255, 255, 255, 0.92);
   border-right: 1px solid var(--rose-100);
   display: flex;
   flex-direction: column;
@@ -235,6 +298,7 @@ const progressPercentage = computed(() => {
   flex-shrink: 0;
   position: relative;
   z-index: 40;
+  backdrop-filter: blur(12px);
 }
 
 .sidebar-collapsed {
@@ -526,9 +590,23 @@ const progressPercentage = computed(() => {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  /* Ensure it takes full width initially */
   width: 100%;
   transition: padding-left 0.3s ease;
+  position: relative;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.7) 0%, var(--rose-canvas) 35%);
+}
+
+.main-wrapper::before {
+  content: '';
+  position: absolute;
+  top: -8%;
+  right: -6%;
+  width: 36%;
+  height: 36%;
+  background: radial-gradient(circle, rgba(255, 133, 161, 0.12) 0%, transparent 70%);
+  filter: blur(48px);
+  z-index: 0;
+  pointer-events: none;
 }
 
 /* Header */
@@ -536,14 +614,18 @@ const progressPercentage = computed(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0.75rem 1.5rem;
+  padding: 0.75rem 2rem;
   min-height: 64px;
   height: auto;
   flex-wrap: wrap;
   row-gap: 0.5rem;
-  background: white;
-  border-bottom: 1px solid var(--gray-100);
+  background: rgba(255, 255, 255, 0.78);
+  border-bottom: 1px solid var(--rose-100);
   flex-shrink: 0;
+  backdrop-filter: blur(14px);
+  box-shadow: 0 8px 24px rgba(255, 133, 161, 0.08);
+  position: relative;
+  z-index: 2;
 }
 
 .header-left {
@@ -610,6 +692,31 @@ const progressPercentage = computed(() => {
   max-width: 200px;
 }
 
+.current-edit-trigger {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--gray-400);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.current-edit-trigger:hover {
+  border-color: var(--rose-100);
+  background: var(--rose-50);
+  color: var(--rose-500);
+}
+
+.current-edit-trigger:disabled {
+  cursor: default;
+  color: var(--gray-300);
+}
+
 .header-actions {
   display: flex;
   align-items: center;
@@ -617,6 +724,63 @@ const progressPercentage = computed(() => {
   flex-wrap: wrap;
   justify-content: flex-end;
   row-gap: 0.5rem;
+}
+
+.header-menu {
+  position: relative;
+}
+
+.header-menu-trigger {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  border: 1px solid var(--rose-100);
+  background: white;
+  color: var(--gray-600);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.header-menu-trigger:hover {
+  border-color: var(--rose-200);
+  background: var(--rose-50);
+  color: var(--gray-900);
+}
+
+.header-menu-dropdown {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 0.5rem);
+  background: white;
+  border: 1px solid var(--rose-100);
+  border-radius: 12px;
+  box-shadow: 0 12px 30px rgba(255, 133, 161, 0.18);
+  padding: 0.35rem;
+  min-width: 160px;
+  z-index: 10;
+}
+
+.header-menu-dropdown .menu-item {
+  width: 100%;
+  border: none;
+  background: transparent;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.65rem;
+  border-radius: 8px;
+  color: var(--gray-700);
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.header-menu-dropdown .menu-item:hover {
+  background: var(--rose-50);
+  color: var(--gray-900);
 }
 
 .progress-section {
@@ -686,6 +850,18 @@ const progressPercentage = computed(() => {
   padding: 2rem;
   overflow-y: auto;
   overflow-x: hidden;
+  position: relative;
+  z-index: 1;
+}
+
+.btn-preview {
+  background: linear-gradient(135deg, var(--rose-500), var(--rose-600));
+  box-shadow: 0 10px 22px rgba(255, 133, 161, 0.28);
+}
+
+.btn-preview:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 14px 28px rgba(255, 133, 161, 0.32);
 }
 
 /* Responsive Adjustments */

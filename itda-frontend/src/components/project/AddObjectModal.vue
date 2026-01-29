@@ -190,27 +190,6 @@ defineExpose({
   margin-left: 0.25rem;
 }
 
-.form-input {
-  width: 100%;
-  padding: 0.625rem 0.875rem;
-  border: 1px solid var(--rose-200);
-  border-radius: 8px;
-  font-size: 0.875rem;
-  color: var(--gray-900);
-  background: white;
-  transition: all 0.2s ease;
-}
-
-.form-input:focus {
-  outline: none;
-  border-color: var(--rose-400);
-  box-shadow: 0 0 0 3px rgba(255, 133, 161, 0.1);
-}
-
-.form-input::placeholder {
-  color: var(--gray-400);
-}
-
 .form-textarea {
   min-height: 80px;
   resize: vertical;

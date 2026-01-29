@@ -8,6 +8,8 @@ import type { Node } from '@vue-flow/core';
 import type { SceneHeaderNodeData } from '../../../types/ui/sceneNodes';
 import BasePanel from './BasePanel.vue';
 import { useSceneNodeStore } from '../../../stores/sceneNode';
+import { useSceneStore } from '../../../stores/scene';
+import { useUIStore } from '../../../stores/ui';
 import { BookOpen, Hash, Type, Text, Edit2, ExternalLink } from 'lucide-vue-next';
 
 interface Props {
@@ -17,6 +19,8 @@ interface Props {
 const props = defineProps<Props>();
 
 const nodeStore = useSceneNodeStore();
+const sceneStore = useSceneStore();
+const uiStore = useUIStore();
 const isEditing = ref(false);
 
 const form = ref({
@@ -37,11 +41,46 @@ function cancelEdit(): void {
   isEditing.value = false;
 }
 
-function saveEdit(): void {
-  nodeStore.updateNode(props.node.id, {
-    title: form.value.title,
-    description: form.value.description,
+async function saveEdit(): Promise<void> {
+  if (!data.value) return;
+  const trimmedTitle = form.value.title.trim();
+  const trimmedDescription = form.value.description.trim();
+  const previous = {
+    title: data.value.title,
+    description: data.value.description,
+  };
+
+  nodeStore.updateNodeLocal(props.node.id, {
+    title: trimmedTitle,
+    description: trimmedDescription,
   });
+
+  const sceneId = Number(data.value.sceneId);
+  if (!Number.isFinite(sceneId)) {
+    nodeStore.updateNodeLocal(props.node.id, previous);
+    uiStore.showToast({
+      type: 'error',
+      title: '씬 저장 실패',
+      message: '씬 ID를 확인할 수 없습니다.',
+    });
+    return;
+  }
+
+  const updated = await sceneStore.updateScene(sceneId, {
+    title: trimmedTitle,
+    description: trimmedDescription,
+  });
+
+  if (!updated) {
+    nodeStore.updateNodeLocal(props.node.id, previous);
+    uiStore.showToast({
+      type: 'error',
+      title: '씬 저장 실패',
+      message: '잠시 후 다시 시도해주세요.',
+    });
+    return;
+  }
+
   isEditing.value = false;
 }
 </script>

@@ -41,6 +41,10 @@ export interface ScenarioScene {
 }
 
 export type ScenarioStep = 1 | 2 | 3 | 4
+type GenerationOptions = {
+    allowWhileLoading?: boolean
+    loading?: boolean
+}
 
 export const useScenarioStore = defineStore('scenario', () => {
     // State
@@ -184,6 +188,7 @@ export const useScenarioStore = defineStore('scenario', () => {
     }
 
     const generatePrompt = async (): Promise<void> => {
+        if (isGenerating.value) return
         if (!activeProjectId.value) return
         const { startGenerationToast, finishGenerationToast } = useGenerationToast()
         const toastId = startGenerationToast('scenario_prompt')
@@ -220,6 +225,7 @@ export const useScenarioStore = defineStore('scenario', () => {
     }
 
     const approvePrompt = async () => {
+        if (isGenerating.value) return
         if (!activeProjectId.value) return
         // approvePrompt triggers plot generation
         await run(async () => {
@@ -245,13 +251,14 @@ export const useScenarioStore = defineStore('scenario', () => {
             // Let's just modify generatePlot and generateScenes to have toasts.
             // And generatePrompt.
 
-            await generatePlot()
+            await generatePlot({ allowWhileLoading: true, loading: false })
         }, { errorMessage: 'Failed to approve prompt' })
         // Note: if generatePlot fails, run catches it. 
         // We will implement toast inside generatePlot so we don't duplicate logic.
     }
 
     const regeneratePrompt = async () => {
+        if (isGenerating.value) return
         if (!activeProjectId.value) return
         const { startGenerationToast, finishGenerationToast } = useGenerationToast()
         const toastId = startGenerationToast('scenario_prompt')
@@ -282,7 +289,8 @@ export const useScenarioStore = defineStore('scenario', () => {
         })
     }
 
-    const generatePlot = async (): Promise<void> => {
+    const generatePlot = async (options: GenerationOptions = {}): Promise<void> => {
+        if (isGenerating.value && !options.allowWhileLoading) return
         if (!activeProjectId.value) return
         const { startGenerationToast, finishGenerationToast } = useGenerationToast()
         const toastId = startGenerationToast('plot')
@@ -297,6 +305,7 @@ export const useScenarioStore = defineStore('scenario', () => {
             finishGenerationToast(toastId, 'plot', 'success')
         }, {
             errorMessage: 'Failed to generate plot',
+            loading: options.loading ?? true,
             onError: (err) => {
                 const message = err instanceof Error ? err.message : '알 수 없는 오류'
                 finishGenerationToast(toastId, 'plot', 'error', { reason: message })
@@ -305,17 +314,19 @@ export const useScenarioStore = defineStore('scenario', () => {
         })
     }
 
-    const approvePlot = () => {
+    const approvePlot = async () => {
+        if (isGenerating.value) return
         if (!activeProjectId.value) return
         // approvePlot calls generateScenes
-        run(async () => {
+        await run(async () => {
             await updateScenarioPlot(activeProjectId.value as number, plot.value.text, 'APPROVED')
             plot.value.status = 'approved'
-            await generateScenes()
+            await generateScenes({ allowWhileLoading: true, loading: false })
         }, { errorMessage: 'Failed to approve plot' })
     }
 
     const regeneratePlot = async () => {
+        if (isGenerating.value) return
         if (!activeProjectId.value) return
         const { startGenerationToast, finishGenerationToast } = useGenerationToast()
         const toastId = startGenerationToast('plot')
@@ -335,7 +346,8 @@ export const useScenarioStore = defineStore('scenario', () => {
         })
     }
 
-    const generateScenes = async (): Promise<void> => {
+    const generateScenes = async (options: GenerationOptions = {}): Promise<void> => {
+        if (isGenerating.value && !options.allowWhileLoading) return
         if (!activeProjectId.value) return
         const { startGenerationToast, finishGenerationToast } = useGenerationToast()
         const toastId = startGenerationToast('scenes')
@@ -352,6 +364,7 @@ export const useScenarioStore = defineStore('scenario', () => {
             finishGenerationToast(toastId, 'scenes', 'success')
         }, {
             errorMessage: 'Failed to generate scenes',
+            loading: options.loading ?? true,
             onError: (err) => {
                 const message = err instanceof Error ? err.message : '알 수 없는 오류'
                 finishGenerationToast(toastId, 'scenes', 'error', { reason: message })
@@ -378,6 +391,7 @@ export const useScenarioStore = defineStore('scenario', () => {
     }
 
     const regenerateScene = async (id: number) => {
+        if (isGenerating.value) return
         await run(async () => {
             await new Promise((resolve) => setTimeout(resolve, 1000))
 
@@ -391,13 +405,15 @@ export const useScenarioStore = defineStore('scenario', () => {
 
     const addScene = () => {
         const newId = Math.max(...scenes.value.map(s => s.id), 0) + 1
-        scenes.value.push({
+        const newScene = {
             id: newId,
             order: scenes.value.length + 1,
             title: '', // 빈 문자열로 시작
             description: '', // 빈 문자열로 시작
-        })
+        }
+        scenes.value.push(newScene)
         saveCurrentState()
+        return newScene
     }
 
     const removeScene = (id: number) => {
@@ -481,4 +497,3 @@ export const useScenarioStore = defineStore('scenario', () => {
         setGenre,
     }
 })
-
