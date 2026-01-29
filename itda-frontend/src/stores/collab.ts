@@ -672,6 +672,17 @@ export const useCollabStore = defineStore('collab', () => {
     function toggleMute() {
         isMuted.value = !isMuted.value;
         peerConnectionService.toggleMute(isMuted.value);
+
+        // Broadcast mute state to other participants (Backend spec: MUTE type)
+        if (roomId.value && isMediaConnected.value) {
+            socketManager.sendSignal({
+                type: 'MUTE',
+                payload: {
+                    muted: isMuted.value,
+                },
+            });
+        }
+
         broadcastState();
     }
 
