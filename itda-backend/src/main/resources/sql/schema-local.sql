@@ -8,6 +8,7 @@ USE itda_local;
 SET FOREIGN_KEY_CHECKS = 0;
 DROP TABLE IF EXISTS timeline_items;
 DROP TABLE IF EXISTS generation_jobs;
+DROP TABLE IF EXISTS project_merges;
 DROP TABLE IF EXISTS video_clips;
 DROP TABLE IF EXISTS nodes;
 DROP TABLE IF EXISTS scene_videos;
@@ -211,14 +212,34 @@ CREATE TABLE scene_videos (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,
     scene_id BIGINT NOT NULL,
     asset_id BIGINT,
+    merge_signature VARCHAR(128),
     status VARCHAR(20) NOT NULL DEFAULT 'QUEUED',  -- QUEUED, GENERATING, COMPLETED, FAILED
     duration_ms INT,
     thumbnail_url VARCHAR(500),
+    is_active TINYINT(1) NOT NULL DEFAULT 1,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     KEY idx_scene_videos_scene (scene_id),
+    KEY idx_scene_videos_merge_sig (merge_signature),
+    KEY idx_scene_videos_scene_active (scene_id, is_active),
     CONSTRAINT fk_scene_videos_scene FOREIGN KEY (scene_id) REFERENCES scenes(id) ON DELETE CASCADE,
     CONSTRAINT fk_scene_videos_asset FOREIGN KEY (asset_id) REFERENCES assets(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE project_merges (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    project_id BIGINT NOT NULL,
+    asset_id BIGINT,
+    merge_signature VARCHAR(128),
+    status VARCHAR(20) NOT NULL DEFAULT 'QUEUED',  -- QUEUED, GENERATING, COMPLETED, FAILED
+    is_active TINYINT(1) NOT NULL DEFAULT 1,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    KEY idx_project_merges_project (project_id),
+    KEY idx_project_merges_project_active (project_id, is_active),
+    KEY idx_project_merges_merge_sig (merge_signature),
+    CONSTRAINT fk_project_merges_project FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+    CONSTRAINT fk_project_merges_asset FOREIGN KEY (asset_id) REFERENCES assets(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ============================================

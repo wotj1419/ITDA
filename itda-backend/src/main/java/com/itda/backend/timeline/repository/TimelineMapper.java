@@ -39,4 +39,7 @@ public interface TimelineMapper {
     int deleteSceneTimelineItemByVideoNodeId(@Param("videoNodeId") Long videoNodeId);
 
     int deleteSceneTimelineItemsByShotId(@Param("shotNodeId") Long shotNodeId);
+
+    int updateSceneTimelineItemsVideoId(@Param("sceneId") Long sceneId,
+                                        @Param("sceneVideoId") Long sceneVideoId);
 }

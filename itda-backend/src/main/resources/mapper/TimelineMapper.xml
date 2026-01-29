@@ -146,4 +146,11 @@
         WHERE n.parent_node_id = #{shotNodeId}
     </delete>
 
+    <update id="updateSceneTimelineItemsVideoId">
+        UPDATE timeline_items
+        SET scene_video_id = #{sceneVideoId}
+        WHERE scene_id = #{sceneId}
+          AND video_node_id IS NOT NULL
+    </update>
+
 </mapper>
