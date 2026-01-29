@@ -996,6 +996,25 @@ API /api/nodes/{id}/generate
 설명 승인된 프롬프트를 기반으로 결과 생성을 시작합니다. (비동기 Job)
 ```
 
+#### 2. Request
+```json
+{
+  "prompt": "화성 기지에서의 아침 식사 풍경",
+  "settings": {
+    "style": "CINEMATIC",
+    "ratio": "16:9"
+  },
+  "referenceObjectIds": [1, 2, 3]
+}
+```
+
+#### 요청 필드 설명
+| 필드 | 타입 | 필수 여부 | 설명 |
+| --- | --- | --- | --- |
+| prompt | String | 선택 | 프롬프트 |
+| settings | Object | 선택 | 생성 옵션 |
+| referenceObjectIds | List<Long> | 선택 | 레퍼런스 오브젝트 ID 목록 (노드 편집에서 선택 시에만 전달) |
+
 #### 3. Response (Job Accepted)
 ```json
 {

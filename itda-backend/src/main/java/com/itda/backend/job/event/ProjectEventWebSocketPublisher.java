@@ -1,5 +1,6 @@
 package com.itda.backend.job.event;
 
+import com.itda.backend.collab.service.CollabRedisPublisher;
 import com.itda.backend.job.controller.dto.JobResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
@@ -13,6 +14,7 @@ import org.springframework.stereotype.Component;
 public class ProjectEventWebSocketPublisher {
 
     private final SimpMessagingTemplate messagingTemplate;
+    private final CollabRedisPublisher collabRedisPublisher;
 
     public void jobDone(Long projectId, JobResponse response) {
         publish(projectId, new JobEventMessage("job.done", response));
@@ -23,6 +25,11 @@ public class ProjectEventWebSocketPublisher {
     }
 
     private void publish(Long projectId, JobEventMessage message) {
-        messagingTemplate.convertAndSend("/topic/projects/" + projectId, message);
+        String destination = "/topic/projects/" + projectId;
+        try {
+            collabRedisPublisher.publish(destination, message);
+        } catch (Exception e) {
+            messagingTemplate.convertAndSend(destination, message);
+        }
     }
 }

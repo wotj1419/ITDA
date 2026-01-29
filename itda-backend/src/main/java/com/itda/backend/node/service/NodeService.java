@@ -46,6 +46,7 @@ import java.util.UUID;
 public class NodeService {
 
     private static final int MAX_MASTER_NODES_PER_SCENE = 3;
+    private static final int MAX_REFERENCE_OBJECTS = 3;
     private static final float SCENE_HEADER_POSITION_X = 0f;
     private static final float SCENE_HEADER_POSITION_Y = -200f;
 
@@ -752,6 +753,9 @@ public class NodeService {
         List<Long> deduped = referenceObjectIds.stream()
                 .distinct()
                 .toList();
+        if (deduped.size() > MAX_REFERENCE_OBJECTS) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST, "Too many referenceObjectIds");
+        }
         int count = objectSheetMapper.countByProjectIdAndIds(projectId, deduped);
         if (count != deduped.size()) {
             throw new BusinessException(ErrorCode.INVALID_REQUEST, "Invalid referenceObjectIds");

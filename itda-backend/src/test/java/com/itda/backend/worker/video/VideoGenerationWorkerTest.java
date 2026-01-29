@@ -18,6 +18,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -51,7 +52,7 @@ class VideoGenerationWorkerTest {
                 .requestJson("{\"prompt\":\"test prompt\"}")
                 .build();
 
-        ParsedJobRequest parsed = new ParsedJobRequest("test prompt", Map.of("duration", 4));
+        ParsedJobRequest parsed = new ParsedJobRequest("test prompt", Map.of("duration", 4), List.of());
         when(jobRequestParser.parse(job.getRequestJson())).thenReturn(parsed);
 
         byte[] videoBytes = new byte[] { 1, 2, 3 };
