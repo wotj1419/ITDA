@@ -25,8 +25,52 @@ const startEdit = (scene: ScenarioScene) => {
   editingSceneId.value = scene.id
 }
 
-const saveEdit = () => {
+const saveEdit = async (scene: ScenarioScene) => {
   if (isBusy.value) return
+
+  const trimmedTitle = scene.title.trim()
+  const trimmedDescription = scene.description.trim()
+  scenarioStore.updateScene(scene.id, { title: trimmedTitle, description: trimmedDescription })
+
+  const projectId = scenarioStore.activeProjectId ?? sceneStore.currentProjectId
+  if (!projectId) {
+    uiStore.showToast({
+      type: 'error',
+      title: '씬 저장 실패',
+      message: '프로젝트 정보를 찾을 수 없습니다.',
+    })
+    return
+  }
+
+  if (sceneStore.currentProjectId !== projectId) {
+    await sceneStore.loadScenes(projectId)
+  }
+
+  const exists = sceneStore.scenes.some((item) => item.sceneId === scene.id)
+  if (!exists) {
+    uiStore.showToast({
+      type: 'info',
+      title: '저장 보류',
+      message: '새로 추가한 씬은 "프로젝트에 적용" 후 저장됩니다.',
+    })
+    editingSceneId.value = null
+    return
+  }
+
+  const updated = await sceneStore.updateScene(scene.id, {
+    title: trimmedTitle,
+    description: trimmedDescription,
+  })
+
+  if (!updated) {
+    uiStore.showToast({
+      type: 'error',
+      title: '씬 저장 실패',
+      message: '잠시 후 다시 시도해주세요.',
+    })
+    return
+  }
+
   editingSceneId.value = null
 }
 
@@ -191,7 +235,7 @@ const handleApplyToProject = async () => {
               rows="3"
               placeholder="씬 설명"
             />
-            <Button variant="primary" size="sm" :disabled="isBusy" @click="saveEdit">
+            <Button variant="primary" size="sm" :disabled="isBusy" @click="saveEdit(scene)">
               저장
             </Button>
           </template>
