@@ -1,4 +1,4 @@
-﻿version: "3.8"
+version: "3.8"
 
 services:
   nginx:
@@ -21,6 +21,7 @@ services:
     container_name: itda-api
     environment:
       SPRING_PROFILES_ACTIVE: prod
+      VERTEX_TEXT_MODEL: ${VERTEX_TEXT_MODEL}
       SERVER_PORT: 18080
       DB_URL: jdbc:mysql://mysql:13306/${MYSQL_DATABASE}?useSSL=false&serverTimezone=Asia/Seoul&allowPublicKeyRetrieval=true
       DB_USERNAME: ${DB_USERNAME}
@@ -37,7 +38,7 @@ services:
       S3_BUCKET: ${S3_BUCKET}
       S3_PATH_STYLE: ${S3_PATH_STYLE}
       FILE_UPLOAD_DIR: /data/uploads
-      GOOGLE_APPLICATION_CREDENTIALS: /data/secrets/gcp-sa.json
+      GOOGLE_APPLICATION_CREDENTIALS: /secrets/gcp-sa.json
     expose:
       - "18080"
     volumes:
@@ -50,6 +51,7 @@ services:
         condition: service_healthy
     networks:
       - internal
+      - public
     restart: unless-stopped
 
   worker-image:
@@ -183,3 +185,4 @@ networks:
   public:
   internal:
     internal: true
+
