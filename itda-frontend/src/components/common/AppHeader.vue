@@ -238,6 +238,7 @@ onUnmounted(() => {
   font-weight: 700;
   font-size: 1rem;
   white-space: nowrap;
+  color : var(--rose-600)
 }
 
 /* Header Layout Refinement */
@@ -296,7 +297,6 @@ onUnmounted(() => {
 
 .input::placeholder,
 .input {
-  font-family: 'Trebuchet MS', 'Lucida Sans Unicode', 'Lucida Grande', 'Lucida Sans', Arial, sans-serif;
   font-size: 17px;
 }
 
@@ -408,7 +408,7 @@ onUnmounted(() => {
   .btn span {
     display: none;
   }
-  
+
   .btn .icon-sm {
     margin: 0;
   }
@@ -433,7 +433,7 @@ onUnmounted(() => {
     max-width: none; /* Uncap width on very small screens */
     margin: 0 0.5rem;
   }
-  
+
   .input {
     min-width: 0;
   }

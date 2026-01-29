@@ -173,8 +173,6 @@ const sidebarClasses = computed(() => [
   height: 100vh;
   overflow: hidden;
 
-  font-family: 'Plus Jakarta Sans', 'Noto Sans KR', 'Inter', -apple-system,
-    BlinkMacSystemFont, sans-serif;
 }
 
 /* ==========================================================================

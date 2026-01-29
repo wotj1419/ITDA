@@ -10,7 +10,7 @@ const shotSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="225
   <circle cx="90" cy="112.5" r="32" fill="rgba(255,255,255,0.2)"/>
   <rect x="140" y="96" width="170" height="12" rx="6" fill="rgba(255,255,255,0.35)"/>
   <rect x="140" y="118" width="120" height="10" rx="5" fill="rgba(255,255,255,0.25)"/>
-  <text x="330" y="190" font-family="Arial, sans-serif" font-size="12" fill="rgba(255,255,255,0.55)">SHOT</text>
+  <text x="330" y="190" font-size="12" fill="rgba(255,255,255,0.55)">SHOT</text>
 </svg>`;
 
 export const SHOT_FALLBACK_THUMBNAIL = `data:image/svg+xml;utf8,${encodeURIComponent(shotSvg)}`;

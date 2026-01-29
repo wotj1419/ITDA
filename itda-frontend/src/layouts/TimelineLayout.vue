@@ -110,7 +110,7 @@ function formatDuration(seconds: number): string {
           </button>
           
           <div class="breadcrumb">
-            <RouterLink to="/dashboard">AI Movie Studio</RouterLink>
+            <RouterLink to="/dashboard">홈</RouterLink>
             <span class="separator">/</span>
             <RouterLink :to="{ name: 'project-detail', params: { id: projectId } }">
               {{ projectTitle }}

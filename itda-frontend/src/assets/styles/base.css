@@ -1,4 +1,5 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@400;600;800&family=Noto+Sans+KR:wght@300;400;500;700;900&display=swap');
+@import url('https://static.toss.im/tps/main.css');
+@import url('https://static.toss.im/tps/others.css');
 @import './_node-base.css';
 @import './_panel.css';
 
@@ -6,10 +7,11 @@
   margin: 0;
   padding: 0;
   box-sizing: border-box;
+  font-family: 'Toss Product Sans';
 }
 
 body {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-family: 'Toss Product Sans';
   background: var(--rose-canvas);
   color: var(--gray-900);
   line-height: 1.5;

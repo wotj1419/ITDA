@@ -11,6 +11,7 @@ import ProjectCard from '../components/project/ProjectCard.vue'
 import NewProjectModal from '../components/project/NewProjectModal.vue'
 import StartCollabModal from '../components/project/StartCollabModal.vue'
 import ConfirmModal from '../components/common/ConfirmModal.vue'
+import UserWelcomeTitle from '../components/common/UserWelcomeTitle.vue'
 
 const router = useRouter()
 const projectStore = useProjectStore()
@@ -22,9 +23,6 @@ const viewMode = ref<'grid' | 'list'>('grid')
 const unreadNotifications = ref(0)
 const isNotificationOpen = ref(false)
 const notificationRef = ref<HTMLElement | null>(null)
-const greetingText = '\ubc18\uac00\uc6cc\uc694'
-const greetingEmoji = '\u2728'
-const greetingSuffix = '\uB2D8'
 const notificationTitle = '\uc54c\ub9bc'
 const notificationFilterLabel = '\uc77d\uc9c0 \uc54a\uc740 \ud56d\ubaa9\ub9cc \ud45c\uc2dc'
 const notificationEmptyTitle = '\uc54c\ub9bc\uc774 \uc5c6\uc2b5\ub2c8\ub2e4'
@@ -135,9 +133,7 @@ const cancelDelete = () => {
   >
     <template #header-left-after-divider>
       <div class="header-greeting">
-        <h2 class="welcome-title">
-          {{ greetingText }}<span v-if="authStore.user?.name">, {{ authStore.user.name }}{{ greetingSuffix }}</span> {{ greetingEmoji }}
-        </h2>
+        <UserWelcomeTitle :name="authStore.user?.name" />
         <div class="notification-wrap" ref="notificationRef">
           <button
             class="notification"
@@ -197,10 +193,27 @@ const cancelDelete = () => {
     </template>
     <div class="dashboard-container">
       <!-- Toolbar -->
-      <div class="toolbar">
-        <div class="toolbar-left">
+      <section v-if="projectStore.projectCount === 0" class="promo-banner" aria-label="AI 제작 안내">
+        <div class="promo-content">
+
+          <h2 class="promo-title">영상 제작, 두려워 마세요!</h2>
+          <p class="promo-description">잇다와 함께 당신의 아이디어를 빛내세요.</p>
+          
+          <button class="promo-cta" type="button" @click="createEmptyProject">
+            지금 바로 시작하기
+            <span class="promo-cta-arrow" aria-hidden="true">→</span>
+          </button>
+        </div>
+        <div class="promo-visual" aria-hidden="true">
+          <div class="promo-orb promo-orb-1"></div>
+          <div class="promo-orb promo-orb-2"></div>
+          <div class="promo-orb promo-orb-3"></div>
+        </div>
+      </section>
+      <div class="page-header">
+        <div>
           <h1 class="page-title">내 프로젝트</h1>
-          <p class="project-count">{{ projectStore.projectCount }}개의 프로젝트</p>
+          <p class="page-description">{{ projectStore.projectCount }}개의 프로젝트</p>
         </div>
         <div class="toolbar-right">
           <div class="cyber-signboard">
@@ -267,6 +280,8 @@ const cancelDelete = () => {
         </div>
       </div>
 
+
+
       <!-- Quick Access Section Removed -->
 
 
@@ -319,13 +334,6 @@ const cancelDelete = () => {
   margin: 0 auto;
 }
 
-.welcome-title {
-  font-size: 1rem;
-  font-weight: 600;
-  color: var(--gray-800);
-  margin: 0;
-  white-space: nowrap;
-}
 
 .header-greeting {
   display: flex;
@@ -334,11 +342,11 @@ const cancelDelete = () => {
 }
 
 /* Toolbar */
-.toolbar {
+.page-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 1.5rem;
+  margin-bottom: 2rem;
 }
 
 .toolbar-left {
@@ -531,13 +539,195 @@ const cancelDelete = () => {
   font-size: 2.5rem;
   font-weight: 700;
   color: var(--gray-900);
-  margin: 0 0 0.25rem;
+  margin-bottom: 0.5rem;
 }
 
-.project-count {
-  font-size: 0.875rem;
+.page-description {
+  font-size: 1rem;
   color: var(--gray-500);
   margin: 0;
+}
+
+/* Promo Banner */
+.promo-banner {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--radius-3xl);
+  padding: 2.25rem 2.5rem;
+  margin-bottom: 2rem;
+  background: linear-gradient(
+    120deg,
+    var(--rose-100) 0%,
+    var(--rose-200) 40%,
+    var(--rose-300) 70%,
+    var(--rose-400) 100%
+  );
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  box-shadow: var(--shadow-lg);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 2rem;
+}
+
+.promo-banner::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+      circle at 12% 20%,
+      rgba(255, 255, 255, 0.65),
+      transparent 55%
+    ),
+    radial-gradient(
+      circle at 80% 10%,
+      rgba(255, 255, 255, 0.45),
+      transparent 60%
+    );
+  pointer-events: none;
+}
+
+.promo-content {
+  position: relative;
+  z-index: 1;
+  max-width: 520px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.promo-badge {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.35rem 0.9rem;
+  border-radius: var(--radius-full);
+  background: rgba(255, 255, 255, 0.65);
+  border: 1px solid rgba(255, 133, 161, 0.3);
+  color: var(--rose-600);
+  font-size: 0.75rem;
+  font-weight: 600;
+  box-shadow: 0 8px 16px rgba(255, 133, 161, 0.12);
+  backdrop-filter: blur(6px);
+}
+
+.promo-badge-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--rose-500);
+  box-shadow: 0 0 8px rgba(255, 133, 161, 0.9);
+}
+
+.promo-title {
+  font-size: 1.75rem;
+  font-weight: 800;
+  color: var(--gray-900);
+  line-height: 1.3;
+}
+
+.promo-description {
+  font-size: 1rem;
+  color: var(--gray-700);
+  margin: 0;
+}
+
+.promo-cta {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.7rem 1.5rem;
+  border-radius: var(--radius-full);
+  border: none;
+  background: linear-gradient(135deg, var(--rose-500), var(--rose-600));
+  color: white;
+  font-weight: 600;
+  font-family: inherit;
+  font-size: 0.95rem;
+  cursor: pointer;
+  box-shadow: var(--shadow-md);
+  transition: transform var(--transition-normal), box-shadow var(--transition-normal);
+}
+
+.promo-cta:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-xl);
+}
+
+.promo-cta:active {
+  transform: scale(0.98);
+}
+
+.promo-cta-arrow {
+  font-size: 1.1rem;
+  font-weight: 800;
+}
+
+.promo-visual {
+  position: relative;
+  flex: 1;
+  min-height: 140px;
+  max-width: 320px;
+}
+
+.promo-orb {
+  position: absolute;
+  border-radius: 999px;
+  background: radial-gradient(
+    circle at 30% 30%,
+    rgba(255, 255, 255, 0.8),
+    rgba(255, 179, 198, 0.4)
+  );
+  filter: blur(0.5px);
+  opacity: 0.9;
+}
+
+.promo-orb-1 {
+  width: 140px;
+  height: 140px;
+  top: -20px;
+  right: 30px;
+}
+
+.promo-orb-2 {
+  width: 90px;
+  height: 90px;
+  bottom: -10px;
+  right: 120px;
+  opacity: 0.7;
+}
+
+.promo-orb-3 {
+  width: 70px;
+  height: 70px;
+  top: 40px;
+  right: -10px;
+  opacity: 0.6;
+}
+
+@media (max-width: 900px) {
+  .promo-banner {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .promo-visual {
+    width: 100%;
+    max-width: none;
+    min-height: 120px;
+  }
+}
+
+@media (max-width: 640px) {
+  .promo-banner {
+    padding: 1.75rem 1.5rem;
+  }
+
+  .promo-title {
+    font-size: 1.5rem;
+  }
 }
 
 /* Sections */
@@ -928,4 +1118,5 @@ const cancelDelete = () => {
   opacity: 0.6;
   box-shadow: none;
 }
+
 </style>
