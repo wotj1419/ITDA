@@ -2,6 +2,7 @@ package com.itda.backend.node.service;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.itda.backend.ai.prompt.PromptRenderer;
 import com.itda.backend.global.exception.BusinessException;
 import com.itda.backend.global.response.ErrorCode;
 import com.itda.backend.job.domain.Job;
@@ -19,6 +20,7 @@ import com.itda.backend.node.controller.dto.response.NodeTreeResponse;
 import com.itda.backend.node.domain.Node;
 import com.itda.backend.node.domain.NodeStatus;
 import com.itda.backend.node.domain.NodeType;
+import com.itda.backend.node.generation.GenerationSettingsResolver;
 import com.itda.backend.node.repository.NodeMapper;
 import com.itda.backend.project.repository.ProjectMemberMapper;
 import com.itda.backend.scene.domain.Scene;
@@ -51,8 +53,11 @@ public class NodeService {
     private final SceneMapper sceneMapper;
     private final ProjectMemberMapper projectMemberMapper;
     private final ObjectMapper objectMapper;
+    private final com.itda.backend.object.repository.ObjectMapper objectSheetMapper;
     private final JobService jobService;
     private final MediaUrlResolver mediaUrlResolver;
+    private final PromptRenderer promptRenderer;
+    private final GenerationSettingsResolver generationSettingsResolver;
 
     private record VideoShotIds(Long startShotNodeId, Long endShotNodeId) {}
 
@@ -80,19 +85,33 @@ public class NodeService {
     }
 
     /**
-     * 씬 노드 목록 조회 (scene_header 가상 노드 포함)
+     * 씬 노드 목록 조회 (scene_header 포함)
      */
-    @Transactional(readOnly = true)
+    @Transactional
     public NodeTreeResponse listNodes(Long userId, Long sceneId) {
         Scene scene = getSceneAndEnsureMember(sceneId, userId);
         List<Node> nodes = nodeMapper.findAllBySceneId(sceneId);
-        List<NodeSummaryResponse> responses = new ArrayList<>(nodes.size() + 1);
+        Node sceneHeader = nodes.stream()
+                .filter(node -> node.getNodeType() == NodeType.SCENE_HEADER)
+                .findFirst()
+                .orElse(null);
+        if (sceneHeader == null) {
+            sceneHeader = createSceneHeaderNode(sceneId, userId);
+            nodes.add(0, sceneHeader);
+        }
 
-        // 가상 SCENE_HEADER 노드 추가
-        responses.add(createSceneHeaderResponse(scene, sceneId));
+        List<NodeSummaryResponse> responses = new ArrayList<>(nodes.size());
 
+        boolean headerIncluded = false;
         // 실제 노드들 변환
         for (Node node : nodes) {
+            if (node.getNodeType() == NodeType.SCENE_HEADER) {
+                if (!headerIncluded) {
+                    responses.add(createSceneHeaderResponse(scene, node));
+                    headerIncluded = true;
+                }
+                continue;
+            }
             String contentUrl = mediaUrlResolver.nodeContentUrl(node);
             responses.add(NodeSummaryResponse.from(node, contentUrl));
         }
@@ -122,7 +141,7 @@ public class NodeService {
         getSceneAndEnsureMember(node.getSceneId(), userId);
         NodeType nodeType = node.getNodeType();
 
-        // SCENE_HEADER 수정 금지 (가상 노드이므로 DB에 없지만 방어적 체크)
+        // SCENE_HEADER 수정 금지
         assertNotSceneHeader(nodeType);
 
         VideoShotIds shotIds = resolveUpdatedVideoShotIds(node, request);
@@ -226,15 +245,47 @@ public class NodeService {
      */
     @Transactional
     public Job generateNode(Long userId, Long nodeId, GenerateNodeRequest request) {
+        if (request == null) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST);
+        }
         Node node = getNodeOrThrow(nodeId);
         Scene scene = getSceneAndEnsureMemberForUpdate(node.getSceneId(), userId);
         assertNotSceneHeader(node.getNodeType());
 
-        UpdateNodeRequest updateRequest = new UpdateNodeRequest(request.prompt(), request.settings());
+        String promptKo = requirePromptKo(request.prompt());
+        Map<String, Object> existingSettings = deserializeSettings(node.getDataJson());
+        Map<String, Object> activeMasterSettings = resolveActiveMasterSettings(scene, node);
+        Map<String, Object> effectiveSettings = generationSettingsResolver.resolve(
+                node.getNodeType(),
+                existingSettings,
+                request.settings(),
+                activeMasterSettings
+        );
+
+        String promptEn = promptRenderer.render(node.getNodeType(), scene, promptKo, effectiveSettings);
+        Map<String, Object> cachedSettings = new LinkedHashMap<>(effectiveSettings);
+        cachedSettings.put("promptEn", promptEn);
+        if (node.getNodeType() == NodeType.VIDEO) {
+            cachedSettings.putIfAbsent("promptEnRewritten", "");
+        }
+
+        UpdateNodeRequest updateRequest = new UpdateNodeRequest(promptKo, cachedSettings);
         VideoShotIds shotIds = resolveUpdatedVideoShotIds(node, updateRequest);
 
+        // Always persist promptKo + settings(promptEn cache) without touching status/contentUrl.
+        nodeMapper.updateGenerationInputs(Node.builder()
+                .id(nodeId)
+                .prompt(promptKo)
+                .dataJson(serializeSettings(cachedSettings))
+                .startShotNodeId(shotIds.startShotNodeId())
+                .endShotNodeId(shotIds.endShotNodeId())
+                .build());
+
+        validateInputImageReady(node, shotIds);
+
         JobType jobType = resolveJobType(node.getNodeType());
-        String requestJson = buildGenerationRequestJson(updateRequest, node);
+        List<Long> referenceObjectIds = normalizeReferenceObjectIds(scene.getProjectId(), request.referenceObjectIds());
+        String requestJson = buildGenerationRequestJson(promptEn, cachedSettings, referenceObjectIds);
         String idempotencyKey = request.force()
                 ? UUID.randomUUID().toString()
                 : request.idempotencyKey();
@@ -367,20 +418,43 @@ public class NodeService {
     }
 
     /**
-     * 가상 SCENE_HEADER 노드 생성
+     * 씬 헤더 노드 생성 (없으면 DB에 저장)
      */
-    private NodeSummaryResponse createSceneHeaderResponse(Scene scene, Long sceneId) {
+    private Node createSceneHeaderNode(Long sceneId, Long userId) {
+        Node node = Node.builder()
+                .sceneId(sceneId)
+                .nodeType(NodeType.SCENE_HEADER)
+                .parentNodeId(null)
+                .orderIndex(0)
+                .positionX(SCENE_HEADER_POSITION_X)
+                .positionY(SCENE_HEADER_POSITION_Y)
+                .createdBy(userId)
+                .build();
+        nodeMapper.insertNode(node);
+        return node;
+    }
+
+    /**
+     * 씬 헤더 응답 생성 (씬 메타 포함)
+     */
+    private NodeSummaryResponse createSceneHeaderResponse(Scene scene, Node headerNode) {
+        Float positionX = headerNode.getPositionX();
+        Float positionY = headerNode.getPositionY();
+        if (positionX == null || positionY == null) {
+            positionX = SCENE_HEADER_POSITION_X;
+            positionY = SCENE_HEADER_POSITION_Y;
+        }
         return new NodeSummaryResponse(
-                -sceneId,  // 음수 ID 규칙
+                headerNode.getId(),
                 NodeType.SCENE_HEADER,
                 scene.getTitle(),
                 scene.getDescription(),
-                null,  // 부모 없음
-                null,  // 상태 없음
                 null,
                 null,
                 null,
-                new NodeSummaryResponse.PositionDto(SCENE_HEADER_POSITION_X, SCENE_HEADER_POSITION_Y)
+                null,
+                null,
+                new NodeSummaryResponse.PositionDto(positionX, positionY)
         );
     }
 
@@ -389,6 +463,71 @@ public class NodeService {
         if (!node.getSceneId().equals(sceneId) || node.getNodeType() != NodeType.SHOT) {
             throw new BusinessException(ErrorCode.INVALID_NODE_RELATION);
         }
+    }
+
+    private void validateInputImageReady(Node node, VideoShotIds shotIds) {
+        if (node == null || node.getNodeType() == null) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST);
+        }
+        switch (node.getNodeType()) {
+            case GRID -> ensureParentContentReady(node, NodeType.MASTER);
+            case SHOT -> ensureParentContentReady(node, NodeType.GRID);
+            case VIDEO -> ensureStartShotContentReady(node, shotIds);
+            case MASTER, SCENE_HEADER -> {
+            }
+        }
+    }
+
+    private void ensureParentContentReady(Node node, NodeType expectedParentType) {
+        Node parent = requireParentNode(node, expectedParentType);
+        if (!hasReadyContent(parent)) {
+            throw new BusinessException(ErrorCode.INPUT_IMAGE_NOT_READY);
+        }
+    }
+
+    private void ensureStartShotContentReady(Node node, VideoShotIds shotIds) {
+        Long startShotNodeId = shotIds == null ? null : shotIds.startShotNodeId();
+        if (startShotNodeId == null) {
+            throw new BusinessException(ErrorCode.INVALID_NODE_RELATION);
+        }
+        Node shot = requireShotNode(node.getSceneId(), startShotNodeId);
+        if (!hasReadyContent(shot)) {
+            throw new BusinessException(ErrorCode.INPUT_IMAGE_NOT_READY);
+        }
+        Long endShotNodeId = shotIds == null ? null : shotIds.endShotNodeId();
+        if (endShotNodeId != null) {
+            Node endShot = requireShotNode(node.getSceneId(), endShotNodeId);
+            if (!hasReadyContent(endShot)) {
+                throw new BusinessException(ErrorCode.INPUT_IMAGE_NOT_READY);
+            }
+        }
+    }
+
+    private Node requireParentNode(Node node, NodeType expectedParentType) {
+        Long parentNodeId = node.getParentNodeId();
+        if (parentNodeId == null) {
+            throw new BusinessException(ErrorCode.INVALID_NODE_RELATION);
+        }
+        Node parent = getNodeOrThrow(parentNodeId);
+        if (!parent.getSceneId().equals(node.getSceneId()) || parent.getNodeType() != expectedParentType) {
+            throw new BusinessException(ErrorCode.INVALID_NODE_RELATION);
+        }
+        return parent;
+    }
+
+    private Node requireShotNode(Long sceneId, Long shotNodeId) {
+        Node shot = getNodeOrThrow(shotNodeId);
+        if (!shot.getSceneId().equals(sceneId) || shot.getNodeType() != NodeType.SHOT) {
+            throw new BusinessException(ErrorCode.INVALID_NODE_RELATION);
+        }
+        return shot;
+    }
+
+    private boolean hasReadyContent(Node node) {
+        if (node == null) {
+            return false;
+        }
+        return node.getStatus() == NodeStatus.SUCCEEDED;
     }
 
     private VideoShotIds validateCreateRequestAndExtractShots(
@@ -489,16 +628,14 @@ public class NodeService {
         return nodeType == NodeType.VIDEO ? JobType.VIDEO_GENERATION : JobType.IMAGE_GENERATION;
     }
 
-    private String buildGenerationRequestJson(UpdateNodeRequest request, Node node) {
+    private String buildGenerationRequestJson(String promptEn, Map<String, Object> settings, List<Long> referenceObjectIds) {
         try {
-            String resolvedPrompt = resolvePrompt(request, node);
-            Map<String, Object> normalizedSettings = normalizeMasterObjectIds(node, request.settings());
-            Map<String, Object> resolvedSettings = normalizedSettings != null
-                    ? normalizedSettings
-                    : deserializeSettings(node.getDataJson());
             Map<String, Object> payload = new java.util.LinkedHashMap<>();
-            payload.put("prompt", resolvedPrompt);
-            payload.put("settings", resolvedSettings);
+            payload.put("prompt", promptEn);
+            payload.put("settings", settings);
+            if (referenceObjectIds != null && !referenceObjectIds.isEmpty()) {
+                payload.put("referenceObjectIds", referenceObjectIds);
+            }
             return objectMapper.writeValueAsString(payload);
         } catch (JsonProcessingException e) {
             throw new BusinessException(ErrorCode.INTERNAL_ERROR);
@@ -506,7 +643,7 @@ public class NodeService {
     }
 
     private List<NodePosition> filterSceneHeaderPositions(List<NodePosition> positions) {
-        // SCENE_HEADER 위치 변경 요청 필터링 (음수 ID 규칙)
+        // 유효하지 않은 노드 ID 필터링 (호환용)
         return positions.stream()
                 .filter(p -> p.nodeId() > 0)
                 .toList();
@@ -596,5 +733,47 @@ public class NodeService {
         Map<String, Object> normalized = new java.util.LinkedHashMap<>(settings);
         normalized.put("objectIds", List.of());
         return normalized;
+    }
+
+    private String requirePromptKo(String prompt) {
+        if (prompt == null || prompt.isBlank()) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST, "Prompt is empty");
+        }
+        return prompt.trim();
+    }
+
+    private List<Long> normalizeReferenceObjectIds(Long projectId, List<Long> referenceObjectIds) {
+        if (referenceObjectIds == null || referenceObjectIds.isEmpty()) {
+            return List.of();
+        }
+        if (referenceObjectIds.stream().anyMatch(id -> id == null || id <= 0)) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST, "Invalid referenceObjectIds");
+        }
+        List<Long> deduped = referenceObjectIds.stream()
+                .distinct()
+                .toList();
+        int count = objectSheetMapper.countByProjectIdAndIds(projectId, deduped);
+        if (count != deduped.size()) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST, "Invalid referenceObjectIds");
+        }
+        return deduped;
+    }
+
+    private Map<String, Object> resolveActiveMasterSettings(Scene scene, Node node) {
+        if (scene == null) {
+            return Map.of();
+        }
+        if (node != null && node.getNodeType() == NodeType.MASTER) {
+            return Map.of();
+        }
+        Long activeMasterNodeId = scene.getActiveMasterNodeId();
+        if (activeMasterNodeId == null) {
+            return Map.of();
+        }
+        Node master = nodeMapper.findById(activeMasterNodeId).orElse(null);
+        if (master == null) {
+            return Map.of();
+        }
+        return deserializeSettings(master.getDataJson());
     }
 }

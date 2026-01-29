@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.itda.backend.scene.repository.SceneObjectMapper">
+
+    <delete id="deleteBySceneId">
+        DELETE FROM scene_objects
+        WHERE scene_id = #{sceneId}
+    </delete>
+
+    <insert id="insertBatch">
+        INSERT INTO scene_objects (scene_id, object_id)
+        VALUES
+        <foreach collection="objectIds" item="objectId" separator=",">
+            (#{sceneId}, #{objectId})
+        </foreach>
+    </insert>
+
+    <select id="findObjectIdsBySceneId" resultType="long">
+        SELECT object_id
+        FROM scene_objects
+        WHERE scene_id = #{sceneId}
+        ORDER BY object_id ASC
+    </select>
+
+</mapper>

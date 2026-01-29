@@ -19,15 +19,23 @@ public record SceneDetailResponse(
         String description,
 
         @Schema(description = "Order index", example = "1")
-        Integer order
+        Integer order,
+
+        @Schema(description = "Object IDs", example = "[1, 2, 3]")
+        java.util.List<Long> objectIds
 ) {
     public static SceneDetailResponse from(Scene scene) {
+        return from(scene, java.util.List.of());
+    }
+
+    public static SceneDetailResponse from(Scene scene, java.util.List<Long> objectIds) {
         return new SceneDetailResponse(
                 scene.getId(),
                 scene.getProjectId(),
                 scene.getTitle(),
                 scene.getDescription(),
-                scene.getOrderIndex()
+                scene.getOrderIndex(),
+                objectIds == null ? java.util.List.of() : objectIds
         );
     }
 }

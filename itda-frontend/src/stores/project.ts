@@ -82,9 +82,12 @@ export const useProjectStore = defineStore('project', () => {
 
     const index = projects.value.findIndex((p) => p.projectId === projectId)
     if (index > -1) {
-      projects.value[index] = {
-        ...projects.value[index],
-        updatedAt,
+      const existing = projects.value[index]
+      if (existing) {
+        projects.value[index] = {
+          ...existing,
+          updatedAt,
+        }
       }
     }
 

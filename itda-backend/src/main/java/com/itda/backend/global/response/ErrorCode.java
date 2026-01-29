@@ -30,6 +30,7 @@ public enum ErrorCode {
     SCENE_NOT_FOUND(404, "씬을 찾을 수 없습니다"),
     SCENARIO_NOT_FOUND(404, "시나리오를 찾을 수 없습니다"),
     NODE_NOT_FOUND(404, "노드를 찾을 수 없습니다"),
+    OBJECT_NOT_FOUND(404, "오브젝트를 찾을 수 없습니다"),
     JOB_NOT_FOUND(404, "작업을 찾을 수 없습니다"),
     EXPORT_NOT_FOUND(404, "내보낼 파일을 찾을 수 없습니다"),
     CONTENT_NOT_FOUND(404, "콘텐츠를 찾을 수 없습니다"),
@@ -39,6 +40,7 @@ public enum ErrorCode {
     EMAIL_ALREADY_EXISTS(409, "이미 가입된 이메일입니다"),
     SCENE_LIMIT_EXCEEDED(409, "씬 개수 제한을 초과했습니다"),
     MASTER_NODE_LIMIT_EXCEEDED(409, "마스터 노드는 씬당 최대 3개까지 생성할 수 있습니다"),
+    INPUT_IMAGE_NOT_READY(409, "입력 이미지가 준비되지 않았습니다"),
     SCENARIO_VERSION_CONFLICT(409, "시나리오가 최신 상태가 아닙니다"),
 
     // ===== 403 Forbidden (Node specific) =====

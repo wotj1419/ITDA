@@ -6,6 +6,7 @@ import ScenarioDrawer from '../../../components/scenario/ScenarioDrawer.vue';
 import SceneCard from '../../../components/project/SceneCard.vue';
 import Card from '../../../components/common/Card.vue';
 import Button from '../../../components/common/Button.vue';
+import ConfirmModal from '../../../components/common/ConfirmModal.vue';
 import { Plus, PlusCircle, Play, Sparkles, X } from 'lucide-vue-next';
 import { computed, ref, watch } from 'vue';
 import { useProjectStore } from '../../../stores/project';
@@ -29,6 +30,7 @@ interface Props {
   handleDragStart: (scene: Scene) => void;
   handleDragEnd: () => void | Promise<void>;
   handleDragOver: (event: DragEvent, targetScene: Scene) => void;
+  handleDeleteScene: (scene: Scene) => void | Promise<boolean>;
   onOpenScenario: () => void;
 }
 
@@ -67,6 +69,7 @@ const scenarioStore = useScenarioStore();
 const localTitle = ref('');
 const localDescription = ref('');
 const isSavingProject = ref(false);
+const deleteTargetScene = ref<Scene | null>(null);
 
 const labels = {
   defaultTitle: '\uC0C8 \uD504\uB85C\uC81D\uD2B8',
@@ -155,6 +158,26 @@ const saveProjectInfo = async (genre: string): Promise<boolean> => {
   return true;
 };
 
+const openDeleteSceneModal = (scene: Scene) => {
+  deleteTargetScene.value = scene;
+};
+
+const closeDeleteSceneModal = () => {
+  deleteTargetScene.value = null;
+};
+
+const confirmDeleteScene = async () => {
+  if (!deleteTargetScene.value) return;
+  const target = deleteTargetScene.value;
+  deleteTargetScene.value = null;
+  await props.handleDeleteScene(target);
+};
+
+const deleteSceneMessage = computed(() => {
+  if (!deleteTargetScene.value) return '';
+  return `"${deleteTargetScene.value.title}" 씬을 삭제하시겠어요? 이 작업은 되돌릴 수 없습니다.`;
+});
+
 const handleOpenScenario = async () => {
   if (!props.project) {
     props.onOpenScenario();
@@ -239,10 +262,10 @@ const handleOpenScenario = async () => {
     <ScenarioDrawer />
 
     <div class="section-header">
-      <h3 class="section-title">장면</h3>
+      <h3 class="section-title">씬 리스트</h3>
       <Button variant="secondary" size="sm" @click="handleAddScene">
         <Plus class="icon-sm" />
-        장면 추가
+        씬 추가
       </Button>
     </div>
 
@@ -259,6 +282,7 @@ const handleOpenScenario = async () => {
           :project-id="projectId"
           :draggable="true"
           :show-thumbnail="false"
+          @delete="openDeleteSceneModal"
         >
           <template #actions-left>
             <Button
@@ -332,7 +356,7 @@ const handleOpenScenario = async () => {
         @click="handleAddScene"
       >
         <PlusCircle class="add-icon" />
-        Add New Scene
+        씬 추가
       </Card>
     </div>
   </div>
@@ -343,7 +367,7 @@ const handleOpenScenario = async () => {
       <div class="preview-modal-header">
         <div>
           <p class="preview-modal-title">
-            {{ activePreviewScene?.title || 'Scene Preview' }}
+            {{ activePreviewScene?.title || '씬 미리보기' }}
           </p>
           <p v-if="activePreviewClip.label" class="preview-modal-subtitle">
             {{ activePreviewClip.label }}
@@ -374,6 +398,17 @@ const handleOpenScenario = async () => {
       </div>
     </div>
   </div>
+
+  <ConfirmModal
+    :is-open="!!deleteTargetScene"
+    title="씬 삭제"
+    :message="deleteSceneMessage"
+    confirm-text="삭제"
+    cancel-text="취소"
+    :is-dangerous="true"
+    @confirm="confirmDeleteScene"
+    @cancel="closeDeleteSceneModal"
+  />
 </template>
 
 <style scoped>

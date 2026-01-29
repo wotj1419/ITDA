@@ -1,7 +1,7 @@
 /**
  * Scene Editor - Vue Flow 캔버스 통합 스타일
  * Rose 테마 기반 노드/엣지/캔버스 스타일
- * 
+ *
  * 설계 문서: docs/vue-flow-node-workflow-design.md Section 8.2
  */
 
@@ -10,36 +10,71 @@
    ========================================================================== */
 
 .vue-flow__node {
-    border-radius: var(--radius-lg, 1rem);
+    border-radius: var(--radius-xl, 1.5rem);
     /* transform 제외: 드래그 시 즉시 이동하도록 */
     transition: box-shadow 0.2s ease, border-color 0.2s ease, opacity 0.2s ease;
 }
 
 .vue-flow__node.selected {
-    box-shadow: 0 0 0 3px rgba(255, 133, 161, 0.4);
-    transform: scale(1.02);
+    box-shadow: none;
 }
 
-.vue-flow__edge-path {
-    stroke: var(--rose-300, #FFD9E8);
-    stroke-width: 2;
+/* ==========================================================================
+   Canvas background (reference-like dotted grid)
+   ========================================================================== */
+
+.vue-flow {
+    background-color: var(--rose-canvas, #FAFAFB);
+    background-image: none;
 }
 
-.vue-flow__edge.selected .vue-flow__edge-path {
-    stroke: var(--rose-500, #FF85A1);
-    stroke-width: 3;
+/* ==========================================================================
+   Edge styling (match sample/reference.html connector-line)
+   ========================================================================== */
+
+.vue-flow__edge {
+    /* Reference colors */
+    /*--edge-track: #FFD6E5;*/
+    --edge-track: #FFC1D6;      /* connector-line background */
+
+    /* Reference geometry */
+    --edge-track-width: 3.8;
+    --edge-highlight-width: 4.2;
 }
 
-/* 확정 엣지 (녹색) */
-.vue-flow__edge.confirmed .vue-flow__edge-path {
-    stroke: var(--success, #22C55E);
-    stroke-width: 3;
+/* Base line (increase specificity to override Vue Flow default edge styles, which may load later) */
+.vue-flow__edge-path.edge-flow__track {
+    stroke: var(--edge-track);
+    stroke-width: var(--edge-track-width);
+    stroke-linecap: butt; /* reference connector-line is a straight rectangle (no rounded caps) */
+    stroke-linejoin: round;
 }
 
-/* 트랜지션 엣지 (점선) */
-.vue-flow__edge.transition .vue-flow__edge-path {
-    stroke: var(--rose-400, #FFB3C6);
-    stroke-dasharray: 6 4;
+.vue-flow__edge.selected .vue-flow__edge-path.edge-flow__track,
+.vue-flow__edge:focus .vue-flow__edge-path.edge-flow__track,
+.vue-flow__edge:focus-visible .vue-flow__edge-path.edge-flow__track {
+    stroke: var(--edge-track);
+    stroke-width: var(--edge-track-width);
+}
+
+.edge-flow__track {
+    opacity: 1;
+}
+
+/* Moving highlight (reference-like gradient band; animation is in SVG) */
+.edge-flow__highlight {
+    stroke-width: var(--edge-highlight-width);
+    stroke-linecap: butt;
+    stroke-linejoin: round;
+    filter: drop-shadow(0 0 2px rgba(255, 77, 141, 0.35));
+    pointer-events: none;
+    will-change: opacity;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .edge-flow__highlight {
+        display: none;
+    }
 }
 
 .vue-flow__handle {
@@ -47,6 +82,13 @@
     height: 10px;
     background: var(--rose-500, #FF85A1);
     border: 2px solid white;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+.vue-flow__node:hover .vue-flow__handle,
+.vue-flow__node.selected .vue-flow__handle {
+    opacity: 1;
 }
 
 .vue-flow__resize-control.line {
@@ -73,22 +115,28 @@
 }
 
 .vue-flow__controls {
-    border: 1px solid var(--rose-200, #FFE8F2);
-    border-radius: var(--radius-md, 0.75rem);
-    box-shadow: var(--shadow-md);
+    padding: 0.25rem;
+    background: white;
+    border: 1px solid var(--gray-100, #F3F4F6);
+    border-radius: 1rem;
+    box-shadow: 0 12px 24px rgba(0, 0, 0, 0.08);
+    transform: translateX(45px) translateY(-10px);
 }
 
 .vue-flow__controls button {
-    background: white;
-    border-color: var(--gray-100, #F5F5F5);
+    background: transparent;
+    border: none;
+    color: var(--gray-400, #9CA3AF);
 }
 
 .vue-flow__controls button:hover {
-    background: var(--rose-50, #FFFAFC);
+    background: transparent;
+    color: var(--rose-500, #FF4D8D);
 }
 
 .vue-flow__background {
-    background: var(--rose-canvas, #FBFBFC);
+    background: transparent;
+    opacity: 1;
 }
 
 /* ==========================================================================

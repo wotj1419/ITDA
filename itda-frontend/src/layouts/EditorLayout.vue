@@ -27,8 +27,8 @@ interface Props {
 
 const props = withDefaults(defineProps<Props>(), {
   projectTitle: 'Project',
-  sceneTitle: 'Scene',
-  sceneBadge: 'Scene Editor',
+  sceneTitle: '씬',
+  sceneBadge: '씬 편집',
 });
 
 // =============================================================================
@@ -58,7 +58,7 @@ const navItems = computed(() => [
   {
     key: 'scene-editor',
     icon: Clapperboard,
-    label: 'Scene Editor',
+    label: '씬 편집',
     to: null,
     active: true,
   },
@@ -172,6 +172,9 @@ const sidebarClasses = computed(() => [
   display: flex;
   height: 100vh;
   overflow: hidden;
+
+  font-family: 'Plus Jakarta Sans', 'Noto Sans KR', 'Inter', -apple-system,
+    BlinkMacSystemFont, sans-serif;
 }
 
 /* ==========================================================================
@@ -182,7 +185,7 @@ const sidebarClasses = computed(() => [
   width: 260px;
   height: 100vh;
   background: white;
-  border-right: 1px solid var(--rose-100);
+  border-right: 1px solid var(--rose-100, #FFF0F5);
   display: flex;
   flex-direction: column;
   transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
@@ -220,11 +223,11 @@ const sidebarClasses = computed(() => [
 }
 
 .border-bottom {
-  border-bottom: 1px solid var(--rose-100);
+  border-bottom: 1px solid var(--rose-100, #FFF0F5);
 }
 
 .border-top {
-  border-top: 1px solid var(--rose-100);
+  border-top: 1px solid var(--rose-100, #FFF0F5);
   margin-top: auto;
 }
 
@@ -267,11 +270,11 @@ const sidebarClasses = computed(() => [
 }
 
 .sidebar-collapsed .nav-item {
-  width: 44px;
+  width: 100%;
   height: 44px;
-  padding: 0;
-  justify-content: center;
-  align-self: center;
+  padding: 0.75rem 0.625rem;
+  justify-content: flex-start;
+  align-self: stretch;
   gap: 0;
 }
 
@@ -285,14 +288,19 @@ const sidebarClasses = computed(() => [
 }
 
 .nav-item.active {
-  background: var(--rose-100);
-  color: var(--rose-600);
+  background: var(--rose-100, #FFF0F5);
+  color: var(--rose-600, #FF6B8A);
 }
 
 .nav-icon {
   width: 20px;
   height: 20px;
   flex-shrink: 0;
+}
+
+.nav-label {
+  font-size: 0.875rem;
+  font-weight: 500;
 }
 
 /* Collapsed tooltips */
@@ -402,6 +410,29 @@ const sidebarClasses = computed(() => [
   margin: 0;
 }
 
+/* Collapsed tooltips (match dashboard) */
+.sidebar-collapsed .nav-item::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  left: 100%;
+  margin-left: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--gray-900);
+  color: white;
+  font-size: 0.75rem;
+  border-radius: 6px;
+  white-space: nowrap;
+  opacity: 0;
+  visibility: hidden;
+  transition: all 0.2s ease;
+  z-index: 100;
+}
+
+.sidebar-collapsed .nav-item:hover::after {
+  opacity: 1;
+  visibility: visible;
+}
+
 .icon-md {
   width: 24px;
   height: 24px;
@@ -415,20 +446,35 @@ const sidebarClasses = computed(() => [
   flex: 1;
   display: flex;
   flex-direction: column;
+  min-height: 0;
   overflow: hidden;
 }
 
 .editor-content {
   flex: 1;
   display: flex;
-  overflow: hidden;
+  min-height: 0;
+  overflow: visible;
 }
 
 .editor-canvas-area {
   flex: 1;
   position: relative;
   overflow: hidden;
-  background: linear-gradient(135deg, var(--rose-50) 0%, var(--rose-75) 100%);
+  background: var(--rose-canvas);
+  z-index: 0;
+
+  /* Scene Editor canvas-only rose tone */
+  --editor-soft-pink: #ff4d8d;
+  --editor-dot-pink: #ffd6e5;
+  --rose-canvas: #fafafb;
+  --rose-200: var(--editor-dot-pink);
+  --rose-300: var(--editor-dot-pink);
+  --rose-500: var(--editor-soft-pink);
+  --rose-600: #ff3d85;
+  --shadow-md: 0 8px 18px rgba(255, 77, 141, 0.14);
+  --shadow-lg: 0 12px 26px rgba(255, 77, 141, 0.18);
+  --shadow-xl: 0 20px 40px -10px rgba(255, 77, 141, 0.2);
 }
 
 

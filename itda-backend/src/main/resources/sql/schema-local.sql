@@ -9,10 +9,12 @@ DROP TABLE IF EXISTS timeline_items;
 DROP TABLE IF EXISTS generation_jobs;
 DROP TABLE IF EXISTS video_clips;
 DROP TABLE IF EXISTS nodes;
+DROP TABLE IF EXISTS scene_objects;
 DROP TABLE IF EXISTS scene_videos;
 DROP TABLE IF EXISTS scenes;
 DROP TABLE IF EXISTS project_scenarios;
 DROP TABLE IF EXISTS project_members;
+DROP TABLE IF EXISTS objects;
 DROP TABLE IF EXISTS upload_requests;
 DROP TABLE IF EXISTS assets;
 DROP TABLE IF EXISTS projects;
@@ -81,7 +83,31 @@ CREATE TABLE project_members (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ============================================
--- 4. 씬 (Scenes)
+-- 4. 오브젝트 시트 (Objects)
+-- ============================================
+
+
+CREATE TABLE objects (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    project_id BIGINT NOT NULL,
+    name VARCHAR(200) NOT NULL,
+    type VARCHAR(20) NOT NULL,         -- CHARACTER, PROP, ETC
+    description TEXT NOT NULL,
+    style VARCHAR(100),
+    sheet_image_url VARCHAR(500),
+    sheet_image_asset_id BIGINT,
+    status VARCHAR(20) NOT NULL DEFAULT 'PENDING',  -- PENDING, RUNNING, SUCCEEDED, FAILED
+    created_by BIGINT,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    KEY idx_objects_project (project_id),
+    KEY idx_objects_status (status),
+    CONSTRAINT fk_objects_project FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+    CONSTRAINT fk_objects_user FOREIGN KEY (created_by) REFERENCES users(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ============================================
+-- 5. 씬 (Scenes)
 -- ============================================
 
 
@@ -99,7 +125,21 @@ CREATE TABLE scenes (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ============================================
--- 4-1. 시나리오 (Project Scenarios)
+-- 5-1. 씬-오브젝트 연결 (Scene Objects)
+-- ============================================
+
+
+CREATE TABLE scene_objects (
+    scene_id BIGINT NOT NULL,
+    object_id BIGINT NOT NULL,
+    PRIMARY KEY (scene_id, object_id),
+    KEY idx_scene_objects_object (object_id),
+    CONSTRAINT fk_scene_objects_scene FOREIGN KEY (scene_id) REFERENCES scenes(id) ON DELETE CASCADE,
+    CONSTRAINT fk_scene_objects_object FOREIGN KEY (object_id) REFERENCES objects(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ============================================
+-- 5-2. 시나리오 (Project Scenarios)
 -- ============================================
 
 
@@ -152,7 +192,7 @@ CREATE TABLE assets (
 CREATE TABLE nodes (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,
     scene_id BIGINT NOT NULL,
-    node_type VARCHAR(20) NOT NULL,  -- MASTER, GRID, SHOT, VIDEO (SCENE_HEADER는 가상 노드)
+    node_type VARCHAR(20) NOT NULL,  -- SCENE_HEADER, MASTER, GRID, SHOT, VIDEO
     parent_node_id BIGINT,
     order_index INT NOT NULL DEFAULT 0,
     position_x FLOAT,                -- 캔버스 X 좌표

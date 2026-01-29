@@ -27,3 +27,13 @@ build/
 # AI Tools
 .serena/
 /.metadata/
+
+# Local artifacts (do not commit)
+/presentation/
+/reference-full-1440.png
+/service-full-1440.png
+/service-mock-1440.png
+/service-mock-1440-v4.png
+# Image
+uploads
+/uploads/

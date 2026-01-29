@@ -9,16 +9,11 @@ import { computed } from 'vue';
 import { Handle, Position } from '@vue-flow/core';
 import { NodeResizer } from '@vue-flow/node-resizer';
 import { useSceneNodeStore } from '../../../stores/sceneNode';
-import { JobStatus, NODE_HEIGHTS, NODE_WIDTHS } from '../../../types/ui/sceneNodes';
 import type { ShotNodeData } from '../../../types/ui/sceneNodes';
-import { 
-  Camera, 
-  Loader2, 
-  CheckCircle, 
-  AlertCircle, 
-  Clock,
-  Plus 
-} from 'lucide-vue-next';
+import { useNodeStatus } from '../../../composables/useNodeStatus';
+import { useNodeThumbnail } from '../../../composables/useNodeThumbnail';
+import { getNodeMinSize, NODE_RESIZER_STYLE } from '../../../utils/nodeUi';
+import { Camera, Plus } from 'lucide-vue-next';
 
 // =============================================================================
 // Props & Emits
@@ -33,10 +28,8 @@ interface Props {
 const props = defineProps<Props>();
 const store = useSceneNodeStore();
 
-const nodeStyle = { '--node-resizer-color': 'var(--rose-500, #FF85A1)' } as Record<string, string>;
-
-const minWidth = NODE_WIDTHS[props.data.type] ?? 200;
-const minHeight = NODE_HEIGHTS[props.data.type] ?? 140;
+const nodeStyle = NODE_RESIZER_STYLE;
+const { minWidth, minHeight } = getNodeMinSize(props.data.type);
 
 const emit = defineEmits<{
   (e: 'add-child'): void;
@@ -58,32 +51,25 @@ const nodeClasses = computed(() => [
   },
 ]);
 
-const statusKey = computed(() => {
-  if (props.data.jobStatus === null) return 'idle';
-  return props.data.jobStatus;
+const { statusKey, statusIcon, isRunning, isGenerationRequested, hasGenerationFailure } =
+  useNodeStatus(
+    () => props.data.jobStatus,
+    () => props.data.generationState
+  );
+const {
+  hasSource: hasThumbnailSource,
+  isVisible: isThumbnailVisible,
+  isBlocked: isThumbnailBlocked,
+  isThumbnailLoading,
+  showFailureOverlay,
+  handleLoad: handleThumbnailLoad,
+  handleError: handleThumbnailError,
+} = useNodeThumbnail({
+  getThumbnailUrl: () => props.data.thumbnailUrl,
+  isRunning: () => isRunning.value,
+  isGenerationRequested: () => isGenerationRequested.value,
+  hasGenerationFailure: () => hasGenerationFailure.value,
 });
-
-const statusIcon = computed(() => {
-  const icons = {
-    [JobStatus.PENDING]: Clock,
-    [JobStatus.RUNNING]: Loader2,
-    [JobStatus.SUCCEEDED]: CheckCircle,
-    [JobStatus.FAILED]: AlertCircle,
-  };
-  return icons[props.data.jobStatus as JobStatus] ?? Clock;
-});
-
-const statusText = computed(() => {
-  const texts: Record<string, string> = {
-    [JobStatus.PENDING]: '대기중',
-    [JobStatus.RUNNING]: '생성중',
-    [JobStatus.SUCCEEDED]: '완료',
-    [JobStatus.FAILED]: '실패',
-  };
-  return texts[props.data.jobStatus as string] ?? '준비';
-});
-
-const isRunning = computed(() => props.data.jobStatus === JobStatus.RUNNING);
 
 // =============================================================================
 // Handlers
@@ -98,6 +84,12 @@ function handleToggleCollapse(event: Event): void {
   event.stopPropagation();
   store.toggleCollapse(props.id);
 }
+
+function handleRetry(event: Event): void {
+  event.stopPropagation();
+  store.updateNodeLocal(props.id, { generationState: null });
+  store.selectNode(props.id);
+}
 </script>
 
 <template>
@@ -107,6 +99,7 @@ function handleToggleCollapse(event: Event): void {
       :min-height="minHeight"
       :is-visible="props.selected"
       @resize-start="store.pushPositionSnapshot()"
+      @resize-end="store.persistNodePositions()"
     />
     <div v-if="props.selected" class="node-resizer-outline" />
     <!-- Target Handle -->
@@ -129,7 +122,7 @@ function handleToggleCollapse(event: Event): void {
           </span>
         </div>
       </div>
-      <div class="node-glass__status">
+      <div v-if="statusIcon" class="node-glass__status">
         <component 
           :is="statusIcon" 
           class="node-glass__status-icon" 
@@ -140,20 +133,41 @@ function handleToggleCollapse(event: Event): void {
 
     <!-- Body -->
     <div class="node-glass__body">
-      <div class="node-glass__thumbnail node-glass__thumbnail--square">
+      <div
+        class="node-glass__thumbnail node-glass__thumbnail--square"
+        :class="{ 'node-glass__thumbnail--loading': isThumbnailLoading && !isThumbnailVisible }"
+      >
         <img 
-          v-if="data.thumbnailUrl" 
-          :src="data.thumbnailUrl" 
+          v-if="hasThumbnailSource" 
+          v-show="isThumbnailVisible"
+          :src="data.thumbnailUrl || ''" 
           alt="샷 이미지" 
           class="node-glass__thumbnail-img"
+          @load="handleThumbnailLoad"
+          @error="handleThumbnailError"
         />
-        <span v-else class="node-glass__thumbnail-placeholder">
-          샷 이미지
-        </span>
-      </div>
-      <div class="node-glass__footer">
-        <div class="node-glass__info">
-          {{ statusText }}
+        <div
+          v-if="isThumbnailLoading && !isThumbnailVisible"
+          class="node-glass__thumbnail-loader"
+        >
+          <span class="node-glass__thumbnail-spinner" />
+          <span>생성중…</span>
+        </div>
+        <div
+          v-if="showFailureOverlay"
+          class="node-glass__thumbnail-error"
+        >
+          <span>생성 실패</span>
+          <button class="node-glass__thumbnail-retry" @click="handleRetry">
+            다시 시도
+          </button>
+        </div>
+        <div
+          v-if="(!hasThumbnailSource || isThumbnailBlocked) && !isThumbnailLoading"
+          class="node-glass__thumbnail-placeholder node-glass__thumbnail-placeholder--shot"
+        >
+          <Camera class="node-glass__thumbnail-placeholder-icon" />
+          <span class="node-glass__thumbnail-placeholder-label">샷 이미지 없음</span>
         </div>
       </div>
     </div>
@@ -184,7 +198,7 @@ function handleToggleCollapse(event: Event): void {
       title="영상 추가"
       @click="handleAddChild"
     >
-      <Plus :size="14" />
+      <Plus :size="32" />
     </button>
   </div>
 </template>

@@ -10,7 +10,7 @@ spring:
       port: ${REDIS_PORT:6379}
   sql:
     init:
-      mode: never
+      mode: always
       schema-locations: classpath:sql/schema-local.sql
       continue-on-error: false
 

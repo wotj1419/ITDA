@@ -93,7 +93,7 @@ onMounted(() => {
         end: '+=150%',
         scrub: 1,
         pin: true,
-        onUpdate: (self) => {
+        onUpdate: () => {
           const videoEl = heroVideoElement.value
           const videoWrap = heroVideo.value
           if (!videoEl || !videoWrap) return

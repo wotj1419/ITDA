@@ -34,7 +34,7 @@ public class S3ImageStorage implements ImageStorage {
         String bucket = requireBucket();
         String normalizedContentType = normalizeContentType(contentType);
         String extension = resolveExtension(normalizedContentType);
-        String storageKey = String.format("ai/image/%d/job-%d%s", projectId, jobId, extension)
+        String storageKey = String.format("ai/images/%d/job-%d%s", projectId, jobId, extension)
                 .replace("\\", "/");
 
         PutObjectRequest request = PutObjectRequest.builder()

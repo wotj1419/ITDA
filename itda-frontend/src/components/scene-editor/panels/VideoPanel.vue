@@ -3,14 +3,21 @@
  * VideoPanel - 영상 생성/편집 패널
  * 트랜지션 영상 + 확정 기능 지원
  */
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
+import { ref, computed, watch } from 'vue';
 import type { Node as VueFlowNode } from '@vue-flow/core';
 import type { VideoNodeData, CameraMotion, ShotNodeData } from '../../../types/ui/sceneNodes';
-import { PromptStatus, JobStatus } from '../../../types/ui/sceneNodes';
+import { PromptStatus, JobStatus, NodeType } from '../../../types/ui/sceneNodes';
 import BasePanel from './BasePanel.vue';
 import { useSceneNodeStore } from '../../../stores/sceneNode';
+import { useUIStore } from '../../../stores/ui';
 import { useNodeGeneration } from '../../../composables/useNodeGeneration';
-import { Video, Repeat, Move, Timer, Text, FileText, Sparkles, Check, RefreshCw, Target, ZoomIn, ZoomOut, ArrowRight, ArrowUp, Circle } from 'lucide-vue-next';
+import { useHelpPopover } from '../../../composables/useHelpPopover';
+import { Video, Repeat, Move, Timer, Text, FileText, Sparkles, Check, RefreshCw, Target, ZoomIn, ZoomOut, ArrowRight, ArrowUp, Circle, Loader2 } from 'lucide-vue-next';
+import { resolveCameraMotionKey } from '../../../utils/nodeSettings';
+import {
+  DEFAULT_VIDEO_CAMERA_MOTION,
+  DEFAULT_VIDEO_DURATION,
+} from '../../../utils/nodeDefaults';
 
 interface Props {
   node: VueFlowNode<VideoNodeData>;
@@ -18,13 +25,13 @@ interface Props {
 
 const props = defineProps<Props>();
 const nodeStore = useSceneNodeStore();
-const cameraMotionHelpRef = ref<HTMLElement | null>(null);
-const isCameraMotionHelpOpen = ref(false);
+const uiStore = useUIStore();
+const cameraMotionHelp = useHelpPopover();
 
 const form = ref({
   isTransition: false,
-  cameraMotion: 'staticCamera' as CameraMotion,
-  duration: 4,
+  cameraMotion: DEFAULT_VIDEO_CAMERA_MOTION as CameraMotion,
+  duration: DEFAULT_VIDEO_DURATION,
   motionDescription: '',
   prompt: '',
 });
@@ -60,7 +67,7 @@ const cameraMotionHelpItems = [
 ];
 
 const durationOptions = [4, 6, 8];
-const defaultDuration = durationOptions[0];
+const defaultDuration = durationOptions[0] ?? 4;
 
 function normalizeDuration(value?: number | null): number {
   if (value == null) return defaultDuration;
@@ -68,19 +75,76 @@ function normalizeDuration(value?: number | null): number {
 }
 
 const data = computed(() => props.node.data as VideoNodeData | undefined);
-const hasEndShot = computed(() => !!data.value?.endShotId);
 const startShotData = computed(() => {
   const startId = data.value?.startShotId;
   if (!startId) return undefined;
   const node = nodeStore.nodes.find((n) => n.id === startId);
   return node?.data as ShotNodeData | undefined;
 });
+const endShotData = computed(() => {
+  const endId = data.value?.endShotId;
+  if (!endId) return undefined;
+  const node = nodeStore.nodes.find((n) => n.id === endId);
+  return node?.data as ShotNodeData | undefined;
+});
 const isPromptGenerated = computed(() => data.value?.promptStatus !== PromptStatus.DRAFT);
 const isPromptApproved = computed(() => data.value?.promptStatus === PromptStatus.APPROVED);
 const isSucceeded = computed(() => data.value?.jobStatus === JobStatus.SUCCEEDED);
 const isConfirmed = computed(() => data.value?.isConfirmed ?? false);
+const isStartShotReady = computed(() => {
+  const start = startShotData.value as { jobStatus?: string; imageUrl?: string | null; thumbnailUrl?: string | null } | undefined;
+  const hasImage = Boolean(start?.thumbnailUrl || start?.imageUrl);
+  return start?.jobStatus === JobStatus.SUCCEEDED && hasImage;
+});
+const isEndShotReady = computed(() => {
+  if (!form.value.isTransition) return true;
+  const end = endShotData.value as { jobStatus?: string; imageUrl?: string | null; thumbnailUrl?: string | null } | undefined;
+  const hasImage = Boolean(end?.thumbnailUrl || end?.imageUrl);
+  return end?.jobStatus === JobStatus.SUCCEEDED && hasImage;
+});
+
+function findAncestorNodeId(startNodeId: string | null | undefined, targetType: NodeType): string | null {
+  let currentId = startNodeId ?? null;
+  const visited = new Set<string>();
+  while (currentId) {
+    if (visited.has(currentId)) return null;
+    visited.add(currentId);
+    const node = nodeStore.nodes.find((n) => n.id === currentId);
+    if (!node?.data) return null;
+    if (node.data.type === targetType) return node.id;
+    currentId = node.data.parentNodeId;
+  }
+  return null;
+}
+
+type EndShotOption = { id: string; label: string; isReady: boolean; order: number };
+const endShotOptions = computed<EndShotOption[]>(() => {
+  const sceneHeaderId = findAncestorNodeId(data.value?.startShotId, NodeType.SCENE_HEADER);
+  if (!sceneHeaderId) return [];
+
+  return nodeStore.nodes
+    .filter((n) => n.data?.type === NodeType.SHOT)
+    .filter((n) => findAncestorNodeId(n.id, NodeType.SCENE_HEADER) === sceneHeaderId)
+    .map((n) => {
+      const shotData = n.data as ShotNodeData;
+      const hasImage = Boolean(shotData.thumbnailUrl || shotData.imageUrl);
+      const isReady = shotData.jobStatus === JobStatus.SUCCEEDED && hasImage;
+      const gridCellIndex = typeof shotData.gridCellIndex === 'number' ? shotData.gridCellIndex + 1 : null;
+      const order = typeof shotData.gridCellIndex === 'number' ? shotData.gridCellIndex : Number.MAX_SAFE_INTEGER;
+      const shotTypeLabel = shotData.shotType ? ` · ${shotData.shotType}` : '';
+      const statusLabel = isReady ? '' : ' (미완료)';
+      const label = `${gridCellIndex ? `#${gridCellIndex}` : 'SHOT'}${shotTypeLabel}${statusLabel}`;
+      return { id: n.id, label, isReady, order };
+    })
+    .sort((a, b) => {
+      if (a.order !== b.order) return a.order - b.order;
+      return a.label.localeCompare(b.label);
+    });
+});
+
 
 const {
+  isGeneratingPrompt,
   isGeneratingJob: isGeneratingVideo,
   clearError,
   generatePrompt,
@@ -106,11 +170,13 @@ const {
   }),
   getApprovedUpdate: () => ({ prompt: form.value.prompt }),
   getJobSettings: () => ({
-    cameraMotion: form.value.cameraMotion,
-    motionDescription: form.value.motionDescription,
+    cameraMotionKey: resolveCameraMotionKey(form.value.cameraMotion),
+    motionDescriptionKo: form.value.motionDescription,
     duration: normalizeDuration(form.value.duration),
-    startShotNodeId: data.value?.startShotId,
-    endShotNodeId: data.value?.endShotId,
+    startShotNodeId: data.value?.startShotId ? Number(data.value.startShotId) : undefined,
+    endShotNodeId: form.value.isTransition && data.value?.endShotId
+      ? Number(data.value.endShotId)
+      : null,
   }),
   getJobSuccessUpdate: ({ resultUrl, thumbnailUrl }) => ({
     videoUrl: resultUrl || null,
@@ -121,11 +187,6 @@ const {
   },
 });
 
-const canGenerate = computed(() =>
-  isPromptApproved.value &&
-  (!form.value.isTransition || hasEndShot.value) &&
-  !isGeneratingVideo.value
-);
 
 function normalizeCameraMotion(value?: CameraMotion | string | null): CameraMotion {
   if (!value) return 'staticCamera';
@@ -163,40 +224,6 @@ function buildVideoSceneOneLine(): string {
   return parts.join(', ');
 }
 
-function toggleCameraMotionHelp(event: MouseEvent): void {
-  event.stopPropagation();
-  isCameraMotionHelpOpen.value = !isCameraMotionHelpOpen.value;
-}
-
-function closeCameraMotionHelp(): void {
-  isCameraMotionHelpOpen.value = false;
-}
-
-function handleDocumentClick(event: MouseEvent): void {
-  if (!isCameraMotionHelpOpen.value) return;
-  const target = event.target as Node | null;
-  if (!cameraMotionHelpRef.value || !target) return;
-  if (!cameraMotionHelpRef.value.contains(target)) {
-    closeCameraMotionHelp();
-  }
-}
-
-function handleDocumentKeydown(event: KeyboardEvent): void {
-  if (event.key === 'Escape' && isCameraMotionHelpOpen.value) {
-    closeCameraMotionHelp();
-  }
-}
-
-onMounted(() => {
-  document.addEventListener('click', handleDocumentClick);
-  document.addEventListener('keydown', handleDocumentKeydown);
-});
-
-onUnmounted(() => {
-  document.removeEventListener('click', handleDocumentClick);
-  document.removeEventListener('keydown', handleDocumentKeydown);
-});
-
 watch(() => props.node.id, () => {
   if (!data.value) return;
   form.value = {
@@ -220,6 +247,16 @@ watch(
 );
 
 watch(
+  () => [data.value?.cameraMotion, data.value?.duration, data.value?.motionDescription],
+  () => {
+    if (!data.value) return;
+    form.value.cameraMotion = normalizeCameraMotion(data.value.cameraMotion);
+    form.value.duration = normalizeDuration(data.value.duration);
+    form.value.motionDescription = data.value.motionDescription || '';
+  }
+);
+
+watch(
   () => form.value.isTransition,
   (enabled) => {
     if (!enabled) {
@@ -232,8 +269,51 @@ function startSelectEndShot(): void {
   nodeStore.startSelectEndShot(props.node.id);
 }
 
+function handleEndShotChange(event: Event): void {
+  const selected = (event.target as HTMLSelectElement | null)?.value ?? '';
+  if (!selected) {
+    nodeStore.clearEndShot(props.node.id);
+    return;
+  }
+  nodeStore.startSelectEndShot(props.node.id);
+  nodeStore.setEndShot(selected);
+}
+
 function toggleConfirm(): void {
   nodeStore.toggleVideoConfirm(props.node.id);
+}
+
+function notifyBlocked(title: string, message: string): void {
+  uiStore.showToast({
+    type: 'warning',
+    title,
+    message,
+  });
+}
+
+function handleGenerateVideo(): void {
+  if (isGeneratingVideo.value) return;
+  if (!isStartShotReady.value) {
+    notifyBlocked('영상 생성 불가', '시작 SHOT 이미지가 준비되어야 영상을 생성할 수 있습니다.');
+    return;
+  }
+  if (form.value.isTransition && !data.value?.endShotId) {
+    notifyBlocked('끝 샷 필요', '트랜지션 영상을 위해 끝 샷을 선택해 주세요.');
+    return;
+  }
+  if (form.value.isTransition && !isEndShotReady.value) {
+    notifyBlocked('끝 샷 준비 필요', '선택한 끝 SHOT 이미지가 준비되어야 합니다.');
+    return;
+  }
+  if (!isPromptGenerated.value) {
+    notifyBlocked('프롬프트 필요', '먼저 프롬프트를 생성해 주세요.');
+    return;
+  }
+  if (!isPromptApproved.value) {
+    notifyBlocked('프롬프트 승인 필요', '승인 후 영상을 생성할 수 있습니다.');
+    return;
+  }
+  generateVideo();
 }
 </script>
 
@@ -249,7 +329,6 @@ function toggleConfirm(): void {
           </label>
           <input type="checkbox" v-model="form.isTransition" class="panel-toggle" />
         </div>
-        <p class="panel-hint">시작 샷과 끝 샷 사이를 연결하는 영상</p>
       </div>
 
       <!-- End Shot Selection (Transition) -->
@@ -258,11 +337,13 @@ function toggleConfirm(): void {
           <Target class="panel-label-icon" />
           끝 샷
         </label>
-        <div v-if="data.endShotId" class="panel-selected-shot">
-          <span>샷 선택됨</span>
-          <button class="panel-btn panel-btn--text" @click="startSelectEndShot">변경</button>
-        </div>
-        <button v-else class="panel-btn panel-btn--secondary panel-btn--full" @click="startSelectEndShot">
+        <select :value="data.endShotId ?? ''" class="panel-select" @change="handleEndShotChange">
+          <option value="">선택 안 함</option>
+          <option v-for="opt in endShotOptions" :key="opt.id" :value="opt.id">
+            {{ opt.label }}
+          </option>
+        </select>
+        <button class="panel-btn panel-btn--secondary panel-btn--full" @click="startSelectEndShot">
           <Target class="panel-btn-icon" />
           캔버스에서 끝 샷 선택
         </button>
@@ -275,17 +356,17 @@ function toggleConfirm(): void {
             <Move class="panel-label-icon" />
             카메라 움직임
           </label>
-          <div ref="cameraMotionHelpRef" class="panel-info">
+          <div :ref="cameraMotionHelp.popoverRef" class="panel-info">
             <button
               type="button"
               class="panel-info-button"
               aria-label="카메라 움직임 안내"
-              :aria-expanded="isCameraMotionHelpOpen"
-              @click="toggleCameraMotionHelp"
+              :aria-expanded="cameraMotionHelp.isOpen.value"
+              @click="cameraMotionHelp.toggle"
             >
               <span class="panel-info-icon">i</span>
             </button>
-            <div v-if="isCameraMotionHelpOpen" class="panel-info-popover">
+            <div v-if="cameraMotionHelp.isOpen" class="panel-info-popover">
               <div class="panel-info-title">카메라 움직임 안내</div>
               <ul class="panel-info-list">
                 <li v-for="item in cameraMotionHelpItems" :key="item.label" class="panel-info-item">
@@ -335,21 +416,29 @@ function toggleConfirm(): void {
       </div>
 
       <!-- Generate Prompt -->
-      <button class="panel-btn panel-btn--secondary panel-btn--full" @click="generatePrompt">
-        <Sparkles class="panel-btn-icon" />
-        프롬프트 생성
+      <button
+        class="panel-btn panel-btn--secondary panel-btn--full panel-btn--prompt-generate"
+        :disabled="isGeneratingPrompt"
+        @click="generatePrompt"
+      >
+        <Loader2 v-if="isGeneratingPrompt" class="panel-btn-icon panel-btn-icon--spin" />
+        <Sparkles v-else class="panel-btn-icon" />
+        {{ isGeneratingPrompt ? '생성 중...' : '프롬프트 생성' }}
       </button>
 
       <!-- Generated Prompt -->
-      <div v-if="isPromptGenerated" class="panel-section">
+      <div v-if="isPromptGenerated" class="panel-section panel-section--prompt">
         <label class="panel-label">
           <FileText class="panel-label-icon" />
           AI 프롬프트
+          <span class="panel-label-badge">생성됨</span>
         </label>
         <textarea v-model="form.prompt" class="panel-textarea panel-textarea--prompt" rows="3"></textarea>
-        <div class="panel-prompt-actions">
-          <button class="panel-btn panel-btn--text" @click="generatePrompt">
-            <RefreshCw class="panel-btn-icon" /> 재생성
+        <div class="panel-prompt-actions panel-prompt-actions--right">
+          <button class="panel-btn panel-btn--text" :disabled="isGeneratingPrompt" @click="generatePrompt">
+            <Loader2 v-if="isGeneratingPrompt" class="panel-btn-icon panel-btn-icon--spin" />
+            <RefreshCw v-else class="panel-btn-icon" />
+            재생성
           </button>
           <button v-if="!isPromptApproved" class="panel-btn panel-btn--success" @click="approvePrompt">
             <Check class="panel-btn-icon" /> 승인
@@ -367,8 +456,8 @@ function toggleConfirm(): void {
       <div class="panel-actions panel-actions--footer">
         <button
           class="panel-btn panel-btn--primary panel-btn--full"
-          :disabled="!canGenerate"
-          @click="generateVideo"
+          :disabled="isGeneratingVideo"
+          @click="handleGenerateVideo"
         >
           <Video class="panel-btn-icon" />
           영상 생성

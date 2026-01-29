@@ -9,4 +9,6 @@ public interface AssetMapper {
     void insert(Asset asset);
 
     Optional<Asset> findById(Long id);
+
+    int deleteById(Long id);
 }
