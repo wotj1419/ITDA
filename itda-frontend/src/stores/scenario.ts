@@ -405,13 +405,15 @@ export const useScenarioStore = defineStore('scenario', () => {
 
     const addScene = () => {
         const newId = Math.max(...scenes.value.map(s => s.id), 0) + 1
-        scenes.value.push({
+        const newScene = {
             id: newId,
             order: scenes.value.length + 1,
             title: '', // 빈 문자열로 시작
             description: '', // 빈 문자열로 시작
-        })
+        }
+        scenes.value.push(newScene)
         saveCurrentState()
+        return newScene
     }
 
     const removeScene = (id: number) => {

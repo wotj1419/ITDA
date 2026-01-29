@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
-import { Film, Plus, Trash2, RefreshCw, GripVertical, Check, Info } from 'lucide-vue-next'
+import { computed, nextTick, ref } from 'vue'
+import { Film, Plus, Trash2, GripVertical, Check, Info, Pencil } from 'lucide-vue-next'
 import { useScenarioStore, type ScenarioScene } from '../../stores/scenario'
 import { useSceneStore } from '../../stores/scene'
 import { useProjectStore } from '../../stores/project'
@@ -17,12 +17,20 @@ const DEFAULT_PROJECT_TITLE = '새 프로젝트'
 const editingSceneId = ref<number | null>(null)
 const draggedId = ref<number | null>(null)
 const isApplying = ref(false)
+const titleInputRefs = ref<Record<number, HTMLInputElement | null>>({})
 
 const isBusy = computed(() => scenarioStore.isGenerating || isApplying.value)
+
+const focusTitleInput = (sceneId: number) => {
+  void nextTick(() => {
+    titleInputRefs.value[sceneId]?.focus()
+  })
+}
 
 const startEdit = (scene: ScenarioScene) => {
   if (isBusy.value) return
   editingSceneId.value = scene.id
+  focusTitleInput(scene.id)
 }
 
 const saveEdit = async (scene: ScenarioScene) => {
@@ -72,6 +80,19 @@ const saveEdit = async (scene: ScenarioScene) => {
   }
 
   editingSceneId.value = null
+}
+
+const setTitleInputRef = (sceneId: number, el: HTMLInputElement | null) => {
+  titleInputRefs.value[sceneId] = el
+}
+
+const handleAddScene = () => {
+  if (isBusy.value) return
+  const newScene = scenarioStore.addScene()
+  if (newScene) {
+    editingSceneId.value = newScene.id
+    focusTitleInput(newScene.id)
+  }
 }
 
 const handleDragStart = (scene: ScenarioScene) => {
@@ -205,11 +226,11 @@ const handleApplyToProject = async () => {
               <button
                 v-if="editingSceneId !== scene.id"
                 class="action-btn"
-                title="재생성"
+                title="편집"
                 :disabled="isBusy"
-                @click="scenarioStore.regenerateScene(scene.id)"
+                @click="startEdit(scene)"
               >
-                <RefreshCw class="icon-sm" />
+                <Pencil class="icon-sm" />
               </button>
               <button
                 class="action-btn danger"
@@ -228,6 +249,7 @@ const handleApplyToProject = async () => {
               v-model="scene.title"
               class="scene-title-input"
               placeholder="씬 제목"
+              :ref="(el) => setTitleInputRef(scene.id, el as HTMLInputElement | null)"
             />
             <textarea
               v-model="scene.description"
@@ -242,18 +264,24 @@ const handleApplyToProject = async () => {
 
           <!-- View Mode -->
           <template v-else>
-            <h4 class="scene-title" @click="startEdit(scene)">
-              {{ scene.title }}
+            <h4
+              :class="['scene-title', { 'scene-title--empty': !scene.title }]"
+              @click="startEdit(scene)"
+            >
+              {{ scene.title || '씬 제목을 입력하세요' }}
             </h4>
-            <p class="scene-description" @click="startEdit(scene)">
-              {{ scene.description }}
+            <p
+              :class="['scene-description', { 'scene-description--empty': !scene.description }]"
+              @click="startEdit(scene)"
+            >
+              {{ scene.description || '씬 설명을 입력하세요' }}
             </p>
           </template>
         </div>
       </div>
 
       <!-- Add Scene Button -->
-      <button class="add-scene-btn" :disabled="isBusy" @click="scenarioStore.addScene">
+      <button class="add-scene-btn" :disabled="isBusy" @click="handleAddScene">
         <Plus class="icon-sm" />
         씬 추가
       </button>
@@ -433,6 +461,12 @@ const handleApplyToProject = async () => {
 
 .scene-description:hover {
   color: var(--gray-700);
+}
+
+.scene-title--empty,
+.scene-description--empty {
+  color: var(--gray-400);
+  font-style: italic;
 }
 
 .scene-title-input,
