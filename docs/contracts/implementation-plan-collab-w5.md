@@ -199,6 +199,20 @@ Response(서버→클라):
 - [ ] Chat REST 구현(히스토리 조회) + 페이징
 - [ ] `chat_messages` 마이그레이션/인덱스 확정 및 적용
 
+---
+
+## 8) 현행사항 (2026-01-29)
+### 완료
+- WS 경로 고정: `/ws`, App Prefix `/pub`, Topic `/topic`, User `/user`, Queue `/user/queue`
+- CONNECT JWT 인증 + Principal 세팅 (STOMP 인바운드 인터셉터)
+- SUBSCRIBE/SEND 시 destination에서 `projectId` 추출 → 멤버 체크
+- STOMP ERROR 프레임 핸들러 추가(에러 코드/메시지 반환)
+- `ProjectAccessService.isProjectMember` 공용 메서드 추가
+
+### 테스트
+- Unit: `StompAuthChannelInterceptor`, `CollabStompErrorHandler`
+- Integration: STOMP CONNECT 무인증 에러 프레임 수신, SUBSCRIBE 시 멤버 체크 호출
+
 #### Dev A 권장 파일/클래스(예시)
 - WebSocket 설정/보안
   - `com.itda.backend.ws.config.WebSocketConfig`
