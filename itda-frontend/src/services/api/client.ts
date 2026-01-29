@@ -7,18 +7,36 @@ import { redirectToAccessDenied, redirectToAuth } from './redirects';
 
 const apiClient = axios.create({
     baseURL: API_BASE_URL,
-    headers: {
-        'Content-Type': 'application/json',
-    },
     timeout: 60000, // 60s timeout
 });
 
 // Request interceptor for API calls
 apiClient.interceptors.request.use(
     (config) => {
+        const headers = config.headers || {};
+        const isFormData = axios.isFormData(config.data);
+        const hasContentType = typeof (headers as { has?: (name: string) => boolean }).has === 'function'
+            ? (headers as { has: (name: string) => boolean }).has('Content-Type')
+            : 'Content-Type' in headers || 'content-type' in headers;
+
+        if (isFormData) {
+            if (typeof (headers as { delete?: (name: string) => void }).delete === 'function') {
+                (headers as { delete: (name: string) => void }).delete('Content-Type');
+            } else {
+                delete (headers as Record<string, unknown>)['Content-Type'];
+                delete (headers as Record<string, unknown>)['content-type'];
+            }
+        } else if (config.data && !hasContentType) {
+            if (typeof (headers as { set?: (name: string, value: string) => void }).set === 'function') {
+                (headers as { set: (name: string, value: string) => void }).set('Content-Type', 'application/json');
+            } else {
+                (headers as Record<string, unknown>)['Content-Type'] = 'application/json';
+            }
+        }
+
+        config.headers = headers;
         const token = getAccessToken();
         if (token) {
-            config.headers = config.headers || {};
             config.headers.Authorization = `Bearer ${token}`;
         }
         return config;
