@@ -4,6 +4,7 @@ import com.itda.backend.global.config.FileStorageProperties;
 import com.itda.backend.global.exception.BusinessException;
 import com.itda.backend.global.response.ErrorCode;
 import com.itda.backend.asset.domain.Asset;
+import com.itda.backend.asset.domain.StorageProvider;
 import com.itda.backend.asset.repository.AssetMapper;
 import com.itda.backend.node.domain.Node;
 import com.itda.backend.node.domain.NodeStatus;
@@ -96,6 +97,9 @@ public class MediaFileService {
         }
         Asset asset = assetMapper.findById(assetId)
                 .orElseThrow(() -> new BusinessException(notFoundCode, errorMessage));
+        if (asset.getStorageProvider() == StorageProvider.S3) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST, "Export file is not available for S3 storage");
+        }
         String storageKey = asset.getStorageKey();
         if (storageKey == null || storageKey.isBlank()) {
             throw new BusinessException(notFoundCode, errorMessage);
