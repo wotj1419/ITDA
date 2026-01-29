@@ -70,7 +70,7 @@ function formatDuration(seconds: number): string {
         <h2 class="project-title">{{ projectTitle }}</h2>
         <div class="timeline-badge">
           <Layers class="badge-icon" />
-          <span>Full Timeline</span>
+          <span>전체 타임라인</span>
         </div>
       </div>
 
@@ -116,7 +116,7 @@ function formatDuration(seconds: number): string {
               {{ projectTitle }}
             </RouterLink>
             <span class="separator">/</span>
-            <span class="current">Full Timeline</span>
+            <span class="current">전체 타임라인</span>
           </div>
         </div>
 

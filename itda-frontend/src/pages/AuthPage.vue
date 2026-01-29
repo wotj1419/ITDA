@@ -141,9 +141,8 @@ async function handleRegister() {
 
 <template>
   <div class="auth-page">
-    <!-- Decorative Background -->
-    <div class="auth-bg-blob auth-bg-blob-1"></div>
-    <div class="auth-bg-blob auth-bg-blob-2"></div>
+    <!-- From Uiverse.io by sunn_2633 -->
+    <div class="cyber-pattern"></div>
 
     <main class="auth-container">
       <!-- Logo -->
@@ -152,7 +151,7 @@ async function handleRegister() {
           <img src="/icon.png" alt="Itda Logo" class="logo-icon" />
           <h1 class="h2">잇다</h1>
         </div>
-        <p class="text-muted text-sm">Turn your ideas into AI-generated films</p>
+        <p class="text-muted text-sm">오늘도 잇다와 함께</p>
       </div>
 
       <!-- Auth Card -->
@@ -248,7 +247,7 @@ async function handleRegister() {
               type="text"
               class="form-input"
               :class="{ 'input-error': registerForm.name && !isNameValid }"
-              placeholder="이름을 입력하세요"
+              placeholder="이름을 입력하세요."
               required
             />
             <div v-if="registerForm.name && !isNameValid" class="form-error">
@@ -270,7 +269,7 @@ async function handleRegister() {
               />
             </div>
             <div v-if="registerForm.email && !isEmailValid" class="form-error">
-              이메일을 올바르게 입력해주세요.
+              유효한 이메일 주소를 입력해주세요.
             </div>
           </div>
 
@@ -304,7 +303,7 @@ async function handleRegister() {
               type="password"
               class="form-input"
               :class="{ 'input-error': registerForm.passwordConfirm && !passwordsMatch }"
-              placeholder="비밀번호 다시 입력"
+              placeholder="비밀번호를 다시 입력하세요"
               required
             />
             <div v-if="registerForm.passwordConfirm && !passwordsMatch" class="form-error">
@@ -317,7 +316,7 @@ async function handleRegister() {
               <input v-model="registerForm.agreeTerms" type="checkbox" class="form-checkbox" @change="termsError = false" />
               <span class="form-check-label">
                 <a href="#" class="link">이용약관</a> 및
-                <a href="#" class="link">개인정보처리방침</a>에 동의합니다
+                <a href="#" class="link">개인정보처리방침</a>에 동의합니다.
               </span>
             </label>
             <div v-if="termsError" class="form-error">
@@ -365,12 +364,12 @@ async function handleRegister() {
               d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
             />
           </svg>
-          Google로 계속하기 (P1)
+          Google로 계속하기
         </button>
       </div>
 
       <!-- Footer -->
-      <p class="auth-footer">© 2026 AI Movie Studio. All rights reserved.</p>
+      <p class="auth-footer">© 2026 ITDA. All rights reserved.</p>
     </main>
   </div>
 </template>
@@ -385,30 +384,48 @@ async function handleRegister() {
   overflow: hidden;
 }
 
-.auth-bg-blob {
+/* From Uiverse.io by sunn_2633 */
+.cyber-pattern {
   position: fixed;
-  border-radius: 50%;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: var(--rose-canvas);
+  background-image:
+    radial-gradient(circle at center, transparent 30%, var(--rose-100) 90%),
+    linear-gradient(rgba(255, 133, 161, 0.18) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 133, 161, 0.18) 1px, transparent 1px),
+    linear-gradient(rgba(255, 179, 198, 0.12) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 179, 198, 0.12) 1px, transparent 1px);
+  background-size:
+    100% 100%,
+    60px 60px,
+    60px 60px,
+    20px 20px,
+    20px 20px;
+  animation: cyber-move 10s linear infinite;
   z-index: -1;
+  pointer-events: none;
 }
 
-.auth-bg-blob-1 {
-  top: -20%;
-  left: -10%;
-  width: 500px;
-  height: 500px;
-  background: var(--rose-200);
-  filter: blur(100px);
-  opacity: 0.5;
-}
-
-.auth-bg-blob-2 {
-  bottom: -20%;
-  right: -10%;
-  width: 600px;
-  height: 600px;
-  background: var(--rose-300);
-  filter: blur(120px);
-  opacity: 0.4;
+@keyframes cyber-move {
+  0% {
+    background-position:
+      0 0,
+      0 0,
+      0 0,
+      0 0,
+      0 0;
+  }
+  100% {
+    background-position:
+      0 0,
+      60px 60px,
+      60px 60px,
+      40px 40px,
+      40px 40px;
+  }
 }
 
 .auth-container {

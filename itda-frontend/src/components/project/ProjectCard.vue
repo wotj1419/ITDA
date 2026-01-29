@@ -181,8 +181,8 @@ const handleDeleteRequest = (e: Event) => {
         class="thumbnail-image"
       />
       <div v-else class="thumbnail-placeholder">
-        <img src="/icon.png" alt="No Preview" class="preview-icon" />
-        <span>No Preview</span>
+        <img src="/icon.png" alt="아직 미리보기가 없어요" class="preview-icon" />
+        <span>아직 미리보기가 없어요</span>
       </div>
     </div>
 
@@ -216,7 +216,7 @@ const handleDeleteRequest = (e: Event) => {
 
       <!-- Footer -->
       <div class="card-footer">
-        <span class="card-time">Edited <TimeAgo :date="project.updatedAt" /></span>
+        <span class="card-time"><TimeAgo :date="project.updatedAt" /></span>
       </div>
     </div>
   </RouterLink>

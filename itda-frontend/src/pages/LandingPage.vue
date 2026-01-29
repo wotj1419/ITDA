@@ -282,13 +282,13 @@ onUnmounted(() => {
 
     <!-- Footer -->
     <footer class="landing-footer">
-      <div class="footer-logo">🎬 AI Movie Studio</div>
+      <div class="footer-logo">🎬 ITDA</div>
       <div class="footer-links">
         <a href="#">이용약관</a>
         <a href="#">개인정보처리방침</a>
         <a href="#">문의하기</a>
       </div>
-      <p class="footer-copyright">© 2026 AI Movie Studio. All rights reserved.</p>
+      <p class="footer-copyright">© 2026 . All rights reserved.</p>
     </footer>
   </div>
 </template>

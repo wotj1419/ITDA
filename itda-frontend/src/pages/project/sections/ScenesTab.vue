@@ -72,7 +72,7 @@ const getScenePresenceAvatars = (sceneId: number) =>
           v-slot="{ navigate }"
         >
           <Button variant="secondary" size="sm" @click="navigate">
-            Full Timeline
+            전체 타임라인
           </Button>
         </RouterLink>
       </div>

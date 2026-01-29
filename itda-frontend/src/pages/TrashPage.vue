@@ -167,7 +167,7 @@ const closeModal = () => {
 }
 
 .page-title {
-  font-size: 1.875rem;
+  font-size: 2.5rem;
   font-weight: 700;
   color: var(--gray-900);
   margin-bottom: 0.5rem;

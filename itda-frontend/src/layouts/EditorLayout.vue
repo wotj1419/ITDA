@@ -51,7 +51,7 @@ const navItems = computed(() => [
   {
     key: 'story',
     icon: BookOpen,
-    label: 'Story',
+    label: '스토리',
     to: { name: 'project-detail', params: { id: projectId.value } },
     active: false,
   },
@@ -65,7 +65,7 @@ const navItems = computed(() => [
   {
     key: 'timeline',
     icon: Layers,
-    label: 'Full Timeline',
+    label: '전체 타임라인',
     to: { name: 'timeline', params: { id: projectId.value } },
     active: false,
   },

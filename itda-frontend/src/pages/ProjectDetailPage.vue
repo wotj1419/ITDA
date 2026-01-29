@@ -69,9 +69,17 @@ watch(projectId, (newId) => {
     }
 })
 
-const presenceLocation = computed(() => {
-  if (activeTab.value === 'timeline') return 'TIMELINE'
-  return 'SCENE_LIST'
+const tabLabelMap: Record<string, string> = {
+  story: '스토리',
+  scenes: '장면',
+  objects: '오브젝트',
+  timeline: 'Timeline',
+  settings: '설정',
+}
+
+const projectLocation = computed(() => {
+  const label = tabLabelMap[activeTab.value] || 'Project'
+  return project.value?.title ? `${project.value.title} · ${label}` : label
 })
 
 watch([presenceLocation], ([nextLocation]) => {

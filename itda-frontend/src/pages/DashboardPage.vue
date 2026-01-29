@@ -135,8 +135,8 @@ const toggleViewMode = () => {
       <!-- Toolbar -->
       <div class="toolbar">
         <div class="toolbar-left">
-          <h1 class="page-title">My Projects</h1>
-          <p class="project-count">{{ projectStore.projectCount }} projects</p>
+          <h1 class="page-title">내 프로젝트</h1>
+          <p class="project-count">{{ projectStore.projectCount }}개의 프로젝트</p>
         </div>
         <div class="toolbar-right">
           <div class="cyber-signboard">
@@ -208,7 +208,7 @@ const toggleViewMode = () => {
 
       <!-- All Projects Section -->
       <section class="section">
-        <h3 class="section-title">All Projects</h3>
+        <h3 class="section-title">모든 프로젝트</h3>
         <div :class="['projects-grid', { 'list-view': viewMode === 'list' }]">
           <!-- Project Cards -->
           <ProjectCard
@@ -226,7 +226,7 @@ const toggleViewMode = () => {
             <div class="add-project-icon">
               <Plus class="icon-lg" />
             </div>
-            <span class="add-project-text">Create New Project</span>
+            <span class="add-project-text">새로운 프로젝트 생성</span>
           </button>
         </div>
       </section>
@@ -458,7 +458,7 @@ const toggleViewMode = () => {
 }
 
 .page-title {
-  font-size: 1.5rem;
+  font-size: 2.5rem;
   font-weight: 700;
   color: var(--gray-900);
   margin: 0 0 0.25rem;

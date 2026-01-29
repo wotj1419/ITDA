@@ -49,8 +49,8 @@ const createEmptyProject = async () => {
     <div class="dashboard-container">
       <div class="toolbar">
         <div class="toolbar-left">
-          <h1 class="page-title">Favorites</h1>
-          <p class="project-count">{{ projectStore.favoriteProjects.length }} saved projects</p>
+          <h1 class="page-title">즐겨찾기</h1>
+          <p class="project-count">{{ projectStore.favoriteProjects.length }} 개의 즐겨찾기</p>
         </div>
       </div>
 
@@ -94,7 +94,7 @@ const createEmptyProject = async () => {
 
 <style scoped>
 .dashboard-container {
-  max-width: 1200px;
+  max-width: 1600px;
   margin: 0 auto;
 }
 
@@ -106,7 +106,7 @@ const createEmptyProject = async () => {
 }
 
 .page-title {
-  font-size: 1.5rem;
+  font-size: 2.5rem;
   font-weight: 700;
   color: var(--gray-900);
   margin: 0 0 0.25rem;
@@ -121,6 +121,11 @@ const createEmptyProject = async () => {
 .projects-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.section {
   margin-bottom: 1.5rem;
 }
 

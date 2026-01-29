@@ -59,11 +59,11 @@ interface NavItem {
 
 const navItems = computed<NavItem[]>(() => {
   const items: NavItem[] = [
-    { key: 'story', icon: BookOpen, label: 'Story', to: null },
-    { key: 'scenes', icon: Clapperboard, label: 'Scenes', badge: props.sceneCount, to: null },
-    { key: 'objects', icon: User, label: 'Objects', to: null },
-    { key: 'timeline', icon: Layers, label: 'Full Timeline', to: { name: 'timeline', params: { id: projectId.value } } },
-    { key: 'settings', icon: Settings, label: 'Settings', to: null },
+    { key: 'story', icon: BookOpen, label: '스토리', to: null },
+    { key: 'scenes', icon: Clapperboard, label: '장면', badge: props.sceneCount, to: null },
+    { key: 'objects', icon: User, label: '오브젝트', to: null },
+    { key: 'timeline', icon: Layers, label: '전체 타임라인', to: { name: 'timeline', params: { id: projectId.value } } },
+    { key: 'settings', icon: Settings, label: '설정', to: null },
   ]
   return props.hideScenes ? items.filter((item) => item.key !== 'scenes') : items
 })
@@ -153,7 +153,7 @@ const progressPercentage = computed(() => {
           <PresencePanel />
           <Button variant="secondary" class="start-call-btn">
             <Phone class="icon-sm" />
-            <span class="nav-label">Start Call</span>
+            <span class="nav-label">통화 시작</span>
           </Button>
         </div>
       </div>
@@ -171,7 +171,7 @@ const progressPercentage = computed(() => {
           </button>
           
           <div class="breadcrumb">
-            <RouterLink to="/dashboard">AI Movie Studio</RouterLink>
+            <RouterLink to="/dashboard">홈</RouterLink>
             <span class="separator">/</span>
             <span class="current">{{ project?.title || 'Project' }}</span>
           </div>
@@ -179,7 +179,7 @@ const progressPercentage = computed(() => {
 
         <div class="header-actions">
           <div class="progress-section">
-            <span class="progress-label">Progress</span>
+            <span class="progress-label">제작 진행도</span>
             <div class="progress-bar">
               <div class="progress-fill" :style="{ width: `${progressPercentage}%` }"></div>
             </div>
@@ -199,9 +199,13 @@ const progressPercentage = computed(() => {
 
           <ShareButton @click="uiStore.openModal('share-project')" />
 
+          <Button variant="secondary" @click="collabStore.showFloatingBar()">
+            <Users class="icon-sm" />
+            협업 시작
+          </Button>
           <Button variant="primary">
             <Play class="icon-sm" />
-            Preview
+            미리보기
           </Button>
         </div>
       </header>

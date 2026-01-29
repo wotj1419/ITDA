@@ -84,7 +84,7 @@ const followMember = (member: CollabParticipant) => {
 
 <template>
   <div class="presence">
-    <div class="section-label">ONLINE NOW</div>
+    <div class="section-label">현재 접속 중</div>
     <div class="online-users">
       <AvatarGroup :avatars="avatars" :max="3" size="sm" />
     </div>
