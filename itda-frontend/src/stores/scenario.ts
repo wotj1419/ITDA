@@ -184,6 +184,7 @@ export const useScenarioStore = defineStore('scenario', () => {
     }
 
     const generatePrompt = async (): Promise<void> => {
+        if (isGenerating.value) return
         if (!activeProjectId.value) return
         const { startGenerationToast, finishGenerationToast } = useGenerationToast()
         const toastId = startGenerationToast('scenario_prompt')
@@ -220,6 +221,7 @@ export const useScenarioStore = defineStore('scenario', () => {
     }
 
     const approvePrompt = async () => {
+        if (isGenerating.value) return
         if (!activeProjectId.value) return
         // approvePrompt triggers plot generation
         await run(async () => {
@@ -252,6 +254,7 @@ export const useScenarioStore = defineStore('scenario', () => {
     }
 
     const regeneratePrompt = async () => {
+        if (isGenerating.value) return
         if (!activeProjectId.value) return
         const { startGenerationToast, finishGenerationToast } = useGenerationToast()
         const toastId = startGenerationToast('scenario_prompt')
@@ -283,6 +286,7 @@ export const useScenarioStore = defineStore('scenario', () => {
     }
 
     const generatePlot = async (): Promise<void> => {
+        if (isGenerating.value) return
         if (!activeProjectId.value) return
         const { startGenerationToast, finishGenerationToast } = useGenerationToast()
         const toastId = startGenerationToast('plot')
@@ -306,6 +310,7 @@ export const useScenarioStore = defineStore('scenario', () => {
     }
 
     const approvePlot = () => {
+        if (isGenerating.value) return
         if (!activeProjectId.value) return
         // approvePlot calls generateScenes
         run(async () => {
@@ -316,6 +321,7 @@ export const useScenarioStore = defineStore('scenario', () => {
     }
 
     const regeneratePlot = async () => {
+        if (isGenerating.value) return
         if (!activeProjectId.value) return
         const { startGenerationToast, finishGenerationToast } = useGenerationToast()
         const toastId = startGenerationToast('plot')
@@ -336,6 +342,7 @@ export const useScenarioStore = defineStore('scenario', () => {
     }
 
     const generateScenes = async (): Promise<void> => {
+        if (isGenerating.value) return
         if (!activeProjectId.value) return
         const { startGenerationToast, finishGenerationToast } = useGenerationToast()
         const toastId = startGenerationToast('scenes')
@@ -378,6 +385,7 @@ export const useScenarioStore = defineStore('scenario', () => {
     }
 
     const regenerateScene = async (id: number) => {
+        if (isGenerating.value) return
         await run(async () => {
             await new Promise((resolve) => setTimeout(resolve, 1000))
 
@@ -481,4 +489,3 @@ export const useScenarioStore = defineStore('scenario', () => {
         setGenre,
     }
 })
-

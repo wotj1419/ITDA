@@ -14,7 +14,9 @@ const apiClient = axios.create({
 apiClient.interceptors.request.use(
     (config) => {
         const headers = config.headers || {};
-        const isFormData = axios.isFormData(config.data);
+        const isFormData =
+            typeof FormData !== 'undefined' &&
+            config.data instanceof FormData;
         const hasContentType = typeof (headers as { has?: (name: string) => boolean }).has === 'function'
             ? (headers as { has: (name: string) => boolean }).has('Content-Type')
             : 'Content-Type' in headers || 'content-type' in headers;
