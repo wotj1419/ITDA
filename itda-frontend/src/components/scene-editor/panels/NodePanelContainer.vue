@@ -80,6 +80,7 @@ watch(
       <component
         v-if="panelComponent"
         :is="panelComponent"
+        :key="selectedNode?.id"
         :node="selectedNode"
         @close="handleClose"
       />
