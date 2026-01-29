@@ -82,6 +82,15 @@ body {
   text-decoration: none;
 }
 
+.btn:disabled,
+.btn[disabled] {
+  cursor: not-allowed;
+  opacity: 0.6;
+  box-shadow: none;
+  transform: none;
+  pointer-events: none;
+}
+
 .btn-primary {
   background: var(--rose-500);
   color: white;
