@@ -146,6 +146,7 @@ function handleRetry(event: Event): void {
     <Handle 
       type="target" 
       :position="Position.Top" 
+      id="start-shot"
       class="node-glass__handle" 
     />
     
@@ -153,9 +154,9 @@ function handleRetry(event: Event): void {
     <Handle 
       v-if="isTransition" 
       type="target" 
-      :position="Position.Left" 
+      :position="Position.Top" 
       id="end-shot"
-      class="node-glass__handle node-glass__handle--left" 
+      class="node-glass__handle"
     />
 
     <!-- Header -->

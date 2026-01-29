@@ -428,6 +428,7 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
             );
             await hydrateNodeMedia();
             await hydrateVideoDurations();
+            await hydrateVideoDetailsForEdges();
 
             if (!nodes.value.find((n) => n.data?.type === NodeType.SCENE_HEADER)) {
                 ensureSceneHeaderNode(sceneInfo);
@@ -456,6 +457,12 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
                 persistNodePositions();
             }
         }
+    }
+
+    async function hydrateVideoDetailsForEdges(): Promise<void> {
+        const targets = nodes.value.filter((node) => node.data?.type === NodeType.VIDEO);
+        if (!targets.length) return;
+        await Promise.all(targets.map((node) => hydrateNodeDetail(node.id)));
     }
 
     function ensureSceneHeaderNode(
@@ -1369,8 +1376,8 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
                         )
                 );
             }
-            // 새 end shot 설정
-            videoData.endShotId = shotId;
+            // 새 end shot 설정 (로컬 반영 + 서버 저장)
+            void updateNode(endShotTargetVideoId.value, { endShotId: shotId });
             addEdge(shotId, endShotTargetVideoId.value, { targetHandle: 'end-shot' });
         }
 
@@ -1395,7 +1402,7 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
         edges.value = edges.value.filter(
             (e) => !(e.source === videoData.endShotId && e.target === videoId)
         );
-        videoData.endShotId = null;
+        void updateNode(videoId, { endShotId: null });
         edges.value = syncEdgeMeta(nodes.value, edges.value);
     }
 

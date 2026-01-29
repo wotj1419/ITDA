@@ -614,9 +614,6 @@
     background: var(--success, #22C55E);
 }
 
-.node-glass__handle--left {
-    background: var(--rose-300, #FFD9E8);
-}
 
 /* =============================================================================
    Add Button
