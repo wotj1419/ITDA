@@ -141,8 +141,8 @@ async function handleRegister() {
 
 <template>
   <div class="auth-page">
-    <!-- From Uiverse.io by sunn_2633 -->
-    <div class="cyber-pattern"></div>
+    <!-- From Uiverse.io by themrsami -->
+    <div class="auth-dot-pattern"></div>
 
     <main class="auth-container">
       <!-- Logo -->
@@ -384,47 +384,33 @@ async function handleRegister() {
   overflow: hidden;
 }
 
-/* From Uiverse.io by sunn_2633 */
-.cyber-pattern {
+/* From Uiverse.io by themrsami */
+.auth-dot-pattern {
   position: fixed;
   top: 0;
   left: 0;
   width: 100%;
   height: 100%;
   background-color: var(--rose-canvas);
-  background-image:
-    radial-gradient(circle at center, transparent 30%, var(--rose-100) 90%),
-    linear-gradient(rgba(255, 133, 161, 0.18) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 133, 161, 0.18) 1px, transparent 1px),
-    linear-gradient(rgba(255, 179, 198, 0.12) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 179, 198, 0.12) 1px, transparent 1px);
-  background-size:
-    100% 100%,
-    60px 60px,
-    60px 60px,
-    20px 20px,
-    20px 20px;
-  animation: cyber-move 10s linear infinite;
   z-index: -1;
   pointer-events: none;
 }
 
-@keyframes cyber-move {
+.auth-dot-pattern::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(circle, rgba(255, 133, 161, 0.35) 10%, transparent 10%);
+  background-size: 30px 30px;
+  animation: dot-move 10s linear infinite;
+}
+
+@keyframes dot-move {
   0% {
-    background-position:
-      0 0,
-      0 0,
-      0 0,
-      0 0,
-      0 0;
+    background-position: 0 0;
   }
   100% {
-    background-position:
-      0 0,
-      60px 60px,
-      60px 60px,
-      40px 40px,
-      40px 40px;
+    background-position: 30px 30px;
   }
 }
 
