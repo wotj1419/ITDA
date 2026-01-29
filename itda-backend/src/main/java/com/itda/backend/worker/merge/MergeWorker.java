@@ -1,6 +1,7 @@
 package com.itda.backend.worker.merge;
 
 import com.itda.backend.asset.domain.Asset;
+import com.itda.backend.asset.domain.AssetType;
 import com.itda.backend.asset.repository.AssetMapper;
 import com.itda.backend.global.config.FileStorageProperties;
 import com.itda.backend.job.domain.Job;
@@ -8,7 +9,9 @@ import com.itda.backend.job.domain.JobType;
 import com.itda.backend.timeline.repository.TimelineMapper;
 import com.itda.backend.timeline.repository.dto.ProjectTimelineItem;
 import com.itda.backend.timeline.repository.dto.SceneTimelineItem;
+import com.itda.backend.worker.AssetRegistrar;
 import com.itda.backend.worker.ExecutionResult;
+import com.itda.backend.worker.StoredAsset;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -34,13 +37,16 @@ import java.util.Optional;
 public class MergeWorker {
 
     private static final Duration PROCESS_TIMEOUT = Duration.ofMinutes(10);
-    private static final String EXPORTS_DIR = "exports";
-    private static final String SCENE_EXPORTS_DIR = "scenes";
-    private static final String EXPORT_FILE_NAME = "final.mp4";
+    private static final String PROJECTS_DIR = "projects";
+    private static final String SCENES_DIR = "scenes";
+    private static final String MERGES_DIR = "merges";
+    private static final String MERGE_EXTENSION = ".mp4";
+    private static final String MERGE_CONTENT_TYPE = "video/mp4";
     private static final String FILES_PREFIX = "/files/";
 
     private final TimelineMapper timelineMapper;
     private final AssetMapper assetMapper;
+    private final AssetRegistrar assetRegistrar;
     private final FileStorageProperties fileStorageProperties;
 
     public ExecutionResult execute(Job job) {
@@ -69,9 +75,12 @@ public class MergeWorker {
             throw new IllegalStateException("No project timeline items to merge");
         }
 
-        Path outputPath = resolveProjectExportPath(projectId);
+        String mergeSignature = requireMergeSignature(job);
+        Path outputPath = buildProjectMergeOutputPath(projectId, mergeSignature);
         mergeTimelineItems(resolveProjectInputPaths(items), outputPath);
-        return new ExecutionResult(null, resolveRelativeContentKey(outputPath));
+        StoredAsset storedAsset = buildStoredAsset(outputPath);
+        Long assetId = assetRegistrar.registerLocalAsset(job, storedAsset, AssetType.VIDEO, MERGE_CONTENT_TYPE);
+        return new ExecutionResult(assetId, storedAsset.storageKey());
     }
 
     private ExecutionResult mergeScene(Job job) {
@@ -85,9 +94,12 @@ public class MergeWorker {
             throw new IllegalStateException("No scene timeline items to merge");
         }
 
-        Path outputPath = resolveSceneExportPath(sceneId);
+        String mergeSignature = requireMergeSignature(job);
+        Path outputPath = buildSceneMergeOutputPath(job.getProjectId(), sceneId, mergeSignature);
         mergeTimelineItems(resolveSceneInputPaths(items), outputPath);
-        return new ExecutionResult(null, resolveRelativeContentKey(outputPath));
+        StoredAsset storedAsset = buildStoredAsset(outputPath);
+        Long assetId = assetRegistrar.registerLocalAsset(job, storedAsset, AssetType.VIDEO, MERGE_CONTENT_TYPE);
+        return new ExecutionResult(assetId, storedAsset.storageKey());
     }
 
     private void mergeTimelineItems(List<Path> inputPaths, Path outputPath) {
@@ -193,21 +205,37 @@ public class MergeWorker {
         return target;
     }
 
-    private Path resolveProjectExportPath(Long projectId) {
-        return Path.of(
-                fileStorageProperties.getUploadDir(),
-                EXPORTS_DIR,
-                String.valueOf(projectId),
-                EXPORT_FILE_NAME).toAbsolutePath().normalize();
+    private String requireMergeSignature(Job job) {
+        String mergeSignature = job.getMergeSignature();
+        if (mergeSignature == null || mergeSignature.isBlank()) {
+            throw new IllegalStateException("Merge job missing mergeSignature");
+        }
+        return mergeSignature.trim();
     }
 
-    private Path resolveSceneExportPath(Long sceneId) {
+    private Path buildProjectMergeOutputPath(Long projectId, String mergeSignature) {
         return Path.of(
                 fileStorageProperties.getUploadDir(),
-                EXPORTS_DIR,
-                SCENE_EXPORTS_DIR,
+                PROJECTS_DIR,
+                String.valueOf(projectId),
+                MERGES_DIR,
+                mergeSignature + MERGE_EXTENSION
+        ).toAbsolutePath().normalize();
+    }
+
+    private Path buildSceneMergeOutputPath(Long projectId, Long sceneId, String mergeSignature) {
+        if (projectId == null) {
+            throw new IllegalStateException("Scene merge job missing projectId");
+        }
+        return Path.of(
+                fileStorageProperties.getUploadDir(),
+                PROJECTS_DIR,
+                String.valueOf(projectId),
+                SCENES_DIR,
                 String.valueOf(sceneId),
-                EXPORT_FILE_NAME).toAbsolutePath().normalize();
+                MERGES_DIR,
+                mergeSignature + MERGE_EXTENSION
+        ).toAbsolutePath().normalize();
     }
 
     private String resolveRelativeContentKey(Path absolutePath) {
@@ -222,6 +250,19 @@ public class MergeWorker {
             return null;
         }
         return root.relativize(normalized).toString().replace("\\", "/");
+    }
+
+    private StoredAsset buildStoredAsset(Path outputPath) {
+        String storageKey = resolveRelativeContentKey(outputPath);
+        if (storageKey == null || storageKey.isBlank()) {
+            throw new IllegalStateException("Failed to resolve merge output storageKey");
+        }
+        try {
+            long sizeBytes = Files.size(outputPath);
+            return new StoredAsset(storageKey, sizeBytes);
+        } catch (IOException e) {
+            throw new IllegalStateException("Failed to resolve merge output size", e);
+        }
     }
 
     private void ensureParentDir(Path outputPath) {

@@ -6,6 +6,7 @@ import com.itda.backend.job.domain.JobType;
 import com.itda.backend.job.repository.JobMapper;
 import com.itda.backend.node.domain.NodeStatus;
 import com.itda.backend.node.repository.NodeMapper;
+import com.itda.backend.timeline.service.MergeResultService;
 import com.itda.backend.worker.ExecutionResult;
 import com.itda.backend.worker.image.ImageGenerationWorker;
 import com.itda.backend.worker.merge.MergeWorker;
@@ -40,6 +41,7 @@ public class JobExecutor {
     private final ImageGenerationWorker imageWorker;
     private final VideoGenerationWorker videoWorker;
     private final MergeWorker mergeWorker;
+    private final MergeResultService mergeResultService;
     private final Environment environment;
 
     /**
@@ -83,6 +85,20 @@ public class JobExecutor {
             if (!succeeded) {
                 log.warn("[JobExecutor] Job success ignored (status changed): id={}", jobId);
                 return;
+            }
+
+            if (job.getType() == JobType.SCENE_MERGE) {
+                try {
+                    mergeResultService.recordSceneMergeResult(job, result.resultAssetId(), null, null);
+                } catch (Exception e) {
+                    log.error("[JobExecutor] Failed to record scene merge result: id={}", jobId, e);
+                }
+            } else if (job.getType() == JobType.PROJECT_MERGE) {
+                try {
+                    mergeResultService.recordProjectMergeResult(job, result.resultAssetId());
+                } catch (Exception e) {
+                    log.error("[JobExecutor] Failed to record project merge result: id={}", jobId, e);
+                }
             }
 
             updateNodeStatusIfApplicable(job, NodeStatus.SUCCEEDED, result.nodeContentKey(), result.resultAssetId());
@@ -242,7 +258,10 @@ public class JobExecutor {
 
     private boolean requiresResultAssetId(Job job) {
         JobType type = job.getType();
-        return type == JobType.IMAGE_GENERATION || type == JobType.VIDEO_GENERATION;
+        return type == JobType.IMAGE_GENERATION
+                || type == JobType.VIDEO_GENERATION
+                || type == JobType.SCENE_MERGE
+                || type == JobType.PROJECT_MERGE;
     }
 
     private void validateExecutionResult(Job job, ExecutionResult result) {

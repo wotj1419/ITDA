@@ -1,7 +1,11 @@
 package com.itda.backend.timeline.service;
 
+import com.itda.backend.timeline.repository.TimelineMapper;
 import com.itda.backend.timeline.repository.dto.ProjectTimelineItem;
 import com.itda.backend.timeline.repository.dto.SceneTimelineItem;
+import com.itda.backend.global.exception.BusinessException;
+import com.itda.backend.global.response.ErrorCode;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.nio.charset.StandardCharsets;
@@ -10,31 +14,69 @@ import java.security.NoSuchAlgorithmException;
 import java.util.List;
 
 @Service
+@RequiredArgsConstructor
 public class MergeSignatureService {
 
-    public String sceneSignature(Long sceneId, boolean includeMusic, List<SceneTimelineItem> items) {
+    private final TimelineMapper timelineMapper;
+
+    public String computeSceneSignature(Long sceneId) {
+        return computeSceneSignature(sceneId, false);
+    }
+
+    public String computeSceneSignature(Long sceneId, boolean includeMusic) {
+        List<SceneTimelineItem> items = timelineMapper.findSceneTimelineItems(sceneId);
+        return computeSceneSignature(sceneId, includeMusic, items);
+    }
+
+    public String computeSceneSignature(Long sceneId, boolean includeMusic, List<SceneTimelineItem> items) {
+        validateSceneItems(items);
+        return buildSceneSignature(sceneId, includeMusic, items);
+    }
+
+    public String computeProjectSignature(Long projectId) {
+        return computeProjectSignature(projectId, false);
+    }
+
+    public String computeProjectSignature(Long projectId, boolean includeMusic) {
+        List<ProjectTimelineItem> items = timelineMapper.findProjectTimelineItems(projectId);
+        return computeProjectSignature(projectId, includeMusic, items);
+    }
+
+    public String computeProjectSignature(Long projectId, boolean includeMusic, List<ProjectTimelineItem> items) {
+        validateProjectItems(items);
+        return buildProjectSignature(projectId, includeMusic, items);
+    }
+
+    private String buildSceneSignature(Long sceneId, boolean includeMusic, List<SceneTimelineItem> items) {
         StringBuilder builder = new StringBuilder();
         builder.append("scene:").append(sceneId).append('|')
-                .append("includeMusic=").append(includeMusic).append('|');
-        for (SceneTimelineItem item : items) {
-            builder.append(item.getOrderIndex()).append(':')
+                .append("includeMusic=").append(includeMusic).append('|')
+                .append("items=");
+        for (int i = 0; i < items.size(); i++) {
+            SceneTimelineItem item = items.get(i);
+            if (i > 0) {
+                builder.append(',');
+            }
+            builder.append(item.getSceneId()).append(':')
                     .append(item.getVideoNodeId()).append(':')
-                    .append(sourceKey(item.getAssetId(), item.getFallbackUrl()))
-                    .append('|');
+                    .append(item.getOrderIndex());
         }
         return sha256Hex(builder.toString());
     }
 
-    public String projectSignature(Long projectId, boolean includeMusic, List<ProjectTimelineItem> items) {
+    private String buildProjectSignature(Long projectId, boolean includeMusic, List<ProjectTimelineItem> items) {
         StringBuilder builder = new StringBuilder();
         builder.append("project:").append(projectId).append('|')
-                .append("includeMusic=").append(includeMusic).append('|');
-        for (ProjectTimelineItem item : items) {
-            builder.append(item.getOrderIndex()).append(':')
-                    .append(item.getSceneId()).append(':')
+                .append("includeMusic=").append(includeMusic).append('|')
+                .append("items=");
+        for (int i = 0; i < items.size(); i++) {
+            ProjectTimelineItem item = items.get(i);
+            if (i > 0) {
+                builder.append(',');
+            }
+            builder.append(item.getSceneId()).append(':')
                     .append(item.getSceneVideoId()).append(':')
-                    .append(sourceKey(item.getAssetId(), item.getFallbackUrl()))
-                    .append('|');
+                    .append(item.getOrderIndex());
         }
         return sha256Hex(builder.toString());
     }
@@ -44,6 +86,28 @@ public class MergeSignatureService {
             return "A:" + assetId;
         }
         return "U:" + (fallbackUrl == null ? "null" : fallbackUrl);
+    }
+
+    private void validateSceneItems(List<SceneTimelineItem> items) {
+        if (items == null || items.isEmpty()) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST);
+        }
+        for (SceneTimelineItem item : items) {
+            if (item.getOrderIndex() == null) {
+                throw new BusinessException(ErrorCode.INVALID_REQUEST);
+            }
+        }
+    }
+
+    private void validateProjectItems(List<ProjectTimelineItem> items) {
+        if (items == null || items.isEmpty()) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST);
+        }
+        for (ProjectTimelineItem item : items) {
+            if (item.getOrderIndex() == null) {
+                throw new BusinessException(ErrorCode.INVALID_REQUEST);
+            }
+        }
     }
 
     private String sha256Hex(String input) {

@@ -13,9 +13,6 @@ import org.junit.jupiter.api.io.TempDir;
 import org.springframework.beans.factory.ObjectProvider;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -29,12 +26,8 @@ class JobResultResolverTest {
     Path tempDir;
 
     @Test
-    void resolve_ShouldReturnSceneExportUrl_WhenSceneMergeSucceededAndFileExists() throws IOException {
+    void resolve_ShouldReturnSceneExportUrl_WhenSceneMergeSucceeded() {
         long sceneId = 55L;
-        Path exportPath = tempDir.resolve("exports/scenes/" + sceneId + "/final.mp4");
-        Files.createDirectories(exportPath.getParent());
-        Files.write(exportPath, "dummy".getBytes());
-
         FileStorageProperties props = new FileStorageProperties();
         props.setUploadDir(tempDir.toString());
 
@@ -65,7 +58,7 @@ class JobResultResolverTest {
     }
 
     @Test
-    void resolve_ShouldReturnNull_WhenSceneMergeSucceededButFileMissing() {
+    void resolve_ShouldReturnNull_WhenJobNotSucceeded() {
         FileStorageProperties props = new FileStorageProperties();
         props.setUploadDir(tempDir.toString());
 
@@ -88,7 +81,7 @@ class JobResultResolverTest {
         Job job = Job.builder()
                 .id(1L)
                 .type(JobType.SCENE_MERGE)
-                .status(JobStatus.SUCCEEDED)
+                .status(JobStatus.FAILED)
                 .sceneId(55L)
                 .build();
 

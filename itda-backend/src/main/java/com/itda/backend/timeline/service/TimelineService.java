@@ -20,6 +20,8 @@ import com.itda.backend.timeline.controller.dto.response.ProjectTimelineItemResp
 import com.itda.backend.timeline.controller.dto.response.ProjectTimelineResponse;
 import com.itda.backend.timeline.controller.dto.response.SceneTimelineItemResponse;
 import com.itda.backend.timeline.controller.dto.response.SceneTimelineResponse;
+import com.itda.backend.timeline.repository.ProjectMergeMapper;
+import com.itda.backend.timeline.repository.SceneVideoMapper;
 import com.itda.backend.timeline.repository.TimelineMapper;
 import com.itda.backend.timeline.repository.dto.ProjectTimelineItem;
 import com.itda.backend.timeline.repository.dto.SceneTimelineItem;
@@ -44,6 +46,8 @@ public class TimelineService {
     private final ObjectMapper objectMapper;
     private final AssetUrlResolver assetUrlResolver;
     private final MergeSignatureService mergeSignatureService;
+    private final SceneVideoMapper sceneVideoMapper;
+    private final ProjectMergeMapper projectMergeMapper;
 
     @Transactional(readOnly = true)
     public SceneTimelineResponse getSceneTimeline(Long userId, Long sceneId) {
@@ -53,8 +57,8 @@ public class TimelineService {
         List<SceneTimelineItemResponse> items = timelineMapper.findSceneTimelineItems(sceneId).stream()
                 .map(item -> SceneTimelineItemResponse.from(
                         item,
-                        assetUrlResolver.resolveNodeUrl(item.getAssetId(), item.getVideoNodeId(), item.getFallbackUrl())
-                ))
+                        assetUrlResolver.resolveNodeUrl(item.getAssetId(), item.getVideoNodeId(),
+                                item.getFallbackUrl())))
                 .toList();
         int totalDuration = sumDuration(items);
 
@@ -69,8 +73,7 @@ public class TimelineService {
         List<ProjectTimelineItemResponse> items = timelineMapper.findProjectTimelineItems(projectId).stream()
                 .map(item -> ProjectTimelineItemResponse.from(
                         item,
-                        assetUrlResolver.resolveUrl(item.getAssetId(), item.getFallbackUrl())
-                ))
+                        assetUrlResolver.resolveUrl(item.getAssetId(), item.getFallbackUrl())))
                 .toList();
         int totalDuration = sumProjectDuration(items);
 
@@ -88,9 +91,15 @@ public class TimelineService {
         }
 
         boolean includeMusic = request != null && request.includeMusicOrFalse();
-        String requestJson = serializePayload(Map.of("includeMusic", includeMusic));
-        String mergeSignature = mergeSignatureService.sceneSignature(sceneId, includeMusic, timelineItems);
+        String mergeSignature = mergeSignatureService.computeSceneSignature(sceneId, includeMusic, timelineItems);
 
+        // 캐시 체크: 동일 signature의 active 결과 존재 확인
+        if (sceneVideoMapper.findActiveBySceneIdAndSignature(sceneId, mergeSignature).isPresent()) {
+            return MergeResponse.cacheHit();
+        }
+
+        // 캐시 미스: 새 Job 생성
+        String requestJson = serializePayload(Map.of("includeMusic", includeMusic));
         Job job = jobService.createAndEnqueue(
                 new JobCreateRequest(
                         JobType.SCENE_MERGE,
@@ -100,10 +109,8 @@ public class TimelineService {
                         requestJson,
                         null,
                         mergeSignature,
-                        MergeSource.SCENE
-                ),
-                true
-        );
+                        MergeSource.SCENE),
+                true);
 
         return MergeResponse.from(job);
     }
@@ -119,9 +126,14 @@ public class TimelineService {
         }
 
         boolean includeMusic = request != null && request.includeMusicOrFalse();
-        String requestJson = serializePayload(Map.of("includeMusic", includeMusic));
-        String mergeSignature = mergeSignatureService.projectSignature(projectId, includeMusic, timelineItems);
+        String mergeSignature = mergeSignatureService.computeProjectSignature(projectId, includeMusic, timelineItems);
 
+        // 캐시 체크: 동일 signature의 active 결과 존재 시 재실행 금지
+        if (projectMergeMapper.findActiveByProjectIdAndSignature(projectId, mergeSignature).isPresent()) {
+            return MergeResponse.cacheHit();
+        }
+
+        String requestJson = serializePayload(Map.of("includeMusic", includeMusic));
         Job job = jobService.createAndEnqueue(
                 new JobCreateRequest(
                         JobType.PROJECT_MERGE,
@@ -131,10 +143,8 @@ public class TimelineService {
                         requestJson,
                         null,
                         mergeSignature,
-                        MergeSource.PROJECT
-                ),
-                true
-        );
+                        MergeSource.PROJECT),
+                true);
 
         return MergeResponse.from(job);
     }
