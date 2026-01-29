@@ -37,6 +37,54 @@ public class AssetRegistrar {
         return asset.getId();
     }
 
+    public Asset registerS3Asset(Long projectId,
+                                 Long ownerId,
+                                 String storageKey,
+                                 AssetType assetType,
+                                 String contentType,
+                                 long sizeBytes) {
+        if (storageKey == null || storageKey.isBlank()) {
+            throw new IllegalArgumentException("storageKey is required");
+        }
+        Objects.requireNonNull(assetType, "assetType is required");
+
+        Asset asset = Asset.builder()
+                .ownerId(ownerId)
+                .projectId(projectId)
+                .assetType(assetType)
+                .storageProvider(StorageProvider.S3)
+                .storageKey(storageKey)
+                .contentType(contentType)
+                .sizeBytes(sizeBytes)
+                .build();
+        assetMapper.insert(asset);
+        return asset;
+    }
+
+    public Asset registerLocalAsset(Long projectId,
+                                    Long ownerId,
+                                    String storageKey,
+                                    AssetType assetType,
+                                    String contentType,
+                                    long sizeBytes) {
+        if (storageKey == null || storageKey.isBlank()) {
+            throw new IllegalArgumentException("storageKey is required");
+        }
+        Objects.requireNonNull(assetType, "assetType is required");
+
+        Asset asset = Asset.builder()
+                .ownerId(ownerId)
+                .projectId(projectId)
+                .assetType(assetType)
+                .storageProvider(StorageProvider.LOCAL)
+                .storageKey(storageKey)
+                .contentType(contentType)
+                .sizeBytes(sizeBytes)
+                .build();
+        assetMapper.insert(asset);
+        return asset;
+    }
+
     private void requireJob(Job job) {
         if (job == null) {
             throw new IllegalArgumentException("Job is required");

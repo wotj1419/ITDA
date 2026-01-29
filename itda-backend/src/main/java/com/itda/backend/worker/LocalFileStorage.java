@@ -6,6 +6,7 @@ import org.springframework.stereotype.Component;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 
 @Component
 public class LocalFileStorage {
@@ -33,6 +34,21 @@ public class LocalFileStorage {
         }
     }
 
+    public StoredAsset save(Path sourceFile, String relativePath) {
+        try {
+            requireRelativePath(relativePath);
+            requireSourceFile(sourceFile);
+
+            String storageKey = normalizeRelativePath(relativePath);
+            Path targetPath = resolveTargetPath(storageKey);
+            copyFile(sourceFile, targetPath);
+
+            return new StoredAsset(storageKey, Files.size(targetPath));
+        } catch (IOException e) {
+            throw new IllegalStateException("Failed to store file", e);
+        }
+    }
+
     private void requireRelativePath(String relativePath) {
         if (relativePath == null || relativePath.trim().isEmpty()) {
             throw new IllegalArgumentException("relativePath is required");
@@ -42,6 +58,15 @@ public class LocalFileStorage {
     private void requireBytes(byte[] bytes) {
         if (bytes == null) {
             throw new IllegalArgumentException("bytes is required");
+        }
+    }
+
+    private void requireSourceFile(Path sourceFile) {
+        if (sourceFile == null) {
+            throw new IllegalArgumentException("sourceFile is required");
+        }
+        if (!Files.exists(sourceFile)) {
+            throw new IllegalArgumentException("sourceFile does not exist");
         }
     }
 
@@ -70,5 +95,13 @@ public class LocalFileStorage {
             Files.createDirectories(parent);
         }
         Files.write(targetPath, bytes);
+    }
+
+    private void copyFile(Path sourceFile, Path targetPath) throws IOException {
+        Path parent = targetPath.getParent();
+        if (parent != null) {
+            Files.createDirectories(parent);
+        }
+        Files.copy(sourceFile, targetPath, StandardCopyOption.REPLACE_EXISTING);
     }
 }

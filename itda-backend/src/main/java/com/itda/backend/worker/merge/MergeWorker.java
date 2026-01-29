@@ -1,7 +1,6 @@
 package com.itda.backend.worker.merge;
 
 import com.itda.backend.asset.domain.Asset;
-import com.itda.backend.asset.domain.AssetType;
 import com.itda.backend.asset.repository.AssetMapper;
 import com.itda.backend.global.config.FileStorageProperties;
 import com.itda.backend.job.domain.Job;
@@ -9,9 +8,8 @@ import com.itda.backend.job.domain.JobType;
 import com.itda.backend.timeline.repository.TimelineMapper;
 import com.itda.backend.timeline.repository.dto.ProjectTimelineItem;
 import com.itda.backend.timeline.repository.dto.SceneTimelineItem;
-import com.itda.backend.worker.AssetRegistrar;
 import com.itda.backend.worker.ExecutionResult;
-import com.itda.backend.worker.StoredAsset;
+import com.itda.backend.worker.video.VideoStorage;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -40,13 +38,13 @@ public class MergeWorker {
     private static final String PROJECTS_DIR = "projects";
     private static final String SCENES_DIR = "scenes";
     private static final String MERGES_DIR = "merges";
+    private static final String TEMP_MERGE_DIR = "tmp/merges";
     private static final String MERGE_EXTENSION = ".mp4";
-    private static final String MERGE_CONTENT_TYPE = "video/mp4";
     private static final String FILES_PREFIX = "/files/";
 
     private final TimelineMapper timelineMapper;
     private final AssetMapper assetMapper;
-    private final AssetRegistrar assetRegistrar;
+    private final VideoStorage videoStorage;
     private final FileStorageProperties fileStorageProperties;
 
     public ExecutionResult execute(Job job) {
@@ -76,11 +74,15 @@ public class MergeWorker {
         }
 
         String mergeSignature = requireMergeSignature(job);
-        Path outputPath = buildProjectMergeOutputPath(projectId, mergeSignature);
-        mergeTimelineItems(resolveProjectInputPaths(items), outputPath);
-        StoredAsset storedAsset = buildStoredAsset(outputPath);
-        Long assetId = assetRegistrar.registerLocalAsset(job, storedAsset, AssetType.VIDEO, MERGE_CONTENT_TYPE);
-        return new ExecutionResult(assetId, storedAsset.storageKey());
+        String storageKey = buildProjectMergeStorageKey(projectId, mergeSignature);
+        Path outputPath = createTempOutputPath(projectId);
+        try {
+            mergeTimelineItems(resolveProjectInputPaths(items), outputPath);
+            Asset asset = videoStorage.storeMergedVideo(outputPath, storageKey);
+            return new ExecutionResult(asset.getId(), asset.getStorageKey());
+        } finally {
+            deleteQuietly(outputPath);
+        }
     }
 
     private ExecutionResult mergeScene(Job job) {
@@ -95,11 +97,15 @@ public class MergeWorker {
         }
 
         String mergeSignature = requireMergeSignature(job);
-        Path outputPath = buildSceneMergeOutputPath(job.getProjectId(), sceneId, mergeSignature);
-        mergeTimelineItems(resolveSceneInputPaths(items), outputPath);
-        StoredAsset storedAsset = buildStoredAsset(outputPath);
-        Long assetId = assetRegistrar.registerLocalAsset(job, storedAsset, AssetType.VIDEO, MERGE_CONTENT_TYPE);
-        return new ExecutionResult(assetId, storedAsset.storageKey());
+        String storageKey = buildSceneMergeStorageKey(job.getProjectId(), sceneId, mergeSignature);
+        Path outputPath = createTempOutputPath(job.getProjectId());
+        try {
+            mergeTimelineItems(resolveSceneInputPaths(items), outputPath);
+            Asset asset = videoStorage.storeMergedVideo(outputPath, storageKey);
+            return new ExecutionResult(asset.getId(), asset.getStorageKey());
+        } finally {
+            deleteQuietly(outputPath);
+        }
     }
 
     private void mergeTimelineItems(List<Path> inputPaths, Path outputPath) {
@@ -213,55 +219,41 @@ public class MergeWorker {
         return mergeSignature.trim();
     }
 
-    private Path buildProjectMergeOutputPath(Long projectId, String mergeSignature) {
-        return Path.of(
-                fileStorageProperties.getUploadDir(),
+    private String buildProjectMergeStorageKey(Long projectId, String mergeSignature) {
+        return String.join("/",
                 PROJECTS_DIR,
                 String.valueOf(projectId),
                 MERGES_DIR,
                 mergeSignature + MERGE_EXTENSION
-        ).toAbsolutePath().normalize();
+        );
     }
 
-    private Path buildSceneMergeOutputPath(Long projectId, Long sceneId, String mergeSignature) {
+    private String buildSceneMergeStorageKey(Long projectId, Long sceneId, String mergeSignature) {
         if (projectId == null) {
             throw new IllegalStateException("Scene merge job missing projectId");
         }
-        return Path.of(
-                fileStorageProperties.getUploadDir(),
+        return String.join("/",
                 PROJECTS_DIR,
                 String.valueOf(projectId),
                 SCENES_DIR,
                 String.valueOf(sceneId),
                 MERGES_DIR,
                 mergeSignature + MERGE_EXTENSION
-        ).toAbsolutePath().normalize();
+        );
     }
 
-    private String resolveRelativeContentKey(Path absolutePath) {
-        if (absolutePath == null) {
-            return null;
-        }
-        Path root = Path.of(fileStorageProperties.getUploadDir())
-                .toAbsolutePath()
-                .normalize();
-        Path normalized = absolutePath.toAbsolutePath().normalize();
-        if (!normalized.startsWith(root)) {
-            return null;
-        }
-        return root.relativize(normalized).toString().replace("\\", "/");
-    }
-
-    private StoredAsset buildStoredAsset(Path outputPath) {
-        String storageKey = resolveRelativeContentKey(outputPath);
-        if (storageKey == null || storageKey.isBlank()) {
-            throw new IllegalStateException("Failed to resolve merge output storageKey");
-        }
+    private Path createTempOutputPath(Long projectId) {
         try {
-            long sizeBytes = Files.size(outputPath);
-            return new StoredAsset(storageKey, sizeBytes);
+            String projectDir = projectId == null ? "unknown" : String.valueOf(projectId);
+            Path tempDir = Path.of(
+                    fileStorageProperties.getUploadDir(),
+                    TEMP_MERGE_DIR,
+                    projectDir
+            ).toAbsolutePath().normalize();
+            Files.createDirectories(tempDir);
+            return Files.createTempFile(tempDir, "merge-", MERGE_EXTENSION);
         } catch (IOException e) {
-            throw new IllegalStateException("Failed to resolve merge output size", e);
+            throw new IllegalStateException("Failed to create merge output temp file", e);
         }
     }
 

@@ -1,59 +1,63 @@
 package com.itda.backend.worker.video;
 
+import com.itda.backend.asset.config.S3StorageProperties;
 import com.itda.backend.asset.domain.Asset;
 import com.itda.backend.asset.domain.AssetType;
 import com.itda.backend.worker.AssetRegistrar;
-import com.itda.backend.worker.LocalFileStorage;
-import com.itda.backend.worker.LocalJobAssetStorage;
-import com.itda.backend.worker.StoredAsset;
-import org.springframework.beans.factory.annotation.Autowired;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.annotation.Primary;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
+import software.amazon.awssdk.core.sync.RequestBody;
+import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
+@Slf4j
 @Component
-public class LocalVideoStorage extends LocalJobAssetStorage implements VideoStorage {
+@RequiredArgsConstructor
+@Primary
+@ConditionalOnProperty(name = "storage.provider", havingValue = "S3")
+public class S3VideoStorage implements VideoStorage {
 
     private static final String DEFAULT_CONTENT_TYPE = "video/mp4";
 
-    private final LocalFileStorage localFileStorage;
+    private final S3Client s3Client;
+    private final S3StorageProperties s3Properties;
     private final AssetRegistrar assetRegistrar;
-
-    @Autowired
-    public LocalVideoStorage(LocalFileStorage localFileStorage, AssetRegistrar assetRegistrar) {
-        super(localFileStorage, "video", "ai/videos", ".mp4");
-        this.localFileStorage = localFileStorage;
-        this.assetRegistrar = assetRegistrar;
-    }
-
-    public LocalVideoStorage(LocalFileStorage localFileStorage) {
-        super(localFileStorage, "video", "ai/videos", ".mp4");
-        this.localFileStorage = localFileStorage;
-        this.assetRegistrar = null;
-    }
 
     @Override
     public Asset storeMergedVideo(Path localFile, String storageKey) {
-        if (assetRegistrar == null) {
-            throw new IllegalStateException("AssetRegistrar is not configured for LocalVideoStorage");
-        }
         requireLocalFile(localFile);
         String normalizedKey = normalizeStorageKey(storageKey);
-
-        StoredAsset storedAsset = localFileStorage.save(localFile, normalizedKey);
+        String bucket = requireBucket();
         String contentType = resolveContentType(localFile);
-        Long projectId = resolveProjectId(normalizedKey);
+        long sizeBytes = resolveSize(localFile);
 
-        return assetRegistrar.registerLocalAsset(
+        PutObjectRequest request = PutObjectRequest.builder()
+                .bucket(bucket)
+                .key(normalizedKey)
+                .contentType(contentType)
+                .build();
+
+        s3Client.putObject(request, RequestBody.fromFile(localFile));
+
+        Long projectId = resolveProjectId(normalizedKey);
+        Asset asset = assetRegistrar.registerS3Asset(
                 projectId,
                 null,
-                storedAsset.storageKey(),
+                normalizedKey,
                 AssetType.VIDEO,
                 contentType,
-                storedAsset.sizeBytes()
+                sizeBytes
         );
+
+        log.info("[S3VideoStorage] Stored video: bucket={}, key={}, assetId={}", bucket, normalizedKey, asset.getId());
+        return asset;
     }
 
     private void requireLocalFile(Path localFile) {
@@ -76,6 +80,14 @@ public class LocalVideoStorage extends LocalJobAssetStorage implements VideoStor
         return normalized;
     }
 
+    private String requireBucket() {
+        String bucket = s3Properties.getBucket();
+        if (bucket == null || bucket.trim().isEmpty()) {
+            throw new IllegalStateException("storage.s3.bucket must be configured");
+        }
+        return bucket.trim();
+    }
+
     private String resolveContentType(Path localFile) {
         try {
             String contentType = Files.probeContentType(localFile);
@@ -93,8 +105,17 @@ public class LocalVideoStorage extends LocalJobAssetStorage implements VideoStor
         }
     }
 
+    private long resolveSize(Path localFile) {
+        try {
+            return Files.size(localFile);
+        } catch (IOException e) {
+            throw new IllegalStateException("Failed to resolve file size", e);
+        }
+    }
+
     private Long resolveProjectId(String storageKey) {
-        String[] parts = storageKey.split("/");
+        String normalized = normalizeStorageKey(storageKey);
+        String[] parts = normalized.split("/");
         if (parts.length >= 2 && "projects".equals(parts[0])) {
             return parseLongSafely(parts[1]);
         }
