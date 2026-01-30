@@ -99,7 +99,6 @@ export function useNodeGeneration(options: UseNodeGenerationOptions) {
       });
 
       if (result.status === 'SUCCEEDED') {
-        const node = nodeStore.nodes.find((item) => item.id === options.nodeId);
         const blobUrl = await fetchProtectedBlobUrl(result.resultUrl).catch(() => null);
         const resolvedResultUrl =
           blobUrl ?? (isApiResourceUrl(result.resultUrl) ? null : resolveApiUrl(result.resultUrl));
