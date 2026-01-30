@@ -43,11 +43,6 @@ const nodeClasses = computed(() => [
   { 'node-glass--selected': props.selected },
 ]);
 
-const truncatedDescription = computed(() => {
-  const desc = props.data.description || '';
-  return desc.length > 80 ? `${desc.substring(0, 80)}...` : desc;
-});
-
 function handleAddChild(event: Event) {
   event.stopPropagation();
   emit('add-child');
@@ -81,7 +76,7 @@ function handleAddChild(event: Event) {
     <!-- Body -->
     <div class="node-glass__body">
       <p class="node-glass__description">
-        {{ truncatedDescription || '설명 없음' }}
+        {{ data.description || '설명 없음' }}
       </p>
     </div>
 

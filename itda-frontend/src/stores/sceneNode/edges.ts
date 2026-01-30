@@ -30,6 +30,10 @@ export function buildEdge(
 ): Edge {
   const edgeId = `edge-${sourceId}-${targetId}`;
   const meta = getEdgeMeta(nodes, sourceId, targetId);
+  const targetNode = nodes.find((n) => n.id === targetId);
+  const resolvedTargetHandle =
+    options.targetHandle ??
+    (targetNode?.data?.type === NodeType.VIDEO ? 'start-shot' : undefined);
   return {
     id: edgeId,
     source: sourceId,
@@ -37,7 +41,7 @@ export function buildEdge(
     // Custom edge renderer: smoothstep geometry + flowing highlight.
     type: 'flowing',
     sourceHandle: options.sourceHandle,
-    targetHandle: options.targetHandle,
+    targetHandle: resolvedTargetHandle,
     data: { isTransition: meta.isTransition, isConfirmed: meta.isConfirmed },
     class: getEdgeClass(meta),
   };

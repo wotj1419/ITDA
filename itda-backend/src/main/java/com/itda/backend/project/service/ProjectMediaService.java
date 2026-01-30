@@ -2,43 +2,52 @@ package com.itda.backend.project.service;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.itda.backend.global.config.FileStorageProperties;
 import com.itda.backend.global.exception.BusinessException;
 import com.itda.backend.global.response.ErrorCode;
+import com.itda.backend.asset.service.AssetUrlResolver;
 import com.itda.backend.job.domain.Job;
 import com.itda.backend.job.domain.JobType;
+import com.itda.backend.job.domain.MergeSource;
+import com.itda.backend.job.service.JobCreateRequest;
 import com.itda.backend.job.service.JobService;
 import com.itda.backend.media.MediaUrlResolver;
+import com.itda.backend.timeline.domain.ProjectMerge;
+import com.itda.backend.timeline.repository.ProjectMergeMapper;
 import com.itda.backend.node.repository.NodeMapper;
 import com.itda.backend.node.repository.dto.TimelineNodeRow;
 import com.itda.backend.project.controller.dto.response.ProjectExportResponse;
 import com.itda.backend.project.controller.dto.response.ProjectTimelineItem;
 import com.itda.backend.project.controller.dto.response.ProjectTimelineResponse;
+import com.itda.backend.timeline.controller.dto.response.MergeResponse;
+import com.itda.backend.timeline.repository.TimelineMapper;
+import com.itda.backend.timeline.service.MergeSignatureService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
 public class ProjectMediaService {
 
     private static final String MERGE_REQUEST_PROJECT_ID_KEY = "projectId";
-    private static final String EXPORTS_DIR = "exports";
-    private static final String EXPORT_FILE_NAME = "final.mp4";
+    private static final String MERGE_REQUEST_INCLUDE_MUSIC_KEY = "includeMusic";
     private static final int TIMELINE_START_ORDER = 1;
 
     private final ProjectAccessService projectAccessService;
     private final NodeMapper nodeMapper;
+    private final TimelineMapper timelineMapper;
+    private final MergeSignatureService mergeSignatureService;
     private final JobService jobService;
     private final ObjectMapper objectMapper;
-    private final FileStorageProperties fileStorageProperties;
     private final MediaUrlResolver mediaUrlResolver;
+    private final ProjectMergeMapper projectMergeMapper;
+    private final AssetUrlResolver assetUrlResolver;
 
     @Transactional(readOnly = true)
     public ProjectTimelineResponse getTimeline(Long userId, Long projectId) {
@@ -48,19 +57,56 @@ public class ProjectMediaService {
     }
 
     @Transactional
-    public Job requestMerge(Long userId, Long projectId) {
+    public MergeResponse requestMerge(Long userId, Long projectId) {
         projectAccessService.ensureProjectAccessible(projectId, userId);
-        String requestJson = buildMergeRequestJson(projectId);
-        return enqueueProjectMergeJob(projectId, requestJson);
+        List<com.itda.backend.timeline.repository.dto.ProjectTimelineItem> timelineItems = timelineMapper
+                .findProjectTimelineItems(projectId);
+        if (timelineItems.isEmpty()) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST);
+        }
+        boolean includeMusic = false;
+        String mergeSignature = mergeSignatureService.computeProjectSignature(projectId, includeMusic, timelineItems);
+        // 캐시 체크: 동일 signature의 active 결과 존재 확인
+        if (projectMergeMapper.findActiveByProjectIdAndSignature(projectId, mergeSignature).isPresent()) {
+            return MergeResponse.cacheHit();
+        }
+        // 캐시 미스: 새 Job 생성
+        String requestJson = buildMergeRequestJson(projectId, includeMusic);
+        Job job = enqueueProjectMergeJob(projectId, requestJson, mergeSignature);
+        return MergeResponse.from(job);
+    }
+
+    @Transactional
+    public void reorderTimeline(Long userId, Long projectId, List<Long> orderedSceneVideoIds) {
+        projectAccessService.ensureProjectAccessible(projectId, userId);
+        validateOrderedIds(orderedSceneVideoIds);
+
+        int total = timelineMapper.countProjectTimelineItems(projectId);
+        if (total == 0) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST);
+        }
+
+        int matched = timelineMapper.countProjectTimelineItemsBySceneVideoIds(projectId, orderedSceneVideoIds);
+        if (matched != total || matched != orderedSceneVideoIds.size()) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST);
+        }
+
+        timelineMapper.reorderProjectTimelineItems(projectId, orderedSceneVideoIds);
     }
 
     @Transactional(readOnly = true)
     public ProjectExportResponse getExport(Long userId, Long projectId) {
         projectAccessService.ensureProjectAccessible(projectId, userId);
-        Path exportPath = resolveExportPath(projectId);
-        ensureExportExists(exportPath);
-        String exportUrl = mediaUrlResolver.projectExportUrl(projectId);
-        return new ProjectExportResponse(exportUrl);
+        ProjectMerge activeMerge = projectMergeMapper.findActiveByProjectId(projectId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.EXPORT_NOT_FOUND,
+                        "No active project merge result"));
+        String fallbackUrl = mediaUrlResolver.projectExportUrl(projectId);
+        String downloadUrl = assetUrlResolver.resolveUrl(activeMerge.getAssetId(), fallbackUrl);
+        return new ProjectExportResponse(
+                activeMerge.getAssetId(),
+                downloadUrl,
+                activeMerge.getMergeSignature(),
+                activeMerge.getStatus());
     }
 
     private List<ProjectTimelineItem> buildTimelineItems(List<TimelineNodeRow> rows) {
@@ -79,45 +125,44 @@ public class ProjectMediaService {
                 row.getVideoNodeId(),
                 row.getSceneId(),
                 order,
-                contentUrl
-        );
+                contentUrl);
     }
 
-    private Job enqueueProjectMergeJob(Long projectId, String requestJson) {
+    private Job enqueueProjectMergeJob(Long projectId, String requestJson, String mergeSignature) {
         return jobService.createAndEnqueue(
-                JobType.PROJECT_MERGE,
-                projectId,
-                null,
-                null,
-                requestJson,
-                null
-        );
+                new JobCreateRequest(
+                        JobType.PROJECT_MERGE,
+                        projectId,
+                        null,
+                        null,
+                        requestJson,
+                        null,
+                        mergeSignature,
+                        MergeSource.PROJECT),
+                true);
     }
 
-    private String buildMergeRequestJson(Long projectId) {
+    private String buildMergeRequestJson(Long projectId, boolean includeMusic) {
         try {
-            return objectMapper.writeValueAsString(mergeRequestPayload(projectId));
+            return objectMapper.writeValueAsString(mergeRequestPayload(projectId, includeMusic));
         } catch (JsonProcessingException e) {
             throw new BusinessException(ErrorCode.INTERNAL_ERROR, e);
         }
     }
 
-    private Map<String, Object> mergeRequestPayload(Long projectId) {
-        return Map.of(MERGE_REQUEST_PROJECT_ID_KEY, projectId);
+    private Map<String, Object> mergeRequestPayload(Long projectId, boolean includeMusic) {
+        return Map.of(
+                MERGE_REQUEST_PROJECT_ID_KEY, projectId,
+                MERGE_REQUEST_INCLUDE_MUSIC_KEY, includeMusic);
     }
 
-    private void ensureExportExists(Path exportPath) {
-        if (!Files.exists(exportPath)) {
-            throw new BusinessException(ErrorCode.EXPORT_NOT_FOUND);
+    private void validateOrderedIds(List<Long> orderedIds) {
+        if (orderedIds == null || orderedIds.isEmpty()) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST);
         }
-    }
-
-    private Path resolveExportPath(Long projectId) {
-        return Path.of(
-                fileStorageProperties.getUploadDir(),
-                EXPORTS_DIR,
-                String.valueOf(projectId),
-                EXPORT_FILE_NAME
-        );
+        Set<Long> uniqueIds = new HashSet<>(orderedIds);
+        if (uniqueIds.size() != orderedIds.size()) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST);
+        }
     }
 }

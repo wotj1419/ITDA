@@ -3,6 +3,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useCollabStore } from '../../stores/collab'
 import CollabPanel from '../collab/CollabPanel.vue'
+import Button from './Button.vue'
 import { Mic, MicOff, MessageCircle, PhoneOff } from 'lucide-vue-next'
 
 const collabStore = useCollabStore()
@@ -278,7 +279,7 @@ onBeforeUnmount(() => {
          <!-- Status -->
          <div class="status-indicator">
             <div class="status-dot bg-yellow-500"></div>
-            <span class="status-text">{{ isAutoStarting ? '연결 중' : 'Ready' }}</span>
+            <span class="status-text">{{ isAutoStarting ? '?? ?' : 'Ready' }}</span>
          </div>
          <div class="divider"></div>
 
@@ -292,7 +293,7 @@ onBeforeUnmount(() => {
            </Button>
            <div class="divider"></div>
          </template>
-         <div v-else class="connecting-hint">통화 준비 중...</div>
+         <div v-else class="connecting-hint">?? ?? ?...</div>
          <div v-if="isAutoStarting" class="divider"></div>
          <button
             class="control-btn"

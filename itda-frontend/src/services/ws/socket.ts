@@ -8,6 +8,7 @@ const WS_URL = import.meta.env.VITE_WS_URL || 'http://localhost:8080/ws';
 
 class WebSocketManager {
     private client: Client;
+    private lastSendWarnAt = 0;
     private chatSubscriptions = new Map<string, ReturnType<Client['subscribe']>>();
     private chatHandlers = new Map<string, (message: any) => void>();
     private presenceSubscriptions = new Map<string, ReturnType<Client['subscribe']>>();
@@ -15,6 +16,7 @@ class WebSocketManager {
     private rtcSubscription: ReturnType<Client['subscribe']> | null = null;
     private rtcHandler: ((message: any) => void) | null = null;
     private currentProjectId: string | null = null;
+    private currentRoomId: string | null = null;
 
     constructor() {
         this.client = new Client({
@@ -61,8 +63,6 @@ class WebSocketManager {
     public disconnect() {
         this.client.deactivate();
     }
-
-    private currentRoomId: string | null = null;
 
     public subscribeToRoom(roomId: string) {
         if (this.currentRoomId === roomId) return;
@@ -194,7 +194,11 @@ class WebSocketManager {
 
     public sendSignal(signal: any) {
         if (!this.client.connected || !this.currentRoomId) {
-            console.warn('Cannot send signal: disconnected or no room joined');
+            const now = Date.now();
+            if (now - this.lastSendWarnAt > 5000) {
+                console.warn('Cannot send signal: disconnected or no room joined');
+                this.lastSendWarnAt = now;
+            }
             return;
         }
         const authStore = useAuthStore();
@@ -278,6 +282,10 @@ class WebSocketManager {
 
     public getClient() {
         return this.client;
+    }
+
+    public canSendSignal() {
+        return this.client.connected && !!this.currentRoomId;
     }
 }
 

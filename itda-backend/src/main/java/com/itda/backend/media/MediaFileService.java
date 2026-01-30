@@ -3,18 +3,22 @@ package com.itda.backend.media;
 import com.itda.backend.global.config.FileStorageProperties;
 import com.itda.backend.global.exception.BusinessException;
 import com.itda.backend.global.response.ErrorCode;
+import com.itda.backend.asset.domain.Asset;
+import com.itda.backend.asset.domain.StorageProvider;
+import com.itda.backend.asset.repository.AssetMapper;
 import com.itda.backend.node.domain.Node;
 import com.itda.backend.node.domain.NodeStatus;
 import com.itda.backend.node.domain.NodeType;
 import com.itda.backend.node.repository.NodeMapper;
 import com.itda.backend.object.domain.ObjectSheet;
 import com.itda.backend.object.repository.ObjectMapper;
-import com.itda.backend.asset.domain.Asset;
-import com.itda.backend.asset.domain.StorageProvider;
-import com.itda.backend.asset.repository.AssetMapper;
 import com.itda.backend.project.service.ProjectAccessService;
 import com.itda.backend.scene.domain.Scene;
 import com.itda.backend.scene.repository.SceneMapper;
+import com.itda.backend.timeline.domain.ProjectMerge;
+import com.itda.backend.timeline.domain.SceneVideo;
+import com.itda.backend.timeline.repository.ProjectMergeMapper;
+import com.itda.backend.timeline.repository.SceneVideoMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.core.io.Resource;
@@ -46,6 +50,8 @@ public class MediaFileService {
 
     private final NodeMapper nodeMapper;
     private final SceneMapper sceneMapper;
+    private final SceneVideoMapper sceneVideoMapper;
+    private final ProjectMergeMapper projectMergeMapper;
     private final ObjectMapper objectMapper;
     private final AssetMapper assetMapper;
     private final ProjectAccessService projectAccessService;
@@ -77,7 +83,12 @@ public class MediaFileService {
 
     public MediaFile loadProjectExport(Long userId, Long projectId) {
         projectAccessService.ensureProjectAccessible(projectId, userId);
-        Path targetPath = resolveProjectExportPath(projectId);
+        ProjectMerge activeMerge = projectMergeMapper.findActiveByProjectId(projectId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.EXPORT_NOT_FOUND,
+                        "No active project merge result"));
+        Path targetPath = resolveExportPathByAsset(activeMerge.getAssetId(),
+                ErrorCode.EXPORT_NOT_FOUND,
+                "No export asset for project");
         return toMediaFile(targetPath);
     }
 
@@ -85,7 +96,12 @@ public class MediaFileService {
         Scene scene = sceneMapper.findById(sceneId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.SCENE_NOT_FOUND));
         projectAccessService.ensureProjectAccessible(scene.getProjectId(), userId);
-        Path targetPath = resolveSceneExportPath(sceneId);
+        SceneVideo activeSceneVideo = sceneVideoMapper.findActiveBySceneId(sceneId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.EXPORT_NOT_FOUND,
+                        "No active scene merge result"));
+        Path targetPath = resolveExportPathByAsset(activeSceneVideo.getAssetId(),
+                ErrorCode.EXPORT_NOT_FOUND,
+                "No export asset for scene");
         return toMediaFile(targetPath);
     }
 
@@ -133,14 +149,20 @@ public class MediaFileService {
         return contentKey;
     }
 
-    private Path resolveProjectExportPath(Long projectId) {
-        String relativePath = "exports/" + projectId + "/final.mp4";
-        return resolveUnderUploadRoot(relativePath, ErrorCode.EXPORT_NOT_FOUND);
-    }
-
-    private Path resolveSceneExportPath(Long sceneId) {
-        String relativePath = "exports/scenes/" + sceneId + "/final.mp4";
-        return resolveUnderUploadRoot(relativePath, ErrorCode.EXPORT_NOT_FOUND);
+    private Path resolveExportPathByAsset(Long assetId, ErrorCode notFoundCode, String errorMessage) {
+        if (assetId == null) {
+            throw new BusinessException(notFoundCode, errorMessage);
+        }
+        Asset asset = assetMapper.findById(assetId)
+                .orElseThrow(() -> new BusinessException(notFoundCode, errorMessage));
+        if (asset.getStorageProvider() == StorageProvider.S3) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST, "Export file is not available for S3 storage");
+        }
+        String storageKey = asset.getStorageKey();
+        if (storageKey == null || storageKey.isBlank()) {
+            throw new BusinessException(notFoundCode, errorMessage);
+        }
+        return resolveUnderUploadRoot(storageKey, notFoundCode);
     }
 
     private Path resolveUnderUploadRoot(String relativePath, ErrorCode notFoundCode) {

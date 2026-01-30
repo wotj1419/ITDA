@@ -25,7 +25,7 @@ const collabStore = useCollabStore()
 const projectId = computed(() => Number(route.params.id))
 const project = computed(() => projectStore.currentProject)
 const sceneId = computed(() => {
-  const raw = route.query.sceneId
+  const raw = route.params.sceneId
   const value = Array.isArray(raw) ? raw[0] : raw
   const parsed = Number(value)
   return Number.isFinite(parsed) ? parsed : null
@@ -33,19 +33,24 @@ const sceneId = computed(() => {
 
 onMounted(async () => {
   if (projectId.value) {
+    // ?? ? ?? (??? ??? ??, ?? ?? ???)
+    collabStore.joinRoom(projectId.value)
+    collabStore.updateLocation('TIMELINE', sceneId.value ?? undefined)
+
     await Promise.all([
       projectStore.loadProject(projectId.value),
       timelineStore.loadClips(projectId.value, sceneId.value ?? undefined),
     ])
-    
-    // 협업 방 입장
-    collabStore.joinRoom(projectId.value)
-    collabStore.updateLocation('TIMELINE')
   }
 })
 
 watch([projectId, sceneId], async ([nextProjectId, nextSceneId]) => {
   if (!nextProjectId) return
+
+  // ???? ?? ? ?? ? ???
+  collabStore.joinRoom(nextProjectId)
+  collabStore.updateLocation('TIMELINE', nextSceneId ?? undefined)
+
   await timelineStore.loadClips(nextProjectId, nextSceneId ?? undefined)
 })
 

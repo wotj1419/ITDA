@@ -56,7 +56,7 @@ public class AiPromptService {
         lines.add("스타일: " + safe(request == null ? null : request.style()));
         lines.add("시간대: " + safe(request == null ? null : request.timeOfDay()));
         lines.add("톤(조명/색감): " + safe(request == null ? null : request.mood()));
-        if (request.objects() != null && !request.objects().isEmpty()) {
+        if (request != null && request.objects() != null && !request.objects().isEmpty()) {
             lines.add("오브젝트: " + String.join(", ", request.objects()));
         } else {
             lines.add("오브젝트: 없음");

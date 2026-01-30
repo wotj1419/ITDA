@@ -19,6 +19,7 @@ import {
   Layers,
   Settings,
   Phone,
+  Share2,
   Play,
   ArrowLeft,
   Pencil,
@@ -45,8 +46,8 @@ const emit = defineEmits<{
 
 const router = useRouter()
 const route = useRoute()
-const uiStore = useUIStore()
 const collabStore = useCollabStore()
+const uiStore = useUIStore()
 
 // Keyboard shortcut (Ctrl+B)
 useSidebarShortcut()
@@ -219,7 +220,6 @@ const handleStartCall = () => {
             </span>
             <span v-if="extraCount > 0" class="member-more">+{{ extraCount }}</span>
           </div>
-
           <ShareButton @click="uiStore.openModal('share-project')" />
 
           <Button variant="primary" class="btn-preview">
