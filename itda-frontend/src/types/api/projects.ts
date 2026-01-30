@@ -22,7 +22,7 @@ export interface ProjectListItem extends Project {
 export interface ProjectDetail extends Project {
   myRole: ProjectRole;
   ownerId: number;
-  members: ProjectMember[];
+  members?: ProjectMember[];
 }
 
 export interface ProjectMember {
@@ -30,7 +30,7 @@ export interface ProjectMember {
   email: string;
   name: string;
   role: ProjectRole;
-  profileImage?: string;
+  profileImageUrl?: string | null;
 }
 
 export interface CreateProjectRequest {

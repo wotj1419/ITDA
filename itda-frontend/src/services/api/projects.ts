@@ -1,6 +1,6 @@
 import apiClient from './client'
 import type { ApiResponse } from '../../types/api/common'
-import type { Project, ProjectDetail, CreateProjectRequest } from '../../types/api/projects'
+import type { Project, ProjectDetail, CreateProjectRequest, ProjectMember } from '../../types/api/projects'
 import type { ObjectSheet, CreateObjectRequest } from '../../types/api/objects'
 import { createObject, fetchObjectsByProjectId, fetchObjectById as fetchObjectByIdApi } from './objects'
 
@@ -54,17 +54,6 @@ export async function getProjectProgress(projectId: number): Promise<{ completed
     return response.data.data || { completed: 0, total: 0 }
 }
 
-// ============================================================================
-// Members
-// ============================================================================
-
-export interface ProjectMember {
-    memberId: number
-    userId: number
-    name: string
-    role: 'OWNER' | 'ADMIN' | 'EDITOR' | 'VIEWER'
-}
-
 export async function fetchProjectMembers(projectId: number): Promise<ProjectMember[]> {
     const response = await apiClient.get<ApiResponse<ProjectMember[]>>(`/projects/${projectId}/members`)
     return response.data.data || []
@@ -74,8 +63,8 @@ export async function inviteMember(projectId: number, email: string, role: 'ADMI
     await apiClient.post(`/projects/${projectId}/members`, { email, role })
 }
 
-export async function updateMemberRole(projectId: number, memberId: number, role: string): Promise<void> {
-    await apiClient.patch(`/projects/${projectId}/members/${memberId}`, { role })
+export async function updateMemberRole(projectId: number, userId: number, role: string): Promise<void> {
+    await apiClient.patch(`/projects/${projectId}/members/${userId}`, { role })
 }
 
 export async function removeMember(projectId: number, userId: number): Promise<void> {
