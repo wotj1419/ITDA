@@ -139,7 +139,7 @@ public class NodeService {
     @Transactional
     public void updateNode(Long userId, Long nodeId, UpdateNodeRequest request) {
         Node node = getNodeOrThrow(nodeId);
-        getSceneAndEnsureMember(node.getSceneId(), userId);
+        Scene scene = getSceneAndEnsureMember(node.getSceneId(), userId);
         NodeType nodeType = node.getNodeType();
 
         // SCENE_HEADER 수정 금지
@@ -150,6 +150,7 @@ public class NodeService {
 
         nodeMapper.updateNode(updatedNode);
         log.debug("Updated node: id={}", nodeId);
+        logFinalPromptEnIfPresent(scene, node, request);
     }
 
     /**
@@ -761,6 +762,42 @@ public class NodeService {
             throw new BusinessException(ErrorCode.INVALID_REQUEST, "Invalid referenceObjectIds");
         }
         return deduped;
+    }
+
+    private void logFinalPromptEnIfPresent(Scene scene, Node node, UpdateNodeRequest request) {
+        if (request == null) {
+            return;
+        }
+        String promptKo = request.prompt();
+        if (promptKo == null || promptKo.isBlank()) {
+            return;
+        }
+
+        try {
+            Map<String, Object> existingSettings = deserializeSettings(node.getDataJson());
+            Map<String, Object> activeMasterSettings = resolveActiveMasterSettings(scene, node);
+            Map<String, Object> effectiveSettings = generationSettingsResolver.resolve(
+                    node.getNodeType(),
+                    existingSettings,
+                    request.settings(),
+                    activeMasterSettings
+            );
+            String promptEn = promptRenderer.render(node.getNodeType(), scene, promptKo, effectiveSettings);
+            log.info(
+                    "Prompt preview (final English): nodeId={}, nodeType={}, promptKo={}, promptEn={}",
+                    node.getId(),
+                    node.getNodeType(),
+                    promptKo,
+                    promptEn
+            );
+        } catch (Exception e) {
+            log.warn(
+                    "Prompt preview failed: nodeId={}, nodeType={}, reason={}",
+                    node.getId(),
+                    node.getNodeType(),
+                    e.getMessage()
+            );
+        }
     }
 
     private Map<String, Object> resolveActiveMasterSettings(Scene scene, Node node) {

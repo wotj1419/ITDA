@@ -15,12 +15,14 @@ import com.itda.backend.worker.NodeContent;
 import com.itda.backend.worker.NodeContentLoader;
 import com.itda.backend.worker.ParsedJobRequest;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
 
 @Component
 @RequiredArgsConstructor
+@Slf4j
 public class ImageGenerationWorker {
 
     private final GeminiImageClient geminiImageClient;
@@ -34,6 +36,13 @@ public class ImageGenerationWorker {
     public ExecutionResult execute(Job job) {
         requireJobIdentifiers(job);
         ParsedJobRequest request = jobRequestParser.parse(job.getRequestJson());
+        log.info(
+                "Image generation prompt resolved: jobId={}, nodeId={}, projectId={}, prompt={}"
+                , job.getId()
+                , job.getNodeId()
+                , job.getProjectId()
+                , request.prompt()
+        );
         GeminiImageResult result = generateImage(job, request);
         ImageStorageResult storedImage = imageStorage.save(
                 job.getProjectId(),

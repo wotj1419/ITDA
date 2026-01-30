@@ -17,10 +17,12 @@ import com.itda.backend.worker.NodeContentLoader;
 import com.itda.backend.worker.ParsedJobRequest;
 import com.itda.backend.worker.StoredAsset;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 @Component
 @RequiredArgsConstructor
+@Slf4j
 public class VideoGenerationWorker {
 
     private final VeoClient veoClient;
@@ -33,6 +35,13 @@ public class VideoGenerationWorker {
     public ExecutionResult execute(Job job) {
         requireJobIdentifiers(job);
         ParsedJobRequest request = jobRequestParser.parse(job.getRequestJson());
+        log.info(
+                "Video generation prompt resolved: jobId={}, nodeId={}, projectId={}, prompt={}"
+                , job.getId()
+                , job.getNodeId()
+                , job.getProjectId()
+                , request.prompt()
+        );
         Node node = loadNode(job);
         NodeContent firstFrame = resolveFirstFrame(node);
         NodeContent lastFrame = resolveLastFrame(node);

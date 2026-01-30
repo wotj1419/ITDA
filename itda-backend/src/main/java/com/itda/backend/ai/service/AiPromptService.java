@@ -5,8 +5,10 @@ import com.itda.backend.ai.controller.dto.request.AiPromptGenerateRequest;
 import com.itda.backend.ai.controller.dto.request.AiPromptImproveRequest;
 import com.itda.backend.ai.dto.request.TextGenerationRequest;
 import com.itda.backend.ai.dto.response.TextGenerationResponse;
+import com.itda.backend.ai.prompt.KoEnTranslator;
 import com.itda.backend.node.domain.NodeType;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -18,14 +20,18 @@ import java.util.Optional;
  */
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class AiPromptService {
 
     private final VertexAiGeminiClient vertexAiGeminiClient;
+    private final KoEnTranslator koEnTranslator;
 
     public String generatePrompt(AiPromptGenerateRequest request) {
         String prompt = buildGeneratePrompt(request);
         TextGenerationResponse response = vertexAiGeminiClient.generate(new TextGenerationRequest(prompt, null));
-        return sanitizePromptKo(response.text());
+        String promptKo = sanitizePromptKo(response.text());
+        logGeneratedPrompt(request, promptKo);
+        return promptKo;
     }
 
     public String improvePrompt(AiPromptImproveRequest request) {
@@ -93,6 +99,22 @@ public class AiPromptService {
         text = text.replaceAll("\\s{2,}", " ").trim();
 
         return text;
+    }
+
+    private void logGeneratedPrompt(AiPromptGenerateRequest request, String promptKo) {
+        String promptEn = "";
+        try {
+            promptEn = koEnTranslator.toEnglishOneSentence(promptKo);
+        } catch (Exception e) {
+            log.warn("Failed to translate prompt to English for logging: reason={}", e.getMessage());
+        }
+
+        log.info(
+                "Prompt generate: nodeType={}, promptKo={}, promptEn={}",
+                request == null ? null : request.nodeType(),
+                promptKo,
+                promptEn
+        );
     }
 
     private String safe(String value) {
