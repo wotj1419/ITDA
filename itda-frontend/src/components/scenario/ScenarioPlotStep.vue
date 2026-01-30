@@ -3,7 +3,6 @@ import { ref } from 'vue'
 import { BookOpen, RefreshCw, Check, Edit3, Scroll, Info } from 'lucide-vue-next'
 import { useScenarioStore } from '../../stores/scenario'
 import Button from '../common/Button.vue'
-import FlowerLoader from '../common/FlowerLoader.vue'
 
 const scenarioStore = useScenarioStore()
 const isEditing = ref(false)
@@ -102,12 +101,12 @@ const handleRegenerate = () => {
       </Button>
       <Button
         variant="primary"
+        :loading="scenarioStore.isGenerating"
         :disabled="scenarioStore.isGenerating || isEditing"
         @click="handleApprove"
       >
         <template v-if="scenarioStore.isGenerating">
-          <FlowerLoader />
-          생성중
+          생성 중
         </template>
         <template v-else>
           <Check class="icon-sm" />

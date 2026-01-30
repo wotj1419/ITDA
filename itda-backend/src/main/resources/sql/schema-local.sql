@@ -9,6 +9,7 @@ DROP TABLE IF EXISTS timeline_items;
 DROP TABLE IF EXISTS generation_jobs;
 DROP TABLE IF EXISTS video_clips;
 DROP TABLE IF EXISTS nodes;
+DROP TABLE IF EXISTS chat_messages;
 DROP TABLE IF EXISTS scene_objects;
 DROP TABLE IF EXISTS scene_videos;
 DROP TABLE IF EXISTS scenes;

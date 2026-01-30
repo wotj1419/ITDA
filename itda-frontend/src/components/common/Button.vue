@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { LoaderCircle } from 'lucide-vue-next'
 
 interface Props {
   variant?: 'primary' | 'secondary' | 'ghost' | 'outline' | 'danger'
@@ -35,9 +36,12 @@ const classes = computed(() => [
     :type="type"
     :class="classes"
     :disabled="disabled || loading"
+    :aria-busy="loading"
   >
-    <span v-if="loading" class="btn-spinner"></span>
-    <slot />
+    <LoaderCircle v-if="loading" class="btn-spinner" aria-hidden="true" />
+    <span class="btn-label">
+      <slot />
+    </span>
   </button>
 </template>
 
@@ -62,22 +66,13 @@ const classes = computed(() => [
 }
 
 /* Loading state - 컴포넌트 전용 */
-.btn-loading {
-  position: relative;
-  color: transparent;
-}
-
 .btn-spinner {
-  position: absolute;
   width: 1em;
   height: 1em;
-  border: 2px solid currentColor;
-  border-right-color: transparent;
-  border-radius: 50%;
-  animation: spin 0.6s linear infinite;
+  animation: btn-spin 0.9s linear infinite;
 }
 
-@keyframes spin {
+@keyframes btn-spin {
   to {
     transform: rotate(360deg);
   }

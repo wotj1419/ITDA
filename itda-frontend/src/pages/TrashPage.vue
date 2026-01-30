@@ -28,7 +28,7 @@ const selectedProject = ref<{ id: number; title: string } | null>(null)
 // Modal Content Computed
 const modalTitle = computed(() => {
   return modalType.value === 'restore' 
-    ? '다시 함께 해볼까요? ✨' 
+    ? '다시 함께 해볼까요? ' 
     : '정말 이별인가요? 😢'
 })
 

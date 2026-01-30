@@ -12,6 +12,9 @@ public record SceneSummaryResponse(
         @Schema(description = "Scene title", example = "Scene 1: Mars Base")
         String title,
 
+        @Schema(description = "Scene description", example = "The crew arrives at the Mars base.")
+        String description,
+
         @Schema(description = "Order index", example = "1")
         Integer order,
 
@@ -22,6 +25,7 @@ public record SceneSummaryResponse(
         return new SceneSummaryResponse(
                 summary.getSceneId(),
                 summary.getTitle(),
+                summary.getDescription(),
                 summary.getOrderIndex(),
                 null
         );

@@ -3,6 +3,7 @@ import { ref, reactive } from 'vue'
 import { useRouter } from 'vue-router'
 import { Sparkles, ArrowRight, ChevronDown } from 'lucide-vue-next'
 import ModalBase from '../common/ModalBase.vue'
+import Button from '../common/Button.vue'
 import { useProjectStore } from '../../stores/project'
 import { useUIStore } from '../../stores/ui'
 
@@ -213,13 +214,16 @@ const handleClose = () => {
             ></textarea>
           </div>
 
-          <button
-            type="button"
-            class="btn btn-secondary w-full"
+          <Button
+            variant="secondary"
+            class="w-full"
+            :loading="isGenerating"
             :disabled="isGenerating"
             @click="generateScenario"
           >
-            <span v-if="isGenerating" class="btn-spinner"></span>
+            <template v-if="isGenerating">
+              생성 중
+            </template>
             <template v-else-if="aiGenerated">
               <span class="checkmark">✓</span>
               {{ form.sceneCount }}개 씬 생성 완료!
@@ -228,7 +232,7 @@ const handleClose = () => {
               <Sparkles class="icon-sm" />
               AI로 씬 생성하기
             </template>
-          </button>
+          </Button>
         </div>
       </div>
     </form>
@@ -275,39 +279,9 @@ const handleClose = () => {
   color: var(--rose-500);
 }
 
-.form-input {
-  width: 100%;
-  padding: 0.75rem 1rem;
-  background: var(--rose-50);
-  border: 1px solid transparent;
-  border-radius: 8px;
-  font-size: 0.875rem;
-  color: var(--gray-700);
-  transition: all 0.2s ease;
-}
-
-.form-input::placeholder {
-  color: var(--gray-400);
-}
-
-.form-input:focus {
-  outline: none;
-  background: white;
-  border-color: var(--rose-300);
-  box-shadow: 0 0 0 3px rgba(255, 133, 161, 0.1);
-}
-
 .form-textarea {
   min-height: 80px;
   resize: vertical;
-}
-
-.form-select {
-  appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236B7280' d='M2.5 4.5L6 8l3.5-3.5'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 1rem center;
-  padding-right: 2.5rem;
 }
 
 .form-row {

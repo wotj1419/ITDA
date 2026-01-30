@@ -114,15 +114,20 @@ const handleGenerate = () => {
       ></textarea>
     </div>
 
-    <Button
-      variant="primary"
-      :loading="isGenerating"
-      :disabled="isGenerating"
-      @click="handleGenerate"
-    >
+  <Button
+    variant="primary"
+    :loading="isGenerating"
+    :disabled="isGenerating"
+    @click="handleGenerate"
+  >
+    <template v-if="isGenerating">
+      생성 중
+    </template>
+    <template v-else>
       <Sparkles class="icon-sm" />
       AI로 씬 생성
-    </Button>
+    </template>
+  </Button>
   </Card>
 </template>
 
@@ -164,31 +169,6 @@ const handleGenerate = () => {
   font-size: 0.75rem;
   font-weight: 500;
   color: var(--gray-700);
-}
-
-.form-input {
-  padding: 0.625rem 0.875rem;
-  border: 1px solid var(--rose-200);
-  border-radius: 8px;
-  font-size: 0.875rem;
-  color: var(--gray-900);
-  background: white;
-  transition: all 0.2s ease;
-}
-
-.form-input:focus {
-  outline: none;
-  border-color: var(--rose-400);
-  box-shadow: 0 0 0 3px rgba(255, 133, 161, 0.1);
-}
-
-.form-select {
-  cursor: pointer;
-  appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 0.75rem center;
-  padding-right: 2.5rem;
 }
 
 .form-textarea {

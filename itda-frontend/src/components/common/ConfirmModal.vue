@@ -78,8 +78,8 @@ const emit = defineEmits<{
   width: 48px;
   height: 48px;
   border-radius: 50%;
-  background: var(--gray-100);
-  color: var(--gray-600);
+  background: var(--warning-bg);
+  color: var(--warning);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -87,8 +87,8 @@ const emit = defineEmits<{
 }
 
 .modal-icon-wrapper.dangerous {
-  background: var(--red-50);
-  color: var(--red-500);
+  background: var(--warning-muted);
+  color: var(--warning-600);
 }
 
 .modal-icon {
@@ -107,6 +107,7 @@ const emit = defineEmits<{
   color: var(--gray-500);
   margin-bottom: 2rem;
   line-height: 1.5;
+  white-space: pre-line;
 }
 
 .modal-actions {
