@@ -7,4 +7,6 @@ import java.nio.file.Path;
 public interface VideoStorage {
 
     Asset storeMergedVideo(Path localFile, String storageKey);
+
+    VideoStorageResult save(Long projectId, Long jobId, byte[] bytes, String contentType);
 }

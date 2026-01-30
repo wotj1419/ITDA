@@ -2,11 +2,12 @@ package com.itda.backend.worker.video;
 
 import com.itda.backend.asset.domain.Asset;
 import com.itda.backend.asset.domain.AssetType;
+import com.itda.backend.asset.domain.StorageProvider;
 import com.itda.backend.worker.AssetRegistrar;
 import com.itda.backend.worker.LocalFileStorage;
 import com.itda.backend.worker.LocalJobAssetStorage;
 import com.itda.backend.worker.StoredAsset;
-import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
@@ -14,6 +15,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 
 @Component
+@ConditionalOnProperty(name = "storage.provider", havingValue = "LOCAL", matchIfMissing = true)
 public class LocalVideoStorage extends LocalJobAssetStorage implements VideoStorage {
 
     private static final String DEFAULT_CONTENT_TYPE = "video/mp4";
@@ -21,24 +23,14 @@ public class LocalVideoStorage extends LocalJobAssetStorage implements VideoStor
     private final LocalFileStorage localFileStorage;
     private final AssetRegistrar assetRegistrar;
 
-    @Autowired
     public LocalVideoStorage(LocalFileStorage localFileStorage, AssetRegistrar assetRegistrar) {
         super(localFileStorage, "video", "ai/videos", ".mp4");
         this.localFileStorage = localFileStorage;
         this.assetRegistrar = assetRegistrar;
     }
 
-    public LocalVideoStorage(LocalFileStorage localFileStorage) {
-        super(localFileStorage, "video", "ai/videos", ".mp4");
-        this.localFileStorage = localFileStorage;
-        this.assetRegistrar = null;
-    }
-
     @Override
     public Asset storeMergedVideo(Path localFile, String storageKey) {
-        if (assetRegistrar == null) {
-            throw new IllegalStateException("AssetRegistrar is not configured for LocalVideoStorage");
-        }
         requireLocalFile(localFile);
         String normalizedKey = normalizeStorageKey(storageKey);
 
@@ -53,6 +45,18 @@ public class LocalVideoStorage extends LocalJobAssetStorage implements VideoStor
                 AssetType.VIDEO,
                 contentType,
                 storedAsset.sizeBytes()
+        );
+    }
+
+    @Override
+    public VideoStorageResult save(Long projectId, Long jobId, byte[] bytes, String contentType) {
+        StoredAsset storedAsset = super.save(projectId, jobId, bytes);
+        String resolvedContentType = normalizeContentType(contentType);
+        return new VideoStorageResult(
+                storedAsset.storageKey(),
+                resolvedContentType,
+                storedAsset.sizeBytes(),
+                StorageProvider.LOCAL
         );
     }
 
@@ -110,5 +114,16 @@ public class LocalVideoStorage extends LocalJobAssetStorage implements VideoStor
         } catch (NumberFormatException e) {
             return null;
         }
+    }
+
+    private String normalizeContentType(String contentType) {
+        if (contentType == null) {
+            return DEFAULT_CONTENT_TYPE;
+        }
+        String trimmed = contentType.trim();
+        if (trimmed.isEmpty()) {
+            return DEFAULT_CONTENT_TYPE;
+        }
+        return trimmed;
     }
 }
