@@ -76,15 +76,9 @@ const labels = {
   titleRequired: '\uD504\uB85C\uC81D\uD2B8 \uC81C\uBAA9\uC744 \uC785\uB825\uD574\uC8FC\uC138\uC694.',
   saveFailTitle: '\uD504\uB85C\uC81D\uD2B8 \uC800\uC7A5 \uC2E4\uD328',
   saveFailMessage: '\uC7A0\uC2DC \uD6C4 \uB2E4\uC2DC \uC2DC\uB3C4\uD574\uC8FC\uC138\uC694.',
-  infoTitle: '\uD504\uB85C\uC81D\uD2B8 \uAE30\uBCF8 \uC815\uBCF4',
-  infoSubtitle: '\uD504\uB85C\uC81D\uD2B8 \uC81C\uBAA9\uACFC \uC124\uBA85\uC744 \uBA3C\uC800 \uC785\uB825\uD574\uC8FC\uC138\uC694.',
-  titleLabel: '\uD504\uB85C\uC81D\uD2B8 \uC81C\uBAA9',
-  descLabel: '\uD504\uB85C\uC81D\uD2B8 \uC124\uBA85',
-  titlePlaceholder: '\uD504\uB85C\uC81D\uD2B8 \uC81C\uBAA9\uC744 \uC785\uB825\uD558\uC138\uC694',
-  descPlaceholder: '\uD504\uB85C\uC81D\uD2B8\uC5D0 \uB300\uD55C \uAC04\uB2E8\uD55C \uC124\uBA85\uC744 \uC785\uB825\uD558\uC138\uC694',
-  saving: '\uC800\uC7A5 \uC911...',
-  scenarioButton: 'AI \uC2DC\uB098\uB9AC\uC624 \uC0DD\uC131',
-  scenarioHint: 'AI\uAC00 \uC7A5\uB974, \uBD84\uC704\uAE30\uB97C \uBC14\uD0D5\uC73C\uB85C \uC52C\uBCC4 \uC2A4\uD1A0\uB9AC\uB97C \uC790\uB3D9 \uC0DD\uC131\uD569\uB2C8\uB2E4.',
+  scenarioTitle: 'AI\uB85C \uC2DC\uB098\uB9AC\uC624 \uB9CC\uB4E4\uAE30',
+  scenarioHint: '\uC7A5\uB974\uC640 \uBD84\uC704\uAE30\uB97C \uC120\uD0DD\uD558\uBA74, \uC52C \uAD6C\uC131\uBD80\uD130 \uC2A4\uD1A0\uB9AC\uAE4C\uC9C0 \uC790\uB3D9\uC73C\uB85C \uC81C\uC548\uD574\uB4DC\uB824\uC694.',
+  scenarioButton: '\uC0DD\uC131\uD558\uAE30',
 };
 
 const isInitialProject = computed(() => {
@@ -222,47 +216,32 @@ const handleOpenScenario = async () => {
 
 <template>
   <div class="tab-content">
-    <Card class="project-info-card">
-      <div class="info-header">
-        <h3 class="info-title">{{ labels.infoTitle }}</h3>
-        <p class="info-subtitle">{{ labels.infoSubtitle }}</p>
-      </div>
-
-      <div class="form-group">
-        <label class="form-label required">{{ labels.titleLabel }}</label>
-        <input
-          v-model="localTitle"
-          type="text"
-          class="form-input"
-          :placeholder="labels.titlePlaceholder"
-        />
-      </div>
-
-      <div class="form-group">
-        <label class="form-label">{{ labels.descLabel }}</label>
-        <textarea
-          v-model="localDescription"
-          class="form-input form-textarea"
-          :placeholder="labels.descPlaceholder"
-          rows="3"
-        ></textarea>
-      </div>
-
-      <p v-if="isSavingProject" class="save-status">{{ labels.saving }}</p>
-    </Card>
-
-    <div class="scenario-trigger mb-6">
-      <Button variant="primary" @click="handleOpenScenario">
-        <Sparkles class="icon-sm" />
-        {{ labels.scenarioButton }}
-      </Button>
-      <p class="scenario-hint">{{ labels.scenarioHint }}</p>
+    <div class="story-hero">
+      <Card class="scenario-card premium-card scenario-main-card">
+        <div class="scenario-card-header">
+          <div class="scenario-icon">
+            <Sparkles class="icon-md" />
+          </div>
+          <div>
+            <p class="scenario-eyebrow">AI Studio</p>
+            <h3 class="scenario-title">{{ labels.scenarioTitle }}</h3>
+          </div>
+        </div>
+        <p class="scenario-description">{{ labels.scenarioHint }}</p>
+        <Button variant="primary" class="scenario-btn" @click="handleOpenScenario">
+          <Sparkles class="icon-sm" />
+          {{ labels.scenarioButton }}
+        </Button>
+      </Card>
     </div>
 
     <ScenarioDrawer />
 
-    <div class="section-header">
-      <h3 class="section-title">씬 리스트</h3>
+    <div class="section-header story-section-header">
+      <div class="section-title-wrap">
+        <h3 class="section-title story-section-title">씬 리스트</h3>
+        <span class="section-count">{{ scenes.length }}</span>
+      </div>
       <Button variant="secondary" size="sm" @click="handleAddScene">
         <Plus class="icon-sm" />
         씬 추가
@@ -412,6 +391,111 @@ const handleOpenScenario = async () => {
 </template>
 
 <style scoped>
+.story-hero {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.premium-card {
+  background: rgba(255, 255, 255, 0.86);
+  border: 1px solid rgba(255, 232, 242, 0.75);
+  box-shadow: 0 16px 40px -28px rgba(255, 133, 161, 0.35);
+  backdrop-filter: blur(18px);
+}
+
+.premium-card:hover {
+  transform: none;
+  box-shadow: 0 18px 40px -28px rgba(255, 133, 161, 0.35);
+  border-color: rgba(255, 232, 242, 0.9);
+}
+
+.scenario-card {
+  position: relative;
+  overflow: hidden;
+  padding: 2.5rem 3rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  min-height: 280px;
+  align-items: center;
+  text-align: center;
+}
+
+.scenario-card::after {
+  content: none;
+}
+
+.scenario-card-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.6rem;
+  position: relative;
+  z-index: 1;
+}
+
+.scenario-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 18px;
+  background: white;
+  border: 1px solid rgba(255, 232, 242, 0.8);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--rose-500);
+  box-shadow: 0 10px 24px rgba(255, 133, 161, 0.15);
+}
+
+.scenario-eyebrow {
+  margin: 0;
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.24em;
+  color: var(--gray-400);
+  font-weight: 800;
+}
+
+.scenario-title {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: var(--gray-900);
+}
+
+.scenario-description {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--gray-500);
+  line-height: 1.5;
+  position: relative;
+  z-index: 1;
+  max-width: 420px;
+}
+
+.scenario-btn.btn-primary {
+  align-self: center;
+  padding: 0.75rem 1.5rem;
+  border-radius: 1rem;
+  background: linear-gradient(135deg, var(--rose-500), var(--rose-600));
+  box-shadow: 0 12px 24px rgba(255, 133, 161, 0.25);
+  position: relative;
+  z-index: 1;
+}
+
+.scenario-btn.btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 16px 30px rgba(255, 133, 161, 0.3);
+}
+
+.scenario-main-card {
+  width: 100%;
+  max-width: 860px;
+  margin: 0 auto;
+}
+
 .storyboard-media {
   position: relative;
   width: 100%;
@@ -448,33 +532,58 @@ const handleOpenScenario = async () => {
   opacity: 0;
 }
 
-.project-info-card {
-  margin-bottom: 1.5rem;
+.story-section-header {
+  margin-top: 2rem;
 }
 
-.info-header {
+.section-title-wrap {
   display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  margin-bottom: 1rem;
+  align-items: center;
+  gap: 0.5rem;
 }
 
-.info-title {
-  margin: 0;
-  font-size: 1rem;
-  font-weight: 600;
-  color: var(--gray-900);
+.story-section-title {
+  font-weight: 700;
 }
 
-.info-subtitle {
-  margin: 0;
-  font-size: 0.8125rem;
-  color: var(--gray-500);
+.section-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 20px;
+  padding: 0 0.5rem;
+  border-radius: 999px;
+  background: var(--rose-50);
+  color: var(--rose-600);
+  font-size: 0.65rem;
+  font-weight: 700;
 }
 
-.save-status {
-  margin: 0;
-  font-size: 0.75rem;
-  color: var(--gray-500);
+.scene-list {
+  margin-top: 1.5rem;
+}
+
+
+.add-scene-card {
+  border-style: dashed;
+  border-color: var(--rose-200);
+  border-radius: 24px;
+  padding: 1.75rem;
+  gap: 0.75rem;
+  background: rgba(255, 255, 255, 0.7);
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.add-scene-card:hover {
+  border-color: var(--rose-300);
+  background: var(--rose-50);
+  transform: translateY(-2px);
+}
+
+@media (max-width: 960px) {
+  .story-hero {
+    gap: 1rem;
+  }
 }
 </style>

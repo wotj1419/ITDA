@@ -24,4 +24,14 @@ jwt:
 
 logging:
   level:
-    com.itda: DEBUG
+    com.itda: INFO
+    org.springframework: WARN
+    org.springframework.messaging: WARN
+    org.springframework.web.socket: WARN
+    org.springframework.web.socket.messaging.StompSubProtocolHandler: ERROR
+    org.springframework.web.socket.messaging.SubProtocolWebSocketHandler: ERROR
+    org.springframework.web.socket.sockjs: ERROR
+    org.springframework.data.redis: WARN
+    org.springframework.boot.web.embedded.tomcat: WARN
+    org.apache.catalina: WARN
+    org.apache.coyote: WARN

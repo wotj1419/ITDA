@@ -104,7 +104,7 @@ const cancelDelete = () => {
   >
     <template #header-left-after-divider>
       <h2 class="welcome-title">
-        반가워요<span v-if="authStore.user?.name">, {{ authStore.user.name }}님</span> ✨
+        반가워요<span v-if="authStore.user?.name">, {{ authStore.user.name }}님</span> 
       </h2>
     </template>
     <template #header-actions>
@@ -235,8 +235,8 @@ const cancelDelete = () => {
     <!-- Confirm Modal -->
     <ConfirmModal
       :is-open="showDeleteModal"
-      title="잠깐! 휴지통으로 보낼까요? 🗑️"
-      :message="`'${projectToDelete?.title}' 프로젝트를 정말 삭제하시겠어요? 🥺\n30일 동안은 보관되니까 너무 걱정 마세요!`"
+      title="잠깐! 휴지통으로 보낼까요?"
+      :message="`'${projectToDelete?.title}' 프로젝트를 정말 삭제하시겠어요?\n30일 동안은 보관되니까 너무 걱정 마세요!`"
       confirm-text="네, 보낼래요"
       :is-dangerous="true"
       @confirm="confirmDelete"

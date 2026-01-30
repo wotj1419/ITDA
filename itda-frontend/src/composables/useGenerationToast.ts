@@ -18,22 +18,16 @@ const labelMap: Record<GenerationKind, string> = {
   scenes: '씬',
 }
 
-function getEtaLabel(eta?: string | null): string {
-  if (eta) return `예상 시간: ${eta}`
-  return '예상 시간: 계산 중'
-}
-
 export function useGenerationToast() {
   const uiStore = useUIStore()
 
   const resolvePosition = (_kind: GenerationKind): 'top-right' => 'top-right'
 
-  const startGenerationToast = (kind: GenerationKind, eta?: string | null): string => {
+  const startGenerationToast = (kind: GenerationKind, _eta?: string | null): string => {
     const label = labelMap[kind]
     return uiStore.showToast({
       type: 'progress',
       title: `${label} 생성중`,
-      meta: getEtaLabel(eta),
       position: resolvePosition(kind),
       autoClose: false,
     })

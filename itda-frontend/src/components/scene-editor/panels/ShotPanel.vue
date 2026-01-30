@@ -223,7 +223,7 @@ function notifyBlocked(title: string, message: string): void {
 }
 
 function handleGenerateShot(): void {
-  if (isGeneratingShot.value) return;
+  if (isGeneratingShot.value || isGeneratingPrompt.value) return;
   if (!isParentReady.value) {
     notifyBlocked('샷 생성 불가', '상위 GRID 이미지가 준비되어야 샷을 생성할 수 있습니다.');
     return;
@@ -311,7 +311,7 @@ function handleGenerateShot(): void {
       <!-- Generate Prompt -->
       <button
         class="panel-btn panel-btn--secondary panel-btn--full panel-btn--prompt-generate"
-        :disabled="isGeneratingPrompt"
+        :disabled="isGeneratingPrompt || isGeneratingShot"
         @click="generatePrompt"
       >
         <Loader2 v-if="isGeneratingPrompt" class="panel-btn-icon panel-btn-icon--spin" />
@@ -328,12 +328,17 @@ function handleGenerateShot(): void {
         </label>
         <textarea v-model="form.prompt" class="panel-textarea panel-textarea--prompt" rows="3"></textarea>
         <div class="panel-prompt-actions panel-prompt-actions--right">
-          <button class="panel-btn panel-btn--text" :disabled="isGeneratingPrompt" @click="generatePrompt">
+          <button class="panel-btn panel-btn--text" :disabled="isGeneratingPrompt || isGeneratingShot" @click="generatePrompt">
             <Loader2 v-if="isGeneratingPrompt" class="panel-btn-icon panel-btn-icon--spin" />
             <RefreshCw v-else class="panel-btn-icon" />
             재생성
           </button>
-          <button v-if="!isPromptApproved" class="panel-btn panel-btn--success" @click="approvePrompt">
+          <button
+            v-if="!isPromptApproved"
+            class="panel-btn panel-btn--success"
+            :disabled="isGeneratingPrompt || isGeneratingShot"
+            @click="approvePrompt"
+          >
             <Check class="panel-btn-icon" /> 승인
           </button>
           <span v-else class="panel-status panel-status--success">
@@ -347,7 +352,7 @@ function handleGenerateShot(): void {
     <template #footer>
       <button
         class="panel-btn panel-btn--primary panel-btn--full"
-        :disabled="isGeneratingShot"
+        :disabled="isGeneratingShot || isGeneratingPrompt"
         @click="handleGenerateShot"
       >
         <Camera class="panel-btn-icon" />

@@ -30,6 +30,11 @@ Only proceed once requirements are clear.
 - `npm run build`
 - `npm run preview`
 
+## Git Safety (MANDATORY)
+- Do NOT run any git command that discards working-tree changes without explicit developer instruction.
+- Forbidden commands (non-exhaustive): `git reset --hard`, `git checkout -- <path>`, `git checkout -- .`, `git restore <path>`, `git restore .`, `git clean -fd`, `git clean -fdx`.
+- Prefer reverting via `apply_patch` with a minimal, explicit patch.
+
 ## Implementation Guidelines
 - Use the existing Composition API patterns and TypeScript types.
 - Keep stores in Pinia; avoid ad-hoc global state.

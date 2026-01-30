@@ -96,9 +96,9 @@ const editLink = computed(() => ({
       <!-- Info -->
       <div class="scene-info">
         <div class="scene-header">
-          <Badge variant="default" size="sm">씬 {{ scene.order }}</Badge>
+          <Badge variant="default" size="sm" class="scene-order">씬 {{ scene.order }}</Badge>
           <h4 class="scene-title">{{ scene.title }}</h4>
-          <Badge :variant="statusConfig.variant" size="sm" class="status-badge">
+          <Badge :variant="statusConfig.variant" size="sm" class="status-badge scene-status">
             <Check v-if="statusConfig.showIcon && scene.status === 'COMPLETED'" class="status-icon" />
             <Loader2 v-if="statusConfig.showIcon && scene.status === 'IN_PROGRESS'" class="status-icon spin" />
             {{ statusConfig.label }}
@@ -158,9 +158,9 @@ const editLink = computed(() => ({
 .scene-card {
   background: white;
   border: 1px solid var(--rose-100);
-  border-radius: 12px;
-  padding: 1rem;
-  transition: all 0.2s ease;
+  border-radius: 18px;
+  padding: 1.25rem 1.5rem;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .scene-card-draggable {
@@ -173,13 +173,14 @@ const editLink = computed(() => ({
 
 .scene-card:hover {
   border-color: var(--rose-200);
-  box-shadow: 0 4px 12px rgba(255, 133, 161, 0.08);
+  box-shadow: 0 16px 36px -20px rgba(255, 133, 161, 0.35);
+  transform: translateY(-1px);
 }
 
 .scene-card-content {
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: 1.25rem;
 }
 
 .scene-card-compact .scene-card-content {
@@ -199,13 +200,13 @@ const editLink = computed(() => ({
 .drag-handle-icon {
   width: 16px;
   height: 16px;
-  color: var(--gray-300);
+  color: var(--rose-300);
 }
 
 .scene-thumbnail {
-  width: 80px;
-  height: 60px;
-  border-radius: 8px;
+  width: 84px;
+  height: 64px;
+  border-radius: 12px;
   overflow: hidden;
   flex-shrink: 0;
 }
@@ -248,8 +249,8 @@ const editLink = computed(() => ({
 }
 
 .scene-title {
-  font-weight: 600;
-  font-size: 0.9375rem;
+  font-weight: 700;
+  font-size: 0.95rem;
   color: var(--gray-900);
   margin: 0;
 }
@@ -259,6 +260,18 @@ const editLink = computed(() => ({
   display: inline-flex;
   align-items: center;
   gap: 0.25rem;
+}
+
+.scene-order {
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-weight: 700;
+  background: var(--rose-50);
+  color: var(--rose-600);
+}
+
+.scene-status {
+  font-weight: 700;
 }
 
 .status-icon {

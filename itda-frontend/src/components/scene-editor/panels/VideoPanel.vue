@@ -26,7 +26,11 @@ interface Props {
 const props = defineProps<Props>();
 const nodeStore = useSceneNodeStore();
 const uiStore = useUIStore();
-const cameraMotionHelp = useHelpPopover();
+const cameraMotionHelp = useHelpPopover({
+  storageKey: 'scene-editor:camera-motion-help',
+  defaultOpen: true,
+  openOnce: true,
+});
 
 const form = ref({
   isTransition: false,
@@ -292,7 +296,7 @@ function notifyBlocked(title: string, message: string): void {
 }
 
 function handleGenerateVideo(): void {
-  if (isGeneratingVideo.value) return;
+  if (isGeneratingVideo.value || isGeneratingPrompt.value) return;
   if (!isStartShotReady.value) {
     notifyBlocked('영상 생성 불가', '시작 SHOT 이미지가 준비되어야 영상을 생성할 수 있습니다.');
     return;
@@ -366,7 +370,7 @@ function handleGenerateVideo(): void {
             >
               <span class="panel-info-icon">i</span>
             </button>
-            <div v-if="cameraMotionHelp.isOpen" class="panel-info-popover">
+            <div v-if="cameraMotionHelp.isOpen.value" class="panel-info-popover">
               <div class="panel-info-title">카메라 움직임 안내</div>
               <ul class="panel-info-list">
                 <li v-for="item in cameraMotionHelpItems" :key="item.label" class="panel-info-item">
@@ -418,7 +422,7 @@ function handleGenerateVideo(): void {
       <!-- Generate Prompt -->
       <button
         class="panel-btn panel-btn--secondary panel-btn--full panel-btn--prompt-generate"
-        :disabled="isGeneratingPrompt"
+        :disabled="isGeneratingPrompt || isGeneratingVideo"
         @click="generatePrompt"
       >
         <Loader2 v-if="isGeneratingPrompt" class="panel-btn-icon panel-btn-icon--spin" />
@@ -435,12 +439,17 @@ function handleGenerateVideo(): void {
         </label>
         <textarea v-model="form.prompt" class="panel-textarea panel-textarea--prompt" rows="3"></textarea>
         <div class="panel-prompt-actions panel-prompt-actions--right">
-          <button class="panel-btn panel-btn--text" :disabled="isGeneratingPrompt" @click="generatePrompt">
+          <button class="panel-btn panel-btn--text" :disabled="isGeneratingPrompt || isGeneratingVideo" @click="generatePrompt">
             <Loader2 v-if="isGeneratingPrompt" class="panel-btn-icon panel-btn-icon--spin" />
             <RefreshCw v-else class="panel-btn-icon" />
             재생성
           </button>
-          <button v-if="!isPromptApproved" class="panel-btn panel-btn--success" @click="approvePrompt">
+          <button
+            v-if="!isPromptApproved"
+            class="panel-btn panel-btn--success"
+            :disabled="isGeneratingPrompt || isGeneratingVideo"
+            @click="approvePrompt"
+          >
             <Check class="panel-btn-icon" /> 승인
           </button>
           <span v-else class="panel-status panel-status--success">
@@ -456,7 +465,7 @@ function handleGenerateVideo(): void {
       <div class="panel-actions panel-actions--footer">
         <button
           class="panel-btn panel-btn--primary panel-btn--full"
-          :disabled="isGeneratingVideo"
+          :disabled="isGeneratingVideo || isGeneratingPrompt"
           @click="handleGenerateVideo"
         >
           <Video class="panel-btn-icon" />

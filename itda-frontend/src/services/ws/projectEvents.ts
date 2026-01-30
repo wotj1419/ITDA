@@ -1,5 +1,6 @@
 import { Client, type IMessage, type StompSubscription } from '@stomp/stompjs'
 import SockJS from 'sockjs-client'
+import { useAuthStore } from '../../stores/auth'
 
 export interface ProjectEventMessage {
     event: string
@@ -60,6 +61,12 @@ function createConnection(projectId: number): Connection {
             console.error('STOMP error', frame.headers['message'], frame.body)
         },
     })
+
+    client.beforeConnect = () => {
+        const authStore = useAuthStore()
+        const token = authStore.accessToken
+        client.connectHeaders = token ? { Authorization: `Bearer ${token}` } : {}
+    }
 
     return { client, listeners, subscription }
 }

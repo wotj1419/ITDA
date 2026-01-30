@@ -111,18 +111,9 @@ const sceneHeaderData = computed(() =>
 );
 const isPromptGenerated = computed(() => data.value?.promptStatus !== PromptStatus.DRAFT);
 const isPromptApproved = computed(() => data.value?.promptStatus === PromptStatus.APPROVED);
-const canGenerate = computed(() => isPromptApproved.value && !isGeneratingImage.value);
-const isLookChanged = computed(() => {
-  if (!data.value) return false;
-  const formIds = [...form.value.objectIds].sort((a, b) => a - b).join(',');
-  const dataIds = [...(data.value.objectIds || [])].sort((a, b) => a - b).join(',');
-  return (
-    form.value.style !== (data.value.style || '') ||
-    form.value.timeOfDay !== (data.value.timeOfDay || '') ||
-    form.value.mood !== (data.value.mood || '') ||
-    formIds !== dataIds
-  );
-});
+const canGenerate = computed(() =>
+  isPromptApproved.value && !isGeneratingImage.value && !isGeneratingPrompt.value
+);
 
 function buildSceneOneLine(): string {
   const parts: string[] = [];
@@ -242,9 +233,6 @@ function setActive(): void {
       </button>
     </template>
     <template v-if="data">
-      <div v-if="isLookChanged" class="panel-alert">
-        룩 변경됨 → MASTER 재생성 필요
-      </div>
       <div v-if="!data.isActive" class="master-panel__inactive-hint">
         <span class="master-panel__inactive-title">안내</span>
         <p class="master-panel__inactive-text">
@@ -324,7 +312,7 @@ function setActive(): void {
       <!-- Generate Prompt -->
       <button 
         class="panel-btn panel-btn--secondary panel-btn--full panel-btn--prompt-generate" 
-        :disabled="isGeneratingPrompt"
+        :disabled="isGeneratingPrompt || isGeneratingImage"
         @click="generatePrompt"
       >
         <Loader2 v-if="isGeneratingPrompt" class="panel-btn-icon animate-spin" />
@@ -341,12 +329,17 @@ function setActive(): void {
         </label>
         <textarea v-model="form.prompt" class="panel-textarea panel-textarea--prompt" rows="4"></textarea>
         <div class="panel-prompt-actions panel-prompt-actions--right">
-          <button class="panel-btn panel-btn--text" :disabled="isGeneratingPrompt" @click="generatePrompt">
+          <button class="panel-btn panel-btn--text" :disabled="isGeneratingPrompt || isGeneratingImage" @click="generatePrompt">
             <Loader2 v-if="isGeneratingPrompt" class="panel-btn-icon panel-btn-icon--spin" />
             <RefreshCw v-else class="panel-btn-icon" />
             재생성
           </button>
-          <button v-if="!isPromptApproved" class="panel-btn panel-btn--success" @click="approvePrompt">
+          <button
+            v-if="!isPromptApproved"
+            class="panel-btn panel-btn--success"
+            :disabled="isGeneratingPrompt || isGeneratingImage"
+            @click="approvePrompt"
+          >
             <Check class="panel-btn-icon" /> 승인
           </button>
           <span v-else class="panel-status panel-status--success">

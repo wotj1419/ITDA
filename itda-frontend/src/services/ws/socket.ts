@@ -1,4 +1,4 @@
-import { Client } from '@stomp/stompjs';
+import { Client, type StompSubscription } from '@stomp/stompjs';
 import SockJS from 'sockjs-client';
 import { useAuthStore } from '../../stores/auth';
 import { useCollabStore } from '../../stores/collab';
@@ -9,6 +9,8 @@ const WS_URL = import.meta.env.VITE_WS_URL || 'http://localhost:8080/ws';
 class WebSocketManager {
     private client: Client;
     private lastSendWarnAt = 0;
+    private subscription: StompSubscription | null = null;
+    private currentRoomId: string | null = null;
 
     constructor() {
         this.client = new Client({
@@ -20,6 +22,12 @@ class WebSocketManager {
             heartbeatIncoming: 4000,
             heartbeatOutgoing: 4000,
         });
+
+        this.client.beforeConnect = () => {
+            const authStore = useAuthStore();
+            const token = authStore.accessToken;
+            this.client.connectHeaders = token ? { Authorization: `Bearer ${token}` } : {};
+        };
 
         this.client.onConnect = () => {
             console.log('Connected to WebSocket');
@@ -38,14 +46,20 @@ class WebSocketManager {
     }
 
     public connect() {
+        const authStore = useAuthStore();
+        const token = authStore.accessToken;
+        this.client.connectHeaders = token ? { Authorization: `Bearer ${token}` } : {};
         this.client.activate();
     }
 
     public disconnect() {
+        if (this.subscription) {
+            this.subscription.unsubscribe();
+            this.subscription = null;
+        }
+        this.currentRoomId = null;
         this.client.deactivate();
     }
-
-    private currentRoomId: string | null = null;
 
     public subscribeToRoom(roomId: string) {
         if (this.currentRoomId === roomId) return;
@@ -53,10 +67,17 @@ class WebSocketManager {
 
         if (!this.client.connected) return;
 
-        console.log(`Subscribing to room: ${roomId}`);
-        // Topic for broadcasting signals (join, offer, answer, ice)
-        this.client.subscribe(`/topic/room/${roomId}`, (message) => {
+        this.subscribeToQueue();
+    }
+
+    private subscribeToQueue() {
+        if (this.subscription) return;
+        console.log('Subscribing to RTC queue');
+        this.subscription = this.client.subscribe('/user/queue/rtc', (message) => {
             const signal = JSON.parse(message.body);
+            if (this.currentRoomId && signal?.projectId && String(signal.projectId) !== this.currentRoomId) {
+                return;
+            }
             // Dispatch to stores
             const collabStore = useCollabStore();
             collabStore.handleSignal(signal);
@@ -82,7 +103,7 @@ class WebSocketManager {
         };
 
         this.client.publish({
-            destination: `/app/room/${this.currentRoomId}/signal`,
+            destination: `/pub/rtc/${this.currentRoomId}`,
             body: JSON.stringify(signalWithSender),
         });
     }
@@ -90,9 +111,11 @@ class WebSocketManager {
     private subscribe() {
         // Re-subscribe to current room on reconnect
         if (this.currentRoomId) {
-            const roomId = this.currentRoomId;
-            this.currentRoomId = null; // Force re-subscription
-            this.subscribeToRoom(roomId);
+            if (this.subscription) {
+                this.subscription.unsubscribe();
+                this.subscription = null;
+            }
+            this.subscribeToQueue();
         }
     }
 

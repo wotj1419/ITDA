@@ -1,31 +1,107 @@
 <script setup lang="ts">
-import { ref } from 'vue'
-import { Film, Plus, Trash2, RefreshCw, GripVertical, Check, Info } from 'lucide-vue-next'
+import { computed, nextTick, ref } from 'vue'
+import { Film, Plus, Trash2, GripVertical, Check, Info, Pencil } from 'lucide-vue-next'
 import { useScenarioStore, type ScenarioScene } from '../../stores/scenario'
 import { useSceneStore } from '../../stores/scene'
+import { useProjectStore } from '../../stores/project'
 import { useUIStore } from '../../stores/ui'
 import Button from '../common/Button.vue'
 
 const scenarioStore = useScenarioStore()
 const sceneStore = useSceneStore()
+const projectStore = useProjectStore()
 const uiStore = useUIStore()
+
+const DEFAULT_PROJECT_TITLE = '새 프로젝트'
 
 const editingSceneId = ref<number | null>(null)
 const draggedId = ref<number | null>(null)
+const isApplying = ref(false)
+const titleInputRefs = ref<Record<number, HTMLInputElement | null>>({})
 
-const startEdit = (scene: ScenarioScene) => {
-  editingSceneId.value = scene.id
+const isBusy = computed(() => scenarioStore.isGenerating || isApplying.value)
+
+const focusTitleInput = (sceneId: number) => {
+  void nextTick(() => {
+    titleInputRefs.value[sceneId]?.focus()
+  })
 }
 
-const saveEdit = () => {
+const startEdit = (scene: ScenarioScene) => {
+  if (isBusy.value) return
+  editingSceneId.value = scene.id
+  focusTitleInput(scene.id)
+}
+
+const saveEdit = async (scene: ScenarioScene) => {
+  if (isBusy.value) return
+
+  const trimmedTitle = scene.title.trim()
+  const trimmedDescription = scene.description.trim()
+  scenarioStore.updateScene(scene.id, { title: trimmedTitle, description: trimmedDescription })
+
+  const projectId = scenarioStore.activeProjectId ?? sceneStore.currentProjectId
+  if (!projectId) {
+    uiStore.showToast({
+      type: 'error',
+      title: '씬 저장 실패',
+      message: '프로젝트 정보를 찾을 수 없습니다.',
+    })
+    return
+  }
+
+  if (sceneStore.currentProjectId !== projectId) {
+    await sceneStore.loadScenes(projectId)
+  }
+
+  const exists = sceneStore.scenes.some((item) => item.sceneId === scene.id)
+  if (!exists) {
+    uiStore.showToast({
+      type: 'info',
+      title: '저장 보류',
+      message: '새로 추가한 씬은 "프로젝트에 적용" 후 저장됩니다.',
+    })
+    editingSceneId.value = null
+    return
+  }
+
+  const updated = await sceneStore.updateScene(scene.id, {
+    title: trimmedTitle,
+    description: trimmedDescription,
+  })
+
+  if (!updated) {
+    uiStore.showToast({
+      type: 'error',
+      title: '씬 저장 실패',
+      message: '잠시 후 다시 시도해주세요.',
+    })
+    return
+  }
+
   editingSceneId.value = null
 }
 
+const setTitleInputRef = (sceneId: number, el: HTMLInputElement | null) => {
+  titleInputRefs.value[sceneId] = el
+}
+
+const handleAddScene = () => {
+  if (isBusy.value) return
+  const newScene = scenarioStore.addScene()
+  if (newScene) {
+    editingSceneId.value = newScene.id
+    focusTitleInput(newScene.id)
+  }
+}
+
 const handleDragStart = (scene: ScenarioScene) => {
+  if (isBusy.value) return
   draggedId.value = scene.id
 }
 
 const handleDragOver = (event: DragEvent, targetScene: ScenarioScene) => {
+  if (isBusy.value) return
   event.preventDefault()
   if (!draggedId.value || draggedId.value === targetScene.id) return
 
@@ -45,48 +121,74 @@ const handleDragEnd = () => {
 }
 
 const handleApplyToProject = async () => {
-  const projectId = sceneStore.currentProjectId
+  if (isBusy.value) return
+  const projectId = scenarioStore.activeProjectId ?? sceneStore.currentProjectId
   if (!projectId) return
 
-  await sceneStore.loadScenes(projectId)
-  const existingIds = new Set(sceneStore.scenes.map((scene) => scene.sceneId))
-  const idMap = new Map<number, number>()
+  isApplying.value = true
+  try {
+    await sceneStore.loadScenes(projectId)
+    const existingIds = new Set(sceneStore.scenes.map((scene) => scene.sceneId))
+    const idMap = new Map<number, number>()
 
-  for (const scene of scenarioStore.scenes) {
-    if (existingIds.has(scene.id)) {
-      idMap.set(scene.id, scene.id)
-      await sceneStore.updateScene(scene.id, {
+    for (const scene of scenarioStore.scenes) {
+      if (existingIds.has(scene.id)) {
+        idMap.set(scene.id, scene.id)
+        await sceneStore.updateScene(scene.id, {
+          title: scene.title,
+          description: scene.description,
+        })
+        continue
+      }
+
+      const created = await sceneStore.addScene({
         title: scene.title,
         description: scene.description,
       })
-      continue
+      if (created) {
+        idMap.set(scene.id, created.sceneId)
+      }
     }
 
-    const created = await sceneStore.addScene({
-      title: scene.title,
-      description: scene.description,
+    const orderedIds = scenarioStore.scenes
+      .map((scene) => idMap.get(scene.id))
+      .filter((id): id is number => typeof id === 'number')
+
+    if (orderedIds.length) {
+      await sceneStore.reorderScenes(orderedIds)
+    }
+
+    const currentProject = projectStore.currentProject?.projectId === projectId
+      ? projectStore.currentProject
+      : projectStore.projects.find((project) => project.projectId === projectId)
+    const currentTitle = (currentProject?.title || '').trim()
+    const currentGenre = (currentProject?.genre || '').trim()
+    const autoTitle = [...scenarioStore.scenes]
+      .sort((a, b) => a.order - b.order)
+      .map((scene) => scene.title.trim())
+      .find(Boolean)
+    const genreForUpdate = currentGenre || scenarioStore.input.genre.trim()
+
+    if (
+      currentProject &&
+      autoTitle &&
+      genreForUpdate &&
+      (!currentTitle || currentTitle === DEFAULT_PROJECT_TITLE)
+    ) {
+      await projectStore.updateProject(projectId, { title: autoTitle, genre: genreForUpdate })
+    }
+
+    uiStore.showToast({
+      type: 'success',
+      title: '씬 생성 완료',
+      message: `${scenarioStore.scenes.length}개의 씬이 프로젝트에 추가되었습니다.`,
     })
-    if (created) {
-      idMap.set(scene.id, created.sceneId)
-    }
+
+    scenarioStore.closeDrawer()
+    scenarioStore.resetWizard()
+  } finally {
+    isApplying.value = false
   }
-
-  const orderedIds = scenarioStore.scenes
-    .map((scene) => idMap.get(scene.id))
-    .filter((id): id is number => typeof id === 'number')
-
-  if (orderedIds.length) {
-    await sceneStore.reorderScenes(orderedIds)
-  }
-
-  uiStore.showToast({
-    type: 'success',
-    title: '씬 생성 완료',
-    message: `${scenarioStore.scenes.length}개의 씬이 프로젝트에 추가되었습니다.`,
-  })
-
-  scenarioStore.closeDrawer()
-  scenarioStore.resetWizard()
 }
 </script>
 
@@ -106,7 +208,7 @@ const handleApplyToProject = async () => {
         v-for="scene in scenarioStore.scenes"
         :key="scene.id"
         :class="['scene-item', { dragging: draggedId === scene.id }]"
-        draggable="true"
+        :draggable="!isBusy"
         @dragstart="handleDragStart(scene)"
         @dragover="(e) => handleDragOver(e, scene)"
         @dragend="handleDragEnd"
@@ -124,15 +226,16 @@ const handleApplyToProject = async () => {
               <button
                 v-if="editingSceneId !== scene.id"
                 class="action-btn"
-                title="재생성"
-                :disabled="scenarioStore.isGenerating"
-                @click="scenarioStore.regenerateScene(scene.id)"
+                title="편집"
+                :disabled="isBusy"
+                @click="startEdit(scene)"
               >
-                <RefreshCw class="icon-sm" />
+                <Pencil class="icon-sm" />
               </button>
               <button
                 class="action-btn danger"
                 title="삭제"
+                :disabled="isBusy"
                 @click="scenarioStore.removeScene(scene.id)"
               >
                 <Trash2 class="icon-sm" />
@@ -146,6 +249,7 @@ const handleApplyToProject = async () => {
               v-model="scene.title"
               class="scene-title-input"
               placeholder="씬 제목"
+              :ref="(el) => setTitleInputRef(scene.id, el as HTMLInputElement | null)"
             />
             <textarea
               v-model="scene.description"
@@ -153,25 +257,31 @@ const handleApplyToProject = async () => {
               rows="3"
               placeholder="씬 설명"
             />
-            <Button variant="primary" size="sm" @click="saveEdit">
+            <Button variant="primary" size="sm" :disabled="isBusy" @click="saveEdit(scene)">
               저장
             </Button>
           </template>
 
           <!-- View Mode -->
           <template v-else>
-            <h4 class="scene-title" @click="startEdit(scene)">
-              {{ scene.title }}
+            <h4
+              :class="['scene-title', { 'scene-title--empty': !scene.title }]"
+              @click="startEdit(scene)"
+            >
+              {{ scene.title || '씬 제목을 입력하세요' }}
             </h4>
-            <p class="scene-description" @click="startEdit(scene)">
-              {{ scene.description }}
+            <p
+              :class="['scene-description', { 'scene-description--empty': !scene.description }]"
+              @click="startEdit(scene)"
+            >
+              {{ scene.description || '씬 설명을 입력하세요' }}
             </p>
           </template>
         </div>
       </div>
 
       <!-- Add Scene Button -->
-      <button class="add-scene-btn" @click="scenarioStore.addScene">
+      <button class="add-scene-btn" :disabled="isBusy" @click="handleAddScene">
         <Plus class="icon-sm" />
         씬 추가
       </button>
@@ -182,7 +292,8 @@ const handleApplyToProject = async () => {
       <Button
         variant="primary"
         size="lg"
-        :disabled="scenarioStore.scenes.length === 0"
+        :loading="isApplying"
+        :disabled="isBusy || scenarioStore.scenes.length === 0"
         @click="handleApplyToProject"
       >
         <Check class="icon-sm" />
@@ -350,6 +461,12 @@ const handleApplyToProject = async () => {
 
 .scene-description:hover {
   color: var(--gray-700);
+}
+
+.scene-title--empty,
+.scene-description--empty {
+  color: var(--gray-400);
+  font-style: italic;
 }
 
 .scene-title-input,

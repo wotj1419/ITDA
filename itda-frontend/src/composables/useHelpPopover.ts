@@ -1,16 +1,59 @@
 import { onMounted, onUnmounted, ref } from 'vue';
 
-export function useHelpPopover() {
+type HelpPopoverOptions = {
+  storageKey?: string;
+  defaultOpen?: boolean;
+  openOnce?: boolean;
+};
+
+const SEEN_TOKEN = 'seen';
+
+export function useHelpPopover(options: HelpPopoverOptions = {}) {
+  const { storageKey, defaultOpen = false, openOnce = false } = options;
   const popoverRef = ref<HTMLElement | null>(null);
-  const isOpen = ref(false);
+  const isOpen = ref(defaultOpen);
+
+  const hasStorage = Boolean(storageKey && typeof window !== 'undefined');
+
+  function readStorage(): string | null {
+    if (!hasStorage || !storageKey) return null;
+    try {
+      return window.localStorage.getItem(storageKey);
+    } catch {
+      return null;
+    }
+  }
+
+  function writeStorage(value: string): void {
+    if (!hasStorage || !storageKey) return;
+    try {
+      window.localStorage.setItem(storageKey, value);
+    } catch {
+      // no-op: storage might be unavailable (private mode, quota, etc.)
+    }
+  }
+
+  function syncStorage(next: boolean): void {
+    if (!hasStorage) return;
+    if (openOnce) {
+      writeStorage(SEEN_TOKEN);
+      return;
+    }
+    writeStorage(String(next));
+  }
+
+  function setOpen(next: boolean): void {
+    isOpen.value = next;
+    syncStorage(next);
+  }
 
   function toggle(event?: MouseEvent): void {
     event?.stopPropagation();
-    isOpen.value = !isOpen.value;
+    setOpen(!isOpen.value);
   }
 
   function close(): void {
-    isOpen.value = false;
+    setOpen(false);
   }
 
   function handleDocumentClick(event: MouseEvent): void {
@@ -29,6 +72,21 @@ export function useHelpPopover() {
   }
 
   onMounted(() => {
+    const stored = readStorage();
+    if (openOnce) {
+      if (stored !== null) {
+        isOpen.value = false;
+      } else {
+        isOpen.value = defaultOpen;
+        if (defaultOpen && hasStorage) {
+          writeStorage(SEEN_TOKEN);
+        }
+      }
+    } else if (stored === 'true' || stored === 'false') {
+      isOpen.value = stored === 'true';
+    } else {
+      isOpen.value = defaultOpen;
+    }
     document.addEventListener('click', handleDocumentClick);
     document.addEventListener('keydown', handleDocumentKeydown);
   });
