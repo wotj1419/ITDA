@@ -72,6 +72,7 @@ const {
     moodKey: resolveMoodKey(form.value.mood) ?? 'NEUTRAL',
     objectIds: form.value.objectIds,
   }),
+  getReferenceObjectIds: () => form.value.objectIds,
   getJobSuccessUpdate: ({ resultUrl, thumbnailUrl }) => ({
     imageUrl: resultUrl || null,
     thumbnailUrl: thumbnailUrl || resultUrl || null,

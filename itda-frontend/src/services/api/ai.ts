@@ -108,11 +108,21 @@ export async function improvePrompt(
 export async function generateNode(
     nodeId: string | number,
     prompt: string,
-    options?: { nodeType?: GenerateNodeRequest['nodeType']; settings?: Record<string, unknown> }
+    options?: {
+        nodeType?: GenerateNodeRequest['nodeType'];
+        settings?: Record<string, unknown>;
+        referenceObjectIds?: number[];
+    }
 ): Promise<number> {
+    const payload = {
+        prompt,
+        nodeType: options?.nodeType,
+        settings: options?.settings,
+        referenceObjectIds: options?.referenceObjectIds,
+    };
     const response = await apiClient.post<ApiResponse<GenerateJobResponse>>(
         `/nodes/${nodeId}/generate`,
-        { prompt, nodeType: options?.nodeType, settings: options?.settings }
+        payload
     );
     if (!response.data.data?.jobId) {
         throw new Error('Failed to start generation job');

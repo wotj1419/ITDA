@@ -37,6 +37,7 @@ export interface GenerateNodeRequest {
   prompt: string;
   nodeType: 'MASTER' | 'GRID' | 'SHOT' | 'VIDEO';
   settings?: Record<string, unknown>;
+  referenceObjectIds?: number[];
 }
 
 export interface GenerateJobResponse {

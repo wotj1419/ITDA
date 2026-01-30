@@ -20,6 +20,7 @@ interface UseNodeGenerationOptions {
   getPromptUpdate: (prompt: string) => Partial<AnyNodeData>;
   getApprovedUpdate: () => Partial<AnyNodeData>;
   getJobSettings: () => Record<string, unknown>;
+  getReferenceObjectIds?: () => number[];
   getJobSuccessUpdate: (result: { resultUrl?: string; thumbnailUrl?: string | null }) => Partial<AnyNodeData>;
   messages?: {
     promptError?: string;
@@ -89,9 +90,12 @@ export function useNodeGeneration(options: UseNodeGenerationOptions) {
         generationState: 'requested',
       });
 
+      const referenceObjectIds = options.getReferenceObjectIds?.()
+        ?.filter((id) => typeof id === 'number' && id > 0);
       const jobId = await aiService.generateNode(options.nodeId, prompt, {
         nodeType: options.nodeType,
         settings: options.getJobSettings(),
+        referenceObjectIds: referenceObjectIds && referenceObjectIds.length ? referenceObjectIds : undefined,
       });
 
       const result = await aiService.pollJobUntilComplete(jobId, (status) => {
