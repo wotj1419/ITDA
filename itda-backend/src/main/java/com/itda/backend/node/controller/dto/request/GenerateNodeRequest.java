@@ -21,6 +21,9 @@ public record GenerateNodeRequest(
         @Schema(description = "Node settings (style, ratio, etc.)")
         Map<String, Object> settings,
 
+        @Schema(description = "Final English prompt override (optional). If provided, generation uses this as-is.")
+        String promptEnFinalOverride,
+
         @Schema(description = "Reference object IDs (optional)", example = "[1, 2, 3]")
         List<Long> referenceObjectIds,
 
