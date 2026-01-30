@@ -209,7 +209,7 @@ const canRemoveMember = (member: { userId: number; role: 'owner' | 'admin' | 'ed
   return false
 }
 
-const roleOptionsForMember = (member: { role: 'owner' | 'admin' | 'editor' | 'viewer' }) => {
+const roleOptionsForMember = () => {
   if (isAdminUser.value) {
     return inviteOptions.filter((option) => option.value !== 'admin')
   }
@@ -258,7 +258,7 @@ async function removeMember(userId: number) {
               <CustomSelect
                 v-if="canEditMemberRole(member)"
                 :model-value="member.role"
-                :options="roleOptionsForMember(member)"
+                :options="roleOptionsForMember()"
                 class="member-role-select"
                 @update:model-value="(val) => updateMemberRole(member.userId, val as any)"
               />
