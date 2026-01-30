@@ -21,6 +21,8 @@ public interface ProjectMemberMapper {
     Optional<String> findRole(@Param("projectId") Long projectId,
                               @Param("userId") Long userId);
 
+    int countByProjectId(@Param("projectId") Long projectId);
+
     List<ProjectMemberResponse> findAllMembers(@Param("projectId") Long projectId);
 
     int updateMemberRole(@Param("projectId") Long projectId,

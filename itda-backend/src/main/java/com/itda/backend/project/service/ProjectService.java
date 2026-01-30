@@ -61,7 +61,8 @@ public class ProjectService {
     public ProjectDetailResponse getProjectDetail(Long userId, Long projectId) {
         Project project = requireProject(projectId);
         String role = requireMemberRole(projectId, userId);
-        return ProjectDetailResponse.from(project, role);
+        Integer memberCount = countMembers(projectId);
+        return ProjectDetailResponse.from(project, role, memberCount);
     }
 
     @Transactional
@@ -72,7 +73,8 @@ public class ProjectService {
         applyUpdate(projectId, request);
 
         Project updatedProject = requireProject(projectId);
-        return ProjectDetailResponse.from(updatedProject, role);
+        Integer memberCount = countMembers(projectId);
+        return ProjectDetailResponse.from(updatedProject, role, memberCount);
     }
 
     @Transactional
@@ -100,6 +102,10 @@ public class ProjectService {
 
     private void addOwnerMember(Long projectId, Long userId) {
         projectMemberMapper.insertMember(projectId, userId, ROLE_OWNER);
+    }
+
+    private Integer countMembers(Long projectId) {
+        return projectMemberMapper.countByProjectId(projectId);
     }
 
     private ProjectCreateResponse toCreateResponse(Project project) {
