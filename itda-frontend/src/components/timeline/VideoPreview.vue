@@ -140,7 +140,6 @@ function togglePlay() {
   padding: 0.25rem 0.75rem;
   border-radius: 4px;
   font-size: 0.875rem;
-  font-family: monospace;
   color: white;
 }
 </style>

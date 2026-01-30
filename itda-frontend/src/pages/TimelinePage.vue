@@ -33,9 +33,9 @@ const sceneId = computed(() => {
 
 onMounted(async () => {
   if (projectId.value) {
-    // 협업 방 입장 (데이터 로딩과 병렬, 실패 영향 최소화)
+    // ?? ? ?? (??? ??? ??, ?? ?? ???)
     collabStore.joinRoom(projectId.value)
-    collabStore.updateLocation('Timeline 편집 중')
+    collabStore.updateLocation('TIMELINE', sceneId.value ?? undefined)
 
     await Promise.all([
       projectStore.loadProject(projectId.value),
@@ -47,9 +47,9 @@ onMounted(async () => {
 watch([projectId, sceneId], async ([nextProjectId, nextSceneId]) => {
   if (!nextProjectId) return
 
-  // 프로젝트 변경 시 협업 방 재입장
+  // ???? ?? ? ?? ? ???
   collabStore.joinRoom(nextProjectId)
-  collabStore.updateLocation('Timeline 편집 중')
+  collabStore.updateLocation('TIMELINE', nextSceneId ?? undefined)
 
   await timelineStore.loadClips(nextProjectId, nextSceneId ?? undefined)
 })

@@ -1,12 +1,14 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, type Component } from 'vue'
+import { computed, ref, type Component } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import type { RouteLocationRaw } from 'vue-router'
 import { useUIStore } from '../stores/ui'
+import { useCollabStore } from '../stores/collab'
 import { useSidebarShortcut } from '../composables/useSidebarShortcut'
 import type { ProjectDetail } from '../types/api/projects'
 import Badge from '../components/common/Badge.vue'
 import Button from '../components/common/Button.vue'
+import ShareButton from '../components/common/ShareButton.vue'
 import ShareProjectModal from '../components/project/ShareProjectModal.vue'
 import ProjectInfoDrawer from '../components/project/ProjectInfoDrawer.vue'
 import PresencePanel from '../components/collab/PresencePanel.vue'
@@ -14,17 +16,14 @@ import {
   BookOpen,
   Clapperboard,
   User,
-  Users,
   Layers,
   Settings,
   Phone,
-  Share2,
   Play,
   ArrowLeft,
-  MoreVertical,
   Pencil,
 } from 'lucide-vue-next'
-import { useCollabStore } from '../stores/collab'
+
 
 interface Props {
   project: ProjectDetail | null
@@ -54,32 +53,6 @@ useSidebarShortcut()
 
 const projectId = computed(() => props.project?.projectId || Number(route.params.id))
 const isProjectInfoOpen = ref(false)
-const isHeaderMenuOpen = ref(false)
-const headerMenuRef = ref<HTMLElement | null>(null)
-
-const closeHeaderMenu = () => {
-  isHeaderMenuOpen.value = false
-}
-
-const handleHeaderMenuToggle = () => {
-  isHeaderMenuOpen.value = !isHeaderMenuOpen.value
-}
-
-const handleClickOutside = (event: MouseEvent) => {
-  if (!isHeaderMenuOpen.value) return
-  if (!headerMenuRef.value) return
-  if (!headerMenuRef.value.contains(event.target as Node)) {
-    closeHeaderMenu()
-  }
-}
-
-onMounted(() => {
-  document.addEventListener('click', handleClickOutside)
-})
-
-onUnmounted(() => {
-  document.removeEventListener('click', handleClickOutside)
-})
 
 interface NavItem {
   key: string
@@ -125,6 +98,13 @@ const progressPercentage = computed(() => {
   if (props.progress.total === 0) return 0
   return Math.round((props.progress.completed / props.progress.total) * 100)
 })
+
+const handleStartCall = () => {
+  const pid = Number(projectId.value)
+  if (Number.isFinite(pid)) {
+    collabStore.startCall(pid)
+  }
+}
 </script>
 
 <template>
@@ -183,7 +163,10 @@ const progressPercentage = computed(() => {
       <div class="sidebar-section border-top">
         <div class="sidebar-text">
           <PresencePanel />
-          <Button variant="secondary" class="start-call-btn">
+        </div>
+        <div class="call-cta">
+          <div class="call-hint">빠른 통화</div>
+          <Button variant="secondary" class="start-call-btn" @click="handleStartCall">
             <Phone class="icon-sm" />
             <span class="nav-label">통화 시작</span>
           </Button>
@@ -236,28 +219,12 @@ const progressPercentage = computed(() => {
             </span>
             <span v-if="extraCount > 0" class="member-more">+{{ extraCount }}</span>
           </div>
-
-          <Button variant="secondary" @click="collabStore.showFloatingBar()">
-            <Users class="icon-sm" />
-            협업 시작
-          </Button>
+          <ShareButton @click="uiStore.openModal('share-project')" />
 
           <Button variant="primary" class="btn-preview">
             <Play class="icon-sm" />
             미리보기
           </Button>
-
-          <div class="header-menu" ref="headerMenuRef">
-            <button class="header-menu-trigger" type="button" @click="handleHeaderMenuToggle">
-              <MoreVertical class="icon-sm" />
-            </button>
-            <div v-if="isHeaderMenuOpen" class="header-menu-dropdown">
-              <button class="menu-item" type="button" @click="uiStore.openModal('share-project'); closeHeaderMenu()">
-                <Share2 class="icon-sm" />
-                공유
-              </button>
-            </div>
-          </div>
         </div>
       </header>
 
@@ -446,7 +413,7 @@ const progressPercentage = computed(() => {
 }
 
 .border-bottom {
-  border-bottom: 1px solid var(--rose-100);
+  border-bottom: 1px solid var(--gray-100);
 }
 
 .border-top {
@@ -580,6 +547,45 @@ const progressPercentage = computed(() => {
   font-size: 0.75rem;
 }
 
+.call-cta {
+  margin-top: 1rem;
+  padding: 0.5rem;
+  border-radius: 12px;
+  background: linear-gradient(135deg, var(--rose-50), white);
+  border: 1px solid var(--rose-100);
+  box-shadow: 0 8px 18px rgba(255, 133, 161, 0.08);
+}
+
+.call-hint {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--gray-500);
+  margin-bottom: 0.375rem;
+}
+
+.sidebar-collapsed .call-cta {
+  margin-top: 0.5rem;
+  padding: 0;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  display: flex;
+  justify-content: center;
+}
+
+.sidebar-collapsed .call-hint {
+  display: none;
+}
+
+.sidebar-collapsed .start-call-btn {
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border-radius: 999px;
+  gap: 0;
+  box-shadow: 0 6px 12px rgba(255, 133, 161, 0.18);
+}
+
 
 /* Main */
 .main-wrapper {
@@ -611,7 +617,7 @@ const progressPercentage = computed(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0.75rem 2rem;
+  padding: 0.75rem 1.5rem;
   min-height: 64px;
   height: auto;
   flex-wrap: wrap;
@@ -635,20 +641,25 @@ const progressPercentage = computed(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  width: 36px;
+  height: 36px;
   border: none;
   background: transparent;
-  color: var(--gray-500);
-  border-radius: 50%;
+  color: var(--gray-600);
+  border-radius: 8px;
   cursor: pointer;
   transition: all 0.2s ease;
   flex-shrink: 0;
 }
 
 .btn-icon-back:hover {
-  background: var(--rose-50);
-  color: var(--rose-600);
+  background: var(--gray-50);
+  color: var(--gray-900);
+}
+
+.btn-icon-back .icon-md {
+  width: 20px;
+  height: 20px;
 }
 
 .breadcrumb {
@@ -718,62 +729,11 @@ const progressPercentage = computed(() => {
   row-gap: 0.5rem;
 }
 
-.header-menu {
-  position: relative;
-}
 
-.header-menu-trigger {
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
-  border: 1px solid var(--rose-100);
-  background: white;
-  color: var(--gray-600);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
 
-.header-menu-trigger:hover {
-  border-color: var(--rose-200);
-  background: var(--rose-50);
-  color: var(--gray-900);
-}
 
-.header-menu-dropdown {
-  position: absolute;
-  right: 0;
-  top: calc(100% + 0.5rem);
-  background: white;
-  border: 1px solid var(--rose-100);
-  border-radius: 12px;
-  box-shadow: 0 12px 30px rgba(255, 133, 161, 0.18);
-  padding: 0.35rem;
-  min-width: 160px;
-  z-index: 10;
-}
 
-.header-menu-dropdown .menu-item {
-  width: 100%;
-  border: none;
-  background: transparent;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.5rem 0.65rem;
-  border-radius: 8px;
-  color: var(--gray-700);
-  font-size: 0.85rem;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
 
-.header-menu-dropdown .menu-item:hover {
-  background: var(--rose-50);
-  color: var(--gray-900);
-}
 
 .progress-section {
   display: flex;

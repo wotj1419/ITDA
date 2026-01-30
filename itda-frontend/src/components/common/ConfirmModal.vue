@@ -23,29 +23,31 @@ const emit = defineEmits<{
 </script>
 
 <template>
-  <div v-if="isOpen" class="modal-overlay" @click.self="emit('cancel')">
-    <div class="modal-content">
-      <div class="modal-icon-wrapper" :class="{ dangerous: isDangerous }">
-        <AlertTriangle class="modal-icon" />
-      </div>
-      
-      <h3 class="modal-title">{{ title }}</h3>
-      <p class="modal-message">{{ message }}</p>
+  <teleport to="body">
+    <div v-if="isOpen" class="modal-overlay" @click.self="emit('cancel')">
+      <div class="modal-content">
+        <div class="modal-icon-wrapper" :class="{ dangerous: isDangerous }">
+          <AlertTriangle class="modal-icon" />
+        </div>
+        
+        <h3 class="modal-title">{{ title }}</h3>
+        <p class="modal-message">{{ message }}</p>
 
-      <div class="modal-actions">
-        <button class="btn btn-secondary" @click="emit('cancel')">
-          {{ cancelText }}
-        </button>
-        <button 
-          class="btn" 
-          :class="isDangerous ? 'btn-danger' : 'btn-primary'"
-          @click="emit('confirm')"
-        >
-          {{ confirmText }}
-        </button>
+        <div class="modal-actions">
+          <button class="btn btn-secondary" @click="emit('cancel')">
+            {{ cancelText }}
+          </button>
+          <button 
+            class="btn" 
+            :class="isDangerous ? 'btn-danger' : 'btn-primary'"
+            @click="emit('confirm')"
+          >
+            {{ confirmText }}
+          </button>
+        </div>
       </div>
     </div>
-  </div>
+  </teleport>
 </template>
 
 <style scoped>
@@ -56,7 +58,7 @@ const emit = defineEmits<{
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 100;
+  z-index: 2000;
   backdrop-filter: blur(4px);
   animation: fadeIn 0.2s ease-out;
 }

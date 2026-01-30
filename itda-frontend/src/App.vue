@@ -9,28 +9,42 @@ import { useCollabStore } from './stores/collab'
 const collabStore = useCollabStore()
 const route = useRoute()
 
-const hideCollabUI = computed(() => route.name === 'landing' || route.name === 'auth')
+const showCollabUI = computed(() => {
+  if (!route.name) return false
+  return route.path.startsWith('/projects')
+})
+
+const shouldLeaveOnRoute = computed(() => {
+  if (!route.name) return false
+  return !route.path.startsWith('/projects')
+})
 
 onMounted(() => {
-  if (!hideCollabUI.value) {
+  if (showCollabUI.value) {
     collabStore.rejoinIfNeeded()
   }
 })
 
-watch(hideCollabUI, (hide) => {
-  if (!hide) {
+watch(showCollabUI, (show) => {
+  if (show) {
     collabStore.rejoinIfNeeded()
     return
   }
   collabStore.leaveRoom()
+})
+
+watch(shouldLeaveOnRoute, (shouldLeave) => {
+  if (shouldLeave && collabStore.isConnected) {
+    collabStore.leaveRoom()
+  }
 })
 </script>
 
 <template>
   <RouterView />
   <ToastContainer />
-  <CollabContainer v-if="!hideCollabUI" />
-  <FloatingControlBar v-if="!hideCollabUI" />
+  <CollabContainer v-if="showCollabUI" />
+  <FloatingControlBar v-if="showCollabUI" />
 </template>
 
 <style>

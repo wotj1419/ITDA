@@ -1,10 +1,13 @@
 <script setup lang="ts">
-import { RouterLink, type RouteLocationRaw } from 'vue-router';
+import { RouterLink, useRouter, type RouteLocationRaw } from 'vue-router';
 import type { Scene } from '../../../types/api/scenes';
 import type { ScenePreview, ScenePreviewClip } from '../composables/useProjectDetail';
 import Card from '../../../components/common/Card.vue';
 import Button from '../../../components/common/Button.vue';
 import Badge from '../../../components/common/Badge.vue';
+import AvatarGroup from '../../../components/common/AvatarGroup.vue';
+import { useCollabStore } from '../../../stores/collab';
+import type { CollabParticipant } from '../../../types/ui/collab';
 import { Play, ChevronLeft, ChevronRight, X } from 'lucide-vue-next';
 
 interface StatusConfig {
@@ -30,7 +33,32 @@ interface Props {
   getSceneEditLink: (scene: Scene) => RouteLocationRaw;
 }
 
-defineProps<Props>();
+const props = defineProps<Props>();
+const collabStore = useCollabStore();
+const router = useRouter();
+
+const getScenePresence = (sceneId: number) => {
+  const list: (CollabParticipant & { isMe?: boolean })[] = [];
+  const local = collabStore.localParticipant;
+  if (local.currentLocation === 'SCENE_EDIT' && local.sceneId === sceneId) {
+    list.push({ ...local, isMe: true });
+  }
+  collabStore.participants.forEach((p) => {
+    if (p.currentLocation === 'SCENE_EDIT' && p.sceneId === sceneId) {
+      list.push({ ...p, isMe: false });
+    }
+  });
+  return list;
+};
+
+const getScenePresenceAvatars = (sceneId: number) =>
+  getScenePresence(sceneId).map((p) => ({
+    src: p.avatarUrl || '',
+    fallback: p.name?.[0]?.toUpperCase() || '?',
+    alt: p.name,
+    title: `${p.name || 'Guest'}: Scene ${sceneId} 편집 중`,
+    onClick: p.isMe ? undefined : () => router.push({ name: 'scene-edit', params: { projectId: props.projectId, sceneId } }),
+  }));
 </script>
 
 <template>
@@ -70,6 +98,9 @@ defineProps<Props>();
               >
                 {{ resolveSceneStatusConfig(scene.status).label }}
               </Badge>
+              <div v-if="getScenePresence(scene.sceneId).length > 0" class="scene-presence">
+                <AvatarGroup :avatars="getScenePresenceAvatars(scene.sceneId)" :max="3" size="sm" />
+              </div>
             </div>
             <h4 class="preview-title">{{ scene.title }}</h4>
             <p v-if="scene.description" class="preview-description">
@@ -134,8 +165,8 @@ defineProps<Props>();
                   :alt="scene.title"
                 />
                 <template v-else>
-                  <img src="/icon.png" alt="아직 미리보기가 없어요" class="preview-empty-icon" />
-                  <span>??? ??? ????</span>
+                  <img src="/icon.png" alt="No Preview" class="preview-empty-icon" />
+                  <span>아직 미리보기가 없습니다.</span>
                 </template>
               </div>
             </template>
@@ -199,11 +230,28 @@ defineProps<Props>();
             :alt="activePreviewClip.label || 'preview'"
           />
           <template v-else>
-            <img src="/icon.png" alt="아직 미리보기가 없어요" class="preview-modal-empty-icon" />
-            <span>?? ????? ?? ????.</span>
+            <img src="/icon.png" alt="No Preview" class="preview-modal-empty-icon" />
+            <span>미리보기를 불러올 수 없습니다.</span>
           </template>
         </div>
       </div>
     </div>
   </div>
 </template>
+
+<style scoped>
+.preview-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.scene-presence {
+  margin-left: auto;
+}
+
+.scene-presence :deep(.avatar-group) {
+  align-items: center;
+}
+</style>

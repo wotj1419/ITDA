@@ -26,8 +26,10 @@ const props = withDefaults(defineProps<Props>(), {
       />
       <span v-else>{{ props.participant.name.substring(0, 2) }}</span>
     </div>
-    <div v-if="props.isMuted" class="mute-button active" title="음소거됨">
-      <MicOff class="mute-icon" />
+    <div class="mute-slot">
+      <div v-if="props.isMuted" class="mute-button active" title="음소거됨">
+        <MicOff class="mute-icon" />
+      </div>
     </div>
   </div>
 </template>
@@ -37,7 +39,23 @@ const props = withDefaults(defineProps<Props>(), {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.1rem;
+  gap: 0.02rem;
+  position: relative;
+}
+
+.mute-slot {
+  height: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 2px;
+  position: relative;
+  overflow: visible;
+}
+
+.mute-slot .mute-button {
+  position: absolute;
+  top: 2px;
 }
 
 .avatar {

@@ -62,7 +62,7 @@ export interface ProjectMember {
     memberId: number
     userId: number
     name: string
-    role: 'OWNER' | 'EDITOR' | 'VIEWER'
+    role: 'OWNER' | 'ADMIN' | 'EDITOR' | 'VIEWER'
 }
 
 export async function fetchProjectMembers(projectId: number): Promise<ProjectMember[]> {
@@ -70,12 +70,16 @@ export async function fetchProjectMembers(projectId: number): Promise<ProjectMem
     return response.data.data || []
 }
 
-export async function inviteMember(projectId: number, email: string, role: 'EDITOR' | 'VIEWER'): Promise<void> {
+export async function inviteMember(projectId: number, email: string, role: 'ADMIN' | 'EDITOR' | 'VIEWER'): Promise<void> {
     await apiClient.post(`/projects/${projectId}/members`, { email, role })
 }
 
 export async function updateMemberRole(projectId: number, memberId: number, role: string): Promise<void> {
     await apiClient.patch(`/projects/${projectId}/members/${memberId}`, { role })
+}
+
+export async function removeMember(projectId: number, userId: number): Promise<void> {
+    await apiClient.delete(`/projects/${projectId}/members/${userId}`)
 }
 
 // ============================================================================
