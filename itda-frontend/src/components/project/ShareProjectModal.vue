@@ -35,10 +35,13 @@ import { watch } from 'vue'
 
 watch(
   () => uiStore.activeModal,
-  (newId) => {
+  async (newId) => {
     if (newId === MODAL_ID) {
       inviteEmail.value = ''
       inviteRole.value = 'admin'
+      if (props.projectId) {
+        await projectStore.loadProjectMembers(props.projectId)
+      }
     }
   }
 )

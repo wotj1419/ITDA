@@ -128,6 +128,13 @@ export const useTimelineStore = defineStore('timeline', () => {
     const cached = durationCache.get(url)
     if (cached) return Promise.resolve(cached)
     const resolved = resolveApiUrl(url) ?? url
+    if (resolved.startsWith('blob:') || resolved.startsWith('data:')) {
+      const duration = await readDurationFromUrl(resolved)
+      if (duration && duration > 0) {
+        durationCache.set(url, duration)
+      }
+      return duration
+    }
     let duration = await readDurationFromUrl(resolved)
 
     if (!duration) {

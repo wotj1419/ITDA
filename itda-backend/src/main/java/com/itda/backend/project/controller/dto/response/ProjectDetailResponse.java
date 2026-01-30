@@ -26,10 +26,13 @@ public record ProjectDetailResponse(
         @Schema(description = "Owner user ID", example = "1")
         Long ownerId,
 
+        @Schema(description = "Member count", example = "3")
+        Integer memberCount,
+
         @Schema(description = "Created at", example = "2026-01-15T12:00:00")
         LocalDateTime createdAt
 ) {
-    public static ProjectDetailResponse from(Project project, String role) {
+    public static ProjectDetailResponse from(Project project, String role, Integer memberCount) {
         return new ProjectDetailResponse(
                 project.getId(),
                 project.getTitle(),
@@ -37,6 +40,7 @@ public record ProjectDetailResponse(
                 project.getGenre(),
                 role,
                 project.getOwnerId(),
+                memberCount,
                 project.getCreatedAt()
         );
     }
