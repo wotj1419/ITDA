@@ -22,6 +22,11 @@ public final class PresetFragments {
         return key == null ? "" : key.fragment();
     }
 
+    public static String filmLookFragment(Object filmLookKey) {
+        FilmLookKey key = FilmLookKey.from(filmLookKey);
+        return key == null ? "" : key.fragment();
+    }
+
     public static String shotTypeEn(Object shotTypeKey) {
         ShotTypeKey key = ShotTypeKey.from(shotTypeKey);
         return key == null ? "" : key.en();
@@ -49,11 +54,11 @@ public final class PresetFragments {
     }
 
     public enum StyleKey {
-        PHOTO_REAL("photo-realistic"),
-        ANIME_2D("2D anime illustration, clean line art"),
-        STYLIZED_3D("stylized 3D animated feature film look"),
-        WATERCOLOR_ILLUSTRATION("watercolor illustration, soft washes, subtle paper texture"),
-        OIL_PAINT_ILLUSTRATION("oil paint illustration, textured brush strokes");
+        PHOTO_REAL("photorealistic, realistic skin texture, natural material surfaces, physically plausible lighting"),
+        ANIME_2D("2D anime illustration, clean ink line art, cel-shaded flat colors, vibrant saturated palette, subtle rim lighting on characters"),
+        STYLIZED_3D("stylized 3D animated feature-film look, smooth subsurface-scattered skin, soft ambient occlusion, rounded appealing shapes"),
+        WATERCOLOR_ILLUSTRATION("watercolor illustration, soft washes, subtle paper texture, loose wet-on-wet edges, visible pigment granulation, delicate color bleeds"),
+        OIL_PAINT_ILLUSTRATION("oil paint illustration, textured brush strokes, thick impasto highlights, rich color mixing, canvas weave texture visible in shadow areas");
 
         private final String fragment;
 
@@ -92,10 +97,10 @@ public final class PresetFragments {
     }
 
     public enum TimeOfDayKey {
-        DAWN("dawn"),
-        DAY("daytime"),
-        DUSK("golden hour, sunset"),
-        NIGHT("night");
+        DAWN("early dawn, pale pink-orange sky gradient, soft diffused pre-sunrise light, long blue-tinted shadows"),
+        DAY("bright midday, clear overhead sunlight, short crisp shadows, neutral white balance"),
+        DUSK("golden hour, warm amber sunset light raking at a low angle, long stretched shadows, rich orange-pink sky"),
+        NIGHT("nighttime, deep blue-black sky, cool moonlight with isolated warm practical light sources, visible ambient glow");
 
         private final String fragment;
 
@@ -131,11 +136,11 @@ public final class PresetFragments {
 
     public enum MoodKey {
         NEUTRAL("natural color grade, balanced lighting, moderate contrast"),
-        COZY("warm color grade, soft diffused lighting, gentle contrast"),
+        COZY("warm color grade, soft diffused lighting, gentle contrast, soft highlights"),
         LONELY("cooler tones, slightly desaturated, more negative space, calm atmosphere"),
-        TENSE("low-key lighting, higher contrast, cooler grade, subtle shadow emphasis"),
-        HOPEFUL("bright high-key lighting, vibrant but natural colors, soft highlights"),
-        DARK("desaturated cool palette, soft low contrast, overcast or dim ambience");
+        TENSE("low-key lighting, higher contrast, cooler grade, subtle shadow emphasis, subtle film grain"),
+        HOPEFUL("bright high-key lighting, vibrant but natural colors, soft highlights, gentle lens flare"),
+        DARK("desaturated cool palette, dim ambience, muted color palette, hazy atmosphere, vignette edges");
 
         private final String fragment;
 
@@ -160,15 +165,41 @@ public final class PresetFragments {
         }
     }
 
+    public enum FilmLookKey {
+        CINEMATIC_MODERN("cinematic modern film look, filmic color grading, subtle film grain, natural highlight roll-off, gentle lens bloom");
+
+        private final String fragment;
+
+        FilmLookKey(String fragment) {
+            this.fragment = fragment;
+        }
+
+        public String fragment() {
+            return fragment;
+        }
+
+        public static FilmLookKey from(Object raw) {
+            String key = normalizeKey(raw);
+            if (key == null) {
+                return null;
+            }
+            try {
+                return valueOf(key);
+            } catch (IllegalArgumentException e) {
+                return null;
+            }
+        }
+    }
+
     public enum ShotTypeKey {
-        WIDE("wide shot"),
-        MEDIUM("medium shot"),
-        CLOSE_UP("close-up"),
-        EXTREME_CLOSE_UP("extreme close-up"),
-        OTS("over-the-shoulder shot"),
-        POV("POV shot"),
-        HIGH_ANGLE("high-angle shot"),
-        LOW_ANGLE("low-angle shot");
+        WIDE("wide shot, full environment visible, subject occupies less than a third of the frame"),
+        MEDIUM("medium shot, waist-up framing, balanced subject-to-environment ratio"),
+        CLOSE_UP("close-up, head and shoulders tightly framed, background softly blurred"),
+        EXTREME_CLOSE_UP("extreme close-up, single facial feature or object detail fills the entire frame"),
+        OTS("over-the-shoulder shot, foreground shoulder softly blurred, subject in sharp focus"),
+        POV("POV first-person perspective, hands or held object visible in foreground"),
+        HIGH_ANGLE("high-angle shot, camera looking down at the subject, subject appears smaller in the environment"),
+        LOW_ANGLE("low-angle shot, camera looking up at the subject, subject appears powerful and dominant");
 
         private final String en;
 
@@ -225,11 +256,11 @@ public final class PresetFragments {
     }
 
     public enum CameraMotionKey {
-        STATIC("static camera"),
-        SLOW_ZOOM_IN("slow zoom in"),
-        ZOOM_OUT("zoom out"),
-        PAN_LR("pan left to right"),
-        TILT_UP("tilt up");
+        STATIC("static locked-off camera, no movement, rock-steady frame"),
+        SLOW_ZOOM_IN("slow gradual zoom in, gently narrowing the frame over the full duration"),
+        ZOOM_OUT("steady zoom out, slowly revealing more of the surrounding environment"),
+        PAN_LR("smooth pan from left to right at a constant speed, following the action"),
+        TILT_UP("smooth tilt upward, gradually revealing the scene from bottom to top");
 
         private final String en;
 
