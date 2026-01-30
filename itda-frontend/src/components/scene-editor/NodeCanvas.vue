@@ -4,7 +4,7 @@
  *
  * 설계 문서: docs/vue-flow-node-workflow-design.md Section 2
  */
-import { ref, watch } from 'vue';
+import { markRaw, ref, watch } from 'vue';
 import { VueFlow, useVueFlow } from '@vue-flow/core';
 import { Background } from '@vue-flow/background';
 import { Controls } from '@vue-flow/controls';
@@ -56,9 +56,9 @@ const INITIAL_FIT_OPTIONS: FitViewOptions = {
   maxZoom: INITIAL_ZOOM,
 };
 
-const edgeTypes = {
+const edgeTypes = markRaw({
   flowing: FlowingEdge,
-} as const;
+} as const);
 
 // =============================================================================
 // Lifecycle

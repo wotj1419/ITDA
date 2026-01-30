@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { Play, Pause } from 'lucide-vue-next'
+import { useVideoPreview } from '../../composables/useVideoPreview'
 
 interface Props {
   thumbnailUrl?: string
@@ -11,6 +12,8 @@ interface Props {
 const props = defineProps<Props>()
 
 const isPlaying = ref(false)
+const videoRef = ref<HTMLVideoElement | null>(null)
+const { isVideo } = useVideoPreview()
 
 function formatTime(seconds: number): string {
   const m = Math.floor(seconds / 60)
@@ -19,7 +22,20 @@ function formatTime(seconds: number): string {
 }
 
 function togglePlay() {
-  isPlaying.value = !isPlaying.value
+  if (!videoRef.value) {
+    if (!props.thumbnailUrl) return
+    // If not video, just toggle state (though it won't play anything)
+    isPlaying.value = !isPlaying.value
+    return
+  }
+  
+  if (videoRef.value.paused) {
+    videoRef.value.play().catch(() => {})
+    isPlaying.value = true
+  } else {
+    videoRef.value.pause()
+    isPlaying.value = false
+  }
 }
 </script>
 
@@ -27,8 +43,17 @@ function togglePlay() {
   <div class="video-preview">
     <div
       class="preview-container"
-      :style="thumbnailUrl ? { backgroundImage: `url(${thumbnailUrl})` } : {}"
+      :style="(!isVideo(thumbnailUrl) && thumbnailUrl) ? { backgroundImage: `url(${thumbnailUrl})` } : {}"
     >
+      <video
+        v-if="isVideo(thumbnailUrl)"
+        ref="videoRef"
+        :src="thumbnailUrl"
+        class="preview-video"
+        preload="metadata"
+        playsinline
+        @ended="isPlaying = false"
+      />
       <!-- Play Overlay -->
       <div class="play-overlay" @click="togglePlay">
         <div class="play-button">
@@ -60,6 +85,13 @@ function togglePlay() {
   border-radius: 16px;
   position: relative;
   overflow: hidden;
+}
+
+.preview-video {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: black;
 }
 
 .play-overlay {

@@ -25,7 +25,7 @@ const collabStore = useCollabStore()
 const projectId = computed(() => Number(route.params.id))
 const project = computed(() => projectStore.currentProject)
 const sceneId = computed(() => {
-  const raw = route.query.sceneId
+  const raw = route.params.sceneId
   const value = Array.isArray(raw) ? raw[0] : raw
   const parsed = Number(value)
   return Number.isFinite(parsed) ? parsed : null
@@ -33,19 +33,24 @@ const sceneId = computed(() => {
 
 onMounted(async () => {
   if (projectId.value) {
+    // 협업 방 입장 (데이터 로딩과 병렬, 실패 영향 최소화)
+    collabStore.joinRoom(projectId.value)
+    collabStore.updateLocation('Timeline 편집 중')
+
     await Promise.all([
       projectStore.loadProject(projectId.value),
       timelineStore.loadClips(projectId.value, sceneId.value ?? undefined),
     ])
-    
-    // 협업 방 입장
-    collabStore.joinRoom(projectId.value)
-    collabStore.updateLocation('Timeline 편집 중')
   }
 })
 
 watch([projectId, sceneId], async ([nextProjectId, nextSceneId]) => {
   if (!nextProjectId) return
+
+  // 프로젝트 변경 시 협업 방 재입장
+  collabStore.joinRoom(nextProjectId)
+  collabStore.updateLocation('Timeline 편집 중')
+
   await timelineStore.loadClips(nextProjectId, nextSceneId ?? undefined)
 })
 

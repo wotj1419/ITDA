@@ -8,7 +8,8 @@
     <resultMap id="SceneTimelineItemMap" type="com.itda.backend.timeline.repository.dto.SceneTimelineItem">
         <id property="videoNodeId" column="video_node_id"/>
         <result property="sceneId" column="scene_id"/>
-        <result property="thumbnailUrl" column="thumbnail_url"/>
+        <result property="assetId" column="asset_id"/>
+        <result property="fallbackUrl" column="fallback_url"/>
         <result property="duration" column="duration"/>
         <result property="orderIndex" column="order_index"/>
     </resultMap>
@@ -17,7 +18,8 @@
         <id property="sceneVideoId" column="scene_video_id"/>
         <result property="sceneId" column="scene_id"/>
         <result property="sceneTitle" column="scene_title"/>
-        <result property="thumbnailUrl" column="thumbnail_url"/>
+        <result property="assetId" column="asset_id"/>
+        <result property="fallbackUrl" column="fallback_url"/>
         <result property="duration" column="duration"/>
         <result property="orderIndex" column="order_index"/>
     </resultMap>
@@ -25,7 +27,8 @@
     <select id="findSceneTimelineItems" resultMap="SceneTimelineItemMap">
         SELECT ti.video_node_id,
                ti.scene_id,
-               n.content_url AS thumbnail_url,
+               n.asset_id AS asset_id,
+               n.content_url AS fallback_url,
                NULL AS duration,
                ti.order_index
         FROM timeline_items ti
@@ -40,7 +43,8 @@
         SELECT sv.id AS scene_video_id,
                ti.scene_id,
                s.title AS scene_title,
-               sv.thumbnail_url AS thumbnail_url,
+               sv.asset_id AS asset_id,
+               sv.thumbnail_url AS fallback_url,
                sv.duration_ms AS duration,
                ti.order_index
         FROM timeline_items ti
@@ -49,5 +53,104 @@
         WHERE ti.project_id = #{projectId}
         ORDER BY ti.order_index ASC, ti.id ASC
     </select>
+
+    <select id="countSceneTimelineItems" resultType="int">
+        SELECT COUNT(*)
+        FROM timeline_items
+        WHERE scene_id = #{sceneId}
+          AND video_node_id IS NOT NULL
+    </select>
+
+    <select id="countSceneTimelineItemsByVideoNodeIds" resultType="int">
+        SELECT COUNT(*)
+        FROM timeline_items
+        WHERE scene_id = #{sceneId}
+          AND video_node_id IN
+        <foreach collection="videoNodeIds" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </select>
+
+    <update id="reorderSceneTimelineItems">
+        UPDATE timeline_items
+        SET order_index = CASE video_node_id
+        <foreach collection="orderedVideoNodeIds" item="id" index="idx">
+            WHEN #{id} THEN #{idx} + 1
+        </foreach>
+        ELSE order_index
+        END
+        WHERE scene_id = #{sceneId}
+          AND video_node_id IN
+        <foreach collection="orderedVideoNodeIds" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </update>
+
+    <select id="countProjectTimelineItems" resultType="int">
+        SELECT COUNT(*)
+        FROM timeline_items
+        WHERE project_id = #{projectId}
+          AND scene_video_id IS NOT NULL
+    </select>
+
+    <select id="countProjectTimelineItemsBySceneVideoIds" resultType="int">
+        SELECT COUNT(*)
+        FROM timeline_items
+        WHERE project_id = #{projectId}
+          AND scene_video_id IN
+        <foreach collection="sceneVideoIds" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </select>
+
+    <update id="reorderProjectTimelineItems">
+        UPDATE timeline_items
+        SET order_index = CASE scene_video_id
+        <foreach collection="orderedSceneVideoIds" item="id" index="idx">
+            WHEN #{id} THEN #{idx} + 1
+        </foreach>
+        ELSE order_index
+        END
+        WHERE project_id = #{projectId}
+          AND scene_video_id IN
+        <foreach collection="orderedSceneVideoIds" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </update>
+
+    <insert id="insertSceneTimelineItem">
+        INSERT INTO timeline_items (
+            project_id,
+            scene_id,
+            video_node_id,
+            order_index,
+            created_by
+        ) VALUES (
+            #{projectId},
+            #{sceneId},
+            #{videoNodeId},
+            #{orderIndex},
+            #{createdBy}
+        )
+    </insert>
+
+    <delete id="deleteSceneTimelineItemByVideoNodeId">
+        DELETE FROM timeline_items
+        WHERE video_node_id = #{videoNodeId}
+    </delete>
+
+    <delete id="deleteSceneTimelineItemsByShotId">
+        DELETE ti
+        FROM timeline_items ti
+        JOIN nodes n ON n.id = ti.video_node_id
+        WHERE n.parent_node_id = #{shotNodeId}
+    </delete>
+
+    <update id="updateSceneTimelineItemsVideoId">
+        UPDATE timeline_items
+        SET scene_video_id = #{sceneVideoId}
+        WHERE scene_id = #{sceneId}
+          AND video_node_id IS NOT NULL
+    </update>
 
 </mapper>

@@ -7,6 +7,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 
 @Component
 public class LocalFileStorage {
@@ -27,6 +28,21 @@ public class LocalFileStorage {
             String storageKey = normalizeRelativePath(relativePath);
             Path targetPath = resolveTargetPath(storageKey);
             writeBytes(targetPath, bytes);
+
+            return new StoredAsset(storageKey, Files.size(targetPath));
+        } catch (IOException e) {
+            throw new IllegalStateException("Failed to store file", e);
+        }
+    }
+
+    public StoredAsset save(Path sourceFile, String relativePath) {
+        try {
+            requireRelativePath(relativePath);
+            requireSourceFile(sourceFile);
+
+            String storageKey = normalizeRelativePath(relativePath);
+            Path targetPath = resolveTargetPath(storageKey);
+            copyFile(sourceFile, targetPath);
 
             return new StoredAsset(storageKey, Files.size(targetPath));
         } catch (IOException e) {
@@ -77,6 +93,15 @@ public class LocalFileStorage {
         }
     }
 
+    private void requireSourceFile(Path sourceFile) {
+        if (sourceFile == null) {
+            throw new IllegalArgumentException("sourceFile is required");
+        }
+        if (!Files.exists(sourceFile)) {
+            throw new IllegalArgumentException("sourceFile does not exist");
+        }
+    }
+
     private String normalizeRelativePath(String relativePath) {
         String normalized = relativePath.trim().replace("\\", "/");
         while (normalized.startsWith("/")) {
@@ -102,5 +127,13 @@ public class LocalFileStorage {
             Files.createDirectories(parent);
         }
         Files.write(targetPath, bytes);
+    }
+
+    private void copyFile(Path sourceFile, Path targetPath) throws IOException {
+        Path parent = targetPath.getParent();
+        if (parent != null) {
+            Files.createDirectories(parent);
+        }
+        Files.copy(sourceFile, targetPath, StandardCopyOption.REPLACE_EXISTING);
     }
 }

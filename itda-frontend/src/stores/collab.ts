@@ -163,11 +163,15 @@ export const useCollabStore = defineStore('collab', () => {
     /**
      * Join a project room (Signaling Only)
      */
-    async function joinRoom(projectId: number) {
-        const nextRoomId = String(projectId);
+    async function joinRoom(projectId: number): Promise<void> {
+        const nextRoomId = `project-${projectId}`;
 
         if (status.value !== 'disconnected' && roomId.value && roomId.value !== nextRoomId) {
             leaveRoom();
+        }
+
+        if (roomId.value === nextRoomId && status.value !== 'disconnected') {
+            return;
         }
 
         if (status.value === 'connected' || status.value === 'connecting') return;
@@ -455,8 +459,11 @@ export const useCollabStore = defineStore('collab', () => {
     // Actions: Features
     // ================================
 
+    const canSendSignal = () => socketManager.canSendSignal() && status.value === 'connected' && !!roomId.value;
+
     function sendMessage(content: string) {
         if (!content.trim()) return;
+        if (!canSendSignal()) return;
 
         // Broadcast
         socketManager.sendSignal({
@@ -485,7 +492,7 @@ export const useCollabStore = defineStore('collab', () => {
         if (now - lastCursorSentAt < CURSOR_THROTTLE_MS) return;
         lastCursorSentAt = now;
 
-        if (!roomId.value || status.value !== 'connected') return;
+        if (!canSendSignal()) return;
 
         socketManager.sendSignal({
             type: 'cursor',
@@ -581,6 +588,7 @@ export const useCollabStore = defineStore('collab', () => {
     }
 
     function broadcastState() {
+        if (!canSendSignal()) return;
         socketManager.sendSignal({
             type: 'state_update',
             payload: localParticipant.value
@@ -593,10 +601,19 @@ export const useCollabStore = defineStore('collab', () => {
         const savedRoomId = localStorage.getItem(STORAGE_KEY);
         if (!savedRoomId) return;
 
-        const parsedId = Number(savedRoomId);
-        if (!Number.isFinite(parsedId)) {
-        localStorage.removeItem(STORAGE_KEY);
-        stopSpeakingMonitor(localUserId.value);
+        let parsedId: number | null = null;
+        if (savedRoomId.startsWith('project-')) {
+            const raw = savedRoomId.replace('project-', '');
+            const value = Number(raw);
+            parsedId = Number.isFinite(value) ? value : null;
+        } else {
+            const value = Number(savedRoomId);
+            parsedId = Number.isFinite(value) ? value : null;
+        }
+
+        if (!parsedId) {
+            localStorage.removeItem(STORAGE_KEY);
+            stopSpeakingMonitor(localUserId.value);
             return;
         }
 

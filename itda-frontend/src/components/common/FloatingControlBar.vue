@@ -2,6 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useCollabStore } from '../../stores/collab'
 import CollabPanel from '../collab/CollabPanel.vue'
+import Button from './Button.vue'
 import { Mic, MicOff, MessageCircle, PhoneOff } from 'lucide-vue-next'
 
 const collabStore = useCollabStore()

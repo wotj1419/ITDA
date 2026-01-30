@@ -16,16 +16,20 @@ public record SceneTimelineItemResponse(
         String thumbnailUrl,
 
         @Schema(description = "Duration", example = "5")
-        Integer duration,
+    Integer duration,
 
-        @Schema(description = "Order index", example = "1")
-        Integer order
+    @Schema(description = "Order index", example = "1")
+    Integer order
 ) {
     public static SceneTimelineItemResponse from(SceneTimelineItem item) {
+        return from(item, item.getFallbackUrl());
+    }
+
+    public static SceneTimelineItemResponse from(SceneTimelineItem item, String resolvedUrl) {
         return new SceneTimelineItemResponse(
                 item.getVideoNodeId(),
                 item.getSceneId(),
-                item.getThumbnailUrl(),
+                resolvedUrl,
                 item.getDuration(),
                 item.getOrderIndex()
         );

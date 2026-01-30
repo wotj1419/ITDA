@@ -8,6 +8,7 @@ const WS_URL = import.meta.env.VITE_WS_URL || 'http://localhost:8080/ws';
 
 class WebSocketManager {
     private client: Client;
+    private lastSendWarnAt = 0;
     private subscription: StompSubscription | null = null;
     private currentRoomId: string | null = null;
 
@@ -85,7 +86,11 @@ class WebSocketManager {
 
     public sendSignal(signal: any) {
         if (!this.client.connected || !this.currentRoomId) {
-            console.warn('Cannot send signal: disconnected or no room joined');
+            const now = Date.now();
+            if (now - this.lastSendWarnAt > 5000) {
+                console.warn('Cannot send signal: disconnected or no room joined');
+                this.lastSendWarnAt = now;
+            }
             return;
         }
         const authStore = useAuthStore();
@@ -116,6 +121,10 @@ class WebSocketManager {
 
     public getClient() {
         return this.client;
+    }
+
+    public canSendSignal() {
+        return this.client.connected && !!this.currentRoomId;
     }
 }
 

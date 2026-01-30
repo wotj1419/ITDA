@@ -34,6 +34,7 @@ build/
 /service-full-1440.png
 /service-mock-1440.png
 /service-mock-1440-v4.png
-# Image
-uploads
+
+# Ignore uploads directory
+uploads/
 /uploads/
