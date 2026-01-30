@@ -139,6 +139,28 @@ const normalizedMembers = computed(() => {
   return list
 })
 
+const currentUserRole = computed(() => {
+  const me = normalizedMembers.value.find((m) => m.userId === authStore.user?.id)
+  return me?.role ?? 'viewer'
+})
+
+const canManageRoles = computed(() => {
+  const currentUserId = authStore.user?.id
+  if (!currentUserId) return false
+  const ownerId = projectStore.currentProject?.ownerId
+  if (ownerId === currentUserId) return true
+  return ['owner', 'admin'].includes(currentUserRole.value)
+})
+
+const roleLabelMap: Record<'owner' | 'admin' | 'editor' | 'viewer', string> = {
+  owner: '전체 허용',
+  admin: '전체 허용',
+  editor: '편집 허용',
+  viewer: '읽기 허용',
+}
+
+const removeTitle = '멤버 제거'
+
 async function updateMemberRole(userId: number, role: 'owner' | 'admin' | 'editor' | 'viewer') {
   if (!props.projectId) return
   // Convert UI role (lowercase) to API role (uppercase)
@@ -202,18 +224,18 @@ async function removeMember(userId: number) {
             </div>
             <div class="member-role">
               <CustomSelect
-                v-if="member.role !== 'owner'"
+                v-if="canManageRoles && member.role !== 'owner'"
                 :model-value="member.role"
                 :options="inviteOptions"
                 class="member-role-select"
                 @update:model-value="(val) => updateMemberRole(member.userId, val as any)"
               />
-              <span v-else class="owner-badge">전체 허용</span>
+              <span v-else class="role-badge">{{ roleLabelMap[member.role] || roleLabelMap.viewer }}</span>
               
               <button 
-                v-if="member.role !== 'owner' && member.userId !== authStore.user?.id"
+                v-if="canManageRoles && member.role !== 'owner' && member.userId !== authStore.user?.id"
                 class="remove-btn"
-                title="멤버 내보내기"
+                :title="removeTitle"
                 @click="removeMember(member.userId)"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -477,7 +499,7 @@ async function removeMember(userId: number) {
   text-align: center;
 }
 
-.owner-badge {
+.role-badge {
   display: inline-block;
   padding: 0.6rem 0.75rem;
   background: var(--rose-50);

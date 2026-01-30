@@ -306,6 +306,7 @@ export const useCollabStore = defineStore('collab', () => {
         isMediaConnected.value = false;
         isMuted.value = false;
         localStream.value = null;
+        isPanelOpen.value = false;
         stopSpeakingMonitor(localUserId.value);
     }
 
@@ -360,6 +361,7 @@ export const useCollabStore = defineStore('collab', () => {
 
     function startCall(projectId: number) {
         isAutoStarting.value = true;
+        isPanelOpen.value = false;
         joinRoom(projectId);
         showFloatingBar(true);
         if (status.value === 'connected') {
