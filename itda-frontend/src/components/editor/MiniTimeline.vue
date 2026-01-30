@@ -1,11 +1,10 @@
 <script setup lang="ts">
 /**
- * MiniTimeline - 확정된 비디오 클립을 보여주는 미니 타임라인
+ * MiniTimeline - 확정된 비디오 트랙 요약 표시
  */
 import { ref } from 'vue';
-import { RouterLink } from 'vue-router';
 import type { TimelineClip } from '../../types/ui';
-import { Star, ArrowRight, Play, X } from 'lucide-vue-next';
+import { Star, Play, X } from 'lucide-vue-next';
 import { useVideoPreview } from '../../composables/useVideoPreview';
 
 // =============================================================================
@@ -98,11 +97,11 @@ const progressPercent = Math.min(
 </script>
 
 <template>
-  <div class="mini-timeline">
+  <div class="mini-timeline" :class="{ 'is-expanded': clips.length > 0 }">
     <!-- Label -->
     <div class="timeline-label">
       <Star class="label-icon" />
-      <span>Confirmed</span>
+      <span>확정</span>
     </div>
 
     <!-- Clips -->
@@ -140,7 +139,6 @@ const progressPercent = Math.min(
           class="clip-content clip-img"
         />
         <span class="clip-duration">{{ clip.duration }}s</span>
-        <span class="clip-duration">{{ clip.duration }}s</span>
       </div>
 
       <!-- Empty State -->
@@ -157,21 +155,11 @@ const progressPercent = Math.min(
       />
     </div>
 
-    <!-- Timeline Link -->
+    <!-- Timeline Play -->
     <button class="timeline-play" @click="handlePlay">
       <Play class="link-icon" />
       재생
     </button>
-
-    <RouterLink
-      :to="sceneId
-        ? { name: 'scene-timeline', params: { id: projectId, sceneId } }
-        : { name: 'timeline', params: { id: projectId } }"
-      class="timeline-link"
-    >
-      <ArrowRight class="link-icon" />
-      Scene Timeline
-    </RouterLink>
   </div>
 </template>
 
@@ -183,10 +171,19 @@ const progressPercent = Math.min(
 .mini-timeline {
   display: flex;
   align-items: center;
-  gap: 1rem;
-  padding: 0.75rem 1.5rem;
+  gap: 1.5rem;
+  height: 40px;
+  padding: 0 1.5rem;
   background: white;
-  border-top: 1px solid var(--rose-100);
+  border-top: 1px solid var(--gray-100);
+  position: relative;
+  z-index: 20;
+  transition: height 0.2s ease, padding 0.2s ease;
+}
+
+.mini-timeline.is-expanded {
+  height: 72px;
+  padding: 0.25rem 1.5rem;
 }
 
 /* ==========================================================================
@@ -197,15 +194,18 @@ const progressPercent = Math.min(
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  font-size: 0.75rem;
-  font-weight: 600;
+  font-size: 10px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
   color: var(--rose-500);
   white-space: nowrap;
 }
 
 .label-icon {
-  width: 16px;
-  height: 16px;
+  width: 14px;
+  height: 14px;
+  fill: currentColor;
 }
 
 /* ==========================================================================
@@ -218,6 +218,7 @@ const progressPercent = Math.min(
   flex: 1;
   overflow-x: auto;
   padding: 4px 0;
+  align-items: center;
 }
 
 .timeline-clip {
@@ -231,12 +232,13 @@ const progressPercent = Math.min(
   transition: transform 0.2s ease;
 }
 
-.timeline-clip.drag-over {
-  box-shadow: 0 0 0 2px var(--rose-300);
+.mini-timeline.is-expanded .timeline-clip {
+  height: 56px;
+  width: 74px;
 }
 
-.timeline-clip:hover {
-  transform: scale(1.05);
+.timeline-clip.drag-over {
+  box-shadow: 0 0 0 2px var(--rose-300);
 }
 
 .timeline-clip:hover {
@@ -294,9 +296,8 @@ const progressPercent = Math.min(
 }
 
 .timeline-empty {
-  font-size: 0.75rem;
-  color: var(--gray-400);
-  font-style: italic;
+  font-size: 10px;
+  color: var(--gray-300);
 }
 
 /* ==========================================================================
@@ -318,25 +319,6 @@ const progressPercent = Math.min(
   transition: width 0.3s ease;
 }
 
-/* ==========================================================================
-   Timeline Link
-   ========================================================================== */
-
-.timeline-link {
-  display: flex;
-  align-items: center;
-  gap: 0.375rem;
-  padding: 0.5rem 0.75rem;
-  font-size: 0.75rem;
-  font-weight: 500;
-  color: var(--rose-500);
-  background: var(--rose-50);
-  border-radius: 6px;
-  text-decoration: none;
-  transition: all 0.2s ease;
-  white-space: nowrap;
-}
-
 .timeline-play {
   display: flex;
   align-items: center;
@@ -356,11 +338,6 @@ const progressPercent = Math.min(
 .timeline-play:hover {
   background: var(--gray-100);
   color: var(--gray-900);
-}
-
-.timeline-link:hover {
-  background: var(--rose-100);
-  color: var(--rose-600);
 }
 
 .link-icon {

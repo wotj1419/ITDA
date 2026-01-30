@@ -24,6 +24,8 @@ public interface NodeMapper {
 
     void updateNode(Node node);
 
+    int updateGenerationInputs(Node node);
+
     void deleteById(@Param("id") Long id);
 
     int countMasterNodesBySceneId(@Param("sceneId") Long sceneId);

@@ -16,6 +16,21 @@ export const useProjectStore = defineStore('project', () => {
   const currentProject = ref<ProjectDetail | null>(null)
   const { isLoading, error, run } = useAsyncAction()
   const favoriteIds = ref<Set<number>>(new Set([1, 2])) // Mock default favorites
+  const highlightedProjectId = ref<number | null>(null)
+  let highlightTimeout: ReturnType<typeof setTimeout> | null = null
+
+  // Local Storage for Last Accessed Time
+  const lastAccessedMap = ref<Record<number, number>>({})
+
+  // Initialize from localStorage
+  try {
+    const stored = localStorage.getItem('project_last_accessed')
+    if (stored) {
+      lastAccessedMap.value = JSON.parse(stored)
+    }
+  } catch (e) {
+    console.error('Failed to parse last accessed projects', e)
+  }
 
   // Getters
   const projectCount = computed(() => projects.value.length)
@@ -30,6 +45,23 @@ export const useProjectStore = defineStore('project', () => {
       .slice(0, 2)
   )
 
+  const sortedProjects = computed(() => {
+    return [...projects.value].sort((a, b) => {
+      const timeA = lastAccessedMap.value[a.projectId] || 0
+      const timeB = lastAccessedMap.value[b.projectId] || 0
+
+      // 1. Sort by last accessed time (descending)
+      if (timeA !== timeB) {
+        return timeB - timeA
+      }
+
+      // 2. If never accessed (Time=0) or equal, sort by updatedAt (descending)
+      const dateA = new Date(a.updatedAt).getTime()
+      const dateB = new Date(b.updatedAt).getTime()
+      return dateB - dateA
+    })
+  })
+
   // Actions
   function isFavorite(projectId: number): boolean {
     return favoriteIds.value.has(projectId)
@@ -43,9 +75,67 @@ export const useProjectStore = defineStore('project', () => {
     }
   }
 
+  function touchProject(projectId: number): void {
+    const now = Date.now()
+    lastAccessedMap.value[projectId] = now
+    const updatedAt = new Date(now).toISOString()
+
+    const index = projects.value.findIndex((p) => p.projectId === projectId)
+    if (index > -1) {
+      const existing = projects.value[index]
+      if (existing) {
+        projects.value[index] = {
+          ...existing,
+          updatedAt,
+        }
+      }
+    }
+
+    if (currentProject.value?.projectId === projectId) {
+      currentProject.value = {
+        ...currentProject.value,
+        updatedAt,
+      }
+    }
+
+    // Persist to localStorage
+    try {
+      localStorage.setItem('project_last_accessed', JSON.stringify(lastAccessedMap.value))
+    } catch (e) {
+      console.error('Failed to save last accessed projects', e)
+    }
+  }
+
+  function highlightProject(projectId: number): void {
+    highlightedProjectId.value = projectId
+
+    if (highlightTimeout) {
+      clearTimeout(highlightTimeout)
+    }
+
+    highlightTimeout = setTimeout(() => {
+      if (highlightedProjectId.value === projectId) {
+        highlightedProjectId.value = null
+      }
+    }, 1400)
+  }
+
   async function loadProjects(): Promise<void> {
     await run(async () => {
-      projects.value = await fetchProjects()
+      const fetched = await fetchProjects()
+      projects.value = fetched.map((project) => {
+        const lastAccessed = lastAccessedMap.value[project.projectId]
+        if (lastAccessed) {
+          const updatedAt = new Date(project.updatedAt).getTime()
+          if (lastAccessed > updatedAt) {
+            return {
+              ...project,
+              updatedAt: new Date(lastAccessed).toISOString(),
+            }
+          }
+        }
+        return project
+      })
     }, { errorMessage: 'Failed to load projects' })
   }
 
@@ -54,6 +144,10 @@ export const useProjectStore = defineStore('project', () => {
       errorMessage: 'Failed to load project',
     })
     currentProject.value = result
+    if (result) {
+      // update access time when loading detail
+      touchProject(projectId)
+    }
     if (!result && !error.value) {
       error.value = 'Project not found'
     }
@@ -65,6 +159,7 @@ export const useProjectStore = defineStore('project', () => {
     })
     if (newProject) {
       projects.value.push(newProject)
+      touchProject(newProject.projectId) // New project is accessed
     }
     return newProject
   }
@@ -108,6 +203,7 @@ export const useProjectStore = defineStore('project', () => {
           ...updatedProject,
         }
       }
+      touchProject(projectId) // Updated project is accessed
     }
     return updatedProject
   }
@@ -125,6 +221,25 @@ export const useProjectStore = defineStore('project', () => {
     await run(() => deleteProject(projectId), { errorMessage: 'Failed to permanently delete project' })
   }
 
+  async function inviteMember(projectId: number, email: string, role: 'EDITOR' | 'VIEWER'): Promise<void> {
+    await run(async () => {
+      // Dynamic import to avoid circular dependency if any, though explicit import is better if safe
+      const api = await import('../services/api/projects')
+      await api.inviteMember(projectId, email, role)
+      // Refresh project to get updated member list
+      await loadProject(projectId)
+    }, { errorMessage: 'Failed to invite member' })
+  }
+
+  async function updateMemberRole(projectId: number, memberId: number, role: 'EDITOR' | 'VIEWER'): Promise<void> {
+    await run(async () => {
+      const api = await import('../services/api/projects')
+      await api.updateMemberRole(projectId, memberId, role)
+      // Refresh project to get updated member list
+      await loadProject(projectId)
+    }, { errorMessage: 'Failed to update member role' })
+  }
+
   function clearCurrentProject(): void {
     currentProject.value = null
   }
@@ -139,9 +254,13 @@ export const useProjectStore = defineStore('project', () => {
     projectCount,
     favoriteProjects,
     recentProjects,
+    sortedProjects,
+    highlightedProjectId,
     // Actions
     isFavorite,
     toggleFavorite,
+    touchProject,
+    highlightProject,
     loadProjects,
     loadProject,
     addProject,
@@ -151,5 +270,7 @@ export const useProjectStore = defineStore('project', () => {
     getDeletedProjects,
     restoreProject,
     permanentDeleteProject,
+    inviteMember,
+    updateMemberRole,
   }
 })

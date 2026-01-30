@@ -3,10 +3,12 @@ package com.itda.backend.ai.gemini;
 import com.google.genai.errors.ApiException;
 import com.google.genai.errors.GenAiIOException;
 import com.google.genai.types.Blob;
+import com.google.genai.types.Content;
 import com.google.genai.types.GenerateContentConfig;
 import com.google.genai.types.GenerateContentResponse;
 import com.google.genai.types.HttpOptions;
 import com.google.genai.types.ImageConfig;
+import com.google.genai.types.Part;
 import com.itda.backend.ai.AiProviderException;
 import com.itda.backend.ai.AiStubAssets;
 import com.itda.backend.ai.GenAiClientProvider;
@@ -17,7 +19,9 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 
@@ -29,6 +33,7 @@ public class GeminiImageClient {
     private static final String DEFAULT_IMAGE_MIME = "image/png";
     private static final String ERROR_PREFIX = "GEMINI_CALL_FAILED";
     private static final List<String> RESPONSE_MODALITIES = List.of("TEXT", "IMAGE");
+    private static final String CONTENT_ROLE = "user";
     private static final long DEFAULT_TIMEOUT_MS = 60_000;
 
     private final GeminiImageProperties imageProperties;
@@ -36,6 +41,27 @@ public class GeminiImageClient {
     private final GenAiClientProvider clientProvider;
 
     public GeminiImageResult generateImage(String prompt, Map<String, Object> settings) {
+        return generateImage(prompt, settings, List.of());
+    }
+
+    public GeminiImageResult generateImage(
+            String prompt,
+            Map<String, Object> settings,
+            byte[] referenceImageBytes,
+            String referenceContentType
+    ) {
+        if (referenceImageBytes == null || referenceImageBytes.length == 0) {
+            return generateImage(prompt, settings);
+        }
+        String mimeType = normalizeImageMime(referenceContentType);
+        return generateImage(prompt, settings, List.of(new ReferenceImage(referenceImageBytes, mimeType)));
+    }
+
+    public GeminiImageResult generateImage(
+            String prompt,
+            Map<String, Object> settings,
+            List<ReferenceImage> referenceImages
+    ) {
         String resolvedPrompt = requirePrompt(prompt);
         if (imageProperties.isStub()) {
             log.info("[GeminiImageClient] Stub enabled. Returning stub image.");
@@ -54,9 +80,7 @@ public class GeminiImageClient {
         GenerateContentConfig config = buildRequestConfig(settings);
 
         try {
-            GenerateContentResponse response = clientProvider.getClient()
-                    .models
-                    .generateContent(model, resolvedPrompt, config);
+            GenerateContentResponse response = generateContent(model, resolvedPrompt, referenceImages, config);
             logResponseDebug(response);
             return parseResponse(response);
         } catch (ApiException e) {
@@ -68,6 +92,41 @@ public class GeminiImageClient {
         } catch (Exception e) {
             throw new AiProviderException(ERROR_PREFIX + ": " + safeMessage(e), e);
         }
+    }
+
+    private GenerateContentResponse generateContent(
+            String model,
+            String prompt,
+            List<ReferenceImage> referenceImages,
+            GenerateContentConfig config
+    ) {
+        if (referenceImages == null || referenceImages.isEmpty()) {
+            return clientProvider.getClient()
+                    .models
+                    .generateContent(model, prompt, config);
+        }
+        Content content = buildContent(prompt, referenceImages);
+        return clientProvider.getClient()
+                .models
+                .generateContent(model, content, config);
+    }
+
+    private Content buildContent(String prompt, List<ReferenceImage> referenceImages) {
+        List<Part> parts = new ArrayList<>();
+        for (ReferenceImage referenceImage : referenceImages) {
+            if (referenceImage == null || referenceImage.bytes() == null || referenceImage.bytes().length == 0) {
+                throw new AiProviderException(ERROR_PREFIX + ": empty reference image");
+            }
+            String mimeType = referenceImage.mimeType() == null || referenceImage.mimeType().isBlank()
+                    ? DEFAULT_IMAGE_MIME
+                    : referenceImage.mimeType();
+            parts.add(Part.fromBytes(referenceImage.bytes(), mimeType));
+        }
+        parts.add(Part.fromText(prompt));
+        return Content.builder()
+                .role(CONTENT_ROLE)
+                .parts(parts)
+                .build();
     }
 
     private GenerateContentConfig buildRequestConfig(Map<String, Object> settings) {
@@ -159,6 +218,17 @@ public class GeminiImageClient {
                 .map(String::trim)
                 .filter(value -> !value.isEmpty())
                 .orElseThrow(() -> new BusinessException(ErrorCode.INVALID_REQUEST, "Prompt is empty"));
+    }
+
+    private String normalizeImageMime(String contentType) {
+        if (contentType == null) {
+            return DEFAULT_IMAGE_MIME;
+        }
+        String trimmed = contentType.trim().toLowerCase(Locale.ROOT);
+        if (trimmed.isEmpty() || !trimmed.startsWith("image/")) {
+            return DEFAULT_IMAGE_MIME;
+        }
+        return trimmed;
     }
 
     private String requireImageModel() {

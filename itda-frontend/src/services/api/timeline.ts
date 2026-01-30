@@ -40,7 +40,14 @@ export async function requestSceneMerge(sceneId: number): Promise<{ jobId: numbe
     return response.data.data
 }
 
-export async function fetchProjectExport(projectId: number): Promise<string | null> {
-    const response = await apiClient.get<ApiResponse<{ exportUrl: string }>>(`/projects/${projectId}/export`)
-    return response.data.data?.exportUrl || null
+export async function fetchSceneExport(sceneId: number): Promise<string | null> {
+    const response = await apiClient.get<ApiResponse<{ downloadUrl: string }>>(`/scenes/${sceneId}/export`)
+    return response.data.data?.downloadUrl || null
 }
+
+export async function fetchProjectExport(projectId: number): Promise<string | null> {
+    const response = await apiClient.get<ApiResponse<{ downloadUrl: string }>>(`/projects/${projectId}/export`)
+    return response.data.data?.downloadUrl || null
+}
+
+export type { TimelineItem } from '../../types/api/timeline'

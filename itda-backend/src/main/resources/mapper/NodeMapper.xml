@@ -86,6 +86,16 @@
         WHERE id = #{id}
     </update>
 
+    <!-- UPDATE generation inputs only (prompt/settings/shot refs) -->
+    <update id="updateGenerationInputs" parameterType="com.itda.backend.node.domain.Node">
+        UPDATE nodes
+        SET prompt = #{prompt},
+            data_json = #{dataJson},
+            start_shot_node_id = #{startShotNodeId},
+            end_shot_node_id = #{endShotNodeId}
+        WHERE id = #{id}
+    </update>
+
     <!-- DELETE -->
     <delete id="deleteById">
         DELETE FROM nodes

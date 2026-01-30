@@ -1,6 +1,6 @@
 import { useUIStore } from '../stores/ui'
 
-type GenerationKind = 'image' | 'grid' | 'shot' | 'video'
+type GenerationKind = 'image' | 'grid' | 'shot' | 'video' | 'prompt' | 'scenario_prompt' | 'plot' | 'scenes'
 type GenerationResult = 'success' | 'error'
 type GenerationErrorOptions = {
   reason?: string
@@ -12,6 +12,10 @@ const labelMap: Record<GenerationKind, string> = {
   grid: '그리드',
   shot: '샷',
   video: '영상',
+  prompt: '프롬프트',
+  scenario_prompt: '시나리오 프롬프트',
+  plot: '줄거리',
+  scenes: '씬',
 }
 
 function getEtaLabel(eta?: string | null): string {
@@ -22,13 +26,15 @@ function getEtaLabel(eta?: string | null): string {
 export function useGenerationToast() {
   const uiStore = useUIStore()
 
+  const resolvePosition = (_kind: GenerationKind): 'top-right' => 'top-right'
+
   const startGenerationToast = (kind: GenerationKind, eta?: string | null): string => {
     const label = labelMap[kind]
     return uiStore.showToast({
       type: 'progress',
       title: `${label} 생성중`,
       meta: getEtaLabel(eta),
-      position: 'bottom-right',
+      position: resolvePosition(kind),
       autoClose: false,
     })
   }
@@ -52,7 +58,7 @@ export function useGenerationToast() {
       message: isError
         ? `원인: ${reason}\n권고: ${advice}`
         : `${label} 생성이 완료되었습니다.`,
-      position: 'bottom-right',
+      position: resolvePosition(kind),
       autoClose: !isError,
       duration: isError ? 0 : undefined,
     })

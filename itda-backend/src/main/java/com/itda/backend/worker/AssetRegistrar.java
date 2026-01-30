@@ -20,18 +20,39 @@ public class AssetRegistrar {
     private final NodeMapper nodeMapper;
 
     public Long registerLocalAsset(Job job, StoredAsset storedAsset, AssetType assetType, String contentType) {
+        Objects.requireNonNull(storedAsset, "StoredAsset is required");
+        return registerAsset(
+                job,
+                storedAsset.storageKey(),
+                storedAsset.sizeBytes(),
+                assetType,
+                contentType,
+                StorageProvider.LOCAL
+        );
+    }
+
+    public Long registerAsset(
+            Job job,
+            String storageKey,
+            long sizeBytes,
+            AssetType assetType,
+            String contentType,
+            StorageProvider storageProvider
+    ) {
         requireJob(job);
         requireProjectId(job);
-        Objects.requireNonNull(storedAsset, "StoredAsset is required");
+        Objects.requireNonNull(storageKey, "storageKey is required");
+        Objects.requireNonNull(assetType, "assetType is required");
+        Objects.requireNonNull(storageProvider, "storageProvider is required");
 
         Asset asset = Asset.builder()
                 .ownerId(resolveOwnerId(job))
                 .projectId(job.getProjectId())
                 .assetType(assetType)
-                .storageProvider(StorageProvider.LOCAL)
-                .storageKey(storedAsset.storageKey())
+                .storageProvider(storageProvider)
+                .storageKey(storageKey)
                 .contentType(contentType)
-                .sizeBytes(storedAsset.sizeBytes())
+                .sizeBytes(sizeBytes)
                 .build();
         assetMapper.insert(asset);
         return asset.getId();

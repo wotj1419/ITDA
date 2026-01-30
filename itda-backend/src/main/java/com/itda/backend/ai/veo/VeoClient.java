@@ -8,6 +8,7 @@ import com.google.genai.types.GenerateVideosResponse;
 import com.google.genai.types.GenerateVideosSource;
 import com.google.genai.types.GetOperationConfig;
 import com.google.genai.types.HttpOptions;
+import com.google.genai.types.Image;
 import com.google.genai.types.Video;
 import com.itda.backend.ai.AiProviderException;
 import com.itda.backend.ai.AiStubAssets;
@@ -36,8 +37,6 @@ public class VeoClient {
     private static final String SETTING_PROVIDER = "provider";
     private static final String SETTING_DURATION_SECONDS = "duration";
     private static final String SETTING_ASPECT_RATIO = "aspectRatio";
-    private static final String SETTING_CAMERA_MOTION = "cameraMotion";
-    private static final String SETTING_MOTION_DESCRIPTION = "motionDescription";
 
     private static final Map<String, String> MODEL_ALIASES = Map.of(
             "VEO_3_1", "veo-3.1-generate-001",
@@ -69,10 +68,15 @@ public class VeoClient {
                 timeoutMs
         );
 
-        GenerateVideosSource source = GenerateVideosSource.builder()
-                .prompt(buildPrompt(prompt, settings))
-                .build();
-        GenerateVideosConfig config = buildRequestConfig(settings, timeoutMs);
+        Image firstFrame = buildImage(request.firstFrame());
+        Image lastFrame = buildImage(request.lastFrame());
+        GenerateVideosSource.Builder sourceBuilder = GenerateVideosSource.builder()
+                .prompt(prompt);
+        if (firstFrame != null) {
+            sourceBuilder.image(firstFrame);
+        }
+        GenerateVideosSource source = sourceBuilder.build();
+        GenerateVideosConfig config = buildRequestConfig(settings, timeoutMs, lastFrame);
 
         try {
             var client = clientProvider.getClient();
@@ -154,7 +158,7 @@ public class VeoClient {
         throw new AiProviderException("VEO_CALL_FAILED: video payload missing");
     }
 
-    private GenerateVideosConfig buildRequestConfig(VeoSettings settings, long timeoutMs) {
+    private GenerateVideosConfig buildRequestConfig(VeoSettings settings, long timeoutMs, Image lastFrame) {
         GenerateVideosConfig.Builder builder = GenerateVideosConfig.builder()
                 .numberOfVideos(1)
                 .httpOptions(HttpOptions.builder().timeout(toIntTimeoutMs(timeoutMs, VeoProperties.DEFAULT_TIMEOUT_MS)).build());
@@ -163,24 +167,30 @@ public class VeoClient {
         if (durationSeconds != null) {
             builder.durationSeconds(durationSeconds);
         }
+        if (lastFrame != null) {
+            builder.lastFrame(lastFrame);
+        }
         builder.aspectRatio(settings.aspectRatioOrDefault(DEFAULT_ASPECT_RATIO));
         return builder.build();
     }
 
-    private String buildPrompt(String prompt, VeoSettings settings) {
-        String cameraMotion = settings.cameraMotion();
-        String motionDescription = settings.motionDescription();
-        if (cameraMotion == null && motionDescription == null) {
-            return prompt;
+    private Image buildImage(VeoImage image) {
+        if (image == null || image.bytes() == null || image.bytes().length == 0) {
+            return null;
         }
-        StringBuilder builder = new StringBuilder(prompt);
-        if (cameraMotion != null) {
-            builder.append(" Camera motion: ").append(cameraMotion).append(".");
+        String contentType = normalizeImageMime(image.contentType());
+        return Image.builder()
+                .imageBytes(image.bytes())
+                .mimeType(contentType)
+                .build();
+    }
+
+    private String normalizeImageMime(String contentType) {
+        if (contentType == null || contentType.isBlank()) {
+            return "image/png";
         }
-        if (motionDescription != null) {
-            builder.append(" Motion description: ").append(motionDescription).append(".");
-        }
-        return builder.toString();
+        String trimmed = contentType.trim();
+        return trimmed.startsWith("image/") ? trimmed : "image/png";
     }
 
     private String resolveModel(VeoSettings settings) {
@@ -283,14 +293,6 @@ public class VeoClient {
         private String aspectRatioOrDefault(String defaultValue) {
             String value = readString(SETTING_ASPECT_RATIO);
             return value == null ? defaultValue : value;
-        }
-
-        private String cameraMotion() {
-            return readString(SETTING_CAMERA_MOTION);
-        }
-
-        private String motionDescription() {
-            return readString(SETTING_MOTION_DESCRIPTION);
         }
 
         private Integer readInt(String key) {

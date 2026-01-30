@@ -14,3 +14,37 @@ const shotSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="225
 </svg>`;
 
 export const SHOT_FALLBACK_THUMBNAIL = `data:image/svg+xml;utf8,${encodeURIComponent(shotSvg)}`;
+
+const FALLBACK_SVG_SIGNATURES = ['shot-bg', '>SHOT<'];
+
+function safeDecodeURIComponent(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
+
+function decodeSvgDataUrl(url: string): string | null {
+  if (!url.startsWith('data:image/svg+xml')) return null;
+  const commaIndex = url.indexOf(',');
+  if (commaIndex === -1) return null;
+  const meta = url.slice(0, commaIndex);
+  const payload = url.slice(commaIndex + 1);
+  if (/;base64/i.test(meta)) {
+    try {
+      return atob(payload);
+    } catch {
+      return null;
+    }
+  }
+  return safeDecodeURIComponent(payload);
+}
+
+export function isFallbackThumbnail(url?: string | null): boolean {
+  if (!url) return false;
+  if (url === SHOT_FALLBACK_THUMBNAIL) return true;
+  const decoded = decodeSvgDataUrl(url);
+  if (!decoded) return false;
+  return FALLBACK_SVG_SIGNATURES.some((signature) => decoded.includes(signature));
+}

@@ -79,7 +79,7 @@ public class NodeController {
 
     @Operation(
             summary = "노드 목록 조회",
-            description = "씬의 전체 노드를 조회합니다. (가상 노드인 SCENE_HEADER 포함)"
+            description = "씬의 전체 노드를 조회합니다. (SCENE_HEADER 포함)"
     )
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(

@@ -9,7 +9,9 @@
 // =============================================================================
 // Props & Slots
 // =============================================================================
-import type { Component } from 'vue';
+import { inject } from 'vue';
+import type { Component, ComputedRef } from 'vue';
+import { Trash2, X } from 'lucide-vue-next';
 
 interface Props {
   title: string;
@@ -17,16 +19,45 @@ interface Props {
 }
 
 defineProps<Props>();
+
+const panelClose = inject<(() => void) | null>('nodePanelClose', null);
+const panelDelete = inject<(() => void) | null>('nodePanelDelete', null);
+const panelCanDelete = inject<ComputedRef<boolean> | null>('nodePanelCanDelete', null);
 </script>
 
 <template>
   <div class="base-panel">
     <!-- Header (Sticky) -->
     <header class="base-panel__header">
-      <span v-if="icon" class="base-panel__icon">
-        <component :is="icon" />
-      </span>
-      <h3 class="base-panel__title">{{ title }}</h3>
+      <div class="base-panel__title-row">
+        <span v-if="icon" class="base-panel__icon">
+          <component :is="icon" />
+        </span>
+        <h3 class="base-panel__title">{{ title }}</h3>
+      </div>
+      <div v-if="panelClose" class="base-panel__actions">
+        <slot name="header-actions" />
+        <button
+          v-if="panelCanDelete && panelDelete"
+          type="button"
+          class="base-panel__delete"
+          title="노드 삭제"
+          aria-label="노드 삭제"
+          @click="panelDelete"
+        >
+          <Trash2 class="base-panel__delete-icon" />
+          <span class="base-panel__delete-label">노드 삭제</span>
+        </button>
+        <button
+          v-if="panelClose"
+          class="base-panel__close"
+          type="button"
+          title="닫기"
+          @click="panelClose"
+        >
+          <X class="base-panel__close-icon" />
+        </button>
+      </div>
     </header>
 
     <!-- Content (Scrollable) -->
@@ -46,6 +77,8 @@ defineProps<Props>();
   display: flex;
   flex-direction: column;
   height: 100%;
+  flex: 1 1 auto;
+  min-height: 0;
   overflow: hidden;
 }
 
@@ -54,50 +87,137 @@ defineProps<Props>();
   top: 0;
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 1rem 1.25rem;
-  background: var(--rose-50, #FFFAFC);
-  border-bottom: 1px solid var(--rose-100, #FFF0F5);
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.75rem;
+  padding: 2rem 2rem 1.5rem;
+  background: white;
+  border-bottom: 1px solid #F3F4F6;
   z-index: 1;
 }
 
+.base-panel__title-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex: 1 1 240px;
+  min-width: 0;
+}
+
 .base-panel__icon {
-  width: 32px;
-  height: 32px;
+  width: 34px;
+  height: 34px;
   border-radius: 0.75rem;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: white;
-  border: 1px solid var(--rose-200, #FFE8F2);
-  color: var(--rose-500, #FF85A1);
-  box-shadow: var(--shadow-sm, 0 1px 2px rgba(0, 0, 0, 0.05));
+  background: #fff5f8;
+  border: 1px solid #ffe3ee;
+  color: var(--rose-500, #ff4d8d);
+  box-shadow: 0 4px 10px rgba(255, 77, 141, 0.12);
 }
 
 .base-panel__icon :deep(svg) {
-  width: 16px;
-  height: 16px;
+  width: 18px;
+  height: 18px;
 }
 
 .base-panel__title {
   margin: 0;
-  font-size: 1rem;
-  font-weight: 700;
-  color: var(--gray-900, #1A1A2E);
+  font-size: 1.125rem;
+  font-weight: 800;
+  color: var(--gray-900, #111827);
+  word-break: keep-all;
+  white-space: normal;
+}
+
+.base-panel__actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex: 0 0 auto;
+  margin-left: auto;
 }
 
 .base-panel__content {
   flex: 1;
   overflow-y: auto;
-  padding: 1.25rem;
+  min-height: 0;
+  padding: 0 2rem 2rem;
+  background: #fff;
 }
 
 .base-panel__footer {
   position: sticky;
   bottom: 0;
-  padding: 1rem 1.25rem;
-  background: var(--gray-50, #FAFAFA);
-  border-top: 1px solid var(--rose-100, #FFF0F5);
+  padding: 1.5rem 2rem 2rem;
+  background: white;
+  border-top: 1px solid #F3F4F6;
   z-index: 1;
+}
+
+.base-panel__delete {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.4rem 0.65rem;
+  border-radius: 0.65rem;
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  background: #fff;
+  color: #b42318;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+}
+
+.base-panel__delete:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  background: #fff;
+  border-color: rgba(239, 68, 68, 0.15);
+}
+
+.base-panel__delete:hover {
+  background: #fff1f2;
+  border-color: rgba(239, 68, 68, 0.45);
+}
+
+.base-panel__delete:active {
+  transform: scale(0.98);
+}
+
+.base-panel__delete-icon {
+  width: 14px;
+  height: 14px;
+}
+
+.base-panel__delete-label {
+  line-height: 1;
+}
+
+.base-panel__close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 0.75rem;
+  border: 1px solid #F3F4F6;
+  background: white;
+  color: var(--gray-300, #d1d5db);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.base-panel__close:hover {
+  background: var(--gray-50, #f9fafb);
+  color: var(--rose-500, #ff4d8d);
+  border-color: rgba(255, 77, 141, 0.2);
+}
+
+.base-panel__close-icon {
+  width: 20px;
+  height: 20px;
 }
 </style>

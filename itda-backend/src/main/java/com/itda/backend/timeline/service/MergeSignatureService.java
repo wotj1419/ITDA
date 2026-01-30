@@ -81,13 +81,6 @@ public class MergeSignatureService {
         return sha256Hex(builder.toString());
     }
 
-    private String sourceKey(Long assetId, String fallbackUrl) {
-        if (assetId != null) {
-            return "A:" + assetId;
-        }
-        return "U:" + (fallbackUrl == null ? "null" : fallbackUrl);
-    }
-
     private void validateSceneItems(List<SceneTimelineItem> items) {
         if (items == null || items.isEmpty()) {
             throw new BusinessException(ErrorCode.INVALID_REQUEST);

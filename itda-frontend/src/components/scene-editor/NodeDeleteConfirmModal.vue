@@ -8,6 +8,7 @@ const MODAL_ID = 'node-delete-confirm'
 
 const props = defineProps<{
   nodeId: string | null
+  hasChildren: boolean
 }>()
 
 const emit = defineEmits<{
@@ -35,9 +36,14 @@ const handleClose = () => {
 </script>
 
 <template>
-  <ModalBase :modal-id="MODAL_ID" title="삭제 경고" @close="handleClose">
+  <ModalBase :modal-id="MODAL_ID" title="삭제 확인" @close="handleClose">
     <p class="delete-warning">
-      이 노드를 삭제하면 하위 노드들도 함께 삭제됩니다. 계속 하시겠습니까?
+      <span v-if="props.hasChildren">
+        이 노드를 삭제하면 하위 노드들도 함께 삭제됩니다.
+      </span>
+      <span v-else>
+        이 노드를 삭제하시겠습니까?
+      </span>
     </p>
 
     <template #footer>

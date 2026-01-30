@@ -4,17 +4,17 @@ import AppHeader from '../components/common/AppHeader.vue'
 
 interface Props {
   showHeader?: boolean
-  showCollaborators?: boolean
-  showShareButton?: boolean
-  showCollabButton?: boolean
 }
 
 withDefaults(defineProps<Props>(), {
   showHeader: true,
-  showCollaborators: true,
-  showShareButton: true,
-  showCollabButton: true,
 })
+
+const emit = defineEmits<{
+  (e: 'start-collab'): void
+  (e: 'share'): void
+  (e: 'search', query: string): void
+}>()
 </script>
 
 <template>
@@ -24,10 +24,11 @@ withDefaults(defineProps<Props>(), {
     <main class="main-wrapper">
       <AppHeader
         v-if="showHeader"
-        :show-collaborators="showCollaborators"
-        :show-share-button="showShareButton"
-        :show-collab-button="showCollabButton"
+        @search="emit('search', $event)"
       >
+        <template #left-after-divider>
+          <slot name="header-left-after-divider" />
+        </template>
         <template #actions>
           <slot name="header-actions" />
         </template>

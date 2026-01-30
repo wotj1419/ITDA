@@ -271,6 +271,13 @@ public class JobExecutor {
         if (requiresResultAssetId(job) && result.resultAssetId() == null) {
             throw new IllegalStateException("Worker returned null resultAssetId");
         }
+        if (requiresResultAssetId(job) && isBlank(result.nodeContentKey())) {
+            throw new IllegalStateException("Worker returned blank nodeContentKey");
+        }
+    }
+
+    private boolean isBlank(String value) {
+        return value == null || value.trim().isEmpty();
     }
 
     private boolean markSucceeded(Long jobId, Long resultAssetId) {

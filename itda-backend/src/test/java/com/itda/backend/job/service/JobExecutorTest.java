@@ -6,6 +6,7 @@ import com.itda.backend.job.domain.JobType;
 import com.itda.backend.job.repository.JobMapper;
 import com.itda.backend.node.domain.NodeStatus;
 import com.itda.backend.node.repository.NodeMapper;
+import com.itda.backend.timeline.service.MergeResultService;
 import com.itda.backend.worker.ExecutionResult;
 import com.itda.backend.worker.image.ImageGenerationWorker;
 import com.itda.backend.worker.merge.MergeWorker;
@@ -54,6 +55,9 @@ class JobExecutorTest {
     private MergeWorker mergeWorker;
 
     @Mock
+    private MergeResultService mergeResultService;
+
+    @Mock
     private Environment environment;
 
     private JobExecutionProperties jobExecutionProperties;
@@ -80,6 +84,7 @@ class JobExecutorTest {
                 imageWorker,
                 videoWorker,
                 mergeWorker,
+                mergeResultService,
                 environment
         );
     }
@@ -90,7 +95,7 @@ class JobExecutorTest {
 
         executor.execute(null);
 
-        verifyNoInteractions(jobMapper, nodeMapper, jobEventPublisher, imageWorker, videoWorker, mergeWorker);
+        verifyNoInteractions(jobMapper, nodeMapper, jobEventPublisher, imageWorker, videoWorker, mergeWorker, mergeResultService);
     }
 
     @Test
@@ -101,7 +106,7 @@ class JobExecutorTest {
         executor.execute(1L);
 
         verify(jobMapper).findById(1L);
-        verifyNoInteractions(nodeMapper, jobEventPublisher, imageWorker, videoWorker, mergeWorker);
+        verifyNoInteractions(nodeMapper, jobEventPublisher, imageWorker, videoWorker, mergeWorker, mergeResultService);
     }
 
     @Test
@@ -118,7 +123,7 @@ class JobExecutorTest {
 
         verify(jobMapper).findById(1L);
         verify(jobMapper, never()).updateStatusIfExpected(anyLong(), any(), any(), any(), anyInt());
-        verifyNoInteractions(nodeMapper, jobEventPublisher, imageWorker, videoWorker, mergeWorker);
+        verifyNoInteractions(nodeMapper, jobEventPublisher, imageWorker, videoWorker, mergeWorker, mergeResultService);
     }
 
     @Test
@@ -138,7 +143,7 @@ class JobExecutorTest {
 
         verify(jobMapper).findById(1L);
         verify(jobMapper, never()).updateStatusIfExpected(anyLong(), any(), any(), any(), anyInt());
-        verifyNoInteractions(nodeMapper, jobEventPublisher, imageWorker, videoWorker, mergeWorker);
+        verifyNoInteractions(nodeMapper, jobEventPublisher, imageWorker, videoWorker, mergeWorker, mergeResultService);
     }
 
     @Test
@@ -162,7 +167,7 @@ class JobExecutorTest {
         executor.execute(1L);
 
         verify(jobMapper).updateStatusIfExpected(eq(1L), any(), eq(JobStatus.RUNNING), eq(null), anyInt());
-        verifyNoInteractions(nodeMapper, jobEventPublisher, imageWorker, videoWorker, mergeWorker);
+        verifyNoInteractions(nodeMapper, jobEventPublisher, imageWorker, videoWorker, mergeWorker, mergeResultService);
     }
 
     @Test

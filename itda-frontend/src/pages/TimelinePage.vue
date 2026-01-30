@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, watch } from 'vue'
+import { computed, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useProjectStore } from '../stores/project'
 import { useTimelineStore } from '../stores/timeline'
@@ -52,11 +52,6 @@ watch([projectId, sceneId], async ([nextProjectId, nextSceneId]) => {
   collabStore.updateLocation('Timeline 편집 중')
 
   await timelineStore.loadClips(nextProjectId, nextSceneId ?? undefined)
-})
-
-onUnmounted(() => {
-  // 페이지 이탈 시 협업 방 퇴장
-  collabStore.leaveRoom()
 })
 
 async function handleReorder(clipIds: string[]) {

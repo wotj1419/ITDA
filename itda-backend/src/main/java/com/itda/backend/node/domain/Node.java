@@ -10,7 +10,7 @@ import java.time.LocalDateTime;
 /**
  * 노드 도메인 모델
  * 씬 캔버스의 노드 (MASTER, GRID, SHOT, VIDEO)
- * SCENE_HEADER는 가상 노드로 DB에 저장되지 않음
+ * SCENE_HEADER는 씬 헤더 노드로 DB에 저장됨
  */
 @Getter
 @Builder

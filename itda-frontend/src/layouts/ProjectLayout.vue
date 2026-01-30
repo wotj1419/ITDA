@@ -1,4 +1,3 @@
-```
 <script setup lang="ts">
 import { computed, type Component } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
@@ -7,8 +6,9 @@ import { useUIStore } from '../stores/ui'
 import { useSidebarShortcut } from '../composables/useSidebarShortcut'
 import type { ProjectDetail } from '../types/api/projects'
 import Badge from '../components/common/Badge.vue'
-import AvatarGroup from '../components/common/AvatarGroup.vue'
 import Button from '../components/common/Button.vue'
+import ShareProjectModal from '../components/project/ShareProjectModal.vue'
+import PresencePanel from '../components/collab/PresencePanel.vue'
 import {
   BookOpen,
   Clapperboard,
@@ -17,7 +17,7 @@ import {
   Layers,
   Settings,
   Phone,
-  Menu,
+  Share2,
   Play,
   ArrowLeft,
 } from 'lucide-vue-next'
@@ -28,11 +28,13 @@ interface Props {
   activeTab: 'story' | 'scenes' | 'objects' | 'timeline' | 'settings'
   sceneCount?: number
   progress?: { completed: number; total: number }
+  hideScenes?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
   sceneCount: 0,
   progress: () => ({ completed: 0, total: 0 }),
+  hideScenes: false,
 })
 
 const emit = defineEmits<{
@@ -57,21 +59,25 @@ interface NavItem {
   to: RouteLocationRaw | null
 }
 
-const navItems = computed<NavItem[]>(() => [
-  { key: 'story', icon: BookOpen, label: 'Story', to: null },
-  { key: 'scenes', icon: Clapperboard, label: 'Scenes', badge: props.sceneCount, to: null },
-  { key: 'objects', icon: User, label: 'Objects', to: null },
-  { key: 'timeline', icon: Layers, label: 'Full Timeline', to: { name: 'timeline', params: { id: projectId.value } } },
-  { key: 'settings', icon: Settings, label: 'Settings', to: null },
-])
+const navItems = computed<NavItem[]>(() => {
+  const items: NavItem[] = [
+    { key: 'story', icon: BookOpen, label: '스토리', to: null },
+    { key: 'scenes', icon: Clapperboard, label: '씬', badge: props.sceneCount, to: null },
+    { key: 'objects', icon: User, label: '오브젝트', to: null },
+    { key: 'timeline', icon: Layers, label: '전체 타임라인', to: { name: 'timeline', params: { id: projectId.value } } },
+    { key: 'settings', icon: Settings, label: '설정', to: null },
+  ]
+  return props.hideScenes ? items.filter((item) => item.key !== 'scenes') : items
+})
 
-const avatarItems = computed(() =>
+const memberBadges = computed(() =>
   (props.project?.members || []).slice(0, 3).map((member) => ({
-    src: member.profileImage,
-    alt: member.name,
-    fallback: member.name?.[0]?.toUpperCase() || '?',
+    initials: member.name?.[0]?.toUpperCase() || '?',
   }))
 )
+const totalMembers = computed(() => props.project?.members?.length ?? props.project?.memberCount ?? 0)
+const extraCount = computed(() => Math.max(totalMembers.value - memberBadges.value.length, 0))
+
 
 const sidebarClasses = computed(() => [
   'sidebar',
@@ -99,10 +105,15 @@ const progressPercentage = computed(() => {
       <div class="sidebar-section border-bottom sidebar-header-row">
         <button
           class="menu-btn"
+          :class="{ 'menu-btn--open': uiStore.sidebarExpanded }"
           @click="uiStore.toggleSidebar"
           :title="uiStore.sidebarExpanded ? 'Collapse' : 'Expand'"
         >
-          <Menu class="icon-md" />
+          <span class="toggle" aria-hidden="true">
+            <span class="bars bar1"></span>
+            <span class="bars bar2"></span>
+            <span class="bars bar3"></span>
+          </span>
         </button>
       </div>
 
@@ -141,13 +152,10 @@ const progressPercentage = computed(() => {
       <!-- Online Now -->
       <div class="sidebar-section border-top">
         <div class="sidebar-text">
-          <div class="section-label">ONLINE NOW</div>
-          <div class="online-users">
-            <AvatarGroup :avatars="avatarItems" :max="3" size="sm" />
-          </div>
+          <PresencePanel />
           <Button variant="secondary" class="start-call-btn">
             <Phone class="icon-sm" />
-            <span class="nav-label">Start Call</span>
+            <span class="nav-label">통화 시작</span>
           </Button>
         </div>
       </div>
@@ -165,7 +173,7 @@ const progressPercentage = computed(() => {
           </button>
           
           <div class="breadcrumb">
-            <RouterLink to="/dashboard">AI Movie Studio</RouterLink>
+            <RouterLink to="/dashboard">내 프로젝트</RouterLink>
             <span class="separator">/</span>
             <span class="current">{{ project?.title || 'Project' }}</span>
           </div>
@@ -173,21 +181,37 @@ const progressPercentage = computed(() => {
 
         <div class="header-actions">
           <div class="progress-section">
-            <span class="progress-label">Progress</span>
+            <span class="progress-label">제작 진행도</span>
             <div class="progress-bar">
               <div class="progress-fill" :style="{ width: `${progressPercentage}%` }"></div>
             </div>
             <span class="progress-text">{{ progress.completed }}/{{ progress.total }}</span>
           </div>
 
-          <Button variant="secondary" @click="collabStore.joinRoom(projectId)">
+          <div class="member-pill" v-if="totalMembers > 0">
+            <span
+              v-for="(member, index) in memberBadges"
+              :key="`${member.initials}-${index}`"
+              class="member-initial"
+            >
+              {{ member.initials }}
+            </span>
+            <span v-if="extraCount > 0" class="member-more">+{{ extraCount }}</span>
+          </div>
+
+          <Button variant="secondary" @click="uiStore.openModal('share-project')">
+            <Share2 class="icon-sm" />
+            공유
+          </Button>
+
+          <Button variant="secondary" @click="collabStore.showFloatingBar()">
             <Users class="icon-sm" />
             협업 시작
           </Button>
 
           <Button variant="primary">
             <Play class="icon-sm" />
-            Preview
+            미리보기
           </Button>
         </div>
       </header>
@@ -198,6 +222,8 @@ const progressPercentage = computed(() => {
       </div>
     </main>
   </div>
+
+  <ShareProjectModal :project-id="projectId" />
 </template>
 
 <style scoped>
@@ -215,13 +241,44 @@ const progressPercentage = computed(() => {
   border-right: 1px solid var(--rose-100);
   display: flex;
   flex-direction: column;
-  transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   flex-shrink: 0;
   position: relative;
+  z-index: 40;
 }
 
 .sidebar-collapsed {
   width: 72px;
+}
+
+/* Mobile Sidebar Behavior */
+@media (max-width: 768px) {
+  .app-container {
+    position: relative;
+  }
+
+  .sidebar {
+    position: fixed;
+    height: 100%;
+    /* On mobile, if expanded, it's an overlay. If collapsed, it's hidden or icon bar?
+       Let's keep icon bar (collapsed) by default. */
+  }
+  
+  .sidebar-collapsed {
+     /* Optional: width: 0 if we want to hide it completely, but navigation is needed. 
+        Let's keep 72px for icons, but ensure main content isn't squished? 
+        If sidebar is fixed, it doesn't take flex space. 
+        So main content will be full width behind it. 
+        We need to add margin to main content OR padding-left. 
+     */
+     /* Actually, if sidebar is fixed, main content starts at edge.
+        We need padding-left on main-wrapper equal to sidebar width. 
+     */
+  }
+
+  .sidebar:not(.sidebar-collapsed) {
+    box-shadow: 4px 0 24px rgba(0,0,0,0.15);
+  }
 }
 
 /* Text elements - smooth fade transition */
@@ -242,6 +299,11 @@ const progressPercentage = computed(() => {
   pointer-events: none;
 }
 
+.sidebar-collapsed .nav-label,
+.sidebar-collapsed .nav-badge {
+  display: none;
+}
+
 .sidebar-header-row {
   display: flex;
   align-items: center;
@@ -251,24 +313,62 @@ const progressPercentage = computed(() => {
 }
 
 .menu-btn {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
   width: 40px;
   height: 40px;
   border: none;
   background: transparent;
-  color: var(--gray-500);
   border-radius: 50%;
   cursor: pointer;
-  transition: all 0.2s ease;
-  flex-shrink: 0;
+  padding: 0;
+  transition: background 0.2s ease;
   flex-shrink: 0;
 }
 
 .menu-btn:hover {
   background: var(--rose-50);
-  color: var(--rose-600);
+}
+
+.menu-btn .toggle {
+  position: relative;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition-duration: 0.3s;
+}
+
+.menu-btn .bars {
+  width: 24px;
+  height: 3px;
+  background-color: var(--rose-500);
+  border-radius: 4px;
+  transition-duration: 0.3s;
+}
+
+.menu-btn--open .bars {
+  margin-left: 8px;
+}
+
+.menu-btn--open .bar2 {
+  transform: rotate(135deg);
+  margin-left: 0;
+  transform-origin: center;
+}
+
+.menu-btn--open .bar1 {
+  transform: rotate(45deg);
+  transform-origin: left center;
+}
+
+.menu-btn--open .bar3 {
+  transform: rotate(-45deg);
+  transform-origin: left center;
 }
 
 .icon-md {
@@ -278,20 +378,12 @@ const progressPercentage = computed(() => {
 
 .back-link {
   flex: 1;
-  padding-left: 0.5rem; /* Indent slightly to separate from menu */
+  padding-left: 0.5rem;
 }
 
 .sidebar-collapsed .back-link {
-  display: none; /* Hide back link in collapsed mode to avoid clutter or handle differently */
+  display: none;
 }
-
-/* If we want to show back link icon in collapsed mode, we need to adjust */
-/* Since collapsed mode is 72px wide, and menu button is 40px, we can stack them or hide back link */
-/* Gemini usually keeps the menu at top. Let's hide back link text but maybe keep icon? */
-/* Actually, for simplicity and rail design, let's hide the back link entirely in collapsed mode or make it icon only below menu? */
-/* Current designs puts them in same row. In collapsed mode (72px), they won't fit side by side. */
-/* Let's make the back link disappear in collapsed mode for now, or move it below. */
-/* Better approach: In collapsed mode, the menu button is centered. The back link is hidden. Users can expand to go back. */
 
 .sidebar-collapsed .menu-btn {
   margin: 0;
@@ -316,6 +408,10 @@ const progressPercentage = computed(() => {
   font-weight: 600;
   color: var(--gray-900);
   margin: 0 0 0.25rem;
+  /* Handle long titles */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* Navigation */
@@ -325,6 +421,7 @@ const progressPercentage = computed(() => {
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
+  overflow: visible;
 }
 
 .nav-item {
@@ -344,6 +441,7 @@ const progressPercentage = computed(() => {
   transition: all 0.2s ease;
   position: relative;
   height: 44px;
+  flex-shrink: 0;
 }
 
 .nav-item:hover {
@@ -384,8 +482,9 @@ const progressPercentage = computed(() => {
   left: 100%;
   margin-left: 0.5rem;
   padding: 0.5rem 0.75rem;
-  background: var(--gray-900);
-  color: white;
+  background: var(--rose-50);
+  color: var(--gray-900);
+  border: 1px solid var(--rose-100);
   font-size: 0.75rem;
   border-radius: 6px;
   white-space: nowrap;
@@ -398,6 +497,19 @@ const progressPercentage = computed(() => {
 .sidebar-collapsed .nav-item:hover::after {
   opacity: 1;
   visibility: visible;
+}
+
+.sidebar-collapsed .nav-item {
+  width: 100%;
+  height: 44px;
+  padding: 0.75rem 0.625rem;
+  justify-content: flex-start;
+  align-self: stretch;
+  gap: 0;
+}
+
+.sidebar-collapsed .nav-icon {
+  margin: 0;
 }
 
 /* Online Now Section */
@@ -417,56 +529,6 @@ const progressPercentage = computed(() => {
   font-size: 0.75rem;
 }
 
-/* Uses global .icon-sm from base.css */
-
-/* Sidebar Edge Zone - Hover Trigger */
-.sidebar-edge-zone {
-  position: absolute;
-  right: 0;
-  top: 0;
-  bottom: 0;
-  width: 30px;
-  z-index: 10;
-  cursor: pointer;
-}
-
-/* Sidebar Toggle */
-.sidebar-toggle {
-  position: absolute;
-  right: -16px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 32px;
-  height: 32px;
-  background: white;
-  border: 1px solid var(--rose-200);
-  border-radius: 50%;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--gray-500);
-  opacity: 0;
-  visibility: hidden;
-  transition: all 0.2s ease;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-}
-
-.sidebar-toggle.visible {
-  opacity: 1;
-  visibility: visible;
-}
-
-.sidebar-toggle:hover {
-  background: var(--rose-50);
-  color: var(--rose-500);
-  transform: translateY(-50%) scale(1.1);
-}
-
-.toggle-icon {
-  width: 14px;
-  height: 14px;
-}
 
 /* Main */
 .main-wrapper {
@@ -474,6 +536,9 @@ const progressPercentage = computed(() => {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  /* Ensure it takes full width initially */
+  width: 100%;
+  transition: padding-left 0.3s ease;
 }
 
 /* Header */
@@ -481,10 +546,14 @@ const progressPercentage = computed(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 2rem;
-  height: 64px; /* Align with sidebar header */
+  padding: 0.5rem 2rem;
+  min-height: 64px;
+  height: auto;
+  flex-wrap: wrap;
+  row-gap: 0.5rem;
   background: white;
   border-bottom: 1px solid var(--rose-100);
+  flex-shrink: 0;
 }
 
 .header-left {
@@ -518,11 +587,15 @@ const progressPercentage = computed(() => {
   align-items: center;
   gap: 0.5rem;
   font-size: 0.875rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .breadcrumb a {
   color: var(--gray-500);
   text-decoration: none;
+  flex-shrink: 0;
 }
 
 .breadcrumb a:hover {
@@ -536,12 +609,19 @@ const progressPercentage = computed(() => {
 .current {
   color: var(--gray-900);
   font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 200px;
 }
 
 .header-actions {
   display: flex;
   align-items: center;
   gap: 0.75rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  row-gap: 0.5rem;
 }
 
 .progress-section {
@@ -576,10 +656,137 @@ const progressPercentage = computed(() => {
   color: var(--rose-500);
 }
 
+.member-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem 0.5rem;
+  border: 1px solid var(--rose-100);
+  border-radius: 999px;
+  background: var(--rose-50);
+  color: var(--rose-600);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.member-initial {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 0.25rem;
+  border-radius: 999px;
+  background: white;
+  border: 1px solid var(--rose-100);
+}
+
+.member-more {
+  padding-left: 0.125rem;
+}
+
 /* Content */
 .main-content {
   flex: 1;
   padding: 2rem;
   overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* Responsive Adjustments */
+@media (max-width: 960px) {
+    .current { max-width: 100px; }
+    .progress-section { display: none; } /* Hide progress bar on smaller screens to save space */
+}
+
+@media (max-width: 768px) {
+    /* Mobile Sidebar Handling: 
+       Sidebar becomes fixed overlay 
+       Main wrapper needs margin only if we want to show icons.
+       Or we can push content.
+       Let's push content for valid icon bar usage.
+    */
+    
+    .sidebar {
+        /* Default state is collapsed on mobile usually? */
+    }
+    .main-wrapper {
+        padding-left: 72px; /* Assume collapsed sidebar width always visible */
+    }
+    
+    .sidebar:not(.sidebar-collapsed) {
+        width: 100%; /* Full screen overlay or partial? Partial 260px is fine */
+        width: 260px;
+    }
+    
+    /* When expanded, it covers content, so we don't increase padding-left */
+    
+    .header {
+        padding: 0 1rem;
+    }
+    
+    .main-content {
+        padding: 1rem;
+    }
+    
+    .breadcrumb {
+        font-size: 0.8rem;
+    }
+    
+    .header-actions {
+        gap: 0.5rem;
+    }
+    
+    .header-actions .btn-secondary, 
+    .header-actions .btn-primary {
+         /* Maybe hide text on buttons? handled by Button component? */
+         padding: 0.5rem;
+    }
+}
+@media (max-width: 480px) {
+    .main-wrapper {
+        padding-left: 0; /* Fully hide sidebar bar on very small? No, keep it. */
+        padding-left: 0;
+        padding-bottom: 60px; /* Bottom nav style? No, simpler */
+    }
+    
+    .sidebar {
+        position: fixed;
+        left: -100%; /* Hide completely */
+        transition: transform 0.3s ease;
+        z-index: 100;
+        width: 80%; /* Drawer style */
+        top: 0; bottom: 0;
+        left: 0;
+        transform: translateX(-100%);
+    }
+    
+    .sidebar.sidebar-collapsed {
+        /* When collapsed on mobile, it's actually hidden via transform logic or we rely on explicit visibility state */
+        /* If we reuse sidebar-collapsed class for "closed", then width is 72px. That's not what we want. */
+        /* On mobile: expanded = drawer open, collapsed = hidden. */
+        width: 260px;
+        transform: translateX(-100%);
+    }
+
+    /* We need a trigger. But the trigger is IN the sidebar. If sidebar is hidden, we can't click trigger.
+       So we need a mobile trigger in the Header? Or a bottom nav.
+       Reverting to: Sidebar 72px is visible on mobile left. */
+       
+    .main-wrapper {
+       padding-left: 72px; /* Sidebar strip always there */
+    }
+    .sidebar {
+       left: 0;
+       transform: none;
+    }
+    .sidebar.sidebar-collapsed {
+       width: 72px;
+    }
+    .sidebar:not(.sidebar-collapsed) {
+       width: 100%; /* Full screen menu on tiny screens? or just 260px shadow */
+       width: 260px;
+       box-shadow: 4px 0 20px rgba(0,0,0,0.2);
+    }
 }
 </style>

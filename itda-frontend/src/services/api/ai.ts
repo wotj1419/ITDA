@@ -48,7 +48,7 @@ function mapGeneratePromptPayload(request: GeneratePromptRequest): {
         request.objects && request.objects.length
             ? request.objects
             : request.objectIds && request.objectIds.length
-                ? request.objectIds
+                ? request.objectIds.map((id) => String(id))
                 : undefined;
 
     const derivedSceneOneLine = [

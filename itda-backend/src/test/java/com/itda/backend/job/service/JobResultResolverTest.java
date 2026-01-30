@@ -13,6 +13,7 @@ import org.junit.jupiter.api.io.TempDir;
 import org.springframework.beans.factory.ObjectProvider;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 
+import java.nio.file.Path;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -54,7 +55,7 @@ class JobResultResolverTest {
                 .sceneId(sceneId)
                 .build();
 
-        assertThat(resolver.resolve(job)).isEqualTo("/api/scenes/55/export/file");
+        assertThat(resolver.resolve(job)).isEqualTo("/api/scenes/55/export");
     }
 
     @Test

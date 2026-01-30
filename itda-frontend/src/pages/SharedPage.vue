@@ -10,7 +10,7 @@ import { Users } from 'lucide-vue-next'
         <div class="icon-wrapper">
           <Users class="icon-lg" />
         </div>
-        <h1 class="title">Shared with Me</h1>
+        <h1 class="title">공유받은 프로젝트</h1>
         <p class="description">
           Projects shared with you by other team members will appear here.<br />
           This feature is coming soon!

@@ -4,7 +4,6 @@ import com.itda.backend.asset.domain.Asset;
 import com.itda.backend.asset.repository.AssetMapper;
 import com.itda.backend.global.config.FileStorageProperties;
 import com.itda.backend.job.domain.Job;
-import com.itda.backend.job.domain.JobType;
 import com.itda.backend.timeline.repository.TimelineMapper;
 import com.itda.backend.timeline.repository.dto.ProjectTimelineItem;
 import com.itda.backend.timeline.repository.dto.SceneTimelineItem;

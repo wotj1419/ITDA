@@ -675,16 +675,36 @@ API /api/projects/{id}/objects
 | description | String | 필수 | 외형 설명 |
 | style | String | 선택 | 아트 스타일 |
 
-#### 3. Response (Job Accepted)
+#### 3. Response (현재 OBJ-1 기준)
 ```json
 {
-  "code": "ACCEPTED",
+  "code": "SUCCESS",
   "data": {
-    "jobId": 123,
+    "objectId": 101,
+    "projectId": 12,
+    "name": "우주인 민준",
+    "type": "CHARACTER",
+    "description": "20대 후반 남성, 우주복 착용, 헬멧 벗음",
+    "style": "SF 실사",
+    "sheetImageUrl": null,
     "status": "PENDING"
   }
 }
 ```
+
+#### 응답 필드 설명
+| 필드 | 타입 | 설명 |
+| --- | --- | --- |
+| objectId | Long | 오브젝트 ID |
+| projectId | Long | 프로젝트 ID |
+| name | String | 오브젝트 이름 |
+| type | String | 오브젝트 유형 (CHARACTER, PROP, ETC) |
+| description | String | 외형 설명 |
+| style | String | 아트 스타일 (선택) |
+| sheetImageUrl | String | 시트 이미지 URL (생성 완료 전 null 가능) |
+| status | String | 생성 상태 (PENDING/RUNNING/SUCCEEDED/FAILED) |
+
+> OBJ-2 전환 시 `202 Accepted + jobId` 응답으로 변경 예정
 
 ---
 
@@ -809,6 +829,21 @@ API /api/scenes/{id}
 보안 Bearer Token
 상태 완료
 설명 씬의 상세 정보와 포함된 등장 오브젝트 내역 등을 조회합니다.
+```
+
+#### 3. Response
+```json
+{
+  "code": "SUCCESS",
+  "data": {
+    "sceneId": 201,
+    "projectId": 101,
+    "title": "Scene 1: Mars Base",
+    "description": "Morning at the base",
+    "order": 1,
+    "objectIds": [1, 2, 3]
+  }
+}
 ```
 
 ---
@@ -960,6 +995,25 @@ API /api/nodes/{id}/generate
 상태 완료
 설명 승인된 프롬프트를 기반으로 결과 생성을 시작합니다. (비동기 Job)
 ```
+
+#### 2. Request
+```json
+{
+  "prompt": "화성 기지에서의 아침 식사 풍경",
+  "settings": {
+    "style": "CINEMATIC",
+    "ratio": "16:9"
+  },
+  "referenceObjectIds": [1, 2, 3]
+}
+```
+
+#### 요청 필드 설명
+| 필드 | 타입 | 필수 여부 | 설명 |
+| --- | --- | --- | --- |
+| prompt | String | 선택 | 프롬프트 |
+| settings | Object | 선택 | 생성 옵션 |
+| referenceObjectIds | List<Long> | 선택 | 레퍼런스 오브젝트 ID 목록 (노드 편집에서 선택 시에만 전달) |
 
 #### 3. Response (Job Accepted)
 ```json
@@ -1542,9 +1596,9 @@ API /api/ai/prompts/generate
 {
   "nodeType": "MASTER",
   "sceneOneLine": "화성 기지의 식당",
-  "style": "CINEMATIC",
-  "timeOfDay": "MORNING",
-  "mood": "PEACEFUL",
+  "style": "실사",
+  "timeOfDay": "아침",
+  "mood": "편안",
   "objects": ["우주복", "테이블"]
 }
 ```
@@ -1554,9 +1608,9 @@ API /api/ai/prompts/generate
 | --- | --- | --- | --- |
 | nodeType | String | 필수 | 노드 타입 (MASTER, GRID, SHOT, VIDEO) |
 | sceneOneLine | String | 필수 | 씬 한줄 설명 |
-| style | String | 필수 | 아트 스타일 (CINEMATIC, ANIME, PIXAR 등) |
-| timeOfDay | String | 필수 | 시간대 (MORNING, DAY, EVENING, NIGHT) |
-| mood | String | 필수 | 분위기 (PEACEFUL, LONELY, TENSE 등) |
+| style | String | 필수 | 스타일 라벨(자유 텍스트, 한글/영문 가능) |
+| timeOfDay | String | 필수 | 시간대 라벨(자유 텍스트, 한글/영문 가능) |
+| mood | String | 필수 | 분위기 라벨(자유 텍스트, 한글/영문 가능) |
 | objects | List<String> | 선택 | 등장 오브젝트 텍스트 목록 |
 
 #### 3. Response
@@ -2081,6 +2135,5 @@ Subscribe /topic/projects/{projectId}
   }
 }
 ```
-
 
 

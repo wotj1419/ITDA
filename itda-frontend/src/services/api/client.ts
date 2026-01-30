@@ -39,7 +39,8 @@ apiClient.interceptors.response.use(
         const status = error.response?.status;
 
         // Handle 401 Unauthorized errors (token expired)
-        if (status === 401 && !originalRequest._retry) {
+        // Skip for login requests, as 401 is an expected failure response there
+        if (status === 401 && !originalRequest._retry && !originalRequest.url?.includes('/auth/login')) {
             clearAuthTokens();
             redirectToAuth();
             return Promise.reject(error);

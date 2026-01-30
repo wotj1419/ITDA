@@ -9,7 +9,7 @@ export interface GeneratePromptRequest {
   style?: string;
   timeOfDay?: string;
   mood?: string;
-  objectIds?: string[];
+  objectIds?: number[];
   objects?: string[];
   // Storyboard Grid
   layout?: string;

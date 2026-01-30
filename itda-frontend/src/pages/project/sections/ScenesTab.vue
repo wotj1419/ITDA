@@ -36,7 +36,7 @@ defineProps<Props>();
 <template>
   <div class="tab-content">
     <div class="section-header">
-      <h2 class="section-title">Scene Preview</h2>
+      <h2 class="section-title">씬 미리보기</h2>
       <div class="section-actions">
         <RouterLink
           :to="{ name: 'timeline', params: { id: projectId } }"
@@ -44,7 +44,7 @@ defineProps<Props>();
           v-slot="{ navigate }"
         >
           <Button variant="secondary" size="sm" @click="navigate">
-            Full Timeline
+            전체 타임라인
           </Button>
         </RouterLink>
       </div>
@@ -62,7 +62,7 @@ defineProps<Props>();
         <div class="scene-preview-row">
           <div class="preview-info">
             <div class="preview-header">
-              <Badge variant="default" size="sm">SCENE {{ scene.order }}</Badge>
+              <Badge variant="default" size="sm">씬 {{ scene.order }}</Badge>
               <Badge
                 :variant="resolveSceneStatusConfig(scene.status).variant"
                 size="sm"
@@ -91,7 +91,7 @@ defineProps<Props>();
                 v-slot="{ navigate }"
               >
                 <Button variant="primary" size="sm" @click="navigate">
-                  Scene Timeline
+                  씬 타임라인
                 </Button>
               </RouterLink>
             </div>
@@ -133,7 +133,10 @@ defineProps<Props>();
                   :src="scene.thumbnailUrl"
                   :alt="scene.title"
                 />
-                <span v-else>확정된 영상이 없습니다</span>
+                <template v-else>
+                  <img src="/icon.png" alt="아직 미리보기가 없어요" class="preview-empty-icon" />
+                  <span>??? ??? ????</span>
+                </template>
               </div>
             </template>
 
@@ -172,7 +175,7 @@ defineProps<Props>();
       <div class="preview-modal-header">
         <div>
           <p class="preview-modal-title">
-            {{ activePreviewScene?.title || 'Scene Preview' }}
+            {{ activePreviewScene?.title || '씬 미리보기' }}
           </p>
           <p v-if="activePreviewClip.label" class="preview-modal-subtitle">
             {{ activePreviewClip.label }}
@@ -195,7 +198,10 @@ defineProps<Props>();
             :src="activePreviewClip.thumbnailUrl"
             :alt="activePreviewClip.label || 'preview'"
           />
-          <span v-else>영상 미리보기를 준비 중입니다.</span>
+          <template v-else>
+            <img src="/icon.png" alt="아직 미리보기가 없어요" class="preview-modal-empty-icon" />
+            <span>?? ????? ?? ????.</span>
+          </template>
         </div>
       </div>
     </div>
