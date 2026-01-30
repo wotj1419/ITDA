@@ -19,7 +19,6 @@ import {
   Layers,
   Settings,
   Phone,
-  Share2,
   Play,
   ArrowLeft,
   Pencil,
