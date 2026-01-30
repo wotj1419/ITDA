@@ -28,12 +28,12 @@ public class PromptRenderer {
             throw new BusinessException(ErrorCode.INVALID_REQUEST);
         }
         String promptKoTrimmed = Optional.ofNullable(promptKo).map(String::trim).orElse("");
-        if (promptKoTrimmed.isEmpty()) {
+        if (nodeType != NodeType.MASTER && promptKoTrimmed.isEmpty()) {
             throw new BusinessException(ErrorCode.INVALID_REQUEST, "Prompt is empty");
         }
 
         return switch (nodeType) {
-            case MASTER -> renderMaster(scene, promptKoTrimmed, settings);
+            case MASTER -> renderMaster(scene, settings);
             case GRID -> {
                 String gridMode = readString(settings, "gridMode");
                 if (gridMode.isEmpty() || gridMode.equalsIgnoreCase("SHOT_VARIATIONS")) {
@@ -50,31 +50,81 @@ public class PromptRenderer {
         };
     }
 
-    private String renderMaster(Scene scene, String promptKo, Map<String, Object> settings) {
+    private String renderMaster(Scene scene, Map<String, Object> settings) {
         Map<String, String> translated = koEnTranslator.toEnglishOneSentenceMany(Map.of(
                 "sceneTitle", scene == null ? "" : safe(scene.getTitle()),
-                "sceneDescription", scene == null ? "" : safe(scene.getDescription()),
-                "promptKo", promptKo
+                "sceneDescription", scene == null ? "" : safe(scene.getDescription())
         ));
         String sceneTitleEn = translated.getOrDefault("sceneTitle", "");
         String sceneDescriptionEn = translated.getOrDefault("sceneDescription", "");
-        String promptKoEn = translated.getOrDefault("promptKo", "");
 
         String aspectRatio = readString(settings, "aspectRatio");
         String style = PresetFragments.styleFragment(read(settings, "styleKey"));
         String time = PresetFragments.timeOfDayFragment(read(settings, "timeOfDayKey"));
         String mood = PresetFragments.moodFragment(read(settings, "moodKey"));
 
+        boolean hasReferenceObjects = hasNonEmptyList(settings, "objectIds");
         List<String> lines = new ArrayList<>();
-        lines.add("Scene: " + safeOrNone(sceneTitleEn) + ". " + safeOrNone(sceneDescriptionEn) + ".");
-        lines.add("Content: " + requireEn(promptKoEn) + ".");
-        lines.add("Wide establishing shot, single still frame.");
-        lines.add("Style: " + safeOrNone(style) + ". Time: " + safeOrNone(time) + ". Mood: " + safeOrNone(mood) + ".");
-        lines.add("Keep character identity, outfits, lighting, and key props consistent.");
-        lines.add("No text, no subtitles, no watermark, no logo.");
-        lines.add("Aspect ratio: " + safeOrNone(aspectRatio) + ".");
+        lines.add(buildMasterSceneParagraph(sceneTitleEn, sceneDescriptionEn, mood, hasReferenceObjects));
+        lines.add(buildMasterCameraParagraph(style, time, aspectRatio));
 
         return joinAndValidate(lines);
+    }
+
+    private String buildMasterSceneParagraph(
+            String sceneTitleEn,
+            String sceneDescriptionEn,
+            String mood,
+            boolean hasReferenceObjects
+    ) {
+        String title = safe(sceneTitleEn);
+        String description = safe(sceneDescriptionEn);
+
+        StringBuilder paragraph = new StringBuilder("As an acclaimed film director (뛰어난 영화 감독), ");
+        paragraph.append("craft a cinematic establishing scene");
+        if (!title.isEmpty()) {
+            paragraph.append(" set in ").append(title);
+        }
+        paragraph.append(". ");
+        if (!description.isEmpty()) {
+            paragraph.append(ensurePeriod(description)).append(" ");
+        } else {
+            paragraph.append("Emphasize character intent and tension through visible actions, layered environment, and atmospheric depth. ");
+        }
+
+        String moodText = safe(mood);
+        if (!moodText.isEmpty()) {
+            paragraph.append(" The lighting and color grade feel ").append(moodText).append(".");
+        }
+        if (hasReferenceObjects) {
+            paragraph.append(" Use the provided reference images to preserve exact facial features, hairstyle, and age.");
+        }
+
+        return paragraph.toString();
+    }
+
+    private String buildMasterCameraParagraph(String style, String time, String aspectRatio) {
+        StringBuilder paragraph = new StringBuilder();
+        paragraph.append("The camera frames a wide establishing shot from a three-quarter angle, ");
+        paragraph.append("with subtle low-angle perspective and layered foreground elements to avoid a flat, frontal view. ");
+        paragraph.append("Use a cinematic 35mm lens with shallow depth of field for depth separation, captured as a single still frame.");
+
+        String styleText = safe(style);
+        if (!styleText.isEmpty()) {
+            paragraph.append(" The overall look is ").append(styleText).append(".");
+        }
+
+        String timeText = safe(time);
+        if (!timeText.isEmpty()) {
+            paragraph.append(" The scene is set at ").append(timeText).append(".");
+        }
+
+        String ratioText = safe(aspectRatio);
+        if (!ratioText.isEmpty()) {
+            paragraph.append(" Composed in a ").append(ratioText).append(" frame.");
+        }
+
+        return paragraph.toString();
     }
 
     private String renderGridShotVariations(Scene scene, String promptKo, Map<String, Object> settings) {
@@ -303,6 +353,28 @@ public class PromptRenderer {
 
     private String safe(String value) {
         return value == null ? "" : value.trim();
+    }
+
+    private boolean hasNonEmptyList(Map<String, Object> settings, String key) {
+        if (settings == null || key == null) {
+            return false;
+        }
+        Object value = settings.get(key);
+        if (!(value instanceof List<?> list)) {
+            return false;
+        }
+        for (Object item : list) {
+            if (item != null) {
+                if (item instanceof String text) {
+                    if (!text.isBlank()) {
+                        return true;
+                    }
+                } else {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     private List<String> ensureBeatCount(List<String> beats, int panelCount) {
