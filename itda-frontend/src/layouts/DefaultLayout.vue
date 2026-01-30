@@ -4,6 +4,7 @@ import AppHeader from '../components/common/AppHeader.vue'
 
 interface Props {
   showHeader?: boolean
+  showCollaborators?: boolean
 }
 
 withDefaults(defineProps<Props>(), {
