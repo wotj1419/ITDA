@@ -17,6 +17,7 @@ class WebSocketManager {
     private rtcHandler: ((message: any) => void) | null = null;
     private currentProjectId: string | null = null;
     private currentRoomId: string | null = null;
+    private connectCallbacks: Array<() => void> = [];
 
     constructor() {
         this.client = new Client({
@@ -36,6 +37,7 @@ class WebSocketManager {
             this.resubscribeChats();
             this.resubscribePresence();
             this.resubscribeRTC();
+            this.flushConnectCallbacks();
         };
 
         this.client.onStompError = (frame) => {
@@ -58,6 +60,14 @@ class WebSocketManager {
             this.client.connectHeaders = {};
         }
         this.client.activate();
+    }
+
+    public onConnected(callback: () => void) {
+        if (this.client.connected) {
+            callback();
+            return;
+        }
+        this.connectCallbacks.push(callback);
     }
 
     public disconnect() {
@@ -278,6 +288,18 @@ class WebSocketManager {
         });
         this.rtcSubscription = subscription;
         console.log('[RTC] Resubscribed to /user/queue/rtc');
+    }
+
+    private flushConnectCallbacks() {
+        const callbacks = this.connectCallbacks;
+        this.connectCallbacks = [];
+        callbacks.forEach((callback) => {
+            try {
+                callback();
+            } catch (error) {
+                console.error('Failed to run WS connect callback', error);
+            }
+        });
     }
 
     public getClient() {

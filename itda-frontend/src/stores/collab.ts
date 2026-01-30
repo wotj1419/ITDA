@@ -23,6 +23,7 @@ export const useCollabStore = defineStore('collab', () => {
     // ================================
     const status = ref<CollabStatus>('disconnected');
     const roomId = ref<string | null>(null);
+    const currentProjectId = ref<number | null>(null);
     const participants = ref<CollabParticipant[]>([]);
     const messages = ref<CollabMessage[]>([]);
     const isPanelOpen = ref(false);
@@ -42,6 +43,7 @@ export const useCollabStore = defineStore('collab', () => {
     const currentLocation = ref('');
     const currentSceneId = ref<number | null>(null);
     const currentNodeId = ref<number | null>(null);
+    const pendingPresence = ref<{ location: PresenceLocation; sceneId: number | null; nodeId: number | null } | null>(null);
 
     // Cursors (Map for performance)
     const cursors = reactive(new Map<string, { x: number, y: number, color: string }>());
@@ -171,6 +173,7 @@ export const useCollabStore = defineStore('collab', () => {
      */
     async function joinRoom(projectId: number): Promise<void> {
         const nextRoomId = `project-${projectId}`;
+        const nextProjectId = projectId;
 
         if (status.value !== 'disconnected' && roomId.value && roomId.value !== nextRoomId) {
             leaveRoom();
@@ -184,6 +187,7 @@ export const useCollabStore = defineStore('collab', () => {
 
         status.value = 'connecting';
         roomId.value = nextRoomId;
+        currentProjectId.value = nextProjectId;
         localStorage.setItem(STORAGE_KEY, nextRoomId);
 
         try {
@@ -194,10 +198,10 @@ export const useCollabStore = defineStore('collab', () => {
 
             // 2. Subscribe to room (signaling)
             socketManager.subscribeToRoom(roomId.value);
-            // 2-1. Subscribe to chat
-            socketManager.subscribeToChat(roomId.value, handleChatMessage);
-            // 2-2. Subscribe to presence
-            socketManager.subscribeToPresence(roomId.value, handlePresenceMessage);
+            // 2-1. Subscribe to chat (projectId)
+            socketManager.subscribeToChat(String(nextProjectId), handleChatMessage);
+            // 2-2. Subscribe to presence (projectId)
+            socketManager.subscribeToPresence(String(nextProjectId), handlePresenceMessage);
 
             // 3. Setup WebRTC Callbacks (Prepare for later)
             peerConnectionService.setCallbacks({
@@ -206,19 +210,14 @@ export const useCollabStore = defineStore('collab', () => {
                 onConnectionStateChange: handleConnectionStateChange,
             });
 
-            // 4. Broadcast Join (Signaling Only)
-            setTimeout(() => {
-                socketManager.sendSignal({
-                    type: 'join',
-                    payload: {
-                        user: localParticipant.value
-                    }
-                });
+            // 4. Broadcast Join + Presence after connection is ready
+            socketManager.onConnected(() => {
                 status.value = 'connected';
-            }, 1000);
+                announcePresence();
+            });
 
             // 5. Load chat history (optional)
-            void loadChatHistory(projectId);
+            void loadChatHistory(nextProjectId);
 
         } catch (error) {
             console.error('Failed to join room:', error);
@@ -325,8 +324,10 @@ export const useCollabStore = defineStore('collab', () => {
             type: 'leave',
         });
 
-        socketManager.unsubscribeChat(roomId.value);
-        socketManager.unsubscribePresence(roomId.value);
+        if (currentProjectId.value !== null) {
+            socketManager.unsubscribeChat(String(currentProjectId.value));
+            socketManager.unsubscribePresence(String(currentProjectId.value));
+        }
         disableMedia(); // Handles WebRTC cleanup
         isFloatingBarVisible.value = false;
         floatingBarResetToken.value += 1;
@@ -339,6 +340,7 @@ export const useCollabStore = defineStore('collab', () => {
         // Reset State
         status.value = 'disconnected';
         roomId.value = null;
+        currentProjectId.value = null;
         participants.value = [];
         messages.value = [];
         cursors.clear();
@@ -509,7 +511,7 @@ export const useCollabStore = defineStore('collab', () => {
 
     function sendMessage(content: string) {
         if (!content.trim()) return;
-        if (!canSendSignal() || !roomId.value) return;
+        if (!canSendSignal() || currentProjectId.value === null) return;
 
         // Backend spec: max 2000 characters
         if (content.length > 2000) {
@@ -522,7 +524,7 @@ export const useCollabStore = defineStore('collab', () => {
         const localId = `local-${now}`;
 
         // Publish to chat topic (spec)
-        socketManager.sendChat(roomId.value, {
+        socketManager.sendChat(String(currentProjectId.value), {
             content,
             type: 'TEXT',
         });
@@ -623,14 +625,13 @@ export const useCollabStore = defineStore('collab', () => {
         currentLocation.value = location;
         currentSceneId.value = sceneId ?? null;
         currentNodeId.value = nodeId ?? null;
-        if (roomId.value) {
-            socketManager.sendPresence(roomId.value, {
-                type: 'LOCATION',
-                location,
-                sceneId: sceneId ?? null,
-                nodeId: nodeId ?? null,
-            });
-        }
+        pendingPresence.value = {
+            location,
+            sceneId: sceneId ?? null,
+            nodeId: nodeId ?? null,
+        };
+
+        flushPresence();
         broadcastState();
     }
 
@@ -638,6 +639,11 @@ export const useCollabStore = defineStore('collab', () => {
         const userId = message?.userId;
         if (!userId) return;
         const peerId = String(userId);
+        const type = message?.type;
+        if (type === 'LEAVE') {
+            removeParticipant(peerId);
+            return;
+        }
         addParticipant(peerId, {
             odps: peerId,
             name: message?.name ?? 'Guest',
@@ -738,6 +744,37 @@ export const useCollabStore = defineStore('collab', () => {
             type: 'state_update',
             payload: localParticipant.value
         });
+    }
+
+    function announcePresence() {
+        if (!roomId.value || currentProjectId.value === null) return;
+        socketManager.sendSignal({
+            type: 'join',
+            payload: {
+                user: localParticipant.value
+            }
+        });
+        const location = currentLocation.value || 'PROJECT_LIST';
+        socketManager.sendPresence(String(currentProjectId.value), {
+            type: 'LOCATION',
+            location,
+            sceneId: currentSceneId.value ?? null,
+            nodeId: currentNodeId.value ?? null,
+        });
+        pendingPresence.value = null;
+        broadcastState();
+    }
+
+    function flushPresence() {
+        if (currentProjectId.value === null || !pendingPresence.value) return;
+        if (!socketManager.getClient().connected || status.value !== 'connected') return;
+        socketManager.sendPresence(String(currentProjectId.value), {
+            type: 'LOCATION',
+            location: pendingPresence.value.location,
+            sceneId: pendingPresence.value.sceneId,
+            nodeId: pendingPresence.value.nodeId,
+        });
+        pendingPresence.value = null;
     }
 
     function rejoinIfNeeded() {
