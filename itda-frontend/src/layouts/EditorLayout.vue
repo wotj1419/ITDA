@@ -6,13 +6,16 @@
 import { computed } from 'vue';
 import { RouterLink, useRoute } from 'vue-router';
 import { useUIStore } from '../stores/ui';
+import { useCollabStore } from '../stores/collab';
 import { useSidebarShortcut } from '../composables/useSidebarShortcut';
 import Badge from '../components/common/Badge.vue';
+import Button from '../components/common/Button.vue';
 import PresencePanel from '../components/collab/PresencePanel.vue';
 import {
   BookOpen,
   Clapperboard,
   Layers,
+  Phone,
 } from 'lucide-vue-next';
 
 // =============================================================================
@@ -37,6 +40,7 @@ const props = withDefaults(defineProps<Props>(), {
 
 const route = useRoute();
 const uiStore = useUIStore();
+const collabStore = useCollabStore();
 
 // Keyboard shortcut (Ctrl+B)
 useSidebarShortcut();
@@ -75,6 +79,13 @@ const sidebarClasses = computed(() => [
   'sidebar',
   { 'sidebar-collapsed': !uiStore.sidebarExpanded },
 ]);
+
+const handleStartCall = () => {
+  const pid = Number(projectId.value);
+  if (Number.isFinite(pid)) {
+    collabStore.startCall(pid);
+  }
+};
 </script>
 
 <template>
@@ -131,11 +142,13 @@ const sidebarClasses = computed(() => [
         <div class="sidebar-text">
           <PresencePanel />
         </div>
-      </div>
-
-      <!-- Footer -->
-      <div class="sidebar-section border-top">
-        <div class="sidebar-text text-xs text-muted">{{ sceneTitle }}</div>
+        <div class="call-cta">
+          <div class="call-hint">빠른 통화</div>
+          <Button variant="secondary" class="start-call-btn" @click="handleStartCall">
+            <Phone class="icon-sm" />
+            <span class="nav-label">통화 시작</span>
+          </Button>
+        </div>
       </div>
 
 
@@ -487,5 +500,49 @@ const sidebarClasses = computed(() => [
 
 .text-muted {
   color: var(--gray-500);
+}
+
+.start-call-btn {
+  width: 100%;
+  font-size: 0.75rem;
+}
+
+.call-cta {
+  margin-top: 1rem;
+  padding: 0.5rem;
+  border-radius: 12px;
+  background: linear-gradient(135deg, var(--rose-50), white);
+  border: 1px solid var(--rose-100);
+  box-shadow: 0 8px 18px rgba(255, 133, 161, 0.08);
+}
+
+.call-hint {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--gray-500);
+  margin-bottom: 0.375rem;
+}
+
+.sidebar-collapsed .call-cta {
+  margin-top: 0.5rem;
+  padding: 0;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  display: flex;
+  justify-content: center;
+}
+
+.sidebar-collapsed .call-hint {
+  display: none;
+}
+
+.sidebar-collapsed .start-call-btn {
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border-radius: 999px;
+  gap: 0;
+  box-shadow: 0 6px 12px rgba(255, 133, 161, 0.18);
 }
 </style>

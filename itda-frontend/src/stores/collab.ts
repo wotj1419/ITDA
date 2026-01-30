@@ -30,6 +30,7 @@ export const useCollabStore = defineStore('collab', () => {
     // UI State
     const isFloatingBarVisible = ref(false);
     const isMediaConnected = ref(false);
+    const isAutoStarting = ref(false);
     const floatingBarResetToken = ref(0);
     const speakingMap = reactive(new Map<string, boolean>());
     const localStream = ref<MediaStream | null>(null);
@@ -226,12 +227,16 @@ export const useCollabStore = defineStore('collab', () => {
      */
     async function enableMedia() {
         if (!roomId.value || status.value !== 'connected') return;
-        if (isMediaConnected.value) return;
+        if (isMediaConnected.value) {
+            isAutoStarting.value = false;
+            return;
+        }
 
         // Backend spec: max 6 participants for audio mesh
         if (participants.value.length >= 6) {
             console.warn('[RTC] Room is full (max 6 participants)');
             alert('협업 통화는 최대 6명까지 참여할 수 있습니다.');
+            isAutoStarting.value = false;
             return;
         }
 
@@ -272,6 +277,8 @@ export const useCollabStore = defineStore('collab', () => {
 
         } catch (e) {
             console.error('Failed to enable media:', e);
+        } finally {
+            isAutoStarting.value = false;
         }
     }
 
@@ -319,6 +326,7 @@ export const useCollabStore = defineStore('collab', () => {
         disableMedia(); // Handles WebRTC cleanup
         isFloatingBarVisible.value = false;
         floatingBarResetToken.value += 1;
+        isAutoStarting.value = false;
         localStorage.removeItem('collab:floatingPos');
 
         // Close Socket Subscription
@@ -344,6 +352,15 @@ export const useCollabStore = defineStore('collab', () => {
 
     function hideFloatingBar() {
         isFloatingBarVisible.value = false;
+    }
+
+    function startCall(projectId: number) {
+        isAutoStarting.value = true;
+        joinRoom(projectId);
+        showFloatingBar(true);
+        if (status.value === 'connected') {
+            void enableMedia();
+        }
     }
     async function handleSignal(signal: any) {
         const { type, senderId, payload, targetId } = signal;
@@ -732,6 +749,16 @@ export const useCollabStore = defineStore('collab', () => {
         joinRoom(parsedId);
     }
 
+    watch([status, isMediaConnected], ([nextStatus, nextMedia]) => {
+        if (!isAutoStarting.value) return;
+        if (nextStatus === 'connected' && !nextMedia) {
+            void enableMedia();
+        }
+        if (nextMedia || nextStatus === 'error' || nextStatus === 'disconnected') {
+            isAutoStarting.value = false;
+        }
+    });
+
     function isSpeaking(peerId: string): boolean {
         return speakingMap.get(peerId) ?? false;
     }
@@ -745,6 +772,7 @@ export const useCollabStore = defineStore('collab', () => {
         isPanelOpen,
         isFloatingBarVisible, // Exported
         isMediaConnected,     // Exported
+        isAutoStarting,
         floatingBarResetToken,
         isMuted,
         isVideoOff,
@@ -760,6 +788,7 @@ export const useCollabStore = defineStore('collab', () => {
         leaveRoom,
         enableMedia,  // Exported
         disableMedia, // Exported
+        startCall,
         showFloatingBar, // Exported
         hideFloatingBar, // Exported
         sendMessage,

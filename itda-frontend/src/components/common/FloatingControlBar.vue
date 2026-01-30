@@ -3,7 +3,6 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useCollabStore } from '../../stores/collab'
 import CollabPanel from '../collab/CollabPanel.vue'
-import CollabButton from './CollabButton.vue'
 import { Mic, MicOff, MessageCircle, PhoneOff } from 'lucide-vue-next'
 
 const collabStore = useCollabStore()
@@ -14,20 +13,16 @@ const panelMaxHeight = ref<number | null>(null)
 const panelOffsetX = ref(0)
 const route = useRoute()
 const DEFAULT_BOTTOM_OFFSET = 60
-const TRIGGER_RIGHT_OFFSET = 24
 
 const isProjectPage = computed(() => {
   // Only show on project-related pages, never on dashboard
   return route.path.startsWith('/projects')
 })
 
-const isStartAllowedPage = computed(() =>
-  route.name === 'project-detail' || route.name === 'scene-edit' || route.name === 'timeline'
-)
-
 const isDashboardPage = computed(() => route.path === '/dashboard')
 
 const isConnected = computed(() => collabStore.isConnected)
+const isAutoStarting = computed(() => collabStore.isAutoStarting)
 const statusText = computed(() => {
   if (isConnected.value) {
     return collabStore.isMuted ? 'Online (Mic Off)' : 'Online (Mic On)'
@@ -41,14 +36,6 @@ const statusColor = computed(() => {
   if (collabStore.status === 'connecting') return 'bg-yellow-500'
   return 'bg-gray-500'
 })
-
-const startFromTrigger = () => {
-  const projectId = Number(route.params.projectId ?? route.params.id)
-  if (Number.isFinite(projectId)) {
-    collabStore.joinRoom(projectId)
-  }
-  collabStore.showFloatingBar(true)
-}
 
 const STORAGE_KEY = 'collab:floatingPos'
 const position = ref({ x: 0, y: 0 })
@@ -88,7 +75,7 @@ function setDefaultPosition() {
   const width = collabStore.isFloatingBarVisible ? measuredWidth : defaultWidth
   const height = (rect?.height && rect.height > 0) ? rect.height : 64
   
-  const rightOffset = collabStore.isFloatingBarVisible ? 2 : 2 + TRIGGER_RIGHT_OFFSET
+  const rightOffset = 2
   const x = Math.max(8, window.innerWidth - width - rightOffset)
   const y = Math.max(8, window.innerHeight - height - DEFAULT_BOTTOM_OFFSET)
   position.value = { x, y }
@@ -272,13 +259,8 @@ onBeforeUnmount(() => {
     :style="{ left: `${position.x}px`, top: `${position.y}px` }"
     @pointerdown="onPointerDown"
   >
-    <!-- Start Button (Collapsed State) -->
-    <div v-if="!collabStore.isFloatingBarVisible && isStartAllowedPage" class="floating-trigger">
-      <CollabButton class="trigger-btn" @click="startFromTrigger" />
-    </div>
-
     <!-- Active Bar (Expanded State) -->
-    <div v-else-if="!isDashboardPage && collabStore.isFloatingBarVisible" class="bar-container">
+    <div v-if="!isDashboardPage && collabStore.isFloatingBarVisible" class="bar-container">
     <div
       ref="panelWrapRef"
       class="panel-pop"
@@ -296,19 +278,22 @@ onBeforeUnmount(() => {
          <!-- Status -->
          <div class="status-indicator">
             <div class="status-dot bg-yellow-500"></div>
-            <span class="status-text">Ready</span>
+            <span class="status-text">{{ isAutoStarting ? '연결 중' : 'Ready' }}</span>
          </div>
          <div class="divider"></div>
-         
-         <Button 
-            class="go-live-btn"
-            @click="collabStore.enableMedia()"
-         >
-            <Mic class="icon-sm" />
-            <span>Go Live</span>
-         </Button>
-         
-         <div class="divider"></div>
+
+         <template v-if="!isAutoStarting">
+           <Button 
+              class="go-live-btn"
+              @click="collabStore.enableMedia()"
+           >
+              <Mic class="icon-sm" />
+              <span>Go Live</span>
+           </Button>
+           <div class="divider"></div>
+         </template>
+         <div v-else class="connecting-hint">통화 준비 중...</div>
+         <div v-if="isAutoStarting" class="divider"></div>
          <button
             class="control-btn"
             @click="collabStore.hideFloatingBar()"
@@ -371,16 +356,6 @@ onBeforeUnmount(() => {
   width: max-content;
 }
 
-.floating-trigger {
-  background: transparent;
-  border-radius: 8px;
-  overflow: hidden;
-  cursor: grab;
-}
-
-.floating-wrap.dragging .floating-trigger {
-  cursor: grabbing;
-}
 
 .bar-container {
   position: relative;
@@ -438,8 +413,7 @@ onBeforeUnmount(() => {
 
 .floating-bar button,
 .floating-bar .control-btn,
-.floating-bar .go-live-btn,
-.floating-trigger button {
+.floating-bar .go-live-btn {
   cursor: pointer;
 }
 
@@ -540,6 +514,14 @@ onBeforeUnmount(() => {
 .icon-sm {
   width: 14px;
   height: 14px;
+}
+
+.connecting-hint {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--gray-600);
+  padding: 0 0.25rem;
+  white-space: nowrap;
 }
 
 /* Tailwind-like utilities since we might not have full tailwind configured as classes yet */
