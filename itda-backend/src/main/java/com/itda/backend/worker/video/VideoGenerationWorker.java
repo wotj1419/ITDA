@@ -15,7 +15,6 @@ import com.itda.backend.worker.JobRequestParser;
 import com.itda.backend.worker.NodeContent;
 import com.itda.backend.worker.NodeContentLoader;
 import com.itda.backend.worker.ParsedJobRequest;
-import com.itda.backend.worker.StoredAsset;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -24,7 +23,7 @@ import org.springframework.stereotype.Component;
 public class VideoGenerationWorker {
 
     private final VeoClient veoClient;
-    private final LocalVideoStorage localVideoStorage;
+    private final VideoStorage videoStorage;
     private final AssetRegistrar assetRegistrar;
     private final JobRequestParser jobRequestParser;
     private final NodeMapper nodeMapper;
@@ -43,9 +42,21 @@ public class VideoGenerationWorker {
                 toVeoImage(lastFrame)
         );
         VeoResult result = veoClient.generateVideo(veoRequest);
-        StoredAsset storedAsset = localVideoStorage.save(job.getProjectId(), job.getId(), result.bytes());
-        Long assetId = assetRegistrar.registerLocalAsset(job, storedAsset, AssetType.VIDEO, result.contentType());
-        return new ExecutionResult(assetId, storedAsset.storageKey());
+        VideoStorageResult storedVideo = videoStorage.save(
+                job.getProjectId(),
+                job.getId(),
+                result.bytes(),
+                result.contentType()
+        );
+        Long assetId = assetRegistrar.registerAsset(
+                job,
+                storedVideo.storageKey(),
+                storedVideo.sizeBytes(),
+                AssetType.VIDEO,
+                storedVideo.contentType(),
+                storedVideo.storageProvider()
+        );
+        return new ExecutionResult(assetId, storedVideo.storageKey());
     }
 
     private Node loadNode(Job job) {
