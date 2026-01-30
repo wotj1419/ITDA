@@ -14,6 +14,8 @@ public enum ErrorCode {
     // ===== 400 Bad Request =====
     INVALID_REQUEST(400, "요청 파라미터가 올바르지 않습니다"),
     INVALID_INPUT_VALUE(400, "잘못된 입력 값입니다"),
+    CANNOT_KICK_SELF(400, "자기 자신은 강퇴할 수 없습니다"),
+    CANNOT_LEAVE_OWNER(400, "프로젝트 소유자는 탈퇴할 수 없습니다"),
 
     // ===== 401 Unauthorized =====
     UNAUTHORIZED(401, "인증이 필요합니다"),
@@ -42,6 +44,7 @@ public enum ErrorCode {
     MASTER_NODE_LIMIT_EXCEEDED(409, "마스터 노드는 씬당 최대 3개까지 생성할 수 있습니다"),
     INPUT_IMAGE_NOT_READY(409, "입력 이미지가 준비되지 않았습니다"),
     SCENARIO_VERSION_CONFLICT(409, "시나리오가 최신 상태가 아닙니다"),
+    MEMBER_ALREADY_EXISTS(409, "이미 프로젝트의 멤버입니다"),
 
     // ===== 403 Forbidden (Node specific) =====
     SCENE_HEADER_NOT_MODIFIABLE(403, "씬 헤더 노드는 수정/삭제/이동할 수 없습니다"),

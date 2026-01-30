@@ -3,15 +3,15 @@ import type { Project, ProjectDetail, ProjectMember } from '../../types/api/proj
 // 1. Mock 데이터 정의 (기존과 동일)
 const mockMembers: Record<number, ProjectMember[]> = {
   1: [
-    { userId: 1, email: 'minjun@example.com', name: 'Minjun Kim', role: 'OWNER', profileImage: 'https://i.pravatar.cc/150?u=a' },
-    { userId: 2, email: 'sujin@example.com', name: 'Sujin Lee', role: 'EDITOR', profileImage: 'https://i.pravatar.cc/150?u=b' },
+    { userId: 1, email: 'minjun@example.com', name: 'Minjun Kim', role: 'OWNER', profileImageUrl: 'https://i.pravatar.cc/150?u=a' },
+    { userId: 2, email: 'sujin@example.com', name: 'Sujin Lee', role: 'EDITOR', profileImageUrl: 'https://i.pravatar.cc/150?u=b' },
   ],
   2: [
-    { userId: 1, email: 'minjun@example.com', name: 'Minjun Kim', role: 'OWNER', profileImage: 'https://i.pravatar.cc/150?u=a' },
+    { userId: 1, email: 'minjun@example.com', name: 'Minjun Kim', role: 'OWNER', profileImageUrl: 'https://i.pravatar.cc/150?u=a' },
   ],
   3: [
-    { userId: 3, email: 'yuna@example.com', name: 'Yuna Park', role: 'OWNER', profileImage: 'https://i.pravatar.cc/150?u=c' },
-    { userId: 1, email: 'minjun@example.com', name: 'Minjun Kim', role: 'VIEWER', profileImage: 'https://i.pravatar.cc/150?u=a' },
+    { userId: 3, email: 'yuna@example.com', name: 'Yuna Park', role: 'OWNER', profileImageUrl: 'https://i.pravatar.cc/150?u=c' },
+    { userId: 1, email: 'minjun@example.com', name: 'Minjun Kim', role: 'VIEWER', profileImageUrl: 'https://i.pravatar.cc/150?u=a' },
   ],
 }
 
@@ -122,7 +122,7 @@ export async function createProject(data: { title: string; description?: string;
     ...newProject,
     myRole: 'OWNER',
     ownerId: 1,
-    members: [{ userId: 1, email: 'minjun@example.com', name: 'Minjun Kim', role: 'OWNER', profileImage: 'https://i.pravatar.cc/150?u=user123' }],
+    members: [{ userId: 1, email: 'minjun@example.com', name: 'Minjun Kim', role: 'OWNER', profileImageUrl: 'https://i.pravatar.cc/150?u=user123' }],
   }
 
   return newProject
