@@ -147,6 +147,9 @@ const currentUserRole = computed(() => {
   return me?.role ?? 'viewer'
 })
 
+const isOwnerUser = computed(() => currentUserRole.value === 'owner')
+const isAdminUser = computed(() => currentUserRole.value === 'admin')
+
 const canManageRoles = computed(() => {
   const currentUserId = authStore.user?.id
   if (!currentUserId) return false
@@ -166,6 +169,7 @@ const removeTitle = '멤버 제거'
 
 async function updateMemberRole(userId: number, role: 'owner' | 'admin' | 'editor' | 'viewer') {
   if (!props.projectId) return
+  if (isAdminUser.value && (role === 'admin' || role === 'owner')) return
   // Convert UI role (lowercase) to API role (uppercase)
   // 'owner' cannot be set via this API usually, only ADMIN/EDITOR/VIEWER changes for members.
   // Assuming frontend prevents changing TO owner via disabled option/logic.
@@ -185,6 +189,31 @@ async function updateMemberRole(userId: number, role: 'owner' | 'admin' | 'edito
       message: '권한을 변경하지 못했습니다.',
     })
   }
+}
+
+const canEditMemberRole = (member: { userId: number; role: 'owner' | 'admin' | 'editor' | 'viewer' }) => {
+  if (!canManageRoles.value) return false
+  if (member.role === 'owner') return false
+  if (member.userId === authStore.user?.id) return false
+  if (isOwnerUser.value) return true
+  if (isAdminUser.value) return ['editor', 'viewer'].includes(member.role)
+  return false
+}
+
+const canRemoveMember = (member: { userId: number; role: 'owner' | 'admin' | 'editor' | 'viewer' }) => {
+  if (!canManageRoles.value) return false
+  if (member.role === 'owner') return false
+  if (member.userId === authStore.user?.id) return false
+  if (isOwnerUser.value) return true
+  if (isAdminUser.value) return ['editor', 'viewer'].includes(member.role)
+  return false
+}
+
+const roleOptionsForMember = (member: { role: 'owner' | 'admin' | 'editor' | 'viewer' }) => {
+  if (isAdminUser.value) {
+    return inviteOptions.filter((option) => option.value !== 'admin')
+  }
+  return inviteOptions
 }
 
 async function removeMember(userId: number) {
@@ -227,16 +256,16 @@ async function removeMember(userId: number) {
             </div>
             <div class="member-role">
               <CustomSelect
-                v-if="canManageRoles && member.role !== 'owner'"
+                v-if="canEditMemberRole(member)"
                 :model-value="member.role"
-                :options="inviteOptions"
+                :options="roleOptionsForMember(member)"
                 class="member-role-select"
                 @update:model-value="(val) => updateMemberRole(member.userId, val as any)"
               />
               <span v-else class="role-badge">{{ roleLabelMap[member.role] || roleLabelMap.viewer }}</span>
               
               <button 
-                v-if="canManageRoles && member.role !== 'owner' && member.userId !== authStore.user?.id"
+                v-if="canRemoveMember(member)"
                 class="remove-btn"
                 :title="removeTitle"
                 @click="removeMember(member.userId)"
