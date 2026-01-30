@@ -509,7 +509,7 @@ export const useCollabStore = defineStore('collab', () => {
 
     function sendMessage(content: string) {
         if (!content.trim()) return;
-        if (!canSendSignal()) return;
+        if (!canSendSignal() || !roomId.value) return;
 
         // Backend spec: max 2000 characters
         if (content.length > 2000) {
@@ -556,7 +556,7 @@ export const useCollabStore = defineStore('collab', () => {
                     ...messages.value[realIdx],
                     messageId,
                     timestamp: createdAt,
-                };
+                } as CollabMessage;
                 return;
             }
         }
@@ -593,7 +593,7 @@ export const useCollabStore = defineStore('collab', () => {
         }
     }
 
-    function updateCursor(x: number, y: number, sceneId?: number | null) {
+    function updateCursor(x: number, y: number, _sceneId?: number | null) {
         if (!authStore.isAuthenticated) return;
 
         const now = Date.now();

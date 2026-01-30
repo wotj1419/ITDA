@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { RouterLink } from 'vue-router'
-import { MoreVertical, Trash2, Pencil, Share2 } from 'lucide-vue-next'
+import { MoreVertical, Trash2 } from 'lucide-vue-next'
 import type { Project } from '../../types/api/projects'
 import Badge from '../common/Badge.vue'
 import TimeAgo from '../common/TimeAgo.vue'
