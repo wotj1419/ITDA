@@ -52,6 +52,7 @@ import {
     mapShotTypeKeysToLabels,
     normalizeCameraMotionValue,
     resolveExpressionLabel,
+    resolveFilmLookLabel,
     resolveMoodLabel,
     resolveShotTypeLabel,
     resolveStyleLabel,
@@ -63,6 +64,7 @@ import { SHOT_FALLBACK_THUMBNAIL } from '../../utils/fallbacks';
 import {
     DEFAULT_GRID_LAYOUT,
     DEFAULT_GRID_SHOT_TYPES,
+    DEFAULT_MASTER_FILM_LOOK,
     DEFAULT_MASTER_MOOD,
     DEFAULT_MASTER_STYLE,
     DEFAULT_MASTER_TIME_OF_DAY,
@@ -272,6 +274,51 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
         }
     };
 
+    function reindexNodeVersions(): void {
+        const groups = new Map<string, SceneNode[]>();
+
+        for (const node of nodes.value) {
+            if (!node.data) continue;
+            if (node.data.type === NodeType.SCENE_HEADER) continue;
+            const parentId = node.data.parentNodeId ?? '';
+            const key = `${node.data.type}::${parentId}`;
+            const group = groups.get(key);
+            if (group) {
+                group.push(node);
+            } else {
+                groups.set(key, [node]);
+            }
+        }
+
+        const compareNodeId = (a: SceneNode, b: SceneNode): number => {
+            const aNum = toFiniteNumber(a.id);
+            const bNum = toFiniteNumber(b.id);
+            if (aNum !== null && bNum !== null) return aNum - bNum;
+            if (aNum !== null) return -1;
+            if (bNum !== null) return 1;
+            return String(a.id).localeCompare(String(b.id));
+        };
+
+        for (const group of groups.values()) {
+            group.sort(compareNodeId);
+            group.forEach((node, index) => {
+                if (!node.data) return;
+                node.data.version = index + 1;
+            });
+        }
+    }
+
+    function getNextVersion(type: NodeType, parentNodeId: string | null): number {
+        const siblings = nodes.value.filter(
+            (n) => n.data?.type === type && (n.data.parentNodeId ?? null) === parentNodeId
+        );
+        const maxVersion = siblings.reduce((max, node) => {
+            const version = node.data?.version ?? 0;
+            return version > max ? version : max;
+        }, 0);
+        return maxVersion + 1;
+    }
+
     // ==========================================================================
     // Actions - Persistence
     // ==========================================================================
@@ -435,6 +482,7 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
             }
 
             await ensureActiveMasterNode();
+            reindexNodeVersions();
             edges.value = deriveEdges(nodes.value);
             ensureTimelineOrder();
 
@@ -554,7 +602,7 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
             (n) => n.data?.type === NodeType.MASTER_IMAGE
         ).length;
         if (masterCount >= 3) return null;
-        const nextVersion = masterCount + 1;
+        const nextVersion = getNextVersion(NodeType.MASTER_IMAGE, parentNodeId);
         if (!sceneId.value) return null;
         const sceneNumericId = toFiniteNumber(sceneId.value);
         if (sceneNumericId === null) return null;
@@ -582,6 +630,7 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
             imageUrl: null,
             thumbnailUrl: null,
             prompt: '',
+            filmLook: DEFAULT_MASTER_FILM_LOOK,
             style: DEFAULT_MASTER_STYLE,
             timeOfDay: DEFAULT_MASTER_TIME_OF_DAY,
             mood: DEFAULT_MASTER_MOOD,
@@ -598,6 +647,7 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
 
         nodes.value.push(newNode);
         addEdge(parentNodeId, id);
+        reindexNodeVersions();
         ensureSceneInProgress();
         return newNode;
     }
@@ -605,12 +655,7 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
     async function addStoryboardGridNode(parentNodeId: string): Promise<SceneNode | null> {
         if (!canConnect(nodes.value, parentNodeId, NodeType.STORYBOARD_GRID)) return null;
 
-        const gridCount = nodes.value.filter(
-            (n) =>
-                n.data?.type === NodeType.STORYBOARD_GRID &&
-                n.data.parentNodeId === parentNodeId
-        ).length;
-        const nextVersion = gridCount + 1;
+        const nextVersion = getNextVersion(NodeType.STORYBOARD_GRID, parentNodeId);
 
         if (!sceneId.value) return null;
         const sceneNumericId = toFiniteNumber(sceneId.value);
@@ -650,6 +695,7 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
 
         nodes.value.push(newNode);
         addEdge(parentNodeId, id);
+        reindexNodeVersions();
         ensureSceneInProgress();
         return newNode;
     }
@@ -663,7 +709,7 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
                 n.data.parentNodeId === parentNodeId
         );
         const nextGridIndex = gridCellIndex ?? existingShots.length;
-        const nextVersion = existingShots.length + 1;
+        const nextVersion = getNextVersion(NodeType.SHOT, parentNodeId);
 
         if (!sceneId.value) return null;
         const sceneNumericId = toFiniteNumber(sceneId.value);
@@ -704,6 +750,7 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
 
         nodes.value.push(newNode);
         addEdge(parentNodeId, id);
+        reindexNodeVersions();
         ensureSceneInProgress();
         return newNode;
     }
@@ -711,12 +758,7 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
     async function addVideoNode(parentNodeId: string): Promise<SceneNode | null> {
         if (!canConnect(nodes.value, parentNodeId, NodeType.VIDEO)) return null;
 
-        const videoCount = nodes.value.filter(
-            (n) =>
-                n.data?.type === NodeType.VIDEO &&
-                n.data.parentNodeId === parentNodeId
-        ).length;
-        const nextVersion = videoCount + 1;
+        const nextVersion = getNextVersion(NodeType.VIDEO, parentNodeId);
 
         if (!sceneId.value) return null;
         const sceneNumericId = toFiniteNumber(sceneId.value);
@@ -763,6 +805,7 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
 
         nodes.value.push(newNode);
         addEdge(parentNodeId, id);
+        reindexNodeVersions();
         ensureSceneInProgress();
         return newNode;
     }
@@ -820,6 +863,7 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
         edges.value = edges.value.filter(
             (e) => !toDelete.includes(e.source) && !toDelete.includes(e.target)
         );
+        reindexNodeVersions();
 
         // 선택 해제
         if (selectedNodeId.value && toDelete.includes(selectedNodeId.value)) {
@@ -985,20 +1029,56 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
     function applyDetailSettings(targetNode: SceneNode, detail: Awaited<ReturnType<typeof fetchNodeDetail>>): void {
         if (!targetNode.data) return;
         if (targetNode.data.type === NodeType.SCENE_HEADER) return;
-        if (detail.prompt !== null && detail.prompt !== undefined && 'prompt' in targetNode.data) {
-            targetNode.data.prompt = detail.prompt;
+        if ('prompt' in targetNode.data && typeof detail.prompt === 'string') {
+            const incoming = detail.prompt;
+            const current = targetNode.data.prompt ?? '';
+            const shouldOverwrite = incoming.trim().length > 0 || current.trim().length === 0;
+            if (shouldOverwrite) {
+                targetNode.data.prompt = incoming;
+            }
         }
 
         const settings = detail.settings ?? undefined;
         if (!settings) return;
 
+        if ('promptKo' in targetNode.data) {
+            const promptKo = settings.promptKo as string | undefined;
+            if (typeof promptKo === 'string') {
+                const current = targetNode.data.promptKo ?? '';
+                const shouldOverwrite = promptKo.trim().length > 0 || current.trim().length === 0;
+                if (shouldOverwrite) {
+                    targetNode.data.promptKo = promptKo;
+                }
+            }
+            const promptEnFinal = settings.promptEnFinal as string | undefined;
+            if (typeof promptEnFinal === 'string') {
+                const current = targetNode.data.promptEnFinal ?? '';
+                const shouldOverwrite =
+                    promptEnFinal.trim().length > 0 || current.trim().length === 0;
+                if (shouldOverwrite) {
+                    targetNode.data.promptEnFinal = promptEnFinal;
+                }
+            }
+            const promptEnFinalOverride = settings.promptEnFinalOverride as string | undefined;
+            if (typeof promptEnFinalOverride === 'string') {
+                const current = targetNode.data.promptEnFinalOverride ?? '';
+                const shouldOverwrite =
+                    promptEnFinalOverride.trim().length > 0 || current.trim().length === 0;
+                if (shouldOverwrite) {
+                    targetNode.data.promptEnFinalOverride = promptEnFinalOverride;
+                }
+            }
+        }
+
         if (targetNode.data.type === NodeType.MASTER_IMAGE) {
             const masterData = targetNode.data as MasterImageNodeData;
+            const filmLookValue = (settings.filmLookKey ?? settings.filmLook) as string | undefined;
             const styleValue = (settings.styleKey ?? settings.style) as string | undefined;
             const timeValue = (settings.timeOfDayKey ?? settings.timeOfDay) as string | undefined;
             const moodValue = (settings.moodKey ?? settings.mood) as string | undefined;
             const objectIdsRaw = (settings.objectIds ?? settings.objects) as unknown;
 
+            masterData.filmLook = resolveFilmLookLabel(filmLookValue) || masterData.filmLook || DEFAULT_MASTER_FILM_LOOK;
             masterData.style = resolveStyleLabel(styleValue) || masterData.style;
             masterData.timeOfDay = resolveTimeOfDayLabel(timeValue) || masterData.timeOfDay;
             masterData.mood = resolveMoodLabel(moodValue) || masterData.mood;
@@ -1424,6 +1504,7 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
                 : generateMockSceneNodes(sceneIdParam);
             nodes.value = mockData.nodes;
             edges.value = mockData.edges;
+            reindexNodeVersions();
             positionHistory.value = [];
             resetInteractionState();
             resetHydrationState();

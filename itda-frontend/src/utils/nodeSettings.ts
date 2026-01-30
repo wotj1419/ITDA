@@ -2,10 +2,15 @@ import type { CameraMotion } from '../types/ui/sceneNodes';
 
 const STYLE_LABEL_TO_KEY: Record<string, string> = {
   실사: 'PHOTO_REAL',
+  시네마틱: 'PHOTO_REAL',
   애니메이션: 'ANIME_2D',
   픽사: 'STYLIZED_3D',
   수채화: 'WATERCOLOR_ILLUSTRATION',
   유화: 'OIL_PAINT_ILLUSTRATION',
+};
+
+const FILM_LOOK_LABEL_TO_KEY: Record<string, string> = {
+  '시네마틱 모던': 'CINEMATIC_MODERN',
 };
 
 const TIME_OF_DAY_LABEL_TO_KEY: Record<string, string> = {
@@ -76,6 +81,7 @@ function invertMap(map: Record<string, string>): Record<string, string> {
 }
 
 const STYLE_KEY_TO_LABEL = invertMap(STYLE_LABEL_TO_KEY);
+const FILM_LOOK_KEY_TO_LABEL = invertMap(FILM_LOOK_LABEL_TO_KEY);
 const TIME_OF_DAY_KEY_TO_LABEL = invertMap(TIME_OF_DAY_LABEL_TO_KEY);
 const MOOD_KEY_TO_LABEL = invertMap(MOOD_LABEL_TO_KEY);
 const SHOT_TYPE_KEY_TO_LABEL = invertMap(SHOT_TYPE_LABEL_TO_KEY);
@@ -104,6 +110,10 @@ export function resolveStyleKey(value?: string | null): string | undefined {
   return resolveKey(value, STYLE_LABEL_TO_KEY, STYLE_KEY_TO_LABEL);
 }
 
+export function resolveFilmLookKey(value?: string | null): string | undefined {
+  return resolveKey(value, FILM_LOOK_LABEL_TO_KEY, FILM_LOOK_KEY_TO_LABEL);
+}
+
 export function resolveTimeOfDayKey(value?: string | null): string | undefined {
   return resolveKey(value, TIME_OF_DAY_LABEL_TO_KEY, TIME_OF_DAY_KEY_TO_LABEL);
 }
@@ -122,6 +132,10 @@ export function resolveExpressionKey(value?: string | null): string | undefined 
 
 export function resolveStyleLabel(value?: string | null): string {
   return resolveLabel(value, STYLE_KEY_TO_LABEL);
+}
+
+export function resolveFilmLookLabel(value?: string | null): string {
+  return resolveLabel(value, FILM_LOOK_KEY_TO_LABEL);
 }
 
 export function resolveTimeOfDayLabel(value?: string | null): string {

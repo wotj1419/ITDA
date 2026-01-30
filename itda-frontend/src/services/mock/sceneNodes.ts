@@ -115,7 +115,7 @@ function createMasterImage(
             imageUrl: 'https://picsum.photos/seed/master' + id + '/400/225',
             thumbnailUrl: 'https://picsum.photos/seed/master' + id + '/200/112',
             prompt: '화성 기지 전경, 붉은 사막 위의 돔 구조물',
-            style: '실사',
+            style: '시네마틱',
             timeOfDay: '아침',
             mood: '고독',
             objectIds: [],

@@ -20,6 +20,7 @@ import {
   DEFAULT_MASTER_STYLE,
   DEFAULT_MASTER_TIME_OF_DAY,
 } from '../../../utils/nodeDefaults';
+import { aiService } from '../../../services';
 
 interface Props {
   node: Node<MasterImageNodeData>;
@@ -35,6 +36,11 @@ const form = ref({
   mood: DEFAULT_MASTER_MOOD,
   objectIds: [] as number[],  // 등장 오브젝트 IDs (캐릭터 포함)
   prompt: '',
+  promptKo: '',
+  promptEnFinal: '',
+  promptEnFinalOverride: '',
+  usePromptOverride: false,
+  showAdvanced: false,
 });
 
 const {
@@ -44,6 +50,7 @@ const {
   clearError,
   generatePrompt,
   approvePrompt,
+  refreshPromptPreview,
   runGeneration: generateImage,
 } = useNodeGeneration({
   nodeId: props.node.id,
@@ -58,19 +65,39 @@ const {
     mood: form.value.mood,
     objects: selectedObjectNames.value,
   }),
-  getPromptUpdate: (prompt) => ({
+  getPromptUpdate: (result) => ({
     style: form.value.style,
     timeOfDay: form.value.timeOfDay,
     mood: form.value.mood,
     objectIds: form.value.objectIds,
-    prompt,
+    prompt: result.promptEnBase,
+    promptKo: result.promptKo,
   }),
-  getApprovedUpdate: () => ({ prompt: form.value.prompt }),
+  getApprovedUpdate: () => ({
+    prompt: form.value.prompt,
+    promptKo: form.value.promptKo,
+    promptEnFinalOverride: form.value.usePromptOverride ? form.value.promptEnFinalOverride : '',
+  }),
   getJobSettings: () => ({
     styleKey: resolveStyleKey(form.value.style),
     timeOfDayKey: resolveTimeOfDayKey(form.value.timeOfDay),
     moodKey: resolveMoodKey(form.value.mood) ?? 'NEUTRAL',
     objectIds: form.value.objectIds,
+  }),
+  getPromptOverride: () =>
+    form.value.usePromptOverride ? form.value.promptEnFinalOverride : '',
+  getPromptPreviewPayload: () => ({
+    prompt: form.value.prompt,
+    settings: {
+      styleKey: resolveStyleKey(form.value.style),
+      timeOfDayKey: resolveTimeOfDayKey(form.value.timeOfDay),
+      moodKey: resolveMoodKey(form.value.mood) ?? 'NEUTRAL',
+      objectIds: form.value.objectIds,
+    },
+    promptEnFinalOverride: form.value.usePromptOverride ? form.value.promptEnFinalOverride : '',
+  }),
+  onPromptPreview: (result) => ({
+    promptEnFinal: result.promptEnFinal,
   }),
   getJobSuccessUpdate: ({ resultUrl, thumbnailUrl }) => ({
     imageUrl: resultUrl || null,
@@ -81,7 +108,7 @@ const {
   },
 });
 
-const styleOptions = ['실사', '애니메이션', '픽사', '수채화', '유화'];
+const styleOptions = ['시네마틱', '애니메이션', '픽사', '수채화', '유화'];
 const timeOptions = ['아침', '낮', '저녁', '밤'];
 const moodOptions = ['중립', '편안', '고독', '긴장', '행복', '우울'];
 
@@ -109,7 +136,18 @@ const data = computed(() => props.node.data as MasterImageNodeData | undefined);
 const sceneHeaderData = computed(() =>
   nodeStore.nodes.find((node) => node.data?.type === NodeType.SCENE_HEADER)?.data
 );
-const isPromptGenerated = computed(() => data.value?.promptStatus !== PromptStatus.DRAFT);
+const hasPromptContent = computed(() => {
+  if (!data.value) return false;
+  return Boolean(
+    (data.value.prompt ?? '').trim() ||
+    (data.value.promptKo ?? '').trim() ||
+    (data.value.promptEnFinal ?? '').trim() ||
+    (data.value.promptEnFinalOverride ?? '').trim()
+  );
+});
+const isPromptGenerated = computed(
+  () => hasPromptContent.value || data.value?.promptStatus !== PromptStatus.DRAFT
+);
 const isPromptApproved = computed(() => data.value?.promptStatus === PromptStatus.APPROVED);
 const canGenerate = computed(() =>
   isPromptApproved.value && !isGeneratingImage.value && !isGeneratingPrompt.value
@@ -131,6 +169,34 @@ function buildSceneOneLine(): string {
 const generateButtonRef = ref<HTMLButtonElement | null>(null);
 let generateButtonTween: gsap.core.Tween | null = null;
 
+function normalizeIds(ids: number[] | undefined | null): number[] {
+  return Array.isArray(ids) ? ids : [];
+}
+
+function areNumberArraysEqual(a: number[], b: number[]): boolean {
+  if (a === b) return true;
+  if (a.length !== b.length) return false;
+  for (let index = 0; index < a.length; index += 1) {
+    if (a[index] !== b[index]) return false;
+  }
+  return true;
+}
+
+let persistLookTimeout: ReturnType<typeof setTimeout> | null = null;
+function queuePersistLook(): void {
+  if (!data.value) return;
+  if (persistLookTimeout) clearTimeout(persistLookTimeout);
+  persistLookTimeout = setTimeout(() => {
+    persistLookTimeout = null;
+    nodeStore.updateNode(props.node.id, {
+      style: form.value.style,
+      timeOfDay: form.value.timeOfDay,
+      mood: form.value.mood,
+      objectIds: [...form.value.objectIds],
+    });
+  }, 300);
+}
+
 // 노드 변경 시 폼 동기화
 watch(() => props.node.id, () => {
   if (!data.value) return;
@@ -140,9 +206,45 @@ watch(() => props.node.id, () => {
     mood: data.value.mood || DEFAULT_MASTER_MOOD,
     objectIds: data.value.objectIds || [],
     prompt: data.value.prompt || '',
+    promptKo: data.value.promptKo || '',
+    promptEnFinal: data.value.promptEnFinal || '',
+    promptEnFinalOverride: data.value.promptEnFinalOverride || '',
+    usePromptOverride: Boolean(data.value.promptEnFinalOverride),
+    showAdvanced: false,
   };
   clearError();
 }, { immediate: true });
+
+watch(
+  () => ({
+    style: form.value.style,
+    timeOfDay: form.value.timeOfDay,
+    mood: form.value.mood,
+    objectIds: form.value.objectIds.slice(),
+  }),
+  (next) => {
+    if (!data.value) return;
+    const savedObjectIds = normalizeIds(data.value.objectIds);
+    const nextObjectIds = normalizeIds(next.objectIds);
+
+    const unchanged =
+      next.style === (data.value.style || DEFAULT_MASTER_STYLE) &&
+      next.timeOfDay === (data.value.timeOfDay || DEFAULT_MASTER_TIME_OF_DAY) &&
+      next.mood === (data.value.mood || DEFAULT_MASTER_MOOD) &&
+      areNumberArraysEqual(nextObjectIds, savedObjectIds);
+
+    if (unchanged) return;
+
+    nodeStore.updateNodeLocal(props.node.id, {
+      style: next.style,
+      timeOfDay: next.timeOfDay,
+      mood: next.mood,
+      objectIds: [...nextObjectIds],
+    });
+    queuePersistLook();
+  },
+  { deep: true }
+);
 
 watch(
   () => data.value?.prompt,
@@ -151,6 +253,37 @@ watch(
     if (normalized !== form.value.prompt) {
       form.value.prompt = normalized;
     }
+  }
+);
+
+watch(
+  () => data.value?.promptKo,
+  (nextPromptKo) => {
+    const normalized = nextPromptKo ?? '';
+    if (normalized !== form.value.promptKo) {
+      form.value.promptKo = normalized;
+    }
+  }
+);
+
+watch(
+  () => data.value?.promptEnFinal,
+  (nextPromptEnFinal) => {
+    const normalized = nextPromptEnFinal ?? '';
+    if (normalized !== form.value.promptEnFinal) {
+      form.value.promptEnFinal = normalized;
+    }
+  }
+);
+
+watch(
+  () => data.value?.promptEnFinalOverride,
+  (nextPromptOverride) => {
+    const normalized = nextPromptOverride ?? '';
+    if (normalized !== form.value.promptEnFinalOverride) {
+      form.value.promptEnFinalOverride = normalized;
+    }
+    form.value.usePromptOverride = Boolean(normalized);
   }
 );
 
@@ -200,6 +333,10 @@ watch(
 onUnmounted(() => {
   generateButtonTween?.kill();
   generateButtonTween = null;
+  if (persistLookTimeout) {
+    clearTimeout(persistLookTimeout);
+    persistLookTimeout = null;
+  }
 });
 // 오브젝트 선택 토글
 function toggleObject(objectId: number): void {
@@ -209,6 +346,56 @@ function toggleObject(objectId: number): void {
   } else {
     form.value.objectIds.push(objectId);
   }
+}
+
+const isTranslating = ref(false);
+const isRewriting = ref(false);
+
+async function translatePrompt(): Promise<void> {
+  if (!form.value.prompt) return;
+  if (isTranslating.value) return;
+  isTranslating.value = true;
+  try {
+    const result = await aiService.translatePrompt(form.value.prompt);
+    if (result.promptKo && result.promptKo.trim()) {
+      form.value.promptKo = result.promptKo;
+    }
+  } catch (error) {
+    console.error('Failed to translate prompt:', error);
+  } finally {
+    isTranslating.value = false;
+  }
+}
+
+async function rewritePrompt(): Promise<void> {
+  if (!form.value.promptKo) return;
+  if (isRewriting.value) return;
+  isRewriting.value = true;
+  try {
+    const result = await aiService.rewritePrompt(form.value.promptKo);
+    if (result.promptEnBase && result.promptEnBase.trim()) {
+      form.value.prompt = result.promptEnBase;
+      await refreshPromptPreview();
+    }
+  } catch (error) {
+    console.error('Failed to rewrite prompt:', error);
+  } finally {
+    isRewriting.value = false;
+  }
+}
+
+function enableFinalOverride(): void {
+  if (!form.value.usePromptOverride) {
+    form.value.usePromptOverride = true;
+  }
+  if (!form.value.promptEnFinalOverride.trim()) {
+    form.value.promptEnFinalOverride = form.value.promptEnFinal || form.value.prompt;
+  }
+}
+
+function clearFinalOverride(): void {
+  form.value.usePromptOverride = false;
+  form.value.promptEnFinalOverride = '';
 }
 
 
@@ -250,7 +437,7 @@ function setActive(): void {
           <label
             v-for="opt in styleOptions"
             :key="opt"
-            :class="['panel-radio', 'panel-style-card', { 'panel-style-card--primary': opt === '실사' }]"
+            :class="['panel-radio', 'panel-style-card', { 'panel-style-card--primary': opt === '시네마틱' }]"
           >
             <input type="radio" v-model="form.style" :value="opt" />
             <span class="panel-radio-label">{{ opt }}</span>
@@ -324,10 +511,79 @@ function setActive(): void {
       <div v-if="isPromptGenerated" class="panel-section panel-section--prompt">
         <label class="panel-label">
           <FileText class="panel-label-icon" />
-          AI 프롬프트
+          프롬프트
           <span class="panel-label-badge">생성됨</span>
         </label>
-        <textarea v-model="form.prompt" class="panel-textarea panel-textarea--prompt" rows="4"></textarea>
+        <label class="panel-label" style="margin-top: 0.75rem;">
+          <FileText class="panel-label-icon" />
+          생성용 프롬프트 (영어)
+        </label>
+        <textarea
+          :value="form.promptEnFinal"
+          class="panel-textarea panel-textarea--prompt"
+          rows="4"
+          readonly
+          placeholder="생성용 프롬프트 미리보기로 확인하세요."
+        ></textarea>
+
+        <div class="panel-prompt-actions">
+          <button class="panel-btn panel-btn--text" :disabled="!form.prompt" @click="refreshPromptPreview">
+            <RefreshCw class="panel-btn-icon" />
+            생성용 프롬프트 미리보기
+          </button>
+          <button class="panel-btn panel-btn--text" :disabled="!form.promptEnFinal" @click="enableFinalOverride">
+            영문 직접 편집
+          </button>
+          <button class="panel-btn panel-btn--text" @click="form.showAdvanced = !form.showAdvanced">
+            <span class="panel-btn-icon">⋯</span>
+            고급 설정
+          </button>
+        </div>
+
+        <div v-if="form.usePromptOverride" class="panel-section" style="margin-top: 0.75rem;">
+          <label class="panel-label">
+            <FileText class="panel-label-icon" />
+            생성용 프롬프트 직접 수정
+          </label>
+          <textarea
+            v-model="form.promptEnFinalOverride"
+            class="panel-textarea panel-textarea--prompt"
+            rows="4"
+            placeholder="최종 영어 프롬프트를 직접 입력하세요."
+          ></textarea>
+          <div class="panel-prompt-actions panel-prompt-actions--right">
+            <button class="panel-btn panel-btn--text" @click="clearFinalOverride">
+              오버라이드 해제
+            </button>
+          </div>
+        </div>
+
+        <div v-if="form.showAdvanced" class="panel-section" style="margin-top: 0.75rem;">
+          <label class="panel-label">
+            <FileText class="panel-label-icon" />
+            서술 프롬프트 (한국어)
+          </label>
+          <textarea v-model="form.promptKo" class="panel-textarea panel-textarea--prompt" rows="3"></textarea>
+          <div class="panel-prompt-actions">
+            <button class="panel-btn panel-btn--text" :disabled="isTranslating || !form.prompt" @click="translatePrompt">
+              <Loader2 v-if="isTranslating" class="panel-btn-icon panel-btn-icon--spin" />
+              <RefreshCw v-else class="panel-btn-icon" />
+              EN → KO
+            </button>
+            <button class="panel-btn panel-btn--text" :disabled="isRewriting || !form.promptKo" @click="rewritePrompt">
+              <Loader2 v-if="isRewriting" class="panel-btn-icon panel-btn-icon--spin" />
+              <RefreshCw v-else class="panel-btn-icon" />
+              KO → EN
+            </button>
+          </div>
+
+          <label class="panel-label" style="margin-top: 0.75rem;">
+            <FileText class="panel-label-icon" />
+            서술 프롬프트 (영어)
+          </label>
+          <textarea v-model="form.prompt" class="panel-textarea panel-textarea--prompt" rows="3"></textarea>
+        </div>
+
         <div class="panel-prompt-actions panel-prompt-actions--right">
           <button class="panel-btn panel-btn--text" :disabled="isGeneratingPrompt || isGeneratingImage" @click="generatePrompt">
             <Loader2 v-if="isGeneratingPrompt" class="panel-btn-icon panel-btn-icon--spin" />

@@ -1,6 +1,6 @@
 import { ref } from 'vue';
 import type { AnyNodeData } from '../types/ui/sceneNodes';
-import type { GeneratePromptRequest } from '../types/api/ai';
+import type { GeneratePromptRequest, GeneratePromptResponse, PromptPreviewRequest, PromptPreviewResponse } from '../types/api/ai';
 import { JobStatus, PromptStatus } from '../types/ui/sceneNodes';
 import { useSceneNodeStore } from '../stores/sceneNode';
 import { resolveApiUrl } from '../services/api/urls';
@@ -17,9 +17,12 @@ interface UseNodeGenerationOptions {
   toastType: GenerationToastType;
   getPrompt: () => string;
   getPromptPayload: () => GeneratePromptRequest;
-  getPromptUpdate: (prompt: string) => Partial<AnyNodeData>;
+  getPromptUpdate: (result: GeneratePromptResponse) => Partial<AnyNodeData>;
   getApprovedUpdate: () => Partial<AnyNodeData>;
   getJobSettings: () => Record<string, unknown>;
+  getPromptOverride?: () => string | undefined;
+  getPromptPreviewPayload?: () => PromptPreviewRequest;
+  onPromptPreview?: (result: PromptPreviewResponse) => Partial<AnyNodeData>;
   getJobSuccessUpdate: (result: { resultUrl?: string; thumbnailUrl?: string | null }) => Partial<AnyNodeData>;
   messages?: {
     promptError?: string;
@@ -39,6 +42,18 @@ export function useNodeGeneration(options: UseNodeGenerationOptions) {
     errorMessage.value = null;
   };
 
+  const refreshPromptPreview = async (): Promise<void> => {
+    if (!options.getPromptPreviewPayload) return;
+    try {
+      const result = await aiService.previewPrompt(options.nodeId, options.getPromptPreviewPayload());
+      if (options.onPromptPreview) {
+        nodeStore.updateNodeLocal(options.nodeId, options.onPromptPreview(result));
+      }
+    } catch (error) {
+      console.error('Failed to preview prompt:', error);
+    }
+  };
+
   const generatePrompt = async (): Promise<void> => {
     if (isGeneratingPrompt.value || isGeneratingJob.value) return;
     isGeneratingPrompt.value = true;
@@ -48,11 +63,12 @@ export function useNodeGeneration(options: UseNodeGenerationOptions) {
     const toastId = startGenerationToast('prompt');
 
     try {
-      const prompt = await aiService.generatePrompt(options.getPromptPayload());
+      const result = await aiService.generatePrompt(options.getPromptPayload());
       nodeStore.updateNode(options.nodeId, {
-        ...options.getPromptUpdate(prompt),
+        ...options.getPromptUpdate(result),
         promptStatus: PromptStatus.GENERATED,
       });
+      await refreshPromptPreview();
       // 성공 토스트
       finishGenerationToast(toastId, 'prompt', 'success');
     } catch (error) {
@@ -92,6 +108,7 @@ export function useNodeGeneration(options: UseNodeGenerationOptions) {
       const jobId = await aiService.generateNode(options.nodeId, prompt, {
         nodeType: options.nodeType,
         settings: options.getJobSettings(),
+        promptEnFinalOverride: options.getPromptOverride?.(),
       });
 
       const result = await aiService.pollJobUntilComplete(jobId, (status) => {
@@ -154,6 +171,7 @@ export function useNodeGeneration(options: UseNodeGenerationOptions) {
     clearError,
     generatePrompt,
     approvePrompt,
+    refreshPromptPreview,
     runGeneration,
   };
 }

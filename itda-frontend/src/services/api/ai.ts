@@ -12,6 +12,8 @@ import type {
     GenerateNodeRequest,
     GenerateJobResponse,
     JobStatusResponse,
+    PromptPreviewRequest,
+    PromptPreviewResponse,
 } from '../../types/api';
 
 // =============================================================================
@@ -24,16 +26,16 @@ import type {
  */
 export async function generatePrompt(
     request: GeneratePromptRequest
-): Promise<string> {
+): Promise<GeneratePromptResponse> {
     const payload = mapGeneratePromptPayload(request);
     const response = await apiClient.post<ApiResponse<GeneratePromptResponse>>(
         '/ai/prompts/generate',
         payload
     );
-    if (!response.data.data?.prompt) {
+    if (!response.data.data?.promptEnBase) {
         throw new Error('Failed to generate prompt');
     }
-    return response.data.data.prompt;
+    return response.data.data;
 }
 
 function mapGeneratePromptPayload(request: GeneratePromptRequest): {
@@ -85,15 +87,41 @@ export async function improvePrompt(
     currentPrompt: string,
     userFeedback: string,
     nodeType?: GeneratePromptRequest['nodeType']
-): Promise<string> {
+): Promise<GeneratePromptResponse> {
     const response = await apiClient.post<ApiResponse<GeneratePromptResponse>>(
         '/ai/prompts/improve',
         { nodeType, prompt: currentPrompt, instruction: userFeedback }
     );
-    if (!response.data.data?.prompt) {
+    if (!response.data.data?.promptEnBase) {
         throw new Error('Failed to improve prompt');
     }
-    return response.data.data.prompt;
+    return response.data.data;
+}
+
+export async function translatePrompt(
+    promptEn: string
+): Promise<GeneratePromptResponse> {
+    const response = await apiClient.post<ApiResponse<GeneratePromptResponse>>(
+        '/ai/prompts/translate',
+        { promptEn }
+    );
+    if (!response.data.data?.promptEnBase) {
+        throw new Error('Failed to translate prompt');
+    }
+    return response.data.data;
+}
+
+export async function rewritePrompt(
+    promptKo: string
+): Promise<GeneratePromptResponse> {
+    const response = await apiClient.post<ApiResponse<GeneratePromptResponse>>(
+        '/ai/prompts/rewrite',
+        { promptKo }
+    );
+    if (!response.data.data?.promptEnBase) {
+        throw new Error('Failed to rewrite prompt');
+    }
+    return response.data.data;
 }
 
 // =============================================================================
@@ -108,16 +136,35 @@ export async function improvePrompt(
 export async function generateNode(
     nodeId: string | number,
     prompt: string,
-    options?: { nodeType?: GenerateNodeRequest['nodeType']; settings?: Record<string, unknown> }
+    options?: { nodeType?: GenerateNodeRequest['nodeType']; settings?: Record<string, unknown>; promptEnFinalOverride?: string }
 ): Promise<number> {
     const response = await apiClient.post<ApiResponse<GenerateJobResponse>>(
         `/nodes/${nodeId}/generate`,
-        { prompt, nodeType: options?.nodeType, settings: options?.settings }
+        {
+            prompt,
+            nodeType: options?.nodeType,
+            settings: options?.settings,
+            promptEnFinalOverride: options?.promptEnFinalOverride,
+        }
     );
     if (!response.data.data?.jobId) {
         throw new Error('Failed to start generation job');
     }
     return response.data.data.jobId;
+}
+
+export async function previewPrompt(
+    nodeId: string | number,
+    request: PromptPreviewRequest
+): Promise<PromptPreviewResponse> {
+    const response = await apiClient.post<ApiResponse<PromptPreviewResponse>>(
+        `/nodes/${nodeId}/prompt-preview`,
+        request
+    );
+    if (!response.data.data?.promptEnFinal) {
+        throw new Error('Failed to preview prompt');
+    }
+    return response.data.data;
 }
 
 // =============================================================================
@@ -177,6 +224,9 @@ export async function pollJobUntilComplete(
 export const apiAiService = {
     generatePrompt,
     improvePrompt,
+    translatePrompt,
+    rewritePrompt,
+    previewPrompt,
     generateNode,
     getJobStatus,
     pollJobUntilComplete,

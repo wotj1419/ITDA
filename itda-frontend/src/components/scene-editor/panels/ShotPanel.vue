@@ -14,6 +14,7 @@ import { useNodeGeneration } from '../../../composables/useNodeGeneration';
 import { Camera, Smile, PenLine, FileText, Sparkles, Check, RefreshCw, LayoutGrid, Loader2 } from 'lucide-vue-next';
 import { resolveExpressionKey, resolveShotTypeKey } from '../../../utils/nodeSettings';
 import { DEFAULT_GRID_LAYOUT } from '../../../utils/nodeDefaults';
+import { aiService } from '../../../services';
 
 interface Props {
   node: Node<ShotNodeData>;
@@ -29,6 +30,11 @@ const form = ref({
   expression: '',
   additionalDetail: '',
   prompt: '',
+  promptKo: '',
+  promptEnFinal: '',
+  promptEnFinalOverride: '',
+  usePromptOverride: false,
+  showAdvanced: false,
 });
 
 const shotTypeOptions = ['와이드샷', '미디엄샷', '클로즈업', '익스트림 클로즈업'];
@@ -36,7 +42,18 @@ const expressionOptions = ['기본', '미소', '슬픔', '놀람', '분노', '�
 
 const data = computed(() => props.node.data as ShotNodeData | undefined);
 const shotLabel = computed(() => String.fromCharCode(65 + (data.value?.gridCellIndex || 0)));
-const isPromptGenerated = computed(() => data.value?.promptStatus !== PromptStatus.DRAFT);
+const hasPromptContent = computed(() => {
+  if (!data.value) return false;
+  return Boolean(
+    (data.value.prompt ?? '').trim() ||
+    (data.value.promptKo ?? '').trim() ||
+    (data.value.promptEnFinal ?? '').trim() ||
+    (data.value.promptEnFinalOverride ?? '').trim()
+  );
+});
+const isPromptGenerated = computed(
+  () => hasPromptContent.value || data.value?.promptStatus !== PromptStatus.DRAFT
+);
 const isPromptApproved = computed(() => data.value?.promptStatus === PromptStatus.APPROVED);
 const parentGridNode = computed(() =>
   nodeStore.nodes.find(
@@ -84,6 +101,7 @@ const {
   clearError,
   generatePrompt,
   approvePrompt,
+  refreshPromptPreview,
   runGeneration: generateShot,
 } = useNodeGeneration({
   nodeId: props.node.id,
@@ -101,19 +119,39 @@ const {
     expression: form.value.expression,
     additionalDetail: form.value.additionalDetail,
   }),
-  getPromptUpdate: (prompt) => ({
+  getPromptUpdate: (result) => ({
     shotType: buildShotTypeValue(form.value.shotTypes),
     shotTypes: [...form.value.shotTypes],
     expression: form.value.expression,
     additionalDetail: form.value.additionalDetail,
-    prompt,
+    prompt: result.promptEnBase,
+    promptKo: result.promptKo,
   }),
-  getApprovedUpdate: () => ({ prompt: form.value.prompt }),
+  getApprovedUpdate: () => ({
+    prompt: form.value.prompt,
+    promptKo: form.value.promptKo,
+    promptEnFinalOverride: form.value.usePromptOverride ? form.value.promptEnFinalOverride : '',
+  }),
   getJobSettings: () => ({
     gridCellIndex: data.value?.gridCellIndex ?? 0,
     shotType: resolveShotTypeKey(form.value.shotTypes[0] ?? data.value?.shotType),
     expressionKey: resolveExpressionKey(form.value.expression),
     detailKo: form.value.additionalDetail,
+  }),
+  getPromptOverride: () =>
+    form.value.usePromptOverride ? form.value.promptEnFinalOverride : '',
+  getPromptPreviewPayload: () => ({
+    prompt: form.value.prompt,
+    settings: {
+      gridCellIndex: data.value?.gridCellIndex ?? 0,
+      shotType: resolveShotTypeKey(form.value.shotTypes[0] ?? data.value?.shotType),
+      expressionKey: resolveExpressionKey(form.value.expression),
+      detailKo: form.value.additionalDetail,
+    },
+    promptEnFinalOverride: form.value.usePromptOverride ? form.value.promptEnFinalOverride : '',
+  }),
+  onPromptPreview: (result) => ({
+    promptEnFinal: result.promptEnFinal,
   }),
   getJobSuccessUpdate: ({ resultUrl, thumbnailUrl }) => ({
     imageUrl: resultUrl || null,
@@ -171,6 +209,56 @@ function toggleShotType(type: string): void {
   }
 }
 
+const isTranslating = ref(false);
+const isRewriting = ref(false);
+
+async function translatePrompt(): Promise<void> {
+  if (!form.value.prompt) return;
+  if (isTranslating.value) return;
+  isTranslating.value = true;
+  try {
+    const result = await aiService.translatePrompt(form.value.prompt);
+    if (result.promptKo && result.promptKo.trim()) {
+      form.value.promptKo = result.promptKo;
+    }
+  } catch (error) {
+    console.error('Failed to translate prompt:', error);
+  } finally {
+    isTranslating.value = false;
+  }
+}
+
+async function rewritePrompt(): Promise<void> {
+  if (!form.value.promptKo) return;
+  if (isRewriting.value) return;
+  isRewriting.value = true;
+  try {
+    const result = await aiService.rewritePrompt(form.value.promptKo);
+    if (result.promptEnBase && result.promptEnBase.trim()) {
+      form.value.prompt = result.promptEnBase;
+      await refreshPromptPreview();
+    }
+  } catch (error) {
+    console.error('Failed to rewrite prompt:', error);
+  } finally {
+    isRewriting.value = false;
+  }
+}
+
+function enableFinalOverride(): void {
+  if (!form.value.usePromptOverride) {
+    form.value.usePromptOverride = true;
+  }
+  if (!form.value.promptEnFinalOverride.trim()) {
+    form.value.promptEnFinalOverride = form.value.promptEnFinal || form.value.prompt;
+  }
+}
+
+function clearFinalOverride(): void {
+  form.value.usePromptOverride = false;
+  form.value.promptEnFinalOverride = '';
+}
+
 watch(() => props.node.id, () => {
   if (!data.value) return;
   const fallbackShotTypes =
@@ -182,6 +270,11 @@ watch(() => props.node.id, () => {
     expression: data.value.expression || '',
     additionalDetail: data.value.additionalDetail || '',
     prompt: data.value.prompt || '',
+    promptKo: data.value.promptKo || '',
+    promptEnFinal: data.value.promptEnFinal || '',
+    promptEnFinalOverride: data.value.promptEnFinalOverride || '',
+    usePromptOverride: Boolean(data.value.promptEnFinalOverride),
+    showAdvanced: false,
   };
   clearError();
 }, { immediate: true });
@@ -193,6 +286,37 @@ watch(
     if (normalized !== form.value.prompt) {
       form.value.prompt = normalized;
     }
+  }
+);
+
+watch(
+  () => data.value?.promptKo,
+  (nextPromptKo) => {
+    const normalized = nextPromptKo ?? '';
+    if (normalized !== form.value.promptKo) {
+      form.value.promptKo = normalized;
+    }
+  }
+);
+
+watch(
+  () => data.value?.promptEnFinal,
+  (nextPromptEnFinal) => {
+    const normalized = nextPromptEnFinal ?? '';
+    if (normalized !== form.value.promptEnFinal) {
+      form.value.promptEnFinal = normalized;
+    }
+  }
+);
+
+watch(
+  () => data.value?.promptEnFinalOverride,
+  (nextPromptOverride) => {
+    const normalized = nextPromptOverride ?? '';
+    if (normalized !== form.value.promptEnFinalOverride) {
+      form.value.promptEnFinalOverride = normalized;
+    }
+    form.value.usePromptOverride = Boolean(normalized);
   }
 );
 
@@ -323,10 +447,79 @@ function handleGenerateShot(): void {
       <div v-if="isPromptGenerated" class="panel-section panel-section--prompt">
         <label class="panel-label">
           <FileText class="panel-label-icon" />
-          AI 프롬프트
+          프롬프트
           <span class="panel-label-badge">생성됨</span>
         </label>
-        <textarea v-model="form.prompt" class="panel-textarea panel-textarea--prompt" rows="3"></textarea>
+        <label class="panel-label" style="margin-top: 0.75rem;">
+          <FileText class="panel-label-icon" />
+          생성용 프롬프트 (영어)
+        </label>
+        <textarea
+          :value="form.promptEnFinal"
+          class="panel-textarea panel-textarea--prompt"
+          rows="3"
+          readonly
+          placeholder="생성용 프롬프트 미리보기로 확인하세요."
+        ></textarea>
+
+        <div class="panel-prompt-actions">
+          <button class="panel-btn panel-btn--text" :disabled="!form.prompt" @click="refreshPromptPreview">
+            <RefreshCw class="panel-btn-icon" />
+            생성용 프롬프트 미리보기
+          </button>
+          <button class="panel-btn panel-btn--text" :disabled="!form.promptEnFinal" @click="enableFinalOverride">
+            영문 직접 편집
+          </button>
+          <button class="panel-btn panel-btn--text" @click="form.showAdvanced = !form.showAdvanced">
+            <span class="panel-btn-icon">⋯</span>
+            고급 설정
+          </button>
+        </div>
+
+        <div v-if="form.usePromptOverride" class="panel-section" style="margin-top: 0.75rem;">
+          <label class="panel-label">
+            <FileText class="panel-label-icon" />
+            생성용 프롬프트 직접 수정
+          </label>
+          <textarea
+            v-model="form.promptEnFinalOverride"
+            class="panel-textarea panel-textarea--prompt"
+            rows="3"
+            placeholder="최종 영어 프롬프트를 직접 입력하세요."
+          ></textarea>
+          <div class="panel-prompt-actions panel-prompt-actions--right">
+            <button class="panel-btn panel-btn--text" @click="clearFinalOverride">
+              오버라이드 해제
+            </button>
+          </div>
+        </div>
+
+        <div v-if="form.showAdvanced" class="panel-section" style="margin-top: 0.75rem;">
+          <label class="panel-label">
+            <FileText class="panel-label-icon" />
+            서술 프롬프트 (한국어)
+          </label>
+          <textarea v-model="form.promptKo" class="panel-textarea panel-textarea--prompt" rows="3"></textarea>
+          <div class="panel-prompt-actions">
+            <button class="panel-btn panel-btn--text" :disabled="isTranslating || !form.prompt" @click="translatePrompt">
+              <Loader2 v-if="isTranslating" class="panel-btn-icon panel-btn-icon--spin" />
+              <RefreshCw v-else class="panel-btn-icon" />
+              EN → KO
+            </button>
+            <button class="panel-btn panel-btn--text" :disabled="isRewriting || !form.promptKo" @click="rewritePrompt">
+              <Loader2 v-if="isRewriting" class="panel-btn-icon panel-btn-icon--spin" />
+              <RefreshCw v-else class="panel-btn-icon" />
+              KO → EN
+            </button>
+          </div>
+
+          <label class="panel-label" style="margin-top: 0.75rem;">
+            <FileText class="panel-label-icon" />
+            서술 프롬프트 (영어)
+          </label>
+          <textarea v-model="form.prompt" class="panel-textarea panel-textarea--prompt" rows="3"></textarea>
+        </div>
+
         <div class="panel-prompt-actions panel-prompt-actions--right">
           <button class="panel-btn panel-btn--text" :disabled="isGeneratingPrompt || isGeneratingShot" @click="generatePrompt">
             <Loader2 v-if="isGeneratingPrompt" class="panel-btn-icon panel-btn-icon--spin" />

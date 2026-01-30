@@ -26,7 +26,13 @@ export interface GeneratePromptRequest {
 }
 
 export interface GeneratePromptResponse {
-  prompt: string;
+  promptEnBase: string;
+  promptKo: string;
+}
+
+export interface TranslatePromptResponse {
+  promptEnBase: string;
+  promptKo: string;
 }
 
 // =============================================================================
@@ -37,6 +43,18 @@ export interface GenerateNodeRequest {
   prompt: string;
   nodeType: 'MASTER' | 'GRID' | 'SHOT' | 'VIDEO';
   settings?: Record<string, unknown>;
+  promptEnFinalOverride?: string;
+}
+
+export interface PromptPreviewRequest {
+  prompt: string;
+  settings?: Record<string, unknown>;
+  promptEnFinalOverride?: string;
+}
+
+export interface PromptPreviewResponse {
+  promptEnFinal: string;
+  source: 'RENDERED' | 'OVERRIDE';
 }
 
 export interface GenerateJobResponse {
