@@ -1,0 +1,67 @@
+﻿<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.itda.backend.timeline.repository.ProjectMergeMapper">
+
+    <resultMap id="ProjectMergeMap" type="com.itda.backend.timeline.domain.ProjectMerge">
+        <id property="id" column="id" />
+        <result property="projectId" column="project_id" />
+        <result property="assetId" column="asset_id" />
+        <result property="mergeSignature" column="merge_signature" />
+        <result property="status" column="status" />
+        <result property="isActive" column="is_active" />
+        <result property="createdAt" column="created_at" />
+        <result property="updatedAt" column="updated_at" />
+    </resultMap>
+
+    <insert id="insert" parameterType="com.itda.backend.timeline.domain.ProjectMerge" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO project_merges (
+            project_id,
+            asset_id,
+            merge_signature,
+            status,
+            is_active
+        ) VALUES (
+            #{projectId},
+            #{assetId},
+            #{mergeSignature},
+            #{status},
+            1
+        )
+    </insert>
+
+    <update id="deactivateByProjectId">
+        UPDATE project_merges
+        SET is_active = 0
+        WHERE project_id = #{projectId}
+    </update>
+
+    <select id="findActiveByProjectIdAndSignature" resultMap="ProjectMergeMap">
+        SELECT id, project_id, asset_id, merge_signature, status, is_active, created_at, updated_at
+        FROM project_merges
+        WHERE project_id = #{projectId}
+          AND is_active = 1
+          AND merge_signature = #{mergeSignature}
+        ORDER BY id DESC
+        LIMIT 1
+    </select>
+
+    <select id="findActiveByProjectId" resultMap="ProjectMergeMap">
+        SELECT id, project_id, asset_id, merge_signature, status, is_active, created_at, updated_at
+        FROM project_merges
+        WHERE project_id = #{projectId}
+          AND is_active = 1
+        ORDER BY id DESC
+        LIMIT 1
+    </select>
+
+    <update id="updateAssetAndStatus">
+        UPDATE project_merges
+        SET asset_id = #{assetId},
+            status = #{status}
+        WHERE id = #{id}
+    </update>
+
+</mapper>

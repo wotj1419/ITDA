@@ -4,6 +4,7 @@ import { useRoute } from 'vue-router'
 import { useCollabStore } from '../../stores/collab'
 import CollabPanel from '../collab/CollabPanel.vue'
 import CollabButton from './CollabButton.vue'
+import Button from './Button.vue'
 import { Mic, MicOff, MessageCircle, PhoneOff } from 'lucide-vue-next'
 
 const collabStore = useCollabStore()

@@ -5,6 +5,7 @@ import com.itda.backend.global.response.ErrorCode;
 import com.itda.backend.job.domain.Job;
 import com.itda.backend.job.domain.JobStatus;
 import com.itda.backend.job.domain.JobType;
+import com.itda.backend.job.domain.MergeSource;
 import com.itda.backend.job.event.JobCreatedEventPublisher;
 import com.itda.backend.job.repository.JobMapper;
 import lombok.RequiredArgsConstructor;
@@ -52,15 +53,14 @@ public class JobService {
      */
     @Transactional
     public Job createAndEnqueue(JobType type,
-                                Long projectId,
-                                Long sceneId,
-                                Long nodeId,
-                                String requestJson,
-                                String idempotencyKey) {
+            Long projectId,
+            Long sceneId,
+            Long nodeId,
+            String requestJson,
+            String idempotencyKey) {
         return createAndEnqueue(
                 new JobCreateRequest(type, projectId, sceneId, nodeId, requestJson, idempotencyKey),
-                false
-        );
+                true);
     }
 
     /**
@@ -70,16 +70,15 @@ public class JobService {
      */
     @Transactional
     public Job createAndEnqueue(JobType type,
-                                Long projectId,
-                                Long sceneId,
-                                Long nodeId,
-                                String requestJson,
-                                String idempotencyKey,
-                                boolean requeueIfExisting) {
+            Long projectId,
+            Long sceneId,
+            Long nodeId,
+            String requestJson,
+            String idempotencyKey,
+            boolean requeueIfExisting) {
         return createAndEnqueue(
                 new JobCreateRequest(type, projectId, sceneId, nodeId, requestJson, idempotencyKey),
-                requeueIfExisting
-        );
+                requeueIfExisting);
     }
 
     /**
@@ -102,8 +101,9 @@ public class JobService {
                     request.sceneId(),
                     request.nodeId(),
                     request.requestJson(),
-                    finalKey
-            );
+                    finalKey,
+                    request.mergeSignature(),
+                    request.mergeSource());
         } catch (DuplicateKeyException e) {
             Job raced = findByIdempotencyKeyReadCommitted(finalKey);
             if (raced == null) {
@@ -140,24 +140,28 @@ public class JobService {
      * Job 생성 및 이벤트 발행 (내부용)
      */
     private Job createAndDispatch(JobType type,
-                                  Long projectId,
-                                  Long sceneId,
-                                  Long nodeId,
-                                  String requestJson,
-                                  String idempotencyKey) {
+            Long projectId,
+            Long sceneId,
+            Long nodeId,
+            String requestJson,
+            String idempotencyKey,
+            String mergeSignature,
+            MergeSource mergeSource) {
         Job job = Job.builder()
                 .type(type)
                 .projectId(projectId)
                 .sceneId(sceneId)
                 .nodeId(nodeId)
                 .idempotencyKey(idempotencyKey)
+                .mergeSignature(mergeSignature)
+                .mergeSource(mergeSource)
                 .requestJson(requestJson)
                 .status(JobStatus.PENDING)
                 .retryCount(0)
                 .build();
 
         jobMapper.insert(job);
-        log.info("[JobService] Job created: id={}, type={}, idempotencyKey={}", 
+        log.info("[JobService] Job created: id={}, type={}, idempotencyKey={}",
                 job.getId(), type, idempotencyKey);
 
         // 커밋 이후에 Dispatcher가 enqueue하도록 이벤트 발행
@@ -168,15 +172,23 @@ public class JobService {
 
     private String resolveIdempotencyKey(JobCreateRequest request) {
         String normalized = normalizeIdempotencyKey(request.idempotencyKey());
-        String finalKey = normalized != null
-                ? normalized
-                : JobIdempotencyKey.of(
-                        request.projectId(),
-                        request.type(),
-                        request.nodeId(),
-                        request.sceneId(),
-                        request.requestJson()
-                );
+        String finalKey;
+        if (normalized != null) {
+            finalKey = normalized;
+        } else if (request.mergeSignature() != null && !request.mergeSignature().isBlank()) {
+            finalKey = JobIdempotencyKey.forMerge(
+                    request.projectId(),
+                    request.type(),
+                    request.mergeSource(),
+                    request.mergeSignature());
+        } else {
+            finalKey = JobIdempotencyKey.of(
+                    request.projectId(),
+                    request.type(),
+                    request.nodeId(),
+                    request.sceneId(),
+                    request.requestJson());
+        }
         validateIdempotencyKeyLength(finalKey);
         return finalKey;
     }
@@ -216,7 +228,7 @@ public class JobService {
             } else if (job.isPending()) {
                 requeued = true;
             }
-            log.info("[JobService] Requeue existing job: id={}, status={}", 
+            log.info("[JobService] Requeue existing job: id={}, status={}",
                     job.getId(), job.getStatus());
             jobCreatedEventPublisher.publish(job.getId());
             return requeued;

@@ -177,34 +177,63 @@ public class ScenarioService {
 
     private String buildPromptForPromptGeneration(GeneratePromptRequest request, String keywords) {
         List<String> lines = new ArrayList<>();
-        lines.add("당신은 영화 시나리오 플래너입니다.");
-        lines.add("아래 입력을 바탕으로 줄거리 생성을 위한 프롬프트를 작성하세요.");
+        lines.add("당신은 실력이 뛰어난 영화 시나리오 기획자입니다.");
+        lines.add("규칙:");
+        lines.add("1) 아래 입력값을 그대로 반영하되 임의로 추가/변경하지 마세요.");
+        lines.add("2) 한국어로 정확히 3문장, 명령형으로 작성하세요.");
+        lines.add("3) 문장 역할 고정:");
+        lines.add("   - 1문장: 장르/분위기/키워드를 반영한 전체 방향 지시");
+        lines.add("   - 2문장: 주인공/목표/갈등(또는 변화) 지시");
+        lines.add("   - 3문장: 장면 수와 스타일/톤을 반영한 구성 지시");
+        lines.add("4) 대사/목록/표 금지. 문장당 30~50자.");
+        lines.add("");
+        lines.add("출력 형식(문장만, 머리말/번호 없이):");
+        lines.add("문장1");
+        lines.add("문장2");
+        lines.add("문장3");
+        lines.add("");
+        lines.add("입력:");
         lines.add("- 장르: " + request.genre());
         lines.add("- 분위기: " + request.mood());
         lines.add("- 장면 수: " + request.sceneCount());
-        if (keywords != null) {
-            lines.add("- 키워드: " + keywords);
-        }
-        if (request.characterHints() != null && !request.characterHints().isBlank()) {
-            lines.add("- 캐릭터 힌트: " + request.characterHints());
-        }
-        if (request.backgroundHints() != null && !request.backgroundHints().isBlank()) {
-            lines.add("- 배경 힌트: " + request.backgroundHints());
-        }
-        if (request.referenceStyle() != null && !request.referenceStyle().isBlank()) {
-            lines.add("- 참고 스타일: " + request.referenceStyle());
-        }
-        lines.add("요구사항: 한국어로 2~3문장, 간결하고 명령형 문장으로 작성하세요.");
+        lines.add("- 키워드: " + (keywords == null ? "" : keywords));
+        lines.add("- 캐릭터 힌트: " + (request.characterHints() == null ? "" : request.characterHints()));
+        lines.add("- 배경 힌트: " + (request.backgroundHints() == null ? "" : request.backgroundHints()));
+        lines.add("- 참고 스타일: " + (request.referenceStyle() == null ? "" : request.referenceStyle()));
         return String.join("\n", lines);
     }
 
     private String buildPromptForPlotGeneration(ScenarioRecord record) {
         List<String> lines = new ArrayList<>();
-        lines.add("다음 프롬프트를 바탕으로 영화 줄거리를 작성하세요. 프롬프트에서 설정한 내용을 임의로 변경하지 말고, 특히 genre, mood는 절대 변경하지 마세요.");
+        lines.add("당신은 실력이 뛰어난 영화 시나리오 작가입니다.");
+        lines.add("규칙:");
+        lines.add("1) 한국어로 작성.");
+        lines.add("2) 총 5개 문단(발단/사건/전개/클라이맥스/결말), 각 문단은 정확히 3문장.");
+        lines.add("3) 프롬프트의 genre/mood/핵심 요소 변경 금지. 새로운 인물/설정/서브플롯 추가 금지.");
+        lines.add("4) 대사/목록/표 금지. 서사적이고 자연스럽게 이어지는 문장으로 작성.");
+        lines.add("5) 각 문단에 최소 2개 요소 포함: (주인공, 목표, 갈등/변화).");
+        lines.add("6) 시간 흐름과 인과가 느껴지도록 문단·문장 간 연결성을 유지.");
         lines.add("- 장면 수: " + record.getInputSceneCount());
-        lines.add("요구사항: 한국어로 4~6문장, 기승전결이 드러나도록 작성하세요.");
+        lines.add("출력 형식(아래 형식 그대로):");
+        lines.add("[발단]");
+        lines.add("... (3문장)");
+        lines.add("");
+        lines.add("[사건]");
+        lines.add("... (3문장)");
+        lines.add("");
+        lines.add("[전개]");
+        lines.add("... (3문장)");
+        lines.add("");
+        lines.add("[클라이맥스]");
+        lines.add("... (3문장)");
+        lines.add("");
+        lines.add("[결말]");
+        lines.add("... (3문장)");
+        lines.add("");
         lines.add("프롬프트:");
+        lines.add("<BEGIN_PROMPT>");
         lines.add(record.getPromptText());
+        lines.add("<END_PROMPT>");
         return String.join("\n", lines);
     }
 

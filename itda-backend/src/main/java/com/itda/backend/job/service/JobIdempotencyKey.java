@@ -1,6 +1,7 @@
 package com.itda.backend.job.service;
 
 import com.itda.backend.job.domain.JobType;
+import com.itda.backend.job.domain.MergeSource;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -47,6 +48,27 @@ public final class JobIdempotencyKey {
         String normalizedRequest = normalizeRequestJson(requestJson);
         String requestHash = sha256Hex(normalizedRequest);
         return projectId + ":" + type.name() + ":" + target + ":" + requestHash;
+    }
+
+    /**
+     * Merge 작업을 위한 Idempotency Key 생성
+     * <p>
+     * 형식: {projectId}:{jobType}:{mergeSource}:{mergeSignature}
+     *
+     * @param projectId      프로젝트 ID
+     * @param type           Job 타입(SCENE_MERGE/PROJECT_MERGE)
+     * @param mergeSource    MERGE 소스 (SCENE/PROJECT)
+     * @param mergeSignature timeline_items 기반 다이제스트(해시)
+     * @return 생성된 Idempotency Key
+     */
+    public static String forMerge(Long projectId, JobType type, MergeSource mergeSource, String mergeSignature) {
+        if (mergeSignature == null || mergeSignature.isBlank()) {
+            throw new IllegalArgumentException("mergeSignature is required");
+        }
+        if (mergeSource == null) {
+            throw new IllegalArgumentException("mergeSource is required");
+        }
+        return projectId + ":" + type.name() + ":" + mergeSource.name() + ":" + mergeSignature.trim();
     }
 
     private static String resolveTarget(Long nodeId, Long sceneId) {

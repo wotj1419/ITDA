@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { TimelineClip } from '../../types/ui'
 import { X } from 'lucide-vue-next'
+import { useVideoPreview } from '../../composables/useVideoPreview'
 
 interface Props {
   clip: TimelineClip
@@ -14,15 +15,26 @@ withDefaults(defineProps<Props>(), {
 const emit = defineEmits<{
   (e: 'remove'): void
 }>()
+
+const { isVideo, playVideoPreview, stopVideoPreview } = useVideoPreview()
 </script>
 
 <template>
   <div
-    class="clip-item"
     :draggable="draggable"
     :style="{ width: `${clip.duration * 20}px` }"
   >
-    <img :src="clip.thumbnailUrl" :alt="clip.label" class="clip-thumbnail" />
+    <video
+      v-if="clip.videoUrl || isVideo(clip.thumbnailUrl)"
+      :src="clip.videoUrl || clip.thumbnailUrl"
+      class="clip-thumbnail"
+      preload="metadata"
+      muted
+      playsinline
+      @mouseenter="playVideoPreview"
+      @mouseleave="stopVideoPreview"
+    />
+    <img v-else :src="clip.thumbnailUrl" :alt="clip.label" class="clip-thumbnail" />
     <div class="clip-info">
       <div class="clip-label">{{ clip.label || '확정 클립' }}</div>
       <div class="clip-duration">{{ clip.duration }}초</div>

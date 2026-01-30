@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
  * EditorHeader - 에디터 헤더 컴포넌트
- * 브레드크럼 네비게이션과 줌 레벨, 액션 버튼 표시
+ * 브레드크럼 네비게이션, 줌 레벨, 액션 버튼 표시
  */
 import { RouterLink } from 'vue-router';
 import Button from '../common/Button.vue';
@@ -51,13 +51,12 @@ defineProps<Props>();
 
     <!-- Right: Zoom & Actions -->
     <div class="header-right">
+      <span class="zoom-indicator">{{ zoomLevel }}</span>
 
       <RouterLink
-        :to="{
-          name: 'timeline',
-          params: { id: projectId },
-          query: sceneId ? { sceneId } : undefined,
-        }"
+        :to="sceneId
+          ? { name: 'scene-timeline', params: { id: projectId, sceneId } }
+          : { name: 'timeline', params: { id: projectId } }"
         class="header-action"
       >
         <Layers class="icon-sm" />
@@ -155,6 +154,14 @@ defineProps<Props>();
   gap: 0.75rem;
 }
 
+.zoom-indicator {
+  font-size: 0.75rem;
+  font-family: 'JetBrains Mono', monospace;
+  background: var(--gray-100);
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.25rem;
+  color: var(--gray-600);
+}
 
 .icon {
   width: 20px;

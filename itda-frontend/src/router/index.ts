@@ -43,6 +43,12 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: true },
   },
   {
+    path: '/projects/:id/scenes/:sceneId/timeline',
+    name: 'scene-timeline',
+    component: () => import('../pages/TimelinePage.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
     path: '/projects/:id/timeline',
     name: 'timeline',
     component: () => import('../pages/TimelinePage.vue'),

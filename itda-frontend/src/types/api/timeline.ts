@@ -3,7 +3,8 @@ export interface TimelineItem {
   sceneVideoId?: number;
   sceneId: number;
   sceneTitle?: string;
-  thumbnailUrl: string;
+  thumbnailUrl?: string;
+  url?: string;
   duration: number;
   order: number;
 }
@@ -11,6 +12,8 @@ export interface TimelineItem {
 export interface TimelineClip {
   clipId: string;
   nodeId: number | string;
+  videoNodeId?: number;
+  sceneVideoId?: number;
   sceneId?: number;
   sourceNodeId?: string;
   thumbnailUrl: string;

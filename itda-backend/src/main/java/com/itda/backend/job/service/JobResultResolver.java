@@ -20,9 +20,6 @@ import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignReques
 
 import java.time.Duration;
 
-import java.nio.file.Files;
-import java.nio.file.Path;
-
 /**
  * Job 결과 URL 해석기
  * <p>
@@ -60,10 +57,10 @@ public class JobResultResolver {
             return resolveNodeContentUrl(job);
         }
         if (job.getType() == JobType.SCENE_MERGE) {
-            return resolveSceneExportUrl(job.getSceneId());
+            return mediaUrlResolver.sceneExportUrl(job.getSceneId());
         }
         if (job.getType() == JobType.PROJECT_MERGE) {
-            return resolveExportUrl(job.getProjectId());
+            return mediaUrlResolver.projectExportUrl(job.getProjectId());
         }
         return null;
     }
@@ -117,25 +114,5 @@ public class JobResultResolver {
         return mediaUrlResolver.nodeContentUrl(node);
     }
 
-    private String resolveExportUrl(Long projectId) {
-        if (projectId == null) {
-            return null;
-        }
-        Path exportPath = Path.of(fileStorageProperties.getUploadDir(), "exports", String.valueOf(projectId), "final.mp4");
-        if (!Files.exists(exportPath)) {
-            return null;
-        }
-        return mediaUrlResolver.projectExportUrl(projectId);
-    }
-
-    private String resolveSceneExportUrl(Long sceneId) {
-        if (sceneId == null) {
-            return null;
-        }
-        Path exportPath = Path.of(fileStorageProperties.getUploadDir(), "exports", "scenes", String.valueOf(sceneId), "final.mp4");
-        if (!Files.exists(exportPath)) {
-            return null;
-        }
-        return mediaUrlResolver.sceneExportUrl(sceneId);
-    }
+    // export URL resolution uses MediaUrlResolver directly for merge types
 }
