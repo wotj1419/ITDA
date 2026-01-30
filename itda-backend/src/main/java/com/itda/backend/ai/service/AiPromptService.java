@@ -5,7 +5,7 @@ import com.itda.backend.ai.controller.dto.request.AiPromptGenerateRequest;
 import com.itda.backend.ai.controller.dto.request.AiPromptImproveRequest;
 import com.itda.backend.ai.dto.request.TextGenerationRequest;
 import com.itda.backend.ai.dto.response.TextGenerationResponse;
-import com.itda.backend.ai.prompt.KoEnTranslator;
+import com.itda.backend.ai.controller.dto.response.AiPromptResponse;
 import com.itda.backend.node.domain.NodeType;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -24,67 +24,88 @@ import java.util.Optional;
 public class AiPromptService {
 
     private final VertexAiGeminiClient vertexAiGeminiClient;
-    private final KoEnTranslator koEnTranslator;
+    private final PromptTranslationService promptTranslationService;
 
-    public String generatePrompt(AiPromptGenerateRequest request) {
+    public AiPromptResponse generatePrompt(AiPromptGenerateRequest request) {
         String prompt = buildGeneratePrompt(request);
         TextGenerationResponse response = vertexAiGeminiClient.generate(new TextGenerationRequest(prompt, null));
-        String promptKo = sanitizePromptKo(response.text());
-        logGeneratedPrompt(request, promptKo);
-        return promptKo;
+        String promptEnBase = sanitizePromptLine(response == null ? null : response.text());
+        String promptKo = "";
+        try {
+            promptKo = promptTranslationService.translateEnToKo(promptEnBase);
+        } catch (Exception e) {
+            log.warn("Failed to translate prompt to Korean: reason={}", e.getMessage());
+        }
+        logGeneratedPrompt(request, promptEnBase, promptKo);
+        return new AiPromptResponse(promptEnBase, promptKo);
     }
 
-    public String improvePrompt(AiPromptImproveRequest request) {
+    public AiPromptResponse improvePrompt(AiPromptImproveRequest request) {
         String prompt = buildImprovePrompt(request);
         TextGenerationResponse response = vertexAiGeminiClient.generate(new TextGenerationRequest(prompt, null));
-        return sanitizePromptKo(response.text());
+        String promptEnBase = sanitizePromptLine(response == null ? null : response.text());
+        String promptKo = "";
+        try {
+            promptKo = promptTranslationService.translateEnToKo(promptEnBase);
+        } catch (Exception e) {
+            log.warn("Failed to translate prompt to Korean: reason={}", e.getMessage());
+        }
+        return new AiPromptResponse(promptEnBase, promptKo);
     }
 
     private String buildGeneratePrompt(AiPromptGenerateRequest request) {
         List<String> lines = new ArrayList<>();
-        lines.add("다음 정보를 바탕으로 한국어 프롬프트를 1~2문장으로 작성하세요.");
-        lines.add("출력 형식: 프롬프트 문장만. 줄바꿈/불릿/번호/접두어(\"프롬프트:\")/JSON/코드 금지.");
-        lines.add("톤(분위기)은 감정/서사(예: 슬픔/외로움) 대신 조명/색감/콘트라스트로만 표현하세요.");
+        lines.add("Write an English prompt for image/video generation.");
+        lines.add("- Describe ONE coherent scene as 2 to 4 sentences (no keyword list).");
+        lines.add("- Output ONLY the prompt text (no bullets, no numbering, no quotes, no JSON, no code, no 'prompt:' prefix).");
+        lines.add("- Focus on subject appearance, action, environment, and camera framing/angle.");
+        lines.add("- Keep lighting physically plausible: single time of day, single dominant light source; avoid contradictory color/lighting instructions.");
+        lines.add("- Do not mention watermarks, subtitles, captions, or logos.");
+        lines.add("");
 
         NodeType nodeType = request == null ? null : request.nodeType();
         if (nodeType != null) {
             lines.add(switch (nodeType) {
-                case MASTER -> "가이드: 씬의 기준 룩을 잡는 와이드 establishing shot을 떠올리게 쓰세요.";
-                case GRID -> "가이드: 한 장의 스토리보드 그리드 이미지(같은 순간/같은 장면, 프레이밍만 변화)를 떠올리게 쓰세요.";
-                case SHOT -> "가이드: 선택된 컷을 고품질 단일 프레임으로 재생성하는 느낌으로 쓰세요.";
-                case VIDEO -> "가이드: 단일 연속 숏(컷/시간점프 없음)으로 자연스러운 움직임을 유도하세요.";
-                case SCENE_HEADER -> "가이드: 장면의 제목/설명 컨텍스트를 요약하는 느낌으로 쓰세요.";
+                case MASTER -> "Guide: wide establishing shot; include environment, layout, and key props.";
+                case GRID -> "Guide: describe the shared scene moment; avoid sequencing; keep details consistent across panels.";
+                case SHOT -> "Guide: focus on a single frame with clear subject pose, gaze, hands, and foreground/background relation.";
+                case VIDEO -> "Guide: single continuous shot; describe a natural motion arc from start to end (no cuts).";
+                case SCENE_HEADER -> "Guide: summarize the scene context briefly.";
             });
+            lines.add("");
         }
 
-        lines.add("노드 타입: " + safe(nodeType));
-        lines.add("장면 한줄: " + safe(request == null ? null : request.sceneOneLine()));
-        lines.add("스타일: " + safe(request == null ? null : request.style()));
-        lines.add("시간대: " + safe(request == null ? null : request.timeOfDay()));
-        lines.add("톤(조명/색감): " + safe(request == null ? null : request.mood()));
+        lines.add("Inputs:");
+        lines.add("nodeType: " + safe(nodeType));
+        lines.add("sceneOneLine: " + safe(request == null ? null : request.sceneOneLine()));
+        lines.add("style(optional constraint): " + safe(request == null ? null : request.style()));
+        lines.add("timeOfDay(optional constraint): " + safe(request == null ? null : request.timeOfDay()));
+        lines.add("mood(optional constraint): " + safe(request == null ? null : request.mood()));
         if (request.objects() != null && !request.objects().isEmpty()) {
-            lines.add("오브젝트: " + String.join(", ", request.objects()));
+            lines.add("Objects: " + String.join(", ", request.objects()));
         } else {
-            lines.add("오브젝트: 없음");
+            lines.add("Objects: none");
         }
         return String.join("\n", lines);
     }
 
     private String buildImprovePrompt(AiPromptImproveRequest request) {
         List<String> lines = new ArrayList<>();
-        lines.add("다음 프롬프트를 개선하세요.");
-        lines.add("기존 프롬프트의 핵심 키워드를 유지하고 한국어로 1~2문장으로 출력하세요.");
-        lines.add("출력 형식: 프롬프트 문장만. 줄바꿈/불릿/번호/접두어(\"프롬프트:\")/JSON/코드 금지.");
-        lines.add("톤(분위기)은 감정/서사 대신 조명/색감/콘트라스트로만 표현하세요.");
-        lines.add("노드 타입: " + safe(request.nodeType()));
+        lines.add("Improve the following English image/video prompt.");
+        lines.add("- Keep the core content, but make it more concrete and visually specific.");
+        lines.add("- Output 2 to 4 sentences, English only.");
+        lines.add("- Output ONLY the prompt text (no bullets, no numbering, no JSON, no code).");
+        lines.add("- Keep lighting physically plausible and internally consistent.");
+        lines.add("");
+        lines.add("nodeType: " + safe(request.nodeType()));
         if (request.instruction() != null && !request.instruction().isBlank()) {
-            lines.add("개선 지시: " + request.instruction().trim());
+            lines.add("userFeedback: " + request.instruction().trim());
         }
-        lines.add("대상 프롬프트: " + safe(request.prompt()));
+        lines.add("promptEnBase: " + safe(request.prompt()));
         return String.join("\n", lines);
     }
 
-    private String sanitizePromptKo(String raw) {
+    private String sanitizePromptLine(String raw) {
         String text = Optional.ofNullable(raw).orElse("").trim();
         if (text.isEmpty()) {
             return text;
@@ -101,27 +122,20 @@ public class AiPromptService {
         return text;
     }
 
-    private void logGeneratedPrompt(AiPromptGenerateRequest request, String promptKo) {
-        String promptEn = "";
-        try {
-            promptEn = koEnTranslator.toEnglishOneSentence(promptKo);
-        } catch (Exception e) {
-            log.warn("Failed to translate prompt to English for logging: reason={}", e.getMessage());
-        }
-
+    private void logGeneratedPrompt(AiPromptGenerateRequest request, String promptEnBase, String promptKo) {
         log.info(
-                "Prompt generate: nodeType={}, promptKo={}, promptEn={}",
+                "Prompt generate: nodeType={}, promptEnBase={}, promptKo={}",
                 request == null ? null : request.nodeType(),
-                promptKo,
-                promptEn
+                promptEnBase,
+                promptKo
         );
     }
 
     private String safe(String value) {
-        return value == null || value.isBlank() ? "없음" : value.trim();
+        return value == null || value.isBlank() ? "none" : value.trim();
     }
 
     private String safe(NodeType nodeType) {
-        return nodeType == null ? "없음" : nodeType.name();
+        return nodeType == null ? "none" : nodeType.name();
     }
 }

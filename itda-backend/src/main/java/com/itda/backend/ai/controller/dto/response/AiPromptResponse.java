@@ -7,7 +7,10 @@ import io.swagger.v3.oas.annotations.media.Schema;
  */
 @Schema(description = "AI prompt response")
 public record AiPromptResponse(
-        @Schema(description = "Generated prompt", example = "화성 기지에서의 아침 식사, cinematic...")
-        String prompt
+        @Schema(description = "Generated English base prompt", example = "A calm morning breakfast inside a Mars base cafeteria.")
+        String promptEnBase,
+
+        @Schema(description = "Generated Korean prompt (translation)", example = "화성 기지 식당에서의 차분한 아침 식사 장면.")
+        String promptKo
 ) {
 }
