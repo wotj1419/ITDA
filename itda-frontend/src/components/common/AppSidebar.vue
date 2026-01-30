@@ -322,6 +322,7 @@ const sidebarClasses = computed(() => [
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
+  overflow: visible;
 }
 
 .nav-item {
@@ -332,9 +333,16 @@ const sidebarClasses = computed(() => [
   border-radius: 8px;
   color: var(--gray-600);
   text-decoration: none;
+  background: transparent;
+  border: none;
+  width: 100%;
+  cursor: pointer;
+  font-size: 0.875rem;
+  font-weight: 500;
   transition: all 0.2s ease;
   position: relative;
   height: 44px; /* Fixed height */
+  flex-shrink: 0;
 }
 
 .nav-item:hover {

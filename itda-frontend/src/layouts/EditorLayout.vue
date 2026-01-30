@@ -308,8 +308,9 @@ const sidebarClasses = computed(() => [
   left: 100%;
   margin-left: 0.5rem;
   padding: 0.5rem 0.75rem;
-  background: var(--gray-900);
-  color: white;
+  background: var(--rose-50);
+  color: var(--gray-900);
+  border: 1px solid var(--rose-100);
   font-size: 0.75rem;
   border-radius: 6px;
   white-space: nowrap;
@@ -415,8 +416,9 @@ const sidebarClasses = computed(() => [
   left: 100%;
   margin-left: 0.5rem;
   padding: 0.5rem 0.75rem;
-  background: var(--gray-900);
-  color: white;
+  background: var(--rose-50);
+  color: var(--gray-900);
+  border: 1px solid var(--rose-100);
   font-size: 0.75rem;
   border-radius: 6px;
   white-space: nowrap;

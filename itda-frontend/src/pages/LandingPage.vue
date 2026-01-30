@@ -124,9 +124,9 @@ onMounted(() => {
 
     // Init state for video
     // Initial state: small, positioned on the right
-    gsap.set(heroVideo.value, { 
-      width: '35vw', 
-      height: 'auto', 
+    gsap.set(heroVideo.value, {
+      width: '35vw',
+      height: 'auto',
       aspectRatio: '16/9',
       borderRadius: '20px',
       x: 0,
@@ -144,7 +144,7 @@ onMounted(() => {
     tlHero
       .to(
         heroContent.value,
-        { x: -100, opacity: 0, duration: 1 }, 
+        { x: -100, opacity: 0, duration: 1 },
         0,
       )
       .to(
@@ -193,8 +193,9 @@ onUnmounted(() => {
         <span class="logo-text">잇다</span>
       </RouterLink>
       <nav class="landing-nav">
-        <!-- <RouterLink to="/auth" class="nav-link">로그인</RouterLink> -->
-        <!-- <RouterLink to="/auth" class="btn btn-primary">무료로 시작하기</RouterLink> -->
+        <RouterLink to="/auth" class="btn btn-primary btn-lg nav-cta">
+          지금 시작하기
+        </RouterLink>
       </nav>
     </header>
 
@@ -207,14 +208,15 @@ onUnmounted(() => {
       <div class="hero-container">
         <!-- Left Text Content -->
         <div class="hero-content" ref="heroContent">
-          <div class="badge badge-rose hero-badge mb-4">NEW VERSION 2.0 AVAILABLE</div>
+
           <h1 class="hero-title">
-            Itda에서<br />
+            <span class="text-highlight">잇다</span>에서<br />
             모든 영화 제작을<br />
             <span class="text-highlight">한 번에.</span>
           </h1>
           <p class="hero-description">
-            당신이 상상하는 시나리오 - Itda가 영상, 오디오, 3D 캐릭터까지 완벽하게 구현합니다. 복잡한 툴 없이, 오직 아이디어만으로 나만의 영화를 완성하세요.
+            당신이 상상하는 시나리오 - <span class="text-highlight">잇다</span>로 영상, 오디오, 캐릭터까지 완벽하게 구현합니다.
+            복잡한 툴 없이, 오직 아이디어만으로 나만의 영화를 완성하세요.
           </p>
           <div class="hero-actions">
             <RouterLink to="/auth" class="btn btn-primary btn-lg">
@@ -228,10 +230,10 @@ onUnmounted(() => {
 
         <!-- Right Video Content -->
         <div class="hero-video-wrapper" ref="heroVideo">
-           <video 
+           <video
             class="hero-video-content"
-            src="/web.firstpage.video.mp4" 
-            muted 
+            src="/web.firstpage.video.mp4"
+            muted
             loop
             playsinline
             ref="heroVideoElement"
@@ -249,8 +251,12 @@ onUnmounted(() => {
         <div class="feature-content fade-up">
           <h2 class="h1 mb-6">아이디어를<br/>노드로 잇다</h2>
           <p class="feature-text">
-            시나리오부터 영상까지, 영화 제작의 모든 단계를 하나의 캔버스에 펼칩니다.<br/><br/>
-            잇다는 복잡한 과정을 눈에 보이는 노드 흐름으로 자연스럽게 연결합니다.
+            시나리오부터 영상까지, 영화 제작의 모든 단계를 하나의 캔버스에서!
+            <br/>
+            <span class="text-highlight">잇다</span>
+            는 복잡한 과정을 눈에 보이는 노드 흐름으로 연결합니다.
+            <br/>
+
           </p>
         </div>
       </div>
@@ -262,8 +268,12 @@ onUnmounted(() => {
         <div class="feature-content fade-up">
           <h2 class="h1 mb-6">같은 캔버스에서<br/>함께 만들다</h2>
           <p class="feature-text">
-            작업 화면 위에서 바로 대화하고, 보고, 함께 결정하세요.<br/><br/>
-            잇다는 협업을 노드 흐름 속에 자연스럽게 녹여냅니다.
+            작업 화면 위에서 바로 대화하고, 보고, 함께 결정하세요.
+            <br/>
+            <span class="text-highlight">잇다</span>
+            는 협업을 노드 흐름 속에 자연스럽게 녹여냅니다.
+            <br/>
+
           </p>
         </div>
         <div class="feature-image-wrapper fade-up">
@@ -542,7 +552,7 @@ onUnmounted(() => {
     text-align: center;
     order: 1;
   }
-  
+
   .hero-video-wrapper {
     order: 2;
     margin-top: 2rem;
@@ -555,11 +565,11 @@ onUnmounted(() => {
   .hero-actions {
     justify-content: center;
   }
-  
+
   .hero-title {
     font-size: 3rem;
   }
-  
+
   .feature-content h2 {
     font-size: 2.5rem;
   }
