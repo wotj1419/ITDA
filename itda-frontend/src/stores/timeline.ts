@@ -42,7 +42,7 @@ async function mapTimelineItemsToClips(items: TimelineItem[]): Promise<TimelineC
   return Promise.all(
     items.map(async (item) => {
       const clipKey = item.videoNodeId ?? item.sceneVideoId ?? `${item.sceneId}-${item.order}`
-      const resolvedUrl = await resolveMediaUrl(item.thumbnailUrl)
+      const resolvedUrl = await resolveMediaUrl(item.thumbnailUrl ?? item.url)
       const durationSeconds = toDurationSeconds(item.duration)
       const duration = durationSeconds > 0 ? durationSeconds : DEFAULT_CLIP_SECONDS
       const isVideoClip = Boolean(item.videoNodeId || item.sceneVideoId)

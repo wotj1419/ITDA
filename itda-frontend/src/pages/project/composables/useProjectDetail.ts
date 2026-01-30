@@ -153,14 +153,15 @@ export function useProjectDetail() {
     Boolean(previewLoadingMap.value[sceneId]);
 
   const buildScenePreviewFromTimeline = (sceneId: number, items: TimelineItem[]): ScenePreview => {
+    const resolveItemUrl = (item: TimelineItem) => item.url ?? item.thumbnailUrl ?? '';
     const clips = items
       .filter((item) => item.sceneId === sceneId)
       .sort((a, b) => a.order - b.order)
       .map((item) => ({
-        thumbnailUrl: item.url || '',
+        thumbnailUrl: resolveItemUrl(item),
         duration: 4,
         label: `Video ${item.order}`,
-        contentUrl: item.url || '',
+        contentUrl: resolveItemUrl(item),
       }));
     const totalDuration = clips.reduce((sum, clip) => sum + clip.duration, 0);
     return { clips, totalDuration };
