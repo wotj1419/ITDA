@@ -426,6 +426,12 @@ onUnmounted(() => {
   background: #F9FAFB;
 }
 
+.nav-cta {
+  padding-top: calc(0.875rem * 0.9);
+  padding-bottom: calc(0.875rem * 0.9);
+  line-height: 1.35;
+}
+
 /* Hero Video */
 .hero-video-wrapper {
   flex: 1;
