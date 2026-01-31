@@ -372,9 +372,9 @@ watch(
     const normalized = nextPromptKo ?? '';
     if (normalized !== form.value.promptKo) {
       form.value.promptKo = normalized;
+      lastSyncedKo.value = normalized;
+      koDirty.value = false;
     }
-    lastSyncedKo.value = normalized;
-    koDirty.value = false;
   }
 );
 
