@@ -23,7 +23,11 @@ public class CollabPresenceDisconnectListener {
             return;
         }
         String sessionId = event.getSessionId();
-        PresenceSessionRegistry.PresenceSession session = presenceSessionRegistry.remove(sessionId);
+        PresenceSessionRegistry.PresenceRemoval removal = presenceSessionRegistry.remove(sessionId);
+        if (removal == null || !removal.removed()) {
+            return;
+        }
+        PresenceSessionRegistry.PresenceSession session = removal.session();
         if (session == null) {
             return;
         }

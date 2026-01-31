@@ -4,6 +4,7 @@ import com.itda.backend.auth.domain.User;
 import com.itda.backend.auth.repository.UserMapper;
 import com.itda.backend.collab.messaging.PresenceEvent;
 import com.itda.backend.collab.messaging.PresenceRequest;
+import com.itda.backend.collab.messaging.PresenceSnapshotResponse;
 import com.itda.backend.collab.service.CollabRedisPublisher;
 import com.itda.backend.collab.service.PresenceSessionRegistry;
 import com.itda.backend.global.exception.BusinessException;
@@ -44,8 +45,15 @@ public class CollabPresenceController {
         String name = user != null && user.getName() != null ? user.getName() : userDetails.getUsername();
         String profileImageUrl = user != null ? user.getProfileImageUrl() : null;
 
-        presenceSessionRegistry.upsert(sessionId, projectId, userId, name, profileImageUrl);
         PresenceEvent event = PresenceEvent.location(userId, name, profileImageUrl, request);
+        boolean isNewSession = presenceSessionRegistry.upsert(
+                sessionId,
+                projectId,
+                userId,
+                name,
+                profileImageUrl,
+                event
+        );
         String destination = "/topic/presence/" + projectId;
 
         try {
@@ -53,6 +61,21 @@ public class CollabPresenceController {
         } catch (Exception e) {
             log.debug("Presence redis publish failed. Falling back to in-memory broker.", e);
             messagingTemplate.convertAndSend(destination, event);
+        }
+
+        if (isNewSession) {
+            PresenceSnapshotResponse snapshot = PresenceSnapshotResponse.of(
+                    projectId,
+                    presenceSessionRegistry.snapshot(projectId)
+            );
+            String userDestination = "/queue/presence";
+            String userKey = userDetails.getUsername();
+            try {
+                collabRedisPublisher.publishToUser(userKey, userDestination, snapshot);
+            } catch (Exception e) {
+                log.debug("Presence snapshot redis publish failed. Falling back to in-memory broker.", e);
+                messagingTemplate.convertAndSendToUser(userKey, userDestination, snapshot);
+            }
         }
     }
 
