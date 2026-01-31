@@ -20,6 +20,7 @@ interface UseNodeGenerationOptions {
   getPromptUpdate: (result: GeneratePromptResponse) => Partial<AnyNodeData>;
   getApprovedUpdate: () => Partial<AnyNodeData>;
   getJobSettings: () => Record<string, unknown>;
+  getReferenceObjectIds?: () => number[] | undefined;
   getPromptOverride?: () => string | undefined;
   getPromptPreviewPayload?: () => PromptPreviewRequest;
   onPromptPreview?: (result: PromptPreviewResponse) => Partial<AnyNodeData>;
@@ -111,6 +112,7 @@ export function useNodeGeneration(options: UseNodeGenerationOptions) {
         nodeType: options.nodeType,
         settings: options.getJobSettings(),
         promptEnFinalOverride: options.getPromptOverride?.(),
+        referenceObjectIds: options.getReferenceObjectIds?.(),
       });
 
       const result = await aiService.pollJobUntilComplete(jobId, (status) => {

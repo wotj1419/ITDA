@@ -91,6 +91,7 @@ const {
     moodKey: resolveMoodKey(form.value.mood) ?? 'NEUTRAL',
     objectIds: form.value.objectIds,
   }),
+  getReferenceObjectIds: () => (form.value.objectIds.length ? [...form.value.objectIds] : undefined),
   getPromptOverride: () =>
     form.value.usePromptOverride ? form.value.promptEnFinalOverride : '',
   getPromptPreviewPayload: () => ({

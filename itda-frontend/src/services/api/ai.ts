@@ -144,7 +144,12 @@ export async function rewritePrompt(
 export async function generateNode(
     nodeId: string | number,
     prompt: string,
-    options?: { nodeType?: GenerateNodeRequest['nodeType']; settings?: Record<string, unknown>; promptEnFinalOverride?: string }
+    options?: {
+        nodeType?: GenerateNodeRequest['nodeType'];
+        settings?: Record<string, unknown>;
+        promptEnFinalOverride?: string;
+        referenceObjectIds?: number[];
+    }
 ): Promise<number> {
     const response = await apiClient.post<ApiResponse<GenerateJobResponse>>(
         `/nodes/${nodeId}/generate`,
@@ -153,6 +158,7 @@ export async function generateNode(
             nodeType: options?.nodeType,
             settings: options?.settings,
             promptEnFinalOverride: options?.promptEnFinalOverride,
+            referenceObjectIds: options?.referenceObjectIds,
         }
     );
     if (!response.data.data?.jobId) {

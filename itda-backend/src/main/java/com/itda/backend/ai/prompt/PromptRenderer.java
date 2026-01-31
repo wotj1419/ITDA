@@ -68,6 +68,10 @@ public class PromptRenderer {
         List<String> lines = new ArrayList<>();
         lines.add("A " + safeOrNone(filmLook) + " " + safeOrNone(style) + " wide establishing shot of " + requireEn(promptEnBase) + ".");
         lines.add("This is an opening establishing still frame: a single frozen moment with no motion blur, transitions, or time progression.");
+        if (hasNonEmptyIdList(settings, "objectIds") || hasNonEmptyIdList(settings, "referenceObjectIds")) {
+            lines.add("Use the provided reference images to match the appearance of the selected characters/objects.");
+            lines.add("Keep their identity, materials, and distinctive features consistent with the references.");
+        }
         String sceneTitleSafe = safe(sceneTitleEn);
         String sceneDescriptionSafe = safe(sceneDescriptionEn);
         if (!sceneTitleSafe.isBlank() || !sceneDescriptionSafe.isBlank()) {
@@ -279,6 +283,28 @@ public class PromptRenderer {
     private String safeOrNone(String text) {
         String trimmed = Optional.ofNullable(text).map(String::trim).orElse("");
         return trimmed.isEmpty() ? DEFAULT_NONE : trimmed;
+    }
+
+    private boolean hasNonEmptyIdList(Map<String, Object> settings, String key) {
+        Object value = read(settings, key);
+        if (!(value instanceof List<?> list)) {
+            return false;
+        }
+        for (Object item : list) {
+            if (item instanceof Number number && number.longValue() > 0) {
+                return true;
+            }
+            if (item instanceof String text) {
+                try {
+                    if (Long.parseLong(text.trim()) > 0) {
+                        return true;
+                    }
+                } catch (NumberFormatException ignored) {
+                    // ignore non-numeric entries
+                }
+            }
+        }
+        return false;
     }
 
     private Object read(Map<String, Object> settings, String key) {

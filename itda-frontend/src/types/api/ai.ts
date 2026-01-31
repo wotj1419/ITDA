@@ -48,6 +48,7 @@ export interface GenerateNodeRequest {
   nodeType: 'MASTER' | 'GRID' | 'SHOT' | 'VIDEO';
   settings?: Record<string, unknown>;
   promptEnFinalOverride?: string;
+  referenceObjectIds?: number[];
 }
 
 export interface PromptPreviewRequest {

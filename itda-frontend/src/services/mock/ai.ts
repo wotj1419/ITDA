@@ -79,7 +79,12 @@ export async function rewritePrompt(
 export async function generateNode(
   nodeId: string | number,
   prompt: string,
-  _options?: { nodeType?: GeneratePromptRequest['nodeType']; settings?: Record<string, unknown>; promptEnFinalOverride?: string }
+  _options?: {
+    nodeType?: GeneratePromptRequest['nodeType'];
+    settings?: Record<string, unknown>;
+    promptEnFinalOverride?: string;
+    referenceObjectIds?: number[];
+  }
 ): Promise<number> {
   await delay(300)
   const jobId = ++jobIdCounter
