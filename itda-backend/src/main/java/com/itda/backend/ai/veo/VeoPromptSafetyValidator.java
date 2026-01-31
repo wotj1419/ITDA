@@ -93,10 +93,10 @@ public class VeoPromptSafetyValidator {
             Pattern.compile("자살|자해")
     );
 
-    public void validate(String prompt) {
+    public List<String> findViolations(String prompt) {
         String text = prompt == null ? "" : prompt.trim();
         if (text.isEmpty()) {
-            return;
+            return List.of();
         }
         String normalized = text.toLowerCase(Locale.ROOT);
         List<String> violations = new ArrayList<>();
@@ -119,7 +119,11 @@ public class VeoPromptSafetyValidator {
         if (matchesAny(SELF_HARM_PATTERNS, normalized)) {
             violations.add("self-harm");
         }
+        return violations;
+    }
 
+    public void validate(String prompt) {
+        List<String> violations = findViolations(prompt);
         if (!violations.isEmpty()) {
             throw new BusinessException(
                     ErrorCode.INVALID_REQUEST,
