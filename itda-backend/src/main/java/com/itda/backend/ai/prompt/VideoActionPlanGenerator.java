@@ -32,14 +32,14 @@ public class VideoActionPlanGenerator {
 
         return switch (durationSeconds) {
             case 4 -> normalizedBase
-                    + " Hold the start pose for about 1 second, transition smoothly with ease-in/ease-out,"
-                    + " and settle into the end pose for the final second.";
+                    + " Transition continuously from the start pose to the end pose with gentle ease-in/ease-out,"
+                    + " without pauses or snapping.";
             case 6 -> normalizedBase
-                    + " Hold the start pose briefly, transition through the middle with easing,"
-                    + " and settle into the end pose with a short steady hold.";
+                    + " Maintain continuous motion through the transition with soft easing,"
+                    + " and settle into the end pose naturally without a hard stop.";
             case 8 -> normalizedBase
-                    + " Let the transition unfold gradually over most of the clip with smooth easing,"
-                    + " then arrive at the end pose and hold it steady.";
+                    + " Let the transition unfold gradually with smooth easing,"
+                    + " then arrive at the end pose and settle gently without a snap.";
             default -> throw new BusinessException(ErrorCode.INVALID_REQUEST, "VIDEO duration must be 4, 6, or 8");
         };
     }
