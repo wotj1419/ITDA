@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { Play, Pause } from 'lucide-vue-next'
 import { useVideoPreview } from '../../composables/useVideoPreview'
 
 interface Props {
   thumbnailUrl?: string
+  videoUrl?: string
   currentTime: number
   totalTime: number
 }
@@ -14,6 +15,7 @@ const props = defineProps<Props>()
 const isPlaying = ref(false)
 const videoRef = ref<HTMLVideoElement | null>(null)
 const { isVideo } = useVideoPreview()
+const sourceUrl = computed(() => props.videoUrl || props.thumbnailUrl)
 
 function formatTime(seconds: number): string {
   const m = Math.floor(seconds / 60)
@@ -23,7 +25,7 @@ function formatTime(seconds: number): string {
 
 function togglePlay() {
   if (!videoRef.value) {
-    if (!props.thumbnailUrl) return
+    if (!sourceUrl.value) return
     // If not video, just toggle state (though it won't play anything)
     isPlaying.value = !isPlaying.value
     return
@@ -43,12 +45,12 @@ function togglePlay() {
   <div class="video-preview">
     <div
       class="preview-container"
-      :style="(!isVideo(thumbnailUrl) && thumbnailUrl) ? { backgroundImage: `url(${thumbnailUrl})` } : {}"
+      :style="(!isVideo(sourceUrl) && sourceUrl) ? { backgroundImage: `url(${sourceUrl})` } : {}"
     >
       <video
-        v-if="isVideo(thumbnailUrl)"
+        v-if="isVideo(sourceUrl)"
         ref="videoRef"
-        :src="thumbnailUrl"
+        :src="sourceUrl"
         class="preview-video"
         preload="metadata"
         playsinline
