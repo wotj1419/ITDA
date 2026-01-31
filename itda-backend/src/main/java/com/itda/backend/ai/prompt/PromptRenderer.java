@@ -67,10 +67,20 @@ public class PromptRenderer {
 
         List<String> lines = new ArrayList<>();
         lines.add("A " + safeOrNone(filmLook) + " " + safeOrNone(style) + " wide establishing shot of " + requireEn(promptEnBase) + ".");
-        lines.add("This is an opening establishing still frame with no temporal progression or passing-by.");
-        lines.add("Set in the scene \"" + safeOrNone(sceneTitleEn) + "\" — " + safeOrNone(sceneDescriptionEn) + ".");
+        lines.add("This is an opening establishing still frame: a single frozen moment with no motion blur, transitions, or time progression.");
+        String sceneTitleSafe = safe(sceneTitleEn);
+        String sceneDescriptionSafe = safe(sceneDescriptionEn);
+        if (!sceneTitleSafe.isBlank() || !sceneDescriptionSafe.isBlank()) {
+            if (sceneTitleSafe.isBlank()) {
+                lines.add("Set in the scene: " + sceneDescriptionSafe + ".");
+            } else if (sceneDescriptionSafe.isBlank()) {
+                lines.add("Set in the scene \"" + sceneTitleSafe + "\".");
+            } else {
+                lines.add("Set in the scene \"" + sceneTitleSafe + "\" — " + sceneDescriptionSafe + ".");
+            }
+        }
         lines.add("Lighting: " + safeOrNone(time) + ". Mood: " + safeOrNone(mood) + ".");
-        lines.add("Camera: 24-35mm wide lens, deep focus (establishing shot).");
+        lines.add("Camera: preferably 24-35mm wide lens, deep focus (establishing shot).");
         lines.add("Maintain consistent character identity, outfits, lighting, and key props across all shots.");
         lines.add("No text, no subtitles, no watermark, no logo.");
         lines.add("Aspect ratio: " + safeOrNone(aspectRatio) + ".");
