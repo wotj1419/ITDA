@@ -649,8 +649,8 @@ export const useCollabStore = defineStore('collab', () => {
             const existing = new Map(participants.value.map((participant) => [participant.odps, participant]));
             const next = snapshot
                 .map(mapPresenceToParticipant)
-                .filter((participant): participant is CollabParticipant => !!participant)
-                .map((participant) => {
+                .filter((participant: CollabParticipant | null): participant is CollabParticipant => !!participant)
+                .map((participant: CollabParticipant) => {
                     const prev = existing.get(participant.odps);
                     return prev ? { ...prev, ...participant } : participant;
                 });
