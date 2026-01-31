@@ -241,6 +241,7 @@ public class PromptRenderer {
         if (hasEndFrame) {
             lines.add("The video must start exactly at the start image and end exactly at the provided end image (pose, framing, and composition must match).");
             lines.add("Interpolate smoothly between the two keyframes with continuous motion (ease-in/ease-out), no popping or sudden snaps, and no drifting from the target framing.");
+            lines.add("The camera motion should only be what’s necessary to transition from the start framing to the end framing.");
         }
         lines.add(requireEn(actionPlanEn));
 
