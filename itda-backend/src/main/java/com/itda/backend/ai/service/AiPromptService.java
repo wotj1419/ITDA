@@ -89,7 +89,13 @@ public class AiPromptService {
                     yield "Guide: describe the shared scene moment; avoid sequencing; keep details consistent across panels.";
                 }
                 case SHOT -> "Guide: focus on a single frame with clear subject pose, gaze, hands, and foreground/background relation.";
-                case VIDEO -> "Guide: single continuous shot; describe a natural motion arc from start to end (no cuts). Avoid real people, celebrities, minors, sexual content, graphic violence, hate/harassment, and self-harm. Use fictional characters only.";
+                case VIDEO -> String.join(" ",
+                        "Guide: single continuous shot; describe a natural motion arc from start to end (no cuts).",
+                        "Avoid real people, celebrities, minors, sexual content, graphic violence, hate/harassment, and self-harm.",
+                        "Use fictional adult characters only.",
+                        "Do not use school/student/uniform or child/teen language; use adult, neutral wording and public/corporate spaces instead.",
+                        "Output must NOT include any of: student, school, uniform, teen, teenager, boy, girl, child, kid, kids, children, schoolgirl, schoolboy."
+                );
                 case SCENE_HEADER -> "Guide: summarize the scene context briefly.";
             });
             lines.add("");
@@ -117,7 +123,14 @@ public class AiPromptService {
         lines.add("- Output ONLY the prompt text (no bullets, no numbering, no JSON, no code).");
         lines.add("- Keep lighting physically plausible and internally consistent.");
         lines.add("");
-        lines.add("nodeType: " + safe(request.nodeType()));
+        NodeType nodeType = request.nodeType();
+        lines.add("nodeType: " + safe(nodeType));
+        if (nodeType != null && nodeType == NodeType.VIDEO) {
+            lines.add("Guide: single continuous shot; avoid real people, celebrities, minors, sexual content, graphic violence, hate/harassment, and self-harm.");
+            lines.add("Use fictional adult characters only. Do NOT mention students, schools, uniforms, or any child/teen terms.");
+            lines.add("If the input contains forbidden terms, rewrite them to adult/neutral wording (e.g., young adult, woman/man, public corridor, casual outfit).");
+            lines.add("Output must NOT include any of: student, school, uniform, teen, teenager, boy, girl, child, kid, kids, children, schoolgirl, schoolboy.");
+        }
         if (request.instruction() != null && !request.instruction().isBlank()) {
             lines.add("userFeedback: " + request.instruction().trim());
         }
@@ -141,6 +154,7 @@ public class AiPromptService {
 
         return text;
     }
+
 
     private List<String> generateTimelineCutsIfNeeded(AiPromptGenerateRequest request, String promptEnBase) {
         if (request == null || request.nodeType() != NodeType.GRID) {

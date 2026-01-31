@@ -64,6 +64,9 @@ public class PromptRenderer {
         String filmLook = PresetFragments.filmLookFragment(read(settings, "filmLookKey"));
         String time = PresetFragments.timeOfDayFragment(read(settings, "timeOfDayKey"));
         String mood = PresetFragments.moodFragment(read(settings, "moodKey"));
+        String detailEn = koEnTranslator.toEnglishMultiSentenceMany(Map.of(
+                "detailKo", readString(settings, "detailKo")
+        )).getOrDefault("detailKo", "");
 
         List<String> lines = new ArrayList<>();
         lines.add("A " + safeOrNone(filmLook) + " " + safeOrNone(style) + " wide establishing shot of " + requireEn(promptEnBase) + ".");
@@ -83,6 +86,9 @@ public class PromptRenderer {
                 lines.add("Set in the scene \"" + sceneTitleSafe + "\" — " + sceneDescriptionSafe + ".");
             }
         }
+        if (!safeOrNone(detailEn).equals(DEFAULT_NONE)) {
+            lines.add("Additional detail: " + ensurePeriod(detailEn));
+        }
         lines.add("Lighting: " + safeOrNone(time) + ". Mood: " + safeOrNone(mood) + ".");
         lines.add("Camera: preferably 24-35mm wide lens, deep focus (establishing shot).");
         lines.add("Film stock feel: Fuji Eterna-like color science, subtle film grain, gentle halation, soft highlight roll-off.");
@@ -98,8 +104,10 @@ public class PromptRenderer {
         String aspectRatio = readString(settings, "aspectRatio");
         Map<String, String> translationInput = new LinkedHashMap<>();
         translationInput.put("compositionHintKo", readString(settings, "compositionHintKo"));
-        Map<String, String> translated = koEnTranslator.toEnglishOneSentenceMany(translationInput);
+        translationInput.put("detailKo", readString(settings, "detailKo"));
+        Map<String, String> translated = koEnTranslator.toEnglishMultiSentenceMany(translationInput);
         String compositionHintEn = translated.getOrDefault("compositionHintKo", "");
+        String detailEn = translated.getOrDefault("detailKo", "");
 
         String style = PresetFragments.styleFragment(read(settings, "styleKey"));
         String filmLook = PresetFragments.filmLookFragment(read(settings, "filmLookKey"));
@@ -113,6 +121,9 @@ public class PromptRenderer {
         if (hasNonEmptyIdList(settings, "objectIds") || hasNonEmptyIdList(settings, "referenceObjectIds")) {
             lines.add("Use the provided reference images to match the appearance of the selected characters/objects.");
             lines.add("Keep their identity, materials, and distinctive features consistent with the references.");
+        }
+        if (!safeOrNone(detailEn).equals(DEFAULT_NONE)) {
+            lines.add("Additional detail (applies to all panels): " + ensurePeriod(detailEn));
         }
         lines.add("Panels must differ only by camera framing:");
         for (int i = 0; i < shotTypes.size(); i++) {
@@ -134,12 +145,14 @@ public class PromptRenderer {
         List<String> beatsKo = ensureBeatCount(readStringList(settings, "beatsKo"), panelCount);
 
         Map<String, String> translationInput = new LinkedHashMap<>();
+        translationInput.put("detailKo", readString(settings, "detailKo"));
         translationInput.put("continuityRulesKo", readString(settings, "continuityRulesKo"));
         for (int i = 0; i < beatsKo.size(); i++) {
             translationInput.put("beat" + i, beatsKo.get(i));
         }
         Map<String, String> translated = koEnTranslator.toEnglishMultiSentenceMany(translationInput);
         String continuityRulesEn = translated.getOrDefault("continuityRulesKo", "");
+        String detailEn = translated.getOrDefault("detailKo", "");
 
         String style = PresetFragments.styleFragment(read(settings, "styleKey"));
         String filmLook = PresetFragments.filmLookFragment(read(settings, "filmLookKey"));
@@ -152,6 +165,9 @@ public class PromptRenderer {
         if (hasNonEmptyIdList(settings, "objectIds") || hasNonEmptyIdList(settings, "referenceObjectIds")) {
             lines.add("Use the provided reference images to match the appearance of the selected characters/objects.");
             lines.add("Keep their identity, materials, and distinctive features consistent with the references.");
+        }
+        if (!safeOrNone(detailEn).equals(DEFAULT_NONE)) {
+            lines.add("Additional detail (applies to all panels): " + ensurePeriod(detailEn));
         }
         lines.add("Panels 1.." + panelCount + " are timeline cuts (single still frames):");
         for (int i = 0; i < beatsKo.size(); i++) {
@@ -242,6 +258,7 @@ public class PromptRenderer {
             lines.add("The video must start exactly at the start image and end exactly at the provided end image (pose, framing, and composition must match).");
             lines.add("Interpolate smoothly between the two keyframes with continuous motion (ease-in/ease-out), no popping or sudden snaps, and no drifting from the target framing.");
             lines.add("The camera motion should only be what’s necessary to transition from the start framing to the end framing.");
+            lines.add("Ease out into the end frame and hold fully still for the final ~0.5s; all subjects and objects are motionless, and the camera is locked.");
         }
         lines.add(requireEn(actionPlanEn));
 
@@ -258,6 +275,7 @@ public class PromptRenderer {
 
         return joinAndValidate(lines);
     }
+
 
     private String resolveCameraMotionEn(Map<String, Object> settings) {
         String fromKey = PresetFragments.cameraMotionEn(read(settings, "cameraMotionKey"));
