@@ -5,7 +5,7 @@
  * 
  * 설계 문서: docs/vue-flow-node-workflow-design.md Section 3.3
  */
-import { computed } from 'vue';
+import { computed, ref, watch, nextTick, onMounted } from 'vue';
 import { Handle, Position } from '@vue-flow/core';
 import { NodeResizer } from '@vue-flow/node-resizer';
 import { getNodeMinSize, NODE_RESIZER_STYLE } from '../../../utils/nodeUi';
@@ -32,6 +32,7 @@ const emit = defineEmits<{
 const store = useSceneNodeStore();
 const nodeStyle = NODE_RESIZER_STYLE;
 const { minWidth, minHeight } = getNodeMinSize(props.data.type);
+const nodeRef = ref<HTMLElement | null>(null);
 
 // =============================================================================
 // Computed
@@ -47,10 +48,39 @@ function handleAddChild(event: Event) {
   event.stopPropagation();
   emit('add-child');
 }
+
+function syncNodeHeight(): void {
+  const nodeEl = nodeRef.value;
+  if (!nodeEl) return;
+  const headerEl = nodeEl.querySelector('.node-glass__header') as HTMLElement | null;
+  const bodyEl = nodeEl.querySelector('.node-glass__body') as HTMLElement | null;
+  const headerHeight = headerEl?.offsetHeight ?? 0;
+  const bodyHeight = bodyEl?.scrollHeight ?? 0;
+  const requiredHeight = Math.max(minHeight, Math.ceil(headerHeight + bodyHeight));
+  const node = store.nodes.find((item) => item.id === props.id);
+  if (!node) return;
+  const currentHeightRaw = (node.style as Record<string, unknown> | undefined)?.height ?? node.height ?? 0;
+  const currentHeight = Number(String(currentHeightRaw).replace('px', ''));
+  if (Number.isFinite(currentHeight) && requiredHeight <= currentHeight + 4) return;
+  node.height = requiredHeight;
+  node.style = { ...(node.style ?? {}), height: `${requiredHeight}px` };
+  store.persistNodePositions();
+}
+
+onMounted(() => {
+  nextTick(syncNodeHeight);
+});
+
+watch(
+  () => props.data.description,
+  () => {
+    nextTick(syncNodeHeight);
+  }
+);
 </script>
 
 <template>
-  <div :class="nodeClasses" :style="nodeStyle">
+  <div ref="nodeRef" :class="nodeClasses" :style="nodeStyle">
     <NodeResizer
       :min-width="minWidth"
       :min-height="minHeight"

@@ -11,11 +11,10 @@ import { useSceneNodeStore } from '../../../stores/sceneNode';
 import { useUIStore } from '../../../stores/ui';
 import { useNodeGeneration } from '../../../composables/useNodeGeneration';
 import { useHelpPopover } from '../../../composables/useHelpPopover';
-import { LayoutGrid, Camera, Target, FileText, Sparkles, Check, RefreshCw, Loader2 } from 'lucide-vue-next';
+import { LayoutGrid, Camera, Target, FileText, Sparkles, Check, RefreshCw, Loader2, Star } from 'lucide-vue-next';
 import { gsap } from 'gsap';
 import { mapShotTypeLabelsToKeys } from '../../../utils/nodeSettings';
 import { DEFAULT_GRID_LAYOUT, DEFAULT_GRID_SHOT_TYPES } from '../../../utils/nodeDefaults';
-import { aiService } from '../../../services';
 
 interface Props {
   node: VueFlowNode<StoryboardGridNodeData>;
@@ -37,6 +36,7 @@ const form = ref({
   compositionHint: '',
   beats: [] as string[],
   continuityRules: '',
+  additionalDetail: '',
   prompt: '',
   promptKo: '',
   promptEnFinal: '',
@@ -45,10 +45,9 @@ const form = ref({
   promptLang: 'EN' as 'EN' | 'KO',
 });
 
-const koDirty = ref(false);
-const lastSyncedKo = ref('');
 const promptSectionRef = ref<HTMLElement | null>(null);
-const promptKoRef = ref<HTMLTextAreaElement | null>(null);
+const detailSectionRef = ref<HTMLElement | null>(null);
+const detailTextareaRef = ref<HTMLTextAreaElement | null>(null);
 const isFinalEditing = ref(false);
 const timelineCutsSectionRef = ref<HTMLElement | null>(null);
 const isTimelineCutsEditorOpen = ref(false);
@@ -71,6 +70,7 @@ const {
     nodeType: 'GRID',
     sceneOneLine: buildSceneOneLine(),
     prompt: form.value.prompt,
+    additionalDetail: form.value.additionalDetail,
     gridMode: form.value.gridMode,
     layout: form.value.layout,
     timelineIntervalSeconds: TIMELINE_CUT_INTERVAL_SECONDS,
@@ -93,6 +93,7 @@ const {
     prompt: result.promptEnBase,
     promptKo: result.promptKo,
   }),
+  getImproveInstruction: () => form.value.additionalDetail,
   getApprovedUpdate: () => ({
     prompt: form.value.prompt,
     promptKo: form.value.promptKo,
@@ -105,6 +106,7 @@ const {
         layout: form.value.layout,
         beatsKo: form.value.beats,
         continuityRulesKo: form.value.continuityRules,
+        detailKo: form.value.additionalDetail,
       };
     }
     return {
@@ -112,6 +114,7 @@ const {
       layout: form.value.layout,
       shotTypes: mapShotTypeLabelsToKeys(form.value.shotTypes),
       compositionHintKo: form.value.compositionHint,
+      detailKo: form.value.additionalDetail,
     };
   },
   getReferenceObjectIds: () =>
@@ -127,6 +130,7 @@ const {
           layout: form.value.layout,
           beatsKo: form.value.beats,
           continuityRulesKo: form.value.continuityRules,
+          detailKo: form.value.additionalDetail,
         };
       }
       return {
@@ -134,6 +138,7 @@ const {
         layout: form.value.layout,
         shotTypes: mapShotTypeLabelsToKeys(form.value.shotTypes),
         compositionHintKo: form.value.compositionHint,
+        detailKo: form.value.additionalDetail,
       };
     })(),
     promptEnFinalOverride: form.value.usePromptOverride ? form.value.promptEnFinalOverride : '',
@@ -198,7 +203,6 @@ const isPromptGenerated = computed(
   () => hasPromptContent.value || data.value?.promptStatus !== PromptStatus.DRAFT
 );
 const isPromptApproved = computed(() => data.value?.promptStatus === PromptStatus.APPROVED);
-const isKoOutOfSync = computed(() => koDirty.value);
 const isStoryBeats = computed(() => form.value.gridMode === 'STORY_BEATS');
 const timelineCutsCount = computed(() => form.value.beats.filter((beat) => beat.trim().length > 0).length);
 const timelineCutsButtonLabel = computed(() => {
@@ -248,6 +252,7 @@ function buildSceneOneLine(): string {
     if (beats.length) parts.push(`timelineCuts: ${beats.join(' | ')}`);
     if (form.value.continuityRules) parts.push(`continuityRules: ${form.value.continuityRules}`);
   }
+  if (form.value.additionalDetail) parts.push(`detail: ${form.value.additionalDetail}`);
   return parts.join(', ');
 }
 
@@ -288,6 +293,7 @@ watch(() => props.node.id, () => {
     compositionHint: data.value.compositionHint || '',
     beats: normalizeBeats(data.value.beats || [], layout),
     continuityRules: data.value.continuityRules || '',
+    additionalDetail: data.value.additionalDetail || '',
     prompt: data.value.prompt || '',
     promptKo: data.value.promptKo || '',
     promptEnFinal: data.value.promptEnFinal || '',
@@ -295,8 +301,6 @@ watch(() => props.node.id, () => {
     usePromptOverride: Boolean(data.value.promptEnFinalOverride),
     promptLang: 'EN',
   };
-  koDirty.value = false;
-  lastSyncedKo.value = form.value.promptKo;
   isFinalEditing.value = false;
   isTimelineCutsEditorOpen.value = false;
   maybeAutofillPromptFromMaster();
@@ -319,8 +323,6 @@ watch(
     const normalized = nextPromptKo ?? '';
     if (normalized !== form.value.promptKo) {
       form.value.promptKo = normalized;
-      lastSyncedKo.value = normalized;
-      koDirty.value = false;
     }
   }
 );
@@ -343,6 +345,16 @@ watch(
       form.value.promptEnFinalOverride = normalized;
     }
     form.value.usePromptOverride = Boolean(normalized);
+  }
+);
+
+watch(
+  () => data.value?.additionalDetail,
+  (nextDetail) => {
+    const normalized = nextDetail ?? '';
+    if (normalized !== form.value.additionalDetail) {
+      form.value.additionalDetail = normalized;
+    }
   }
 );
 
@@ -392,20 +404,12 @@ watch(
 );
 
 watch(
-  () => form.value.promptLang,
-  (next, prev) => {
-    if (prev === 'KO' && next === 'EN' && koDirty.value) {
-      rewritePrompt();
-    }
-  }
-);
-
-watch(
   () => [
     form.value.prompt,
     form.value.promptKo,
     form.value.promptEnFinalOverride,
     form.value.usePromptOverride,
+    form.value.additionalDetail,
   ],
   () => {
     if (!data.value) return;
@@ -415,6 +419,9 @@ watch(
     }
     if (form.value.promptKo !== (data.value.promptKo ?? '')) {
       updates.promptKo = form.value.promptKo;
+    }
+    if (form.value.additionalDetail !== (data.value.additionalDetail ?? '')) {
+      updates.additionalDetail = form.value.additionalDetail;
     }
     const nextOverride = form.value.usePromptOverride ? form.value.promptEnFinalOverride : '';
     if (nextOverride !== (data.value.promptEnFinalOverride ?? '')) {
@@ -435,6 +442,7 @@ watch(
     compositionHint: form.value.compositionHint,
     beats: form.value.beats.slice(),
     continuityRules: form.value.continuityRules,
+    additionalDetail: form.value.additionalDetail,
     usePromptOverride: form.value.usePromptOverride,
   }),
   () => {
@@ -467,28 +475,6 @@ function maybeAutofillPromptFromMaster(): void {
   form.value.prompt = masterPrompt;
   if (!form.value.promptKo && activeMasterPrompt.value.promptKo) {
     form.value.promptKo = activeMasterPrompt.value.promptKo;
-  }
-}
-
-const isRewriting = ref(false);
-
-async function rewritePrompt(): Promise<void> {
-  if (!form.value.promptKo) return;
-  if (isRewriting.value) return;
-  const sourceKo = form.value.promptKo;
-  isRewriting.value = true;
-  try {
-    const result = await aiService.rewritePrompt(form.value.promptKo);
-    if (result.promptEnBase && result.promptEnBase.trim()) {
-      form.value.prompt = result.promptEnBase;
-      koDirty.value = false;
-      lastSyncedKo.value = sourceKo;
-      queuePromptPreview();
-    }
-  } catch (error) {
-    console.error('Failed to rewrite prompt:', error);
-  } finally {
-    isRewriting.value = false;
   }
 }
 
@@ -549,14 +535,6 @@ function toggleFinalEditing(): void {
   isFinalEditing.value = !isFinalEditing.value;
 }
 
-function markKoDirty(): void {
-  if (form.value.promptKo === lastSyncedKo.value) {
-    koDirty.value = false;
-    return;
-  }
-  koDirty.value = true;
-}
-
 function queuePromptPreview(): void {
   if (!form.value.prompt.trim()) return;
   if (form.value.usePromptOverride) return;
@@ -567,14 +545,13 @@ function queuePromptPreview(): void {
   }, 600);
 }
 
-async function focusKoEditor(): Promise<void> {
-  form.value.promptLang = 'KO';
+async function focusDetailEditor(): Promise<void> {
   await nextTick();
-  if (promptSectionRef.value) {
-    const container = promptSectionRef.value.closest('.base-panel__content') as HTMLElement | null;
+  if (detailSectionRef.value) {
+    const container = detailSectionRef.value.closest('.base-panel__content') as HTMLElement | null;
     if (container) {
       const containerRect = container.getBoundingClientRect();
-      const sectionRect = promptSectionRef.value.getBoundingClientRect();
+      const sectionRect = detailSectionRef.value.getBoundingClientRect();
       const currentScroll = container.scrollTop;
       const offset = sectionRect.top - containerRect.top;
       const centeredOffset = (container.clientHeight - sectionRect.height) / 2;
@@ -583,11 +560,11 @@ async function focusKoEditor(): Promise<void> {
       const targetScroll = Math.min(Math.max(0, rawTarget), maxScroll);
       gsap.to(container, { scrollTop: targetScroll, duration: 0.45, ease: 'power2.out' });
     } else {
-      promptSectionRef.value.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      detailSectionRef.value.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
-    gsap.killTweensOf(promptSectionRef.value);
+    gsap.killTweensOf(detailSectionRef.value);
     gsap.fromTo(
-      promptSectionRef.value,
+      detailSectionRef.value,
       { boxShadow: '0 0 0 0 rgba(255, 107, 138, 0)', backgroundColor: 'rgba(255, 250, 252, 0)' },
       {
         boxShadow: '0 0 0 12px rgba(255, 107, 138, 0.35)',
@@ -600,9 +577,7 @@ async function focusKoEditor(): Promise<void> {
       }
     );
   }
-  if (promptKoRef.value) {
-    promptKoRef.value.focus();
-  }
+  detailTextareaRef.value?.focus();
 }
 
 function notifyBlocked(title: string, message: string): void {
@@ -625,10 +600,6 @@ function handleGenerateGrid(): void {
   }
   if (!isPromptApproved.value) {
     notifyBlocked('프롬프트 승인 필요', '승인 후 그리드를 생성할 수 있습니다.');
-    return;
-  }
-  if (isKoOutOfSync.value) {
-    notifyBlocked('영어 반영 필요', '한국어 수정 내용을 영어에 반영해 주세요.');
     return;
   }
   generateGrid();
@@ -768,6 +739,21 @@ function handleGenerateGrid(): void {
         />
       </div>
 
+      <!-- Detail Change -->
+      <div class="panel-section" ref="detailSectionRef">
+        <label class="panel-label">
+          <Star class="panel-label-icon" />
+          디테일 변경 (선택)
+        </label>
+        <textarea
+          ref="detailTextareaRef"
+          v-model="form.additionalDetail"
+          class="panel-textarea"
+          rows="2"
+          placeholder="예: 소품/질감/감정 톤 등 추가 지시사항"
+        ></textarea>
+      </div>
+
       <!-- Narrative Prompt -->
       <div class="panel-section" ref="promptSectionRef">
         <div class="panel-label-row">
@@ -794,8 +780,12 @@ function handleGenerateGrid(): void {
             </button>
           </div>
         </div>
-        <p class="panel-subtext">
-          {{ form.promptLang === 'EN' ? '원본(편집 가능)' : '번역(수정 가능)' }}
+        <p
+          class="panel-subtext panel-tooltip"
+          data-tooltip="서술 프롬프트는 읽기 전용입니다. 한글 수정은 디테일 변경에서 가능합니다."
+        >
+          {{ form.promptLang === 'EN' ? '원본(읽기 전용)' : '번역(읽기 전용)' }}
+          <span class="panel-tooltip__icon">?</span>
         </p>
         <div v-if="form.promptLang === 'EN'">
           <textarea
@@ -803,28 +793,16 @@ function handleGenerateGrid(): void {
             class="panel-textarea panel-textarea--prompt"
             rows="4"
             placeholder="예: A sequence of frames showing the character's decision moment."
+            readonly
           ></textarea>
         </div>
         <div v-else class="panel-translation-block">
           <textarea
-            ref="promptKoRef"
             v-model="form.promptKo"
             class="panel-textarea panel-textarea--prompt"
             rows="4"
-            @input="markKoDirty"
+            readonly
           ></textarea>
-          <div class="panel-prompt-actions">
-            <button
-              class="panel-btn panel-btn--success panel-btn--sync"
-              :class="{ 'panel-btn--sync--muted': !isKoOutOfSync }"
-              :disabled="isRewriting || !form.promptKo || !isKoOutOfSync"
-              @click="rewritePrompt"
-            >
-              <Loader2 v-if="isRewriting" class="panel-btn-icon panel-btn-icon--spin" />
-              <RefreshCw v-else class="panel-btn-icon" />
-              영어로 반영
-            </button>
-          </div>
         </div>
       </div>
 
@@ -870,15 +848,12 @@ function handleGenerateGrid(): void {
           >
             {{ isFinalEditing ? '편집 완료' : '영문 직접 편집' }}
           </button>
-          <button class="panel-btn panel-btn--text" @click="focusKoEditor">
-            한국어로 편집
+          <button class="panel-btn panel-btn--text" @click="focusDetailEditor">
+            한글 편집
           </button>
         </div>
 
         <div class="panel-prompt-actions panel-prompt-actions--right">
-          <span v-if="isKoOutOfSync" class="panel-subtext">
-            영어 반영이 필요합니다.
-          </span>
           <button class="panel-btn panel-btn--text" :disabled="isGeneratingPrompt || isGeneratingGrid" @click="generatePrompt">
             <Loader2 v-if="isGeneratingPrompt" class="panel-btn-icon panel-btn-icon--spin" />
             <RefreshCw v-else class="panel-btn-icon" />
@@ -887,7 +862,7 @@ function handleGenerateGrid(): void {
           <button
             v-if="!isPromptApproved"
             class="panel-btn panel-btn--success"
-            :disabled="isGeneratingPrompt || isGeneratingGrid || isKoOutOfSync"
+            :disabled="isGeneratingPrompt || isGeneratingGrid"
             @click="approvePrompt"
           >
             <Check class="panel-btn-icon" /> 승인
@@ -903,7 +878,7 @@ function handleGenerateGrid(): void {
     <template #footer>
       <button
         class="panel-btn panel-btn--primary panel-btn--full"
-        :disabled="isGeneratingGrid || isGeneratingPrompt || isKoOutOfSync"
+        :disabled="isGeneratingGrid || isGeneratingPrompt"
         @click="handleGenerateGrid"
       >
         <LayoutGrid class="panel-btn-icon" />

@@ -133,6 +133,7 @@ export function buildNodeSettings(data: AnyNodeData): Record<string, unknown> {
           timeOfDayKey,
           moodKey,
           objectIds: (data as MasterImageNodeData).objectIds,
+          detailKo: (data as MasterImageNodeData).additionalDetail,
         });
       }
     case NodeType.STORYBOARD_GRID:
@@ -145,6 +146,7 @@ export function buildNodeSettings(data: AnyNodeData): Record<string, unknown> {
             layout: gridData.layout,
             beatsKo: gridData.beats ?? [],
             continuityRulesKo: gridData.continuityRules ?? '',
+            detailKo: gridData.additionalDetail,
           });
         }
         return withPromptSettings({
@@ -152,6 +154,7 @@ export function buildNodeSettings(data: AnyNodeData): Record<string, unknown> {
           layout: gridData.layout,
           shotTypes: mapShotTypeLabelsToKeys(gridData.shotTypes),
           compositionHintKo: gridData.compositionHint,
+          detailKo: gridData.additionalDetail,
         });
       }
     case NodeType.SHOT:
@@ -244,38 +247,40 @@ export function createSceneNodeFromApi(
       } as SceneHeaderNodeData;
       break;
     case NodeType.MASTER_IMAGE:
-      data = {
-        ...base,
-        type: NodeType.MASTER_IMAGE,
-        sceneId,
-        isActive: !!node.isActive,
-        imageUrl: resolvedContentUrl,
-        thumbnailUrl: resolvedContentUrl,
-        prompt: '',
-        promptKo: '',
-        promptEnFinal: '',
-        promptEnFinalOverride: '',
-        filmLook: DEFAULT_MASTER_FILM_LOOK,
-        style: DEFAULT_MASTER_STYLE,
-        timeOfDay: DEFAULT_MASTER_TIME_OF_DAY,
-        mood: DEFAULT_MASTER_MOOD,
-        objectIds: [],
-      } as MasterImageNodeData;
+        data = {
+            ...base,
+            type: NodeType.MASTER_IMAGE,
+            sceneId,
+            isActive: !!node.isActive,
+            imageUrl: resolvedContentUrl,
+            thumbnailUrl: resolvedContentUrl,
+            prompt: '',
+            promptKo: '',
+            promptEnFinal: '',
+            promptEnFinalOverride: '',
+            additionalDetail: '',
+            filmLook: DEFAULT_MASTER_FILM_LOOK,
+            style: DEFAULT_MASTER_STYLE,
+            timeOfDay: DEFAULT_MASTER_TIME_OF_DAY,
+            mood: DEFAULT_MASTER_MOOD,
+            objectIds: [],
+        } as MasterImageNodeData;
       break;
     case NodeType.STORYBOARD_GRID:
-      data = {
-        ...base,
-        type: NodeType.STORYBOARD_GRID,
-        imageUrl: resolvedContentUrl,
-        thumbnailUrl: resolvedContentUrl,
-        prompt: '',
-        promptKo: '',
-        promptEnFinal: '',
-        promptEnFinalOverride: '',
-        layout: DEFAULT_GRID_LAYOUT,
-        shotTypes: [...DEFAULT_GRID_SHOT_TYPES],
-        compositionHint: '',
-        gridMode: 'SHOT_VARIATIONS',
+        data = {
+            ...base,
+            type: NodeType.STORYBOARD_GRID,
+            imageUrl: resolvedContentUrl,
+            thumbnailUrl: resolvedContentUrl,
+            prompt: '',
+            promptKo: '',
+            promptEnFinal: '',
+            promptEnFinalOverride: '',
+            additionalDetail: '',
+            layout: DEFAULT_GRID_LAYOUT,
+            shotTypes: [...DEFAULT_GRID_SHOT_TYPES],
+            compositionHint: '',
+            gridMode: 'SHOT_VARIATIONS',
         beats: [],
         continuityRules: '',
       } as StoryboardGridNodeData;

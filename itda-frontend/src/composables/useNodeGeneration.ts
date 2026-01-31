@@ -16,6 +16,7 @@ interface UseNodeGenerationOptions {
   nodeType: 'MASTER' | 'GRID' | 'SHOT' | 'VIDEO';
   toastType: GenerationToastType;
   getPrompt: () => string;
+  getImproveInstruction?: () => string;
   getPromptPayload: () => GeneratePromptRequest;
   getPromptUpdate: (result: GeneratePromptResponse) => Partial<AnyNodeData>;
   getApprovedUpdate: () => Partial<AnyNodeData>;
@@ -44,11 +45,15 @@ export function useNodeGeneration(options: UseNodeGenerationOptions) {
     errorMessage.value = null;
   };
 
-  const refreshPromptPreview = async (force = false): Promise<void> => {
+  const refreshPromptPreview = async (force = false, promptOverride?: string): Promise<void> => {
     if (!force && !options.previewEnabled) return;
     if (!options.getPromptPreviewPayload) return;
     try {
-      const result = await aiService.previewPrompt(options.nodeId, options.getPromptPreviewPayload());
+      const payload = options.getPromptPreviewPayload();
+      if (typeof promptOverride === 'string' && promptOverride.trim()) {
+        payload.prompt = promptOverride;
+      }
+      const result = await aiService.previewPrompt(options.nodeId, payload);
       if (options.onPromptPreview) {
         nodeStore.updateNodeLocal(options.nodeId, options.onPromptPreview(result));
       }
@@ -66,12 +71,22 @@ export function useNodeGeneration(options: UseNodeGenerationOptions) {
     const toastId = startGenerationToast('prompt');
 
     try {
-      const result = await aiService.generatePrompt(options.getPromptPayload());
+      const currentPrompt = options.getPrompt().trim();
+      const instruction = options.getImproveInstruction?.().trim() ?? '';
+      const shouldImprove = currentPrompt.length > 0 && instruction.length > 0;
+      let promptPayload = options.getPromptPayload();
+      if (!shouldImprove && instruction.length === 0 && currentPrompt.length > 0) {
+        // Force regeneration from current inputs instead of echoing the existing prompt.
+        promptPayload = { ...promptPayload, prompt: '' };
+      }
+      const result = shouldImprove
+        ? await aiService.improvePrompt(currentPrompt, instruction, options.nodeType)
+        : await aiService.generatePrompt(promptPayload);
       nodeStore.updateNode(options.nodeId, {
         ...options.getPromptUpdate(result),
         promptStatus: PromptStatus.GENERATED,
       });
-      await refreshPromptPreview(true);
+      await refreshPromptPreview(true, result.promptEnBase);
       // 성공 토스트
       finishGenerationToast(toastId, 'prompt', 'success');
     } catch (error) {

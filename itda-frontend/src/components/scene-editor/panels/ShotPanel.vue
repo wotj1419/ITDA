@@ -15,7 +15,6 @@ import { Camera, Smile, PenLine, FileText, Sparkles, Check, RefreshCw, LayoutGri
 import { gsap } from 'gsap';
 import { resolveExpressionKey, resolveShotTypeKey } from '../../../utils/nodeSettings';
 import { DEFAULT_GRID_LAYOUT } from '../../../utils/nodeDefaults';
-import { aiService } from '../../../services';
 
 interface Props {
   node: Node<ShotNodeData>;
@@ -38,10 +37,9 @@ const form = ref({
   promptLang: 'EN' as 'EN' | 'KO',
 });
 
-const koDirty = ref(false);
-const lastSyncedKo = ref('');
 const promptSectionRef = ref<HTMLElement | null>(null);
-const promptKoRef = ref<HTMLTextAreaElement | null>(null);
+const detailSectionRef = ref<HTMLElement | null>(null);
+const detailTextareaRef = ref<HTMLTextAreaElement | null>(null);
 const isFinalEditing = ref(false);
 let promptPreviewTimeout: ReturnType<typeof setTimeout> | null = null;
 
@@ -63,7 +61,6 @@ const isPromptGenerated = computed(
   () => hasPromptContent.value || data.value?.promptStatus !== PromptStatus.DRAFT
 );
 const isPromptApproved = computed(() => data.value?.promptStatus === PromptStatus.APPROVED);
-const isKoOutOfSync = computed(() => koDirty.value);
 const parentGridNode = computed(() =>
   nodeStore.nodes.find(
     (node) => node.id === data.value?.parentNodeId && node.data?.type === NodeType.STORYBOARD_GRID
@@ -117,6 +114,29 @@ const activeMasterObjectNames = computed(() =>
     .filter((name): name is string => Boolean(name))
 );
 
+const FINAL_PROMPT_PREFIX = 'Single cinematic still, one frame only, full-frame.';
+const FINAL_PROMPT_REFERENCE =
+  'Use the reference image only for continuity: same characters, wardrobe, lighting, color palette, and environment.';
+const FINAL_PROMPT_NEGATIVE = 'No split frames, no panels, no collage, no borders.';
+
+function buildFinalPrompt(base?: string | null): string {
+  const trimmed = (base ?? '').trim();
+  if (!trimmed) return '';
+  const lower = trimmed.toLowerCase();
+  const lines: string[] = [];
+  if (!lower.includes('single cinematic still') && !lower.includes('one frame only')) {
+    lines.push(FINAL_PROMPT_PREFIX);
+  }
+  if (!lower.includes('reference image') && !lower.includes('continuity')) {
+    lines.push(FINAL_PROMPT_REFERENCE);
+  }
+  lines.push(trimmed);
+  if (!/no split frames|no panels|no collage|no borders/i.test(trimmed)) {
+    lines.push(FINAL_PROMPT_NEGATIVE);
+  }
+  return lines.join('\n');
+}
+
 const {
   isGeneratingPrompt,
   isGeneratingJob: isGeneratingShot,
@@ -129,7 +149,7 @@ const {
   nodeId: props.node.id,
   nodeType: 'SHOT',
   toastType: 'shot',
-  getPrompt: () => form.value.prompt,
+  getPrompt: () => buildFinalPrompt(form.value.prompt),
   getPromptPayload: () => ({
     nodeType: 'SHOT',
     sceneOneLine: buildSceneOneLine(),
@@ -149,6 +169,7 @@ const {
     prompt: result.promptEnBase,
     promptKo: result.promptKo,
   }),
+  getImproveInstruction: () => form.value.additionalDetail,
   getApprovedUpdate: () => ({
     prompt: form.value.prompt,
     promptKo: form.value.promptKo,
@@ -164,9 +185,9 @@ const {
   getReferenceObjectIds: () =>
     activeMasterData.value?.objectIds?.length ? [...activeMasterData.value.objectIds] : undefined,
   getPromptOverride: () =>
-    form.value.usePromptOverride ? form.value.promptEnFinalOverride : '',
+    form.value.usePromptOverride ? buildFinalPrompt(form.value.promptEnFinalOverride) : '',
   getPromptPreviewPayload: () => ({
-    prompt: form.value.prompt,
+    prompt: buildFinalPrompt(form.value.prompt),
     settings: {
       gridCellIndex: data.value?.gridCellIndex ?? 0,
       shotType: resolveShotTypeKey(form.value.shotTypes[0] ?? data.value?.shotType),
@@ -174,7 +195,9 @@ const {
       detailKo: form.value.additionalDetail,
       gridCellCutKo: gridCellCutKo.value,
     },
-    promptEnFinalOverride: form.value.usePromptOverride ? form.value.promptEnFinalOverride : '',
+    promptEnFinalOverride: form.value.usePromptOverride
+      ? buildFinalPrompt(form.value.promptEnFinalOverride)
+      : '',
   }),
   onPromptPreview: (result) => ({
     promptEnFinal: result.promptEnFinal,
@@ -240,28 +263,6 @@ function toggleShotType(type: string): void {
   }
 }
 
-const isRewriting = ref(false);
-
-async function rewritePrompt(): Promise<void> {
-  if (!form.value.promptKo) return;
-  if (isRewriting.value) return;
-  const sourceKo = form.value.promptKo;
-  isRewriting.value = true;
-  try {
-    const result = await aiService.rewritePrompt(form.value.promptKo);
-    if (result.promptEnBase && result.promptEnBase.trim()) {
-      form.value.prompt = result.promptEnBase;
-      koDirty.value = false;
-      lastSyncedKo.value = sourceKo;
-      queuePromptPreview();
-    }
-  } catch (error) {
-    console.error('Failed to rewrite prompt:', error);
-  } finally {
-    isRewriting.value = false;
-  }
-}
-
 function toggleFinalEditing(): void {
   if (!form.value.usePromptOverride) {
     form.value.usePromptOverride = true;
@@ -277,14 +278,6 @@ function toggleFinalEditing(): void {
   isFinalEditing.value = !isFinalEditing.value;
 }
 
-function markKoDirty(): void {
-  if (form.value.promptKo === lastSyncedKo.value) {
-    koDirty.value = false;
-    return;
-  }
-  koDirty.value = true;
-}
-
 function queuePromptPreview(): void {
   if (!form.value.prompt.trim()) return;
   if (form.value.usePromptOverride) return;
@@ -295,14 +288,13 @@ function queuePromptPreview(): void {
   }, 600);
 }
 
-async function focusKoEditor(): Promise<void> {
-  form.value.promptLang = 'KO';
+async function focusDetailEditor(): Promise<void> {
   await nextTick();
-  if (promptSectionRef.value) {
-    const container = promptSectionRef.value.closest('.base-panel__content') as HTMLElement | null;
+  if (detailSectionRef.value) {
+    const container = detailSectionRef.value.closest('.base-panel__content') as HTMLElement | null;
     if (container) {
       const containerRect = container.getBoundingClientRect();
-      const sectionRect = promptSectionRef.value.getBoundingClientRect();
+      const sectionRect = detailSectionRef.value.getBoundingClientRect();
       const currentScroll = container.scrollTop;
       const offset = sectionRect.top - containerRect.top;
       const centeredOffset = (container.clientHeight - sectionRect.height) / 2;
@@ -311,11 +303,11 @@ async function focusKoEditor(): Promise<void> {
       const targetScroll = Math.min(Math.max(0, rawTarget), maxScroll);
       gsap.to(container, { scrollTop: targetScroll, duration: 0.45, ease: 'power2.out' });
     } else {
-      promptSectionRef.value.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      detailSectionRef.value.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
-    gsap.killTweensOf(promptSectionRef.value);
+    gsap.killTweensOf(detailSectionRef.value);
     gsap.fromTo(
-      promptSectionRef.value,
+      detailSectionRef.value,
       { boxShadow: '0 0 0 0 rgba(255, 107, 138, 0)', backgroundColor: 'rgba(255, 250, 252, 0)' },
       {
         boxShadow: '0 0 0 12px rgba(255, 107, 138, 0.35)',
@@ -328,9 +320,7 @@ async function focusKoEditor(): Promise<void> {
       }
     );
   }
-  if (promptKoRef.value) {
-    promptKoRef.value.focus();
-  }
+  detailTextareaRef.value?.focus();
 }
 
 watch(() => props.node.id, () => {
@@ -350,8 +340,6 @@ watch(() => props.node.id, () => {
     usePromptOverride: Boolean(data.value.promptEnFinalOverride),
     promptLang: 'EN',
   };
-  koDirty.value = false;
-  lastSyncedKo.value = form.value.promptKo;
   isFinalEditing.value = false;
   clearError();
 }, { immediate: true });
@@ -372,8 +360,6 @@ watch(
     const normalized = nextPromptKo ?? '';
     if (normalized !== form.value.promptKo) {
       form.value.promptKo = normalized;
-      lastSyncedKo.value = normalized;
-      koDirty.value = false;
     }
   }
 );
@@ -414,20 +400,12 @@ watch(
 );
 
 watch(
-  () => form.value.promptLang,
-  (next, prev) => {
-    if (prev === 'KO' && next === 'EN' && koDirty.value) {
-      rewritePrompt();
-    }
-  }
-);
-
-watch(
   () => [
     form.value.prompt,
     form.value.promptKo,
     form.value.promptEnFinalOverride,
     form.value.usePromptOverride,
+    form.value.additionalDetail,
   ],
   () => {
     if (!data.value) return;
@@ -437,6 +415,9 @@ watch(
     }
     if (form.value.promptKo !== (data.value.promptKo ?? '')) {
       updates.promptKo = form.value.promptKo;
+    }
+    if (form.value.additionalDetail !== (data.value.additionalDetail ?? '')) {
+      updates.additionalDetail = form.value.additionalDetail;
     }
     const nextOverride = form.value.usePromptOverride ? form.value.promptEnFinalOverride : '';
     if (nextOverride !== (data.value.promptEnFinalOverride ?? '')) {
@@ -509,10 +490,6 @@ function handleGenerateShot(): void {
     notifyBlocked('프롬프트 승인 필요', '승인 후 샷을 생성할 수 있습니다.');
     return;
   }
-  if (isKoOutOfSync.value) {
-    notifyBlocked('영어 반영 필요', '한국어 수정 내용을 영어에 반영해 주세요.');
-    return;
-  }
   generateShot();
 }
 </script>
@@ -571,17 +548,18 @@ function handleGenerateShot(): void {
         </div>
       </div>
 
-      <!-- Additional Detail -->
-      <div class="panel-section">
+      <!-- Detail Change -->
+      <div class="panel-section" ref="detailSectionRef">
         <label class="panel-label">
           <PenLine class="panel-label-icon" />
-          추가 디테일 (선택)
+          디테일 변경 (선택)
         </label>
         <textarea
+          ref="detailTextareaRef"
           v-model="form.additionalDetail"
           class="panel-textarea"
           rows="2"
-          placeholder="추가 지시사항 입력"
+          placeholder="예: 소품/질감/표정 등 추가 지시사항"
         ></textarea>
       </div>
 
@@ -611,8 +589,12 @@ function handleGenerateShot(): void {
             </button>
           </div>
         </div>
-        <p class="panel-subtext">
-          {{ form.promptLang === 'EN' ? '원본(편집 가능)' : '번역(수정 가능)' }}
+        <p
+          class="panel-subtext panel-tooltip"
+          data-tooltip="서술 프롬프트는 읽기 전용입니다. 한글 수정은 디테일 변경에서 가능합니다."
+        >
+          {{ form.promptLang === 'EN' ? '원본(읽기 전용)' : '번역(읽기 전용)' }}
+          <span class="panel-tooltip__icon">?</span>
         </p>
         <div v-if="form.promptLang === 'EN'">
           <textarea
@@ -620,28 +602,16 @@ function handleGenerateShot(): void {
             class="panel-textarea panel-textarea--prompt"
             rows="4"
             placeholder="예: A quiet alley glows with neon reflections as the character pauses."
+            readonly
           ></textarea>
         </div>
         <div v-else class="panel-translation-block">
           <textarea
-            ref="promptKoRef"
             v-model="form.promptKo"
             class="panel-textarea panel-textarea--prompt"
             rows="4"
-            @input="markKoDirty"
+            readonly
           ></textarea>
-          <div class="panel-prompt-actions">
-            <button
-              class="panel-btn panel-btn--success panel-btn--sync"
-              :class="{ 'panel-btn--sync--muted': !isKoOutOfSync }"
-              :disabled="isRewriting || !form.promptKo || !isKoOutOfSync"
-              @click="rewritePrompt"
-            >
-              <Loader2 v-if="isRewriting" class="panel-btn-icon panel-btn-icon--spin" />
-              <RefreshCw v-else class="panel-btn-icon" />
-              영어로 반영
-            </button>
-          </div>
         </div>
       </div>
 
@@ -687,15 +657,12 @@ function handleGenerateShot(): void {
           >
             {{ isFinalEditing ? '편집 완료' : '영문 직접 편집' }}
           </button>
-          <button class="panel-btn panel-btn--text" @click="focusKoEditor">
-            한국어로 편집
+          <button class="panel-btn panel-btn--text" @click="focusDetailEditor">
+            한글 편집
           </button>
         </div>
 
         <div class="panel-prompt-actions panel-prompt-actions--right">
-          <span v-if="isKoOutOfSync" class="panel-subtext">
-            영어 반영이 필요합니다.
-          </span>
           <button class="panel-btn panel-btn--text" :disabled="isGeneratingPrompt || isGeneratingShot" @click="generatePrompt">
             <Loader2 v-if="isGeneratingPrompt" class="panel-btn-icon panel-btn-icon--spin" />
             <RefreshCw v-else class="panel-btn-icon" />
@@ -704,7 +671,7 @@ function handleGenerateShot(): void {
           <button
             v-if="!isPromptApproved"
             class="panel-btn panel-btn--success"
-            :disabled="isGeneratingPrompt || isGeneratingShot || isKoOutOfSync"
+            :disabled="isGeneratingPrompt || isGeneratingShot"
             @click="approvePrompt"
           >
             <Check class="panel-btn-icon" /> 승인
@@ -720,7 +687,7 @@ function handleGenerateShot(): void {
     <template #footer>
       <button
         class="panel-btn panel-btn--primary panel-btn--full"
-        :disabled="isGeneratingShot || isGeneratingPrompt || isKoOutOfSync"
+        :disabled="isGeneratingShot || isGeneratingPrompt"
         @click="handleGenerateShot"
       >
         <Camera class="panel-btn-icon" />

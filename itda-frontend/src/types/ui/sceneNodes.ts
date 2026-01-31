@@ -119,6 +119,7 @@ export interface MasterImageNodeData extends BaseNodeData {
     promptKo?: string;
     promptEnFinal?: string;
     promptEnFinalOverride?: string;
+    additionalDetail: string;
     filmLook?: string;
     style: string;
     timeOfDay: string;
@@ -138,6 +139,7 @@ export interface StoryboardGridNodeData extends BaseNodeData {
     promptKo?: string;
     promptEnFinal?: string;
     promptEnFinalOverride?: string;
+    additionalDetail: string;
     layout: GridLayout;
     shotTypes: string[];
     compositionHint: string;

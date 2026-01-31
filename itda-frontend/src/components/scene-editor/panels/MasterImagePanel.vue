@@ -20,7 +20,6 @@ import {
   DEFAULT_MASTER_STYLE,
   DEFAULT_MASTER_TIME_OF_DAY,
 } from '../../../utils/nodeDefaults';
-import { aiService } from '../../../services';
 
 interface Props {
   node: Node<MasterImageNodeData>;
@@ -31,10 +30,9 @@ const nodeStore = useSceneNodeStore();
 const objectStore = useObjectStore();
 const autoFilledNodes = new Set<string>();
 let promptPreviewTimeout: ReturnType<typeof setTimeout> | null = null;
-const koDirty = ref(false);
-const lastSyncedKo = ref('');
 const promptSectionRef = ref<HTMLElement | null>(null);
-const promptKoRef = ref<HTMLTextAreaElement | null>(null);
+const detailSectionRef = ref<HTMLElement | null>(null);
+const detailTextareaRef = ref<HTMLTextAreaElement | null>(null);
 const isFinalEditing = ref(false);
 // 폼 상태 - objectIds는 배열로 관리 (다중 선택)
 const form = ref({
@@ -42,6 +40,7 @@ const form = ref({
   timeOfDay: DEFAULT_MASTER_TIME_OF_DAY,
   mood: DEFAULT_MASTER_MOOD,
   objectIds: [] as number[],  // 등장 오브젝트 IDs (캐릭터 포함)
+  additionalDetail: '',
   prompt: '',
   promptKo: '',
   promptEnFinal: '',
@@ -67,6 +66,7 @@ const {
   getPromptPayload: () => ({
     nodeType: 'MASTER',
     sceneOneLine: buildSceneOneLine(),
+    additionalDetail: form.value.additionalDetail,
     style: form.value.style,
     timeOfDay: form.value.timeOfDay,
     mood: form.value.mood,
@@ -80,6 +80,7 @@ const {
     prompt: result.promptEnBase,
     promptKo: result.promptKo,
   }),
+  getImproveInstruction: () => form.value.additionalDetail,
   getApprovedUpdate: () => ({
     prompt: form.value.prompt,
     promptKo: form.value.promptKo,
@@ -90,6 +91,7 @@ const {
     timeOfDayKey: resolveTimeOfDayKey(form.value.timeOfDay),
     moodKey: resolveMoodKey(form.value.mood) ?? 'NEUTRAL',
     objectIds: form.value.objectIds,
+    detailKo: form.value.additionalDetail,
   }),
   getReferenceObjectIds: () => (form.value.objectIds.length ? [...form.value.objectIds] : undefined),
   getPromptOverride: () =>
@@ -101,6 +103,7 @@ const {
       timeOfDayKey: resolveTimeOfDayKey(form.value.timeOfDay),
       moodKey: resolveMoodKey(form.value.mood) ?? 'NEUTRAL',
       objectIds: form.value.objectIds,
+      detailKo: form.value.additionalDetail,
     },
     promptEnFinalOverride: form.value.usePromptOverride ? form.value.promptEnFinalOverride : '',
   }),
@@ -159,7 +162,6 @@ const isPromptGenerated = computed(
 const isPromptApproved = computed(() => data.value?.promptStatus === PromptStatus.APPROVED);
 const canGenerate = computed(() =>
   isPromptApproved.value &&
-  !isKoOutOfSync.value &&
   !isGeneratingImage.value &&
   !isGeneratingPrompt.value
 );
@@ -174,6 +176,9 @@ function buildSceneOneLine(): string {
   if (form.value.mood) parts.push(`mood: ${form.value.mood}`);
   if (selectedObjectNames.value.length) {
     parts.push(`objects: ${selectedObjectNames.value.join(', ')}`);
+  }
+  if (form.value.additionalDetail) {
+    parts.push(`detail: ${form.value.additionalDetail}`);
   }
   return parts.join(', ');
 }
@@ -216,6 +221,7 @@ watch(() => props.node.id, () => {
     timeOfDay: data.value.timeOfDay || DEFAULT_MASTER_TIME_OF_DAY,
     mood: data.value.mood || DEFAULT_MASTER_MOOD,
     objectIds: data.value.objectIds || [],
+    additionalDetail: data.value.additionalDetail || '',
     prompt: data.value.prompt || '',
     promptKo: data.value.promptKo || '',
     promptEnFinal: data.value.promptEnFinal || '',
@@ -223,8 +229,6 @@ watch(() => props.node.id, () => {
     usePromptOverride: Boolean(data.value.promptEnFinalOverride),
     promptLang: 'EN',
   };
-  koDirty.value = false;
-  lastSyncedKo.value = form.value.promptKo;
   isFinalEditing.value = false;
   maybeAutofillPrompt();
   clearError();
@@ -277,8 +281,6 @@ watch(
     const normalized = nextPromptKo ?? '';
     if (normalized !== form.value.promptKo) {
       form.value.promptKo = normalized;
-      lastSyncedKo.value = normalized;
-      koDirty.value = false;
     }
   }
 );
@@ -301,6 +303,16 @@ watch(
       form.value.promptEnFinalOverride = normalized;
     }
     form.value.usePromptOverride = Boolean(normalized);
+  }
+);
+
+watch(
+  () => data.value?.additionalDetail,
+  (nextDetail) => {
+    const normalized = nextDetail ?? '';
+    if (normalized !== form.value.additionalDetail) {
+      form.value.additionalDetail = normalized;
+    }
   }
 );
 
@@ -328,20 +340,12 @@ watch(
 );
 
 watch(
-  () => form.value.promptLang,
-  (next, prev) => {
-    if (prev === 'KO' && next === 'EN' && koDirty.value) {
-      rewritePrompt();
-    }
-  }
-);
-
-watch(
   () => [
     form.value.prompt,
     form.value.promptKo,
     form.value.promptEnFinalOverride,
     form.value.usePromptOverride,
+    form.value.additionalDetail,
   ],
   () => {
     if (!data.value) return;
@@ -351,6 +355,9 @@ watch(
     }
     if (form.value.promptKo !== (data.value.promptKo ?? '')) {
       updates.promptKo = form.value.promptKo;
+    }
+    if (form.value.additionalDetail !== (data.value.additionalDetail ?? '')) {
+      updates.additionalDetail = form.value.additionalDetail;
     }
     const nextOverride = form.value.usePromptOverride ? form.value.promptEnFinalOverride : '';
     if (nextOverride !== (data.value.promptEnFinalOverride ?? '')) {
@@ -369,6 +376,7 @@ watch(
     timeOfDay: form.value.timeOfDay,
     mood: form.value.mood,
     objectIds: form.value.objectIds.slice(),
+    additionalDetail: form.value.additionalDetail,
     usePromptOverride: form.value.usePromptOverride,
   }),
   () => {
@@ -426,28 +434,6 @@ function toggleObject(objectId: number): void {
   }
 }
 
-const isRewriting = ref(false);
-const isKoOutOfSync = computed(() => koDirty.value);
-
-async function rewritePrompt(): Promise<void> {
-  if (!form.value.promptKo) return;
-  if (isRewriting.value) return;
-  const sourceKo = form.value.promptKo;
-  isRewriting.value = true;
-  try {
-    const result = await aiService.rewritePrompt(form.value.promptKo);
-    if (result.promptEnBase && result.promptEnBase.trim()) {
-      form.value.prompt = result.promptEnBase;
-      koDirty.value = false;
-      lastSyncedKo.value = sourceKo;
-      queuePromptPreview();
-    }
-  } catch (error) {
-    console.error('Failed to rewrite prompt:', error);
-  } finally {
-    isRewriting.value = false;
-  }
-}
 
 function toggleFinalEditing(): void {
   if (!form.value.usePromptOverride) {
@@ -482,22 +468,13 @@ function maybeAutofillPrompt(): void {
   autoFilledNodes.add(nodeId);
 }
 
-function markKoDirty(): void {
-  if (form.value.promptKo === lastSyncedKo.value) {
-    koDirty.value = false;
-    return;
-  }
-  koDirty.value = true;
-}
-
-async function focusKoEditor(): Promise<void> {
-  form.value.promptLang = 'KO';
+async function focusDetailEditor(): Promise<void> {
   await nextTick();
-  if (promptSectionRef.value) {
-    const container = promptSectionRef.value.closest('.base-panel__content') as HTMLElement | null;
+  if (detailSectionRef.value) {
+    const container = detailSectionRef.value.closest('.base-panel__content') as HTMLElement | null;
     if (container) {
       const containerRect = container.getBoundingClientRect();
-      const sectionRect = promptSectionRef.value.getBoundingClientRect();
+      const sectionRect = detailSectionRef.value.getBoundingClientRect();
       const currentScroll = container.scrollTop;
       const offset = sectionRect.top - containerRect.top;
       const centeredOffset = (container.clientHeight - sectionRect.height) / 2;
@@ -506,11 +483,11 @@ async function focusKoEditor(): Promise<void> {
       const targetScroll = Math.min(Math.max(0, rawTarget), maxScroll);
       gsap.to(container, { scrollTop: targetScroll, duration: 0.45, ease: 'power2.out' });
     } else {
-      promptSectionRef.value.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      detailSectionRef.value.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
-    gsap.killTweensOf(promptSectionRef.value);
+    gsap.killTweensOf(detailSectionRef.value);
     gsap.fromTo(
-      promptSectionRef.value,
+      detailSectionRef.value,
       { boxShadow: '0 0 0 0 rgba(255, 107, 138, 0)', backgroundColor: 'rgba(255, 250, 252, 0)' },
       {
         boxShadow: '0 0 0 12px rgba(255, 107, 138, 0.35)',
@@ -523,9 +500,7 @@ async function focusKoEditor(): Promise<void> {
       }
     );
   }
-  if (promptKoRef.value) {
-    promptKoRef.value.focus();
-  }
+  detailTextareaRef.value?.focus();
 }
 
 function queuePromptPreview(): void {
@@ -631,6 +606,21 @@ function setActive(): void {
         </div>
       </div>
 
+      <!-- Detail Change -->
+      <div class="panel-section" ref="detailSectionRef">
+        <label class="panel-label">
+          <Star class="panel-label-icon" />
+          디테일 변경 (선택)
+        </label>
+        <textarea
+          ref="detailTextareaRef"
+          v-model="form.additionalDetail"
+          class="panel-textarea"
+          rows="2"
+          placeholder="예: 질감/소품/표정 등 추가 지시사항"
+        ></textarea>
+      </div>
+
       <!-- Narrative Prompt -->
       <div class="panel-section" ref="promptSectionRef">
         <div class="panel-label-row">
@@ -657,8 +647,12 @@ function setActive(): void {
             </button>
           </div>
         </div>
-        <p class="panel-subtext">
-          {{ form.promptLang === 'EN' ? '원본(편집 가능)' : '번역(수정 가능)' }}
+        <p
+          class="panel-subtext panel-tooltip"
+          data-tooltip="서술 프롬프트는 읽기 전용입니다. 한글 수정은 디테일 변경에서 가능합니다."
+        >
+          {{ form.promptLang === 'EN' ? '원본(읽기 전용)' : '번역(읽기 전용)' }}
+          <span class="panel-tooltip__icon">?</span>
         </p>
         <div v-if="form.promptLang === 'EN'">
           <textarea
@@ -666,28 +660,16 @@ function setActive(): void {
             class="panel-textarea panel-textarea--prompt"
             rows="4"
             placeholder="예: A lone traveler stands at the edge of a foggy cliff, wind lifting their coat."
+            readonly
           ></textarea>
         </div>
         <div v-else class="panel-translation-block">
           <textarea
-            ref="promptKoRef"
             v-model="form.promptKo"
             class="panel-textarea panel-textarea--prompt"
             rows="4"
-            @input="markKoDirty"
+            readonly
           ></textarea>
-          <div class="panel-prompt-actions">
-            <button
-              class="panel-btn panel-btn--success panel-btn--sync"
-              :class="{ 'panel-btn--sync--muted': !isKoOutOfSync }"
-              :disabled="isRewriting || !form.promptKo || !isKoOutOfSync"
-              @click="rewritePrompt"
-            >
-              <Loader2 v-if="isRewriting" class="panel-btn-icon panel-btn-icon--spin" />
-              <RefreshCw v-else class="panel-btn-icon" />
-              영어로 반영
-            </button>
-          </div>
         </div>
       </div>
 
@@ -738,15 +720,12 @@ function setActive(): void {
           >
             {{ isFinalEditing ? '편집 완료' : '영문 직접 편집' }}
           </button>
-          <button class="panel-btn panel-btn--text" @click="focusKoEditor">
-            한국어로 편집
+          <button class="panel-btn panel-btn--text" @click="focusDetailEditor">
+            한글 편집
           </button>
         </div>
 
         <div class="panel-prompt-actions panel-prompt-actions--right">
-          <span v-if="isKoOutOfSync" class="panel-subtext">
-            영어 반영이 필요합니다.
-          </span>
           <button class="panel-btn panel-btn--text" :disabled="isGeneratingPrompt || isGeneratingImage" @click="generatePrompt">
             <Loader2 v-if="isGeneratingPrompt" class="panel-btn-icon panel-btn-icon--spin" />
             <RefreshCw v-else class="panel-btn-icon" />
@@ -755,7 +734,7 @@ function setActive(): void {
           <button
             v-if="!isPromptApproved"
             class="panel-btn panel-btn--success"
-            :disabled="isGeneratingPrompt || isGeneratingImage || isKoOutOfSync"
+            :disabled="isGeneratingPrompt || isGeneratingImage"
             @click="approvePrompt"
           >
             <Check class="panel-btn-icon" /> 승인

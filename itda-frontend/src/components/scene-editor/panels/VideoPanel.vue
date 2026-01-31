@@ -12,14 +12,13 @@ import { useSceneNodeStore } from '../../../stores/sceneNode';
 import { useUIStore } from '../../../stores/ui';
 import { useNodeGeneration } from '../../../composables/useNodeGeneration';
 import { useHelpPopover } from '../../../composables/useHelpPopover';
-import { Video, Repeat, Move, Timer, Text, FileText, Sparkles, Check, RefreshCw, Target, ZoomIn, ZoomOut, ArrowRight, ArrowUp, Circle, Loader2 } from 'lucide-vue-next';
+import { Video, Repeat, Move, Timer, FileText, Sparkles, Check, RefreshCw, Target, ZoomIn, ZoomOut, ArrowRight, ArrowUp, Circle, Loader2, Star } from 'lucide-vue-next';
 import { gsap } from 'gsap';
 import { resolveCameraMotionKey } from '../../../utils/nodeSettings';
 import {
   DEFAULT_VIDEO_CAMERA_MOTION,
   DEFAULT_VIDEO_DURATION,
 } from '../../../utils/nodeDefaults';
-import { aiService } from '../../../services';
 
 interface Props {
   node: VueFlowNode<VideoNodeData>;
@@ -47,10 +46,9 @@ const form = ref({
   promptLang: 'EN' as 'EN' | 'KO',
 });
 
-const koDirty = ref(false);
-const lastSyncedKo = ref('');
 const promptSectionRef = ref<HTMLElement | null>(null);
-const promptKoRef = ref<HTMLTextAreaElement | null>(null);
+const detailSectionRef = ref<HTMLElement | null>(null);
+const detailTextareaRef = ref<HTMLTextAreaElement | null>(null);
 const isFinalEditing = ref(false);
 let promptPreviewTimeout: ReturnType<typeof setTimeout> | null = null;
 
@@ -118,9 +116,9 @@ const isPromptGenerated = computed(
   () => hasPromptContent.value || data.value?.promptStatus !== PromptStatus.DRAFT
 );
 const isPromptApproved = computed(() => data.value?.promptStatus === PromptStatus.APPROVED);
-const isKoOutOfSync = computed(() => koDirty.value);
 const isSucceeded = computed(() => data.value?.jobStatus === JobStatus.SUCCEEDED);
 const isConfirmed = computed(() => data.value?.isConfirmed ?? false);
+const promptOverride = computed(() => form.value.promptEnFinalOverride.trim());
 const isStartShotReady = computed(() => {
   const start = startShotData.value as { jobStatus?: string; imageUrl?: string | null; thumbnailUrl?: string | null } | undefined;
   const hasImage = Boolean(start?.thumbnailUrl || start?.imageUrl);
@@ -189,6 +187,7 @@ const {
   getPromptPayload: () => ({
     nodeType: 'VIDEO',
     sceneOneLine: buildVideoSceneOneLine(),
+    prompt: '',
     cameraMotion: form.value.cameraMotion,
     duration: normalizeDuration(form.value.duration),
     motionDescription: form.value.motionDescription,
@@ -200,6 +199,7 @@ const {
     prompt: result.promptEnBase,
     promptKo: result.promptKo,
   }),
+  getImproveInstruction: () => form.value.motionDescription,
   getApprovedUpdate: () => ({
     prompt: form.value.prompt,
     promptKo: form.value.promptKo,
@@ -214,8 +214,7 @@ const {
       ? Number(data.value.endShotId)
       : null,
   }),
-  getPromptOverride: () =>
-    form.value.usePromptOverride ? form.value.promptEnFinalOverride : '',
+  getPromptOverride: () => promptOverride.value,
   getPromptPreviewPayload: () => ({
     prompt: form.value.prompt,
     settings: {
@@ -227,7 +226,7 @@ const {
         ? Number(data.value.endShotId)
         : null,
     },
-    promptEnFinalOverride: form.value.usePromptOverride ? form.value.promptEnFinalOverride : '',
+    promptEnFinalOverride: promptOverride.value,
   }),
   onPromptPreview: (result) => ({
     promptEnFinal: result.promptEnFinal,
@@ -275,6 +274,9 @@ function buildVideoSceneOneLine(): string {
   if (startShotData.value?.prompt) {
     parts.push(`shotPrompt: ${startShotData.value.prompt}`);
   }
+  if (form.value.motionDescription) {
+    parts.push(`detail: ${form.value.motionDescription}`);
+  }
   return parts.join(', ');
 }
 
@@ -292,8 +294,6 @@ watch(() => props.node.id, () => {
     usePromptOverride: Boolean(data.value.promptEnFinalOverride),
     promptLang: 'EN',
   };
-  koDirty.value = false;
-  lastSyncedKo.value = form.value.promptKo;
   isFinalEditing.value = false;
   clearError();
 }, { immediate: true });
@@ -314,8 +314,6 @@ watch(
     const normalized = nextPromptKo ?? '';
     if (normalized !== form.value.promptKo) {
       form.value.promptKo = normalized;
-      lastSyncedKo.value = normalized;
-      koDirty.value = false;
     }
   }
 );
@@ -361,20 +359,12 @@ watch(
 );
 
 watch(
-  () => form.value.promptLang,
-  (next, prev) => {
-    if (prev === 'KO' && next === 'EN' && koDirty.value) {
-      rewritePrompt();
-    }
-  }
-);
-
-watch(
   () => [
     form.value.prompt,
     form.value.promptKo,
     form.value.promptEnFinalOverride,
     form.value.usePromptOverride,
+    form.value.motionDescription,
   ],
   () => {
     if (!data.value) return;
@@ -384,6 +374,9 @@ watch(
     }
     if (form.value.promptKo !== (data.value.promptKo ?? '')) {
       updates.promptKo = form.value.promptKo;
+    }
+    if (form.value.motionDescription !== (data.value.motionDescription ?? '')) {
+      updates.motionDescription = form.value.motionDescription;
     }
     const nextOverride = form.value.usePromptOverride ? form.value.promptEnFinalOverride : '';
     if (nextOverride !== (data.value.promptEnFinalOverride ?? '')) {
@@ -433,28 +426,6 @@ function handleEndShotChange(event: Event): void {
   nodeStore.setEndShot(selected);
 }
 
-const isRewriting = ref(false);
-
-async function rewritePrompt(): Promise<void> {
-  if (!form.value.promptKo) return;
-  if (isRewriting.value) return;
-  const sourceKo = form.value.promptKo;
-  isRewriting.value = true;
-  try {
-    const result = await aiService.rewritePrompt(form.value.promptKo);
-    if (result.promptEnBase && result.promptEnBase.trim()) {
-      form.value.prompt = result.promptEnBase;
-      koDirty.value = false;
-      lastSyncedKo.value = sourceKo;
-      queuePromptPreview();
-    }
-  } catch (error) {
-    console.error('Failed to rewrite prompt:', error);
-  } finally {
-    isRewriting.value = false;
-  }
-}
-
 function toggleFinalEditing(): void {
   if (!form.value.usePromptOverride) {
     form.value.usePromptOverride = true;
@@ -470,17 +441,10 @@ function toggleFinalEditing(): void {
   isFinalEditing.value = !isFinalEditing.value;
 }
 
-function markKoDirty(): void {
-  if (form.value.promptKo === lastSyncedKo.value) {
-    koDirty.value = false;
-    return;
-  }
-  koDirty.value = true;
-}
-
 function queuePromptPreview(): void {
   if (!form.value.prompt.trim()) return;
   if (form.value.usePromptOverride) return;
+  if (/[ㄱ-ㅎㅏ-ㅣ가-힣]/.test(form.value.prompt)) return;
   if (promptPreviewTimeout) clearTimeout(promptPreviewTimeout);
   promptPreviewTimeout = setTimeout(() => {
     promptPreviewTimeout = null;
@@ -488,14 +452,13 @@ function queuePromptPreview(): void {
   }, 600);
 }
 
-async function focusKoEditor(): Promise<void> {
-  form.value.promptLang = 'KO';
+async function focusDetailEditor(): Promise<void> {
   await nextTick();
-  if (promptSectionRef.value) {
-    const container = promptSectionRef.value.closest('.base-panel__content') as HTMLElement | null;
+  if (detailSectionRef.value) {
+    const container = detailSectionRef.value.closest('.base-panel__content') as HTMLElement | null;
     if (container) {
       const containerRect = container.getBoundingClientRect();
-      const sectionRect = promptSectionRef.value.getBoundingClientRect();
+      const sectionRect = detailSectionRef.value.getBoundingClientRect();
       const currentScroll = container.scrollTop;
       const offset = sectionRect.top - containerRect.top;
       const centeredOffset = (container.clientHeight - sectionRect.height) / 2;
@@ -504,11 +467,11 @@ async function focusKoEditor(): Promise<void> {
       const targetScroll = Math.min(Math.max(0, rawTarget), maxScroll);
       gsap.to(container, { scrollTop: targetScroll, duration: 0.45, ease: 'power2.out' });
     } else {
-      promptSectionRef.value.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      detailSectionRef.value.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
-    gsap.killTweensOf(promptSectionRef.value);
+    gsap.killTweensOf(detailSectionRef.value);
     gsap.fromTo(
-      promptSectionRef.value,
+      detailSectionRef.value,
       { boxShadow: '0 0 0 0 rgba(255, 107, 138, 0)', backgroundColor: 'rgba(255, 250, 252, 0)' },
       {
         boxShadow: '0 0 0 12px rgba(255, 107, 138, 0.35)',
@@ -521,9 +484,7 @@ async function focusKoEditor(): Promise<void> {
       }
     );
   }
-  if (promptKoRef.value) {
-    promptKoRef.value.focus();
-  }
+  detailTextareaRef.value?.focus();
 }
 
 function toggleConfirm(): void {
@@ -560,8 +521,8 @@ function handleGenerateVideo(): void {
     notifyBlocked('프롬프트 승인 필요', '승인 후 영상을 생성할 수 있습니다.');
     return;
   }
-  if (isKoOutOfSync.value) {
-    notifyBlocked('영어 반영 필요', '한국어 수정 내용을 영어에 반영해 주세요.');
+  if (form.value.usePromptOverride && !promptOverride.value) {
+    notifyBlocked('영문 직접 편집 필요', '영문 직접 편집 내용이 비어 있습니다.');
     return;
   }
   generateVideo();
@@ -652,17 +613,24 @@ function handleGenerateVideo(): void {
         </select>
       </div>
 
-      <!-- Motion Description -->
-      <div class="panel-section">
+      <!-- Detail Change -->
+      <div class="panel-section" ref="detailSectionRef">
         <label class="panel-label">
-          <Text class="panel-label-icon" />
-          모션 설명 (선택)
+          <Star class="panel-label-icon" />
+          디테일 변경 (선택)
+          <span
+            class="panel-tooltip"
+            data-tooltip="연예인/실존 인물 이름은 직접 언급하지 말아주세요."
+          >
+            <span class="panel-tooltip__icon">?</span>
+          </span>
         </label>
         <textarea
+          ref="detailTextareaRef"
           v-model="form.motionDescription"
           class="panel-textarea"
           rows="2"
-          placeholder="예: 우주인이 창밖을 바라보다 고개를 돌린다"
+          placeholder="예: 동작 흐름/세부 분위기/소품 등 추가 지시사항"
         ></textarea>
       </div>
 
@@ -692,8 +660,12 @@ function handleGenerateVideo(): void {
             </button>
           </div>
         </div>
-        <p class="panel-subtext">
-          {{ form.promptLang === 'EN' ? '원본(편집 가능)' : '번역(수정 가능)' }}
+        <p
+          class="panel-subtext panel-tooltip"
+          data-tooltip="서술 프롬프트는 읽기 전용입니다. 한글 수정은 디테일 변경에서 가능합니다."
+        >
+          {{ form.promptLang === 'EN' ? '원본(읽기 전용)' : '번역(읽기 전용)' }}
+          <span class="panel-tooltip__icon">?</span>
         </p>
         <div v-if="form.promptLang === 'EN'">
           <textarea
@@ -701,28 +673,16 @@ function handleGenerateVideo(): void {
             class="panel-textarea panel-textarea--prompt"
             rows="4"
             placeholder="예: The camera glides toward the character as the city lights blur."
+            readonly
           ></textarea>
         </div>
         <div v-else class="panel-translation-block">
           <textarea
-            ref="promptKoRef"
             v-model="form.promptKo"
             class="panel-textarea panel-textarea--prompt"
             rows="4"
-            @input="markKoDirty"
+            readonly
           ></textarea>
-          <div class="panel-prompt-actions">
-            <button
-              class="panel-btn panel-btn--success panel-btn--sync"
-              :class="{ 'panel-btn--sync--muted': !isKoOutOfSync }"
-              :disabled="isRewriting || !form.promptKo || !isKoOutOfSync"
-              @click="rewritePrompt"
-            >
-              <Loader2 v-if="isRewriting" class="panel-btn-icon panel-btn-icon--spin" />
-              <RefreshCw v-else class="panel-btn-icon" />
-              영어로 반영
-            </button>
-          </div>
         </div>
       </div>
 
@@ -768,15 +728,12 @@ function handleGenerateVideo(): void {
           >
             {{ isFinalEditing ? '편집 완료' : '영문 직접 편집' }}
           </button>
-          <button class="panel-btn panel-btn--text" @click="focusKoEditor">
-            한국어로 편집
+          <button class="panel-btn panel-btn--text" @click="focusDetailEditor">
+            한글 편집
           </button>
         </div>
 
         <div class="panel-prompt-actions panel-prompt-actions--right">
-          <span v-if="isKoOutOfSync" class="panel-subtext">
-            영어 반영이 필요합니다.
-          </span>
           <button class="panel-btn panel-btn--text" :disabled="isGeneratingPrompt || isGeneratingVideo" @click="generatePrompt">
             <Loader2 v-if="isGeneratingPrompt" class="panel-btn-icon panel-btn-icon--spin" />
             <RefreshCw v-else class="panel-btn-icon" />
@@ -785,7 +742,7 @@ function handleGenerateVideo(): void {
           <button
             v-if="!isPromptApproved"
             class="panel-btn panel-btn--success"
-            :disabled="isGeneratingPrompt || isGeneratingVideo || isKoOutOfSync"
+            :disabled="isGeneratingPrompt || isGeneratingVideo"
             @click="approvePrompt"
           >
             <Check class="panel-btn-icon" /> 승인
@@ -801,11 +758,11 @@ function handleGenerateVideo(): void {
 
     <template #footer>
       <div class="panel-actions panel-actions--footer">
-        <button
-          class="panel-btn panel-btn--primary panel-btn--full"
-          :disabled="isGeneratingVideo || isGeneratingPrompt || isKoOutOfSync"
-          @click="handleGenerateVideo"
-        >
+      <button
+        class="panel-btn panel-btn--primary panel-btn--full"
+        :disabled="isGeneratingVideo || isGeneratingPrompt"
+        @click="handleGenerateVideo"
+      >
           <Video class="panel-btn-icon" />
           영상 생성
         </button>

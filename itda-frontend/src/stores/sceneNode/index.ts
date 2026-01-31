@@ -630,6 +630,7 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
             imageUrl: null,
             thumbnailUrl: null,
             prompt: '',
+            additionalDetail: '',
             filmLook: DEFAULT_MASTER_FILM_LOOK,
             style: DEFAULT_MASTER_STYLE,
             timeOfDay: DEFAULT_MASTER_TIME_OF_DAY,
@@ -679,6 +680,7 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
             imageUrl: null,
             thumbnailUrl: null,
             prompt: '',
+            additionalDetail: '',
             layout: DEFAULT_GRID_LAYOUT,
             shotTypes: [...DEFAULT_GRID_SHOT_TYPES],
             compositionHint: '',
@@ -1077,6 +1079,7 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
             const timeValue = (settings.timeOfDayKey ?? settings.timeOfDay) as string | undefined;
             const moodValue = (settings.moodKey ?? settings.mood) as string | undefined;
             const objectIdsRaw = (settings.objectIds ?? settings.objects) as unknown;
+            const detailKo = settings.detailKo as string | undefined;
 
             masterData.filmLook = resolveFilmLookLabel(filmLookValue) || masterData.filmLook || DEFAULT_MASTER_FILM_LOOK;
             masterData.style = resolveStyleLabel(styleValue) || masterData.style;
@@ -1087,6 +1090,9 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
                     .map((item) => toFiniteNumber(item as string | number))
                     .filter((item): item is number => item !== null);
             }
+            if (detailKo !== undefined) {
+                masterData.additionalDetail = detailKo ?? '';
+            }
             return;
         }
 
@@ -1096,6 +1102,7 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
             const shotTypesRaw = settings.shotTypes as string[] | undefined;
             const compositionHint =
                 (settings.compositionHintKo ?? settings.compositionHint) as string | undefined;
+            const detailKo = settings.detailKo as string | undefined;
 
             if (layoutValue) gridData.layout = layoutValue as StoryboardGridNodeData['layout'];
             if (shotTypesRaw?.length) {
@@ -1103,6 +1110,9 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
             }
             if (compositionHint !== undefined) {
                 gridData.compositionHint = compositionHint ?? '';
+            }
+            if (detailKo !== undefined) {
+                gridData.additionalDetail = detailKo ?? '';
             }
             return;
         }
