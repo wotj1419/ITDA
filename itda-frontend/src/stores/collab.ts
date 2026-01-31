@@ -83,6 +83,7 @@ export const useCollabStore = defineStore('collab', () => {
     const localParticipant = computed<CollabParticipant>(() => ({
         odps: localUserId.value,
         name: authStore.user?.name || 'Guest',
+        avatarUrl: authStore.user?.profileImageUrl ?? undefined,
         isMuted: isMuted.value,
         isVideoOff: isVideoOff.value,
         isScreenSharing: isScreenSharing.value,
@@ -636,22 +637,49 @@ export const useCollabStore = defineStore('collab', () => {
     }
 
     function handlePresenceMessage(message: any) {
+        const type = message?.type;
+
+        if (type === 'SNAPSHOT') {
+            if (message?.projectId && currentProjectId.value && Number(message.projectId) !== currentProjectId.value) {
+                return;
+            }
+            const snapshot = Array.isArray(message?.participants) ? message.participants : [];
+            const existing = new Map(participants.value.map((participant) => [participant.odps, participant]));
+            const next = snapshot
+                .map(mapPresenceToParticipant)
+                .filter((participant): participant is CollabParticipant => !!participant)
+                .map((participant) => {
+                    const prev = existing.get(participant.odps);
+                    return prev ? { ...prev, ...participant } : participant;
+                });
+            participants.value = next;
+            return;
+        }
+
         const userId = message?.userId;
         if (!userId) return;
         const peerId = String(userId);
-        const type = message?.type;
         if (type === 'LEAVE') {
             removeParticipant(peerId);
             return;
         }
-        addParticipant(peerId, {
+        const participant = mapPresenceToParticipant(message);
+        if (!participant) return;
+        addParticipant(peerId, participant);
+    }
+
+    function mapPresenceToParticipant(message: any): CollabParticipant | null {
+        const userId = message?.userId;
+        if (!userId) return null;
+        const peerId = String(userId);
+        return {
             odps: peerId,
             name: message?.name ?? 'Guest',
             avatarUrl: message?.profileImageUrl ?? undefined,
             currentLocation: message?.location ?? '',
             sceneId: message?.sceneId ?? null,
             nodeId: message?.nodeId ?? null,
-        });
+        };
     }
 
     // ================================
