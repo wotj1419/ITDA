@@ -14,6 +14,7 @@ export interface PeerConnectionConfig {
 export interface MediaStreamConfig {
     video: boolean;
     audio: boolean;
+    audioDeviceId?: string | null;
 }
 
 export interface PeerConnectionCallbacks {
@@ -52,14 +53,60 @@ class PeerConnectionService {
                 this.localStream.getTracks().forEach(track => track.stop());
             }
 
+            const audioConstraint = config.audio
+                ? (config.audioDeviceId
+                    ? { deviceId: { exact: config.audioDeviceId } }
+                    : true)
+                : false;
             this.localStream = await navigator.mediaDevices.getUserMedia({
                 video: config.video,
-                audio: config.audio,
+                audio: audioConstraint,
             });
             return this.localStream;
         } catch (error) {
             console.error('[PeerConnection] Failed to get local stream:', error);
             return null;
+        }
+    }
+
+    /**
+     * Switch microphone (audio input device)
+     */
+    async switchMicrophone(deviceId: string | null | undefined): Promise<MediaStream | null> {
+        if (!deviceId) return this.localStream;
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({
+                audio: { deviceId: { exact: deviceId } },
+                video: false,
+            });
+            const newTrack = stream.getAudioTracks()[0];
+            if (!newTrack) return this.localStream;
+
+            if (!this.localStream) {
+                this.localStream = new MediaStream();
+            }
+
+            // Replace audio track in local stream
+            this.localStream.getAudioTracks().forEach((track) => {
+                track.stop();
+                this.localStream?.removeTrack(track);
+            });
+            this.localStream.addTrack(newTrack);
+
+            // Replace audio track in peer connections
+            this.peers.forEach((pc) => {
+                const sender = pc.getSenders().find(s => s.track?.kind === 'audio');
+                if (sender) {
+                    sender.replaceTrack(newTrack);
+                } else {
+                    pc.addTrack(newTrack, this.localStream!);
+                }
+            });
+
+            return this.localStream;
+        } catch (error) {
+            console.error('[PeerConnection] Failed to switch microphone:', error);
+            return this.localStream;
         }
     }
 
