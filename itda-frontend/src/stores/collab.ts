@@ -35,6 +35,9 @@ export const useCollabStore = defineStore('collab', () => {
     const floatingBarResetToken = ref(0);
     const speakingMap = reactive(new Map<string, boolean>());
     const localStream = ref<MediaStream | null>(null);
+    const rtcJoinPending = ref(false);
+    const rtcJoined = ref(false);
+    const rtcPeers = reactive(new Set<string>());
 
     // Local User State
     const isMuted = ref(false);
@@ -197,19 +200,22 @@ export const useCollabStore = defineStore('collab', () => {
                 socketManager.connect();
             }
 
-        // 2. Subscribe to room (signaling)
+        // 2. Subscribe to room (legacy signaling)
         socketManager.subscribeToRoom(roomId.value);
         // 2-1. Subscribe to chat (projectId)
         socketManager.subscribeToChat(String(nextProjectId), handleChatMessage);
         // 2-2. Subscribe to presence (projectId)
         socketManager.subscribeToPresence(String(nextProjectId), handlePresenceMessage);
+        // 2-3. Subscribe to RTC signaling + errors
+        socketManager.subscribeToRTC(String(nextProjectId), handleRtcMessage);
+        socketManager.subscribeToErrors(handleRtcError);
 
             // 3. Setup WebRTC Callbacks (Prepare for later)
-            peerConnectionService.setCallbacks({
-                onTrack: handleRemoteTrack,
-                onIceCandidate: (candidate, peerId) => handleIceCandidate(peerId, candidate),
-                onConnectionStateChange: handleConnectionStateChange,
-            });
+        peerConnectionService.setCallbacks({
+            onTrack: handleRemoteTrack,
+            onIceCandidate: (candidate, peerId) => handleLocalIceCandidate(peerId, candidate),
+            onConnectionStateChange: handleConnectionStateChange,
+        });
 
             // 4. Broadcast Join + Presence after connection is ready
             socketManager.onConnected(() => {
@@ -231,7 +237,7 @@ export const useCollabStore = defineStore('collab', () => {
      */
     async function enableMedia() {
         if (!roomId.value || status.value !== 'connected') return;
-        if (isMediaConnected.value) {
+        if (isMediaConnected.value || rtcJoinPending.value || rtcJoined.value) {
             isAutoStarting.value = false;
             return;
         }
@@ -252,35 +258,19 @@ export const useCollabStore = defineStore('collab', () => {
                 await startSpeakingMonitor(localUserId.value, stream);
             }
 
-            // 2. Initialize Peer Connections for existing participants
-            // (In a mesh, we need to offer to everyone who is already here? 
-            //  Or just wait for them? Ideally we offer to existing peers)
-            //  The current logic relied on 'join' signal trigger. 
-            //  Since we already joined, we might need to send a 'media_ready' signal?
-            //  Or just create offers now.
-
-            // Simplified: Just iterate participants and offer if they are media ready?
-            // For now, let's assume standard mesh: create offer to all existing.
-            participants.value.forEach(async (p) => {
-                if (p.odps && p.odps !== localParticipant.value.odps) {
-                    peerConnectionService.createPeerConnection(p.odps);
-                    const offer = await peerConnectionService.createOffer(p.odps);
-                    if (offer) {
-                        socketManager.sendSignal({
-                            type: 'offer',
-                            targetId: p.odps,
-                            payload: offer
-                        });
-                    }
-                }
+            // 2. Join RTC room (server will return JOIN_ACK with participant list)
+            if (currentProjectId.value === null) {
+                rtcJoinPending.value = false;
+                return;
+            }
+            rtcJoinPending.value = true;
+            socketManager.sendRTC(String(currentProjectId.value), {
+                type: 'JOIN',
+                projectId: currentProjectId.value,
             });
-
-            isMediaConnected.value = true;
-            isMuted.value = false; // Auto-unmute on connect? Or keep muted? User said "Live" button. Usually starts unmuted.
-            peerConnectionService.toggleMute(false);
-
         } catch (e) {
             console.error('Failed to enable media:', e);
+            rtcJoinPending.value = false;
         } finally {
             isAutoStarting.value = false;
         }
@@ -290,12 +280,12 @@ export const useCollabStore = defineStore('collab', () => {
      * Disable Media - "End Call"
      */
     function disableMedia() {
-        if (!isMediaConnected.value) return;
+        if (!isMediaConnected.value && !rtcJoinPending.value && !rtcJoined.value) return;
 
-        // Broadcast Media Stop to peers so they can clean up
-        if (roomId.value) {
-            socketManager.sendSignal({
-                type: 'media_stop',
+        if (rtcJoined.value && currentProjectId.value !== null) {
+            socketManager.sendRTC(String(currentProjectId.value), {
+                type: 'LEAVE',
+                projectId: currentProjectId.value,
             });
         }
 
@@ -307,6 +297,9 @@ export const useCollabStore = defineStore('collab', () => {
         isMuted.value = false;
         localStream.value = null;
         isPanelOpen.value = false;
+        rtcJoinPending.value = false;
+        rtcJoined.value = false;
+        rtcPeers.clear();
         stopSpeakingMonitor(localUserId.value);
     }
 
@@ -329,6 +322,8 @@ export const useCollabStore = defineStore('collab', () => {
         if (currentProjectId.value !== null) {
             socketManager.unsubscribeChat(String(currentProjectId.value));
             socketManager.unsubscribePresence(String(currentProjectId.value));
+            socketManager.unsubscribeRTC();
+            socketManager.unsubscribeErrors();
         }
         disableMedia(); // Handles WebRTC cleanup
         isFloatingBarVisible.value = false;
@@ -394,7 +389,7 @@ export const useCollabStore = defineStore('collab', () => {
                 await handleAnswer(senderId, payload);
                 break;
             case 'candidate':
-                await handleIceCandidate(senderId, payload);
+                await handleRemoteIceCandidate(senderId, payload);
                 break;
             case 'cursor':
                 handleCursorUpdate(senderId, payload);
@@ -406,6 +401,102 @@ export const useCollabStore = defineStore('collab', () => {
                 handleStateUpdate(senderId, payload);
                 break;
         }
+    }
+
+    async function handleRtcMessage(message: any) {
+        const type = String(message?.type || '').toUpperCase();
+        const senderId = message?.senderId != null ? String(message.senderId) : '';
+
+        switch (type) {
+            case 'JOIN_ACK':
+                await handleRtcJoinAck(message);
+                break;
+            case 'JOIN':
+                handleRtcJoin(senderId, message);
+                break;
+            case 'LEAVE':
+                handleRtcLeave(senderId);
+                break;
+            case 'MUTE':
+                handleRtcMute(senderId, message?.muted);
+                break;
+            case 'OFFER':
+                if (message?.sdp) {
+                    await handleOffer(senderId, message.sdp);
+                }
+                break;
+            case 'ANSWER':
+                if (message?.sdp) {
+                    await handleAnswer(senderId, message.sdp);
+                }
+                break;
+            case 'CANDIDATE':
+                if (message?.candidate) {
+                    await handleRemoteIceCandidate(senderId, message.candidate);
+                }
+                break;
+            default:
+                break;
+        }
+    }
+
+    function handleRtcError(error: any) {
+        const code = error?.code ?? 'RTC_ERROR';
+        const message = error?.message ?? 'RTC error';
+        console.warn('[RTC] Error:', code, message);
+        alert(message);
+        cleanupRtcState();
+        isAutoStarting.value = false;
+    }
+
+    async function handleRtcJoinAck(message: any) {
+        if (!rtcJoinPending.value && !rtcJoined.value) return;
+        if (rtcJoined.value) return;
+        rtcJoinPending.value = false;
+        rtcJoined.value = true;
+        isMediaConnected.value = true;
+        isMuted.value = false;
+        peerConnectionService.toggleMute(false);
+
+        const participantsList = Array.isArray(message?.participants) ? message.participants : [];
+        for (const participant of participantsList) {
+            const peerId = participant?.userId != null ? String(participant.userId) : null;
+            if (!peerId || peerId === localParticipant.value.odps) continue;
+
+            rtcPeers.add(peerId);
+            updateParticipantMute(peerId, participant?.muted);
+            peerConnectionService.createPeerConnection(peerId);
+            const offer = await peerConnectionService.createOffer(peerId);
+            if (offer && currentProjectId.value !== null) {
+                socketManager.sendRTC(String(currentProjectId.value), {
+                    type: 'OFFER',
+                    projectId: currentProjectId.value,
+                    targetId: Number(peerId),
+                    sdp: offer,
+                });
+            }
+        }
+    }
+
+    function handleRtcJoin(peerId: string, payload: any) {
+        if (!peerId || peerId === localParticipant.value.odps) return;
+        rtcPeers.add(peerId);
+        updateParticipantMute(peerId, payload?.muted);
+    }
+
+    function handleRtcLeave(peerId: string) {
+        if (!peerId) return;
+        rtcPeers.delete(peerId);
+        peerConnectionService.removePeer(peerId);
+        stopSpeakingMonitor(peerId);
+        const audio = document.getElementById(`audio-${peerId}`);
+        if (audio) audio.remove();
+        updateParticipantMute(peerId, undefined);
+    }
+
+    function handleRtcMute(peerId: string, muted: boolean | null | undefined) {
+        if (!peerId || muted == null) return;
+        updateParticipantMute(peerId, muted);
     }
 
     /**
@@ -459,11 +550,14 @@ export const useCollabStore = defineStore('collab', () => {
 
         const answer = await peerConnectionService.createAnswer(peerId);
         if (answer) {
-            socketManager.sendSignal({
-                type: 'answer',
-                targetId: peerId,
-                payload: answer
-            });
+            if (currentProjectId.value !== null) {
+                socketManager.sendRTC(String(currentProjectId.value), {
+                    type: 'ANSWER',
+                    projectId: currentProjectId.value,
+                    targetId: Number(peerId),
+                    sdp: answer,
+                });
+            }
         }
     }
 
@@ -478,7 +572,17 @@ export const useCollabStore = defineStore('collab', () => {
     /**
      * Handle Ice Candidate
      */
-    async function handleIceCandidate(peerId: string, candidate: RTCIceCandidateInit) {
+    function handleLocalIceCandidate(peerId: string, candidate: RTCIceCandidateInit) {
+        if (currentProjectId.value === null) return;
+        socketManager.sendRTC(String(currentProjectId.value), {
+            type: 'CANDIDATE',
+            projectId: currentProjectId.value,
+            targetId: Number(peerId),
+            candidate,
+        });
+    }
+
+    async function handleRemoteIceCandidate(peerId: string, candidate: RTCIceCandidateInit) {
         await peerConnectionService.addIceCandidate(peerId, candidate);
     }
 
@@ -716,6 +820,36 @@ export const useCollabStore = defineStore('collab', () => {
         if (audio) audio.remove();
     }
 
+    function updateParticipantMute(peerId: string, muted: boolean | undefined | null) {
+        if (!peerId) return;
+        const idx = participants.value.findIndex(p => p.odps === peerId);
+        if (idx === -1) return;
+        const next = muted == null ? undefined : muted;
+        const existing = participants.value[idx];
+        if (!existing) return;
+        participants.value[idx] = {
+            ...existing,
+            isMuted: next,
+        };
+    }
+
+    function cleanupRtcState() {
+        rtcPeers.forEach((peerId) => {
+            stopSpeakingMonitor(peerId);
+            const audio = document.getElementById(`audio-${peerId}`);
+            if (audio) audio.remove();
+        });
+        rtcPeers.clear();
+        peerConnectionService.closeAll();
+        isMediaConnected.value = false;
+        isMuted.value = false;
+        localStream.value = null;
+        rtcJoinPending.value = false;
+        rtcJoined.value = false;
+        isPanelOpen.value = false;
+        stopSpeakingMonitor(localUserId.value);
+    }
+
     function getOrAssignCursorColor(peerId: string): string {
         const existing = cursorColorByUser.get(peerId);
         if (existing) return existing;
@@ -732,13 +866,11 @@ export const useCollabStore = defineStore('collab', () => {
         isMuted.value = !isMuted.value;
         peerConnectionService.toggleMute(isMuted.value);
 
-        // Broadcast mute state to other participants (Backend spec: MUTE type)
-        if (roomId.value && isMediaConnected.value) {
-            socketManager.sendSignal({
+        if (isMediaConnected.value && currentProjectId.value !== null) {
+            socketManager.sendRTC(String(currentProjectId.value), {
                 type: 'MUTE',
-                payload: {
-                    muted: isMuted.value,
-                },
+                projectId: currentProjectId.value,
+                muted: isMuted.value,
             });
         }
 
