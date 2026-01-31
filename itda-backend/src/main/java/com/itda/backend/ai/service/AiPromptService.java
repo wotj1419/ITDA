@@ -81,7 +81,13 @@ public class AiPromptService {
         if (nodeType != null) {
             lines.add(switch (nodeType) {
                 case MASTER -> "Guide: opening establishing still frame; wide shot; include environment, layout, key props; no temporal progression or passing-by.";
-                case GRID -> "Guide: describe the shared scene moment; avoid sequencing; keep details consistent across panels.";
+                case GRID -> {
+                    String gridMode = safe(request == null ? null : request.gridMode());
+                    if (gridMode.equalsIgnoreCase("STORY_BEATS")) {
+                        yield "Guide: describe sequential still frames for timeline cuts; each panel is a frozen moment sampled every 2 seconds; keep details consistent across panels.";
+                    }
+                    yield "Guide: describe the shared scene moment; avoid sequencing; keep details consistent across panels.";
+                }
                 case SHOT -> "Guide: focus on a single frame with clear subject pose, gaze, hands, and foreground/background relation.";
                 case VIDEO -> "Guide: single continuous shot; describe a natural motion arc from start to end (no cuts).";
                 case SCENE_HEADER -> "Guide: summarize the scene context briefly.";

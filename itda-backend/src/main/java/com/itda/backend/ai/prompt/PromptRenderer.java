@@ -119,7 +119,7 @@ public class PromptRenderer {
         for (int i = 0; i < beatsKo.size(); i++) {
             translationInput.put("beat" + i, beatsKo.get(i));
         }
-        Map<String, String> translated = koEnTranslator.toEnglishOneSentenceMany(translationInput);
+        Map<String, String> translated = koEnTranslator.toEnglishMultiSentenceMany(translationInput);
         String continuityRulesEn = translated.getOrDefault("continuityRulesKo", "");
 
         String style = PresetFragments.styleFragment(read(settings, "styleKey"));
@@ -132,13 +132,18 @@ public class PromptRenderer {
         lines.add("Base content: " + requireEn(promptEnBase) + ".");
         lines.add("Panels 1.." + panelCount + " are timeline cuts (single still frames):");
         for (int i = 0; i < beatsKo.size(); i++) {
-            String beatEn = translated.getOrDefault("beat" + i, "");
-            lines.add((i + 1) + ") (" + formatTimelineRangeLabel(i) + ") " + safeOrNone(beatEn));
+            String beatEn = translated.getOrDefault("beat" + i, "").trim();
+            if (beatEn.isEmpty()) {
+                continue;
+            }
+            lines.add((i + 1) + ") (" + formatTimelineRangeLabel(i) + ") " + beatEn);
         }
         lines.add("Each panel is a single frozen moment with no transitions or motion blur.");
         lines.add("Keep continuity across panels with the same characters, outfits, lighting, and location.");
         lines.add("Rendered in a " + safeOrNone(filmLook) + " " + safeOrNone(style) + " look under " + safeOrNone(time) + " lighting with a " + safeOrNone(mood) + " feel.");
-        lines.add("Continuity rules: " + safeOrNone(continuityRulesEn) + ".");
+        if (!continuityRulesEn.isBlank()) {
+            lines.add("Continuity rules: " + ensurePeriod(continuityRulesEn));
+        }
         lines.add("No captions, no text, no watermark, no logo. Aspect ratio: " + safeOrNone(aspectRatio) + ".");
 
         return joinAndValidate(lines);
@@ -148,8 +153,10 @@ public class PromptRenderer {
         String aspectRatio = readString(settings, "aspectRatio");
         Map<String, String> translationInput = new LinkedHashMap<>();
         translationInput.put("detailKo", readString(settings, "detailKo"));
-        Map<String, String> translated = koEnTranslator.toEnglishOneSentenceMany(translationInput);
+        translationInput.put("gridCellCutKo", readString(settings, "gridCellCutKo"));
+        Map<String, String> translated = koEnTranslator.toEnglishMultiSentenceMany(translationInput);
         String detailEn = translated.getOrDefault("detailKo", "");
+        String gridCellCutEn = translated.getOrDefault("gridCellCutKo", "");
         Integer gridCellIndex = readInt(settings, "gridCellIndex");
 
         String shotTypeEn = PresetFragments.shotTypeEn(read(settings, "shotType"));
@@ -165,6 +172,9 @@ public class PromptRenderer {
         int cellNumberHuman = safeGridCellIndex + 1;
         lines.add("A " + safeOrNone(filmLook) + " " + safeOrNone(style) + " high-quality single cinematic frame based on storyboard cell #" + cellNumberHuman + ":");
         lines.add(requireEn(promptEnBase) + ".");
+        if (!safeOrNone(gridCellCutEn).equals(DEFAULT_NONE)) {
+            lines.add("Match the content and framing of grid cell #" + cellNumberHuman + ": " + ensurePeriod(gridCellCutEn));
+        }
         lines.add("Captured as a " + safeOrNone(shotTypeEn) + ", with the subject showing a " + safeOrNone(expressionEn) + " expression.");
         lines.add("Camera: lens and depth of field appropriate for the framing (e.g., 24-35mm wide/deep focus; 85mm close-up/shallow DoF).");
         lines.add("Lighting: " + safeOrNone(time) + ". Mood: " + safeOrNone(mood) + ".");
