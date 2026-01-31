@@ -35,6 +35,9 @@ export const useCollabStore = defineStore('collab', () => {
     const floatingBarResetToken = ref(0);
     const speakingMap = reactive(new Map<string, boolean>());
     const localStream = ref<MediaStream | null>(null);
+    const audioInputDevices = ref<MediaDeviceInfo[]>([]);
+    const selectedMicId = ref<string>(localStorage.getItem('collab:micId') ?? '');
+    const remoteVolumeMap = reactive(new Map<string, number>());
     const rtcJoinPending = ref(false);
     const rtcJoined = ref(false);
     const rtcPeers = reactive(new Set<string>());
@@ -168,6 +171,59 @@ export const useCollabStore = defineStore('collab', () => {
         speakingMap.delete(id);
     };
 
+    let deviceChangeBound = false;
+    const handleDeviceChange = () => {
+        void loadAudioInputDevices();
+    };
+
+    async function loadAudioInputDevices() {
+        if (!navigator?.mediaDevices?.enumerateDevices) return;
+        try {
+            const devices = await navigator.mediaDevices.enumerateDevices();
+            const inputs = devices.filter((device) => device.kind === 'audioinput');
+            audioInputDevices.value = inputs;
+
+            if (inputs.length === 0) {
+                selectedMicId.value = '';
+                return;
+            }
+
+            if (!selectedMicId.value || !inputs.some((device) => device.deviceId === selectedMicId.value)) {
+                selectedMicId.value = inputs[0]?.deviceId ?? '';
+            }
+
+            if (!deviceChangeBound && navigator.mediaDevices.addEventListener) {
+                navigator.mediaDevices.addEventListener('devicechange', handleDeviceChange);
+                deviceChangeBound = true;
+            } else if (!deviceChangeBound) {
+                navigator.mediaDevices.ondevicechange = handleDeviceChange;
+                deviceChangeBound = true;
+            }
+        } catch (error) {
+            console.warn('Failed to load audio input devices', error);
+        }
+    }
+
+    async function selectMicrophone(deviceId: string) {
+        selectedMicId.value = deviceId;
+        if (deviceId) {
+            localStorage.setItem('collab:micId', deviceId);
+        } else {
+            localStorage.removeItem('collab:micId');
+        }
+
+        if (!isMediaConnected.value || !rtcJoined.value) return;
+        const stream = await peerConnectionService.switchMicrophone(deviceId);
+        if (stream) {
+            localStream.value = stream;
+            stopSpeakingMonitor(localUserId.value);
+            await startSpeakingMonitor(localUserId.value, stream);
+            if (isMuted.value) {
+                peerConnectionService.toggleMute(true);
+            }
+        }
+    }
+
     // ================================
     // Actions: Room Management
     // ================================
@@ -195,6 +251,7 @@ export const useCollabStore = defineStore('collab', () => {
         localStorage.setItem(STORAGE_KEY, nextRoomId);
 
         try {
+            void loadAudioInputDevices();
             // 1. Connect WebSocket
             if (!socketManager.getClient().connected) {
                 socketManager.connect();
@@ -252,11 +309,16 @@ export const useCollabStore = defineStore('collab', () => {
 
         try {
             // 1. Get Local Stream
-            const stream = await peerConnectionService.getLocalStream({ video: false, audio: true });
+            const stream = await peerConnectionService.getLocalStream({
+                video: false,
+                audio: true,
+                audioDeviceId: selectedMicId.value || undefined,
+            });
             localStream.value = stream;
             if (stream) {
                 await startSpeakingMonitor(localUserId.value, stream);
             }
+            await loadAudioInputDevices();
 
             // 2. Join RTC room (server will return JOIN_ACK with participant list)
             if (currentProjectId.value === null) {
@@ -489,6 +551,7 @@ export const useCollabStore = defineStore('collab', () => {
         rtcPeers.delete(peerId);
         peerConnectionService.removePeer(peerId);
         stopSpeakingMonitor(peerId);
+        remoteVolumeMap.delete(peerId);
         const audio = document.getElementById(`audio-${peerId}`);
         if (audio) audio.remove();
         updateParticipantMute(peerId, undefined);
@@ -603,6 +666,7 @@ export const useCollabStore = defineStore('collab', () => {
             document.body.appendChild(audio);
         }
         audio.srcObject = stream;
+        audio.volume = getRemoteVolume(peerId);
         void startSpeakingMonitor(peerId, stream);
     }
 
@@ -814,6 +878,7 @@ export const useCollabStore = defineStore('collab', () => {
         participants.value = participants.value.filter(p => p.odps !== peerId);
         cursors.delete(peerId);
         cursorColorByUser.delete(peerId);
+        remoteVolumeMap.delete(peerId);
         stopSpeakingMonitor(peerId);
         // Cleanup audio
         const audio = document.getElementById(`audio-${peerId}`);
@@ -833,6 +898,20 @@ export const useCollabStore = defineStore('collab', () => {
         };
     }
 
+    function getRemoteVolume(peerId: string): number {
+        const volume = remoteVolumeMap.get(peerId);
+        return typeof volume === 'number' ? volume : 1;
+    }
+
+    function setRemoteVolume(peerId: string, volume: number) {
+        const clamped = Math.max(0, Math.min(1, volume));
+        remoteVolumeMap.set(peerId, clamped);
+        const audio = document.getElementById(`audio-${peerId}`) as HTMLAudioElement | null;
+        if (audio) {
+            audio.volume = clamped;
+        }
+    }
+
     function cleanupRtcState() {
         rtcPeers.forEach((peerId) => {
             stopSpeakingMonitor(peerId);
@@ -840,6 +919,7 @@ export const useCollabStore = defineStore('collab', () => {
             if (audio) audio.remove();
         });
         rtcPeers.clear();
+        remoteVolumeMap.clear();
         peerConnectionService.closeAll();
         isMediaConnected.value = false;
         isMuted.value = false;
@@ -993,11 +1073,14 @@ export const useCollabStore = defineStore('collab', () => {
         isVideoOff,
         isScreenSharing,
         localParticipant,
+        audioInputDevices,
+        selectedMicId,
         // Getters
         isConnected,
         hasUnreadMessages,
         participantCount,
         isSpeaking,
+        getRemoteVolume,
         // Actions
         joinRoom,
         leaveRoom,
@@ -1015,5 +1098,7 @@ export const useCollabStore = defineStore('collab', () => {
         updateCursor,
         updateLocation,
         rejoinIfNeeded,
+        selectMicrophone,
+        setRemoteVolume,
     };
 });
