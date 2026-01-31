@@ -203,13 +203,13 @@ export async function getJobStatus(jobId: number): Promise<JobStatusResponse> {
  * @param jobId 작업 ID
  * @param onProgress 진행 상태 콜백 (선택)
  * @param intervalMs 폴링 간격 (기본 2초)
- * @param maxAttempts 최대 시도 횟수 (기본 60회 = 2분)
+ * @param maxAttempts 최대 시도 횟수 (기본 90회 = 3분)
  */
 export async function pollJobUntilComplete(
     jobId: number,
     onProgress?: (status: JobStatusResponse) => void,
     intervalMs: number = 2000,
-    maxAttempts: number = 60
+    maxAttempts: number = 90
 ): Promise<JobStatusResponse> {
     let attempts = 0;
 

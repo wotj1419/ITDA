@@ -30,7 +30,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 @RequiredArgsConstructor
 public class VertexAiGeminiClient {
 
-    private static final long DEFAULT_TIMEOUT_MS = 8000;
+    private static final long DEFAULT_TIMEOUT_MS = 180000;
     private static final long SHUTDOWN_TIMEOUT_MS = 2000;
 
     private final GenAiClientProvider clientProvider;
