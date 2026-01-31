@@ -32,13 +32,13 @@ public class VideoActionPlanGenerator {
 
         return switch (durationSeconds) {
             case 4 -> normalizedBase
-                    + " Hold the start pose for about 1 second, transition smoothly,"
-                    + " and lock onto the end pose for the final second.";
+                    + " Hold the start pose for about 1 second, transition smoothly with ease-in/ease-out,"
+                    + " and settle into the end pose for the final second.";
             case 6 -> normalizedBase
-                    + " Hold the start pose briefly, transition through the middle,"
+                    + " Hold the start pose briefly, transition through the middle with easing,"
                     + " and settle into the end pose with a short steady hold.";
             case 8 -> normalizedBase
-                    + " Let the transition unfold gradually over most of the clip,"
+                    + " Let the transition unfold gradually over most of the clip with smooth easing,"
                     + " then arrive at the end pose and hold it steady.";
             default -> throw new BusinessException(ErrorCode.INVALID_REQUEST, "VIDEO duration must be 4, 6, or 8");
         };

@@ -240,7 +240,7 @@ public class PromptRenderer {
         lines.add("Generate a " + resolvedDuration + "-second single continuous shot video from the provided start image, with no cuts or time jumps.");
         if (hasEndFrame) {
             lines.add("The video must start exactly at the start image and end exactly at the provided end image (pose, framing, and composition must match).");
-            lines.add("Interpolate smoothly between the two keyframes with no sudden jumps or drifting from the target framing.");
+            lines.add("Interpolate smoothly between the two keyframes with continuous motion (ease-in/ease-out), no popping or sudden snaps, and no drifting from the target framing.");
         }
         lines.add(requireEn(actionPlanEn));
 
@@ -271,10 +271,10 @@ public class PromptRenderer {
 
     private String buildEndFrameTimingGuidance(int durationSeconds) {
         return switch (durationSeconds) {
-            case 4 -> "Timing: hold the start for ~1s, transition over ~2s, and hold the end pose for ~1s.";
-            case 6 -> "Timing: hold the start for ~1.5s, transition over ~3s, and hold the end pose for ~1.5s.";
-            case 8 -> "Timing: hold the start for ~2s, transition over ~4-5s, and hold the end pose for the final ~1.5-2s.";
-            default -> "Timing: hold the start briefly, transition smoothly, and end with a steady hold on the final pose.";
+            case 4 -> "Timing: hold the start for ~1s, ease through the transition over ~2s, and hold the end pose for ~1s.";
+            case 6 -> "Timing: hold the start for ~1.5s, ease through the transition over ~3s, and hold the end pose for ~1.5s.";
+            case 8 -> "Timing: hold the start for ~2s, ease through the transition over ~4-5s, and hold the end pose for the final ~1.5-2s.";
+            default -> "Timing: hold the start briefly, transition smoothly with easing, and end with a steady hold on the final pose.";
         };
     }
 
