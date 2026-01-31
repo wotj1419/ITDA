@@ -167,6 +167,7 @@ function handleWheel(e: WheelEvent) {
           <Card class="preview-card">
             <VideoPreview
               :thumbnail-url="timelineStore.orderedClips[0]?.thumbnailUrl"
+              :video-url="timelineStore.orderedClips[0]?.videoUrl"
               :current-time="0"
               :total-time="timelineStore.totalDuration"
             />
