@@ -71,6 +71,7 @@ const parentGridNode = computed(() =>
 );
 const parentGridData = computed(() => parentGridNode.value?.data as StoryboardGridNodeData | undefined);
 const gridLayout = computed(() => parentGridData.value?.layout || DEFAULT_GRID_LAYOUT);
+const parentGridMode = computed(() => parentGridData.value?.gridMode ?? 'SHOT_VARIATIONS');
 const gridCellCount = computed(() => {
   const match = gridLayout.value.match(/(\d+)x(\d+)/);
   if (!match) return 6;
@@ -80,6 +81,18 @@ const gridCellOptions = computed(() =>
   Array.from({ length: gridCellCount.value }, (_, index) => index)
 );
 const selectedGridCell = computed(() => data.value?.gridCellIndex ?? 0);
+const gridCellCutKo = computed(() => {
+  if (parentGridMode.value !== 'STORY_BEATS') return '';
+  const beats = parentGridData.value?.beats ?? [];
+  const index = data.value?.gridCellIndex ?? 0;
+  return (beats[index] ?? '').trim();
+});
+const gridCellShotTypeHint = computed(() => {
+  if (parentGridMode.value !== 'SHOT_VARIATIONS') return '';
+  const types = parentGridData.value?.shotTypes ?? [];
+  const index = data.value?.gridCellIndex ?? 0;
+  return (types[index] ?? '').trim();
+});
 const sceneHeaderData = computed(() =>
   nodeStore.nodes.find((node) => node.data?.type === NodeType.SCENE_HEADER)?.data
 );
@@ -146,6 +159,7 @@ const {
     shotType: resolveShotTypeKey(form.value.shotTypes[0] ?? data.value?.shotType),
     expressionKey: resolveExpressionKey(form.value.expression),
     detailKo: form.value.additionalDetail,
+    gridCellCutKo: gridCellCutKo.value,
   }),
   getPromptOverride: () =>
     form.value.usePromptOverride ? form.value.promptEnFinalOverride : '',
@@ -156,6 +170,7 @@ const {
       shotType: resolveShotTypeKey(form.value.shotTypes[0] ?? data.value?.shotType),
       expressionKey: resolveExpressionKey(form.value.expression),
       detailKo: form.value.additionalDetail,
+      gridCellCutKo: gridCellCutKo.value,
     },
     promptEnFinalOverride: form.value.usePromptOverride ? form.value.promptEnFinalOverride : '',
   }),
@@ -201,8 +216,13 @@ function buildSceneOneLine(): string {
   if (parentGridData.value?.compositionHint) {
     parts.push(`composition: ${parentGridData.value.compositionHint}`);
   }
+  if (parentGridMode.value === 'STORY_BEATS' && gridCellCutKo.value) {
+    parts.push(`gridCut: ${gridCellCutKo.value}`);
+  }
   if (form.value.shotTypes.length) {
     parts.push(`shotType: ${buildShotTypeValue(form.value.shotTypes)}`);
+  } else if (gridCellShotTypeHint.value) {
+    parts.push(`shotType: ${gridCellShotTypeHint.value}`);
   }
   if (form.value.expression) parts.push(`expression: ${form.value.expression}`);
   if (form.value.additionalDetail) parts.push(`detail: ${form.value.additionalDetail}`);
@@ -397,6 +417,16 @@ watch(
     if (prev === 'KO' && next === 'EN' && koDirty.value) {
       rewritePrompt();
     }
+  }
+);
+
+watch(
+  () => [parentGridMode.value, gridCellShotTypeHint.value, data.value?.gridCellIndex],
+  () => {
+    if (parentGridMode.value !== 'SHOT_VARIATIONS') return;
+    if (form.value.shotTypes.length > 0) return;
+    if (!gridCellShotTypeHint.value) return;
+    form.value.shotTypes = [gridCellShotTypeHint.value];
   }
 );
 
