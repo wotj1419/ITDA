@@ -8,7 +8,7 @@ export function useVideoPreview() {
         const parsed = new URL(lower, window.location.origin)
         return parsed.pathname
       } catch {
-        return lower.split('?')[0].split('#')[0]
+        return lower.replace(/[?#].*$/, '')
       }
     })()
     return (
