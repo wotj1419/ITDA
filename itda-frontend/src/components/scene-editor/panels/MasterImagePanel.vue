@@ -471,6 +471,13 @@ function maybeAutofillPrompt(): void {
   const header = sceneHeaderData.value as { description?: string } | undefined;
   const description = header?.description?.trim();
   if (!description) return;
+  const hasHangul = /[ㄱ-ㅎㅏ-ㅣ가-힣]/.test(description);
+  if (hasHangul) {
+    if (!form.value.promptKo.trim()) {
+      form.value.promptKo = description;
+    }
+    form.value.promptLang = 'KO';
+  }
   form.value.prompt = description;
   autoFilledNodes.add(nodeId);
 }
