@@ -193,19 +193,20 @@ public class PromptRenderer {
         int safeGridCellIndex = gridCellIndex == null ? 0 : Math.max(0, gridCellIndex);
         int cellNumberHuman = safeGridCellIndex + 1;
         lines.add("A " + safeOrNone(filmLook) + " " + safeOrNone(style) + " high-quality single cinematic frame based on storyboard cell #" + cellNumberHuman + ":");
-        lines.add(requireEn(promptEnBase) + ".");
+        lines.add("Use the provided grid image as the primary reference. Extract the same moment from storyboard cell #" + cellNumberHuman + " with no reinterpretation or new elements.");
+        lines.add("Base content (context only): " + requireEn(promptEnBase) + ".");
         if (hasNonEmptyIdList(settings, "objectIds") || hasNonEmptyIdList(settings, "referenceObjectIds")) {
             lines.add("Use the provided reference images to match the appearance of the selected characters/objects.");
             lines.add("Keep their identity, materials, and distinctive features consistent with the references.");
         }
         if (!safeOrNone(gridCellCutEn).equals(DEFAULT_NONE)) {
-            lines.add("Match the content and framing of grid cell #" + cellNumberHuman + ": " + ensurePeriod(gridCellCutEn));
+            lines.add("Grid cell #" + cellNumberHuman + " description (for reference): " + ensurePeriod(gridCellCutEn));
         }
-        lines.add("Captured as a " + safeOrNone(shotTypeEn) + ", with the subject showing a " + safeOrNone(expressionEn) + " expression.");
-        lines.add("Camera: lens and depth of field appropriate for the framing (e.g., 24-35mm wide/deep focus; 85mm close-up/shallow DoF).");
+        lines.add("Captured as a " + safeOrNone(shotTypeEn) + ", with the subject showing a " + safeOrNone(expressionEn) + " expression. Keep framing and composition aligned with the grid cell.");
+        lines.add("Camera: match the grid cell perspective; lens and depth of field should reinforce the existing framing.");
         lines.add("Lighting: " + safeOrNone(time) + ". Mood: " + safeOrNone(mood) + ".");
         if (!safeOrNone(detailEn).equals(DEFAULT_NONE)) {
-            lines.add(ensurePeriod(detailEn));
+            lines.add("Additional detail (only if consistent with the grid cell): " + ensurePeriod(detailEn));
         }
         lines.add("This frame matches the established master look with consistent character identity and visual continuity.");
         lines.add("No text, no watermark, no logo. Aspect ratio: " + safeOrNone(aspectRatio) + ".");
