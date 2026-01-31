@@ -2,7 +2,7 @@
 /**
  * ShotPanel - 샷 생성/편집 패널
  */
-import { ref, computed, watch } from 'vue';
+import { ref, computed, watch, nextTick, onUnmounted } from 'vue';
 import type { Node } from '@vue-flow/core';
 import type { MasterImageNodeData, ShotNodeData, StoryboardGridNodeData } from '../../../types/ui/sceneNodes';
 import { JobStatus, NodeType, PromptStatus } from '../../../types/ui/sceneNodes';
@@ -12,6 +12,7 @@ import { useObjectStore } from '../../../stores/object';
 import { useUIStore } from '../../../stores/ui';
 import { useNodeGeneration } from '../../../composables/useNodeGeneration';
 import { Camera, Smile, PenLine, FileText, Sparkles, Check, RefreshCw, LayoutGrid, Loader2 } from 'lucide-vue-next';
+import { gsap } from 'gsap';
 import { resolveExpressionKey, resolveShotTypeKey } from '../../../utils/nodeSettings';
 import { DEFAULT_GRID_LAYOUT } from '../../../utils/nodeDefaults';
 import { aiService } from '../../../services';
@@ -34,8 +35,15 @@ const form = ref({
   promptEnFinal: '',
   promptEnFinalOverride: '',
   usePromptOverride: false,
-  showAdvanced: false,
+  promptLang: 'EN' as 'EN' | 'KO',
 });
+
+const koDirty = ref(false);
+const lastSyncedKo = ref('');
+const promptSectionRef = ref<HTMLElement | null>(null);
+const promptKoRef = ref<HTMLTextAreaElement | null>(null);
+const isFinalEditing = ref(false);
+let promptPreviewTimeout: ReturnType<typeof setTimeout> | null = null;
 
 const shotTypeOptions = ['와이드샷', '미디엄샷', '클로즈업', '익스트림 클로즈업'];
 const expressionOptions = ['기본', '미소', '슬픔', '놀람', '분노', '무표정'];
@@ -55,6 +63,7 @@ const isPromptGenerated = computed(
   () => hasPromptContent.value || data.value?.promptStatus !== PromptStatus.DRAFT
 );
 const isPromptApproved = computed(() => data.value?.promptStatus === PromptStatus.APPROVED);
+const isKoOutOfSync = computed(() => koDirty.value);
 const parentGridNode = computed(() =>
   nodeStore.nodes.find(
     (node) => node.id === data.value?.parentNodeId && node.data?.type === NodeType.STORYBOARD_GRID
@@ -209,34 +218,20 @@ function toggleShotType(type: string): void {
   }
 }
 
-const isTranslating = ref(false);
 const isRewriting = ref(false);
-
-async function translatePrompt(): Promise<void> {
-  if (!form.value.prompt) return;
-  if (isTranslating.value) return;
-  isTranslating.value = true;
-  try {
-    const result = await aiService.translatePrompt(form.value.prompt);
-    if (result.promptKo && result.promptKo.trim()) {
-      form.value.promptKo = result.promptKo;
-    }
-  } catch (error) {
-    console.error('Failed to translate prompt:', error);
-  } finally {
-    isTranslating.value = false;
-  }
-}
 
 async function rewritePrompt(): Promise<void> {
   if (!form.value.promptKo) return;
   if (isRewriting.value) return;
+  const sourceKo = form.value.promptKo;
   isRewriting.value = true;
   try {
     const result = await aiService.rewritePrompt(form.value.promptKo);
     if (result.promptEnBase && result.promptEnBase.trim()) {
       form.value.prompt = result.promptEnBase;
-      await refreshPromptPreview();
+      koDirty.value = false;
+      lastSyncedKo.value = sourceKo;
+      queuePromptPreview();
     }
   } catch (error) {
     console.error('Failed to rewrite prompt:', error);
@@ -245,18 +240,75 @@ async function rewritePrompt(): Promise<void> {
   }
 }
 
-function enableFinalOverride(): void {
+function toggleFinalEditing(): void {
   if (!form.value.usePromptOverride) {
     form.value.usePromptOverride = true;
+    form.value.promptEnFinalOverride = form.value.promptEnFinal || form.value.prompt;
+    isFinalEditing.value = true;
+    return;
   }
-  if (!form.value.promptEnFinalOverride.trim()) {
+
+  if (isFinalEditing.value && !form.value.promptEnFinalOverride.trim()) {
     form.value.promptEnFinalOverride = form.value.promptEnFinal || form.value.prompt;
   }
+
+  isFinalEditing.value = !isFinalEditing.value;
 }
 
-function clearFinalOverride(): void {
-  form.value.usePromptOverride = false;
-  form.value.promptEnFinalOverride = '';
+function markKoDirty(): void {
+  if (form.value.promptKo === lastSyncedKo.value) {
+    koDirty.value = false;
+    return;
+  }
+  koDirty.value = true;
+}
+
+function queuePromptPreview(): void {
+  if (!form.value.prompt.trim()) return;
+  if (form.value.usePromptOverride) return;
+  if (promptPreviewTimeout) clearTimeout(promptPreviewTimeout);
+  promptPreviewTimeout = setTimeout(() => {
+    promptPreviewTimeout = null;
+    refreshPromptPreview();
+  }, 600);
+}
+
+async function focusKoEditor(): Promise<void> {
+  form.value.promptLang = 'KO';
+  await nextTick();
+  if (promptSectionRef.value) {
+    const container = promptSectionRef.value.closest('.base-panel__content') as HTMLElement | null;
+    if (container) {
+      const containerRect = container.getBoundingClientRect();
+      const sectionRect = promptSectionRef.value.getBoundingClientRect();
+      const currentScroll = container.scrollTop;
+      const offset = sectionRect.top - containerRect.top;
+      const centeredOffset = (container.clientHeight - sectionRect.height) / 2;
+      const rawTarget = currentScroll + offset - centeredOffset;
+      const maxScroll = Math.max(0, container.scrollHeight - container.clientHeight);
+      const targetScroll = Math.min(Math.max(0, rawTarget), maxScroll);
+      gsap.to(container, { scrollTop: targetScroll, duration: 0.45, ease: 'power2.out' });
+    } else {
+      promptSectionRef.value.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+    gsap.killTweensOf(promptSectionRef.value);
+    gsap.fromTo(
+      promptSectionRef.value,
+      { boxShadow: '0 0 0 0 rgba(255, 107, 138, 0)', backgroundColor: 'rgba(255, 250, 252, 0)' },
+      {
+        boxShadow: '0 0 0 12px rgba(255, 107, 138, 0.35)',
+        backgroundColor: 'rgba(255, 250, 252, 0.9)',
+        duration: 0.35,
+        yoyo: true,
+        repeat: 1,
+        ease: 'power2.out',
+        clearProps: 'boxShadow,backgroundColor',
+      }
+    );
+  }
+  if (promptKoRef.value) {
+    promptKoRef.value.focus();
+  }
 }
 
 watch(() => props.node.id, () => {
@@ -274,8 +326,11 @@ watch(() => props.node.id, () => {
     promptEnFinal: data.value.promptEnFinal || '',
     promptEnFinalOverride: data.value.promptEnFinalOverride || '',
     usePromptOverride: Boolean(data.value.promptEnFinalOverride),
-    showAdvanced: false,
+    promptLang: 'EN',
   };
+  koDirty.value = false;
+  lastSyncedKo.value = form.value.promptKo;
+  isFinalEditing.value = false;
   clearError();
 }, { immediate: true });
 
@@ -296,6 +351,8 @@ watch(
     if (normalized !== form.value.promptKo) {
       form.value.promptKo = normalized;
     }
+    lastSyncedKo.value = normalized;
+    koDirty.value = false;
   }
 );
 
@@ -334,6 +391,40 @@ watch(
   }
 );
 
+watch(
+  () => form.value.promptLang,
+  (next, prev) => {
+    if (prev === 'KO' && next === 'EN' && koDirty.value) {
+      rewritePrompt();
+    }
+  }
+);
+
+watch(
+  () => ({
+    prompt: form.value.prompt,
+    shotTypes: form.value.shotTypes.slice(),
+    expression: form.value.expression,
+    additionalDetail: form.value.additionalDetail,
+    style: activeMasterData.value?.style,
+    timeOfDay: activeMasterData.value?.timeOfDay,
+    mood: activeMasterData.value?.mood,
+    objectIds: activeMasterData.value?.objectIds ?? [],
+    usePromptOverride: form.value.usePromptOverride,
+  }),
+  () => {
+    queuePromptPreview();
+  },
+  { deep: true }
+);
+
+onUnmounted(() => {
+  if (promptPreviewTimeout) {
+    clearTimeout(promptPreviewTimeout);
+    promptPreviewTimeout = null;
+  }
+});
+
 function selectGridCell(index: number): void {
   nodeStore.updateNode(props.node.id, { gridCellIndex: index });
 }
@@ -358,6 +449,10 @@ function handleGenerateShot(): void {
   }
   if (!isPromptApproved.value) {
     notifyBlocked('프롬프트 승인 필요', '승인 후 샷을 생성할 수 있습니다.');
+    return;
+  }
+  if (isKoOutOfSync.value) {
+    notifyBlocked('영어 반영 필요', '한국어 수정 내용을 영어에 반영해 주세요.');
     return;
   }
   generateShot();
@@ -432,6 +527,66 @@ function handleGenerateShot(): void {
         ></textarea>
       </div>
 
+      <!-- Narrative Prompt -->
+      <div class="panel-section" ref="promptSectionRef">
+        <div class="panel-label-row">
+          <label class="panel-label">
+            <FileText class="panel-label-icon" />
+            서술 프롬프트
+          </label>
+          <div class="panel-segmented" role="tablist" aria-label="Prompt language">
+            <button
+              type="button"
+              class="panel-segmented__btn"
+              :class="{ 'is-active': form.promptLang === 'EN' }"
+              @click="form.promptLang = 'EN'"
+            >
+              EN
+            </button>
+            <button
+              type="button"
+              class="panel-segmented__btn"
+              :class="{ 'is-active': form.promptLang === 'KO' }"
+              @click="form.promptLang = 'KO'"
+            >
+              KO
+            </button>
+          </div>
+        </div>
+        <p class="panel-subtext">
+          {{ form.promptLang === 'EN' ? '원본(편집 가능)' : '번역(수정 가능)' }}
+        </p>
+        <div v-if="form.promptLang === 'EN'">
+          <textarea
+            v-model="form.prompt"
+            class="panel-textarea panel-textarea--prompt"
+            rows="4"
+            placeholder="예: A quiet alley glows with neon reflections as the character pauses."
+          ></textarea>
+        </div>
+        <div v-else class="panel-translation-block">
+          <textarea
+            ref="promptKoRef"
+            v-model="form.promptKo"
+            class="panel-textarea panel-textarea--prompt"
+            rows="4"
+            @input="markKoDirty"
+          ></textarea>
+          <div class="panel-prompt-actions">
+            <button
+              class="panel-btn panel-btn--success panel-btn--sync"
+              :class="{ 'panel-btn--sync--muted': !isKoOutOfSync }"
+              :disabled="isRewriting || !form.promptKo || !isKoOutOfSync"
+              @click="rewritePrompt"
+            >
+              <Loader2 v-if="isRewriting" class="panel-btn-icon panel-btn-icon--spin" />
+              <RefreshCw v-else class="panel-btn-icon" />
+              영어로 반영
+            </button>
+          </div>
+        </div>
+      </div>
+
       <!-- Generate Prompt -->
       <button
         class="panel-btn panel-btn--secondary panel-btn--full panel-btn--prompt-generate"
@@ -440,87 +595,49 @@ function handleGenerateShot(): void {
       >
         <Loader2 v-if="isGeneratingPrompt" class="panel-btn-icon panel-btn-icon--spin" />
         <Sparkles v-else class="panel-btn-icon" />
-        {{ isGeneratingPrompt ? '생성 중...' : '프롬프트 생성' }}
+        {{ isGeneratingPrompt ? '생성 중...' : 'AI로 다듬기' }}
       </button>
 
       <!-- Generated Prompt -->
       <div v-if="isPromptGenerated" class="panel-section panel-section--prompt">
         <label class="panel-label">
           <FileText class="panel-label-icon" />
-          프롬프트
-          <span class="panel-label-badge">생성됨</span>
-        </label>
-        <label class="panel-label" style="margin-top: 0.75rem;">
-          <FileText class="panel-label-icon" />
-          생성용 프롬프트 (영어)
+          최종 프롬프트 (영어)
         </label>
         <textarea
+          v-if="form.usePromptOverride"
+          v-model="form.promptEnFinalOverride"
+          class="panel-textarea panel-textarea--prompt"
+          rows="3"
+          :readonly="!isFinalEditing"
+          placeholder="최종 영어 프롬프트를 직접 입력하세요."
+        ></textarea>
+        <textarea
+          v-else
           :value="form.promptEnFinal"
           class="panel-textarea panel-textarea--prompt"
           rows="3"
           readonly
-          placeholder="생성용 프롬프트 미리보기로 확인하세요."
+          placeholder="자동으로 갱신됩니다."
         ></textarea>
 
         <div class="panel-prompt-actions">
-          <button class="panel-btn panel-btn--text" :disabled="!form.prompt" @click="refreshPromptPreview">
-            <RefreshCw class="panel-btn-icon" />
-            생성용 프롬프트 미리보기
+          <button
+            class="panel-btn panel-btn--text"
+            :disabled="!form.promptEnFinal && !form.prompt"
+            @click="toggleFinalEditing"
+          >
+            {{ isFinalEditing ? '편집 완료' : '영문 직접 편집' }}
           </button>
-          <button class="panel-btn panel-btn--text" :disabled="!form.promptEnFinal" @click="enableFinalOverride">
-            영문 직접 편집
+          <button class="panel-btn panel-btn--text" @click="focusKoEditor">
+            한국어로 편집
           </button>
-          <button class="panel-btn panel-btn--text" @click="form.showAdvanced = !form.showAdvanced">
-            <span class="panel-btn-icon">⋯</span>
-            고급 설정
-          </button>
-        </div>
-
-        <div v-if="form.usePromptOverride" class="panel-section" style="margin-top: 0.75rem;">
-          <label class="panel-label">
-            <FileText class="panel-label-icon" />
-            생성용 프롬프트 직접 수정
-          </label>
-          <textarea
-            v-model="form.promptEnFinalOverride"
-            class="panel-textarea panel-textarea--prompt"
-            rows="3"
-            placeholder="최종 영어 프롬프트를 직접 입력하세요."
-          ></textarea>
-          <div class="panel-prompt-actions panel-prompt-actions--right">
-            <button class="panel-btn panel-btn--text" @click="clearFinalOverride">
-              오버라이드 해제
-            </button>
-          </div>
-        </div>
-
-        <div v-if="form.showAdvanced" class="panel-section" style="margin-top: 0.75rem;">
-          <label class="panel-label">
-            <FileText class="panel-label-icon" />
-            서술 프롬프트 (한국어)
-          </label>
-          <textarea v-model="form.promptKo" class="panel-textarea panel-textarea--prompt" rows="3"></textarea>
-          <div class="panel-prompt-actions">
-            <button class="panel-btn panel-btn--text" :disabled="isTranslating || !form.prompt" @click="translatePrompt">
-              <Loader2 v-if="isTranslating" class="panel-btn-icon panel-btn-icon--spin" />
-              <RefreshCw v-else class="panel-btn-icon" />
-              EN → KO
-            </button>
-            <button class="panel-btn panel-btn--text" :disabled="isRewriting || !form.promptKo" @click="rewritePrompt">
-              <Loader2 v-if="isRewriting" class="panel-btn-icon panel-btn-icon--spin" />
-              <RefreshCw v-else class="panel-btn-icon" />
-              KO → EN
-            </button>
-          </div>
-
-          <label class="panel-label" style="margin-top: 0.75rem;">
-            <FileText class="panel-label-icon" />
-            서술 프롬프트 (영어)
-          </label>
-          <textarea v-model="form.prompt" class="panel-textarea panel-textarea--prompt" rows="3"></textarea>
         </div>
 
         <div class="panel-prompt-actions panel-prompt-actions--right">
+          <span v-if="isKoOutOfSync" class="panel-subtext">
+            영어 반영이 필요합니다.
+          </span>
           <button class="panel-btn panel-btn--text" :disabled="isGeneratingPrompt || isGeneratingShot" @click="generatePrompt">
             <Loader2 v-if="isGeneratingPrompt" class="panel-btn-icon panel-btn-icon--spin" />
             <RefreshCw v-else class="panel-btn-icon" />
@@ -529,7 +646,7 @@ function handleGenerateShot(): void {
           <button
             v-if="!isPromptApproved"
             class="panel-btn panel-btn--success"
-            :disabled="isGeneratingPrompt || isGeneratingShot"
+            :disabled="isGeneratingPrompt || isGeneratingShot || isKoOutOfSync"
             @click="approvePrompt"
           >
             <Check class="panel-btn-icon" /> 승인
@@ -545,7 +662,7 @@ function handleGenerateShot(): void {
     <template #footer>
       <button
         class="panel-btn panel-btn--primary panel-btn--full"
-        :disabled="isGeneratingShot || isGeneratingPrompt"
+        :disabled="isGeneratingShot || isGeneratingPrompt || isKoOutOfSync"
         @click="handleGenerateShot"
       >
         <Camera class="panel-btn-icon" />
@@ -554,3 +671,60 @@ function handleGenerateShot(): void {
     </template>
   </BasePanel>
 </template>
+
+<style scoped>
+.panel-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.35rem;
+}
+
+.panel-segmented {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0.15rem;
+  background: var(--gray-100, #F3F4F6);
+  border-radius: 999px;
+}
+
+.panel-segmented__btn {
+  border: 0;
+  background: transparent;
+  padding: 0.2rem 0.65rem;
+  font-size: 0.7rem;
+  color: var(--gray-600, #4B5563);
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.panel-segmented__btn.is-active {
+  background: var(--gray-900, #111827);
+  color: var(--gray-50, #F9FAFB);
+  box-shadow: 0 2px 6px rgba(17, 24, 39, 0.18);
+}
+
+.panel-subtext {
+  margin: 0 0 0.5rem;
+  font-size: 0.75rem;
+  color: var(--gray-500, #6B7280);
+}
+
+.panel-translation-block .panel-prompt-actions {
+  margin-top: 0.4rem;
+}
+
+.panel-btn--sync--muted {
+  background: var(--gray-100, #F3F4F6);
+  color: var(--gray-500, #6B7280);
+  border-color: var(--gray-200, #E5E7EB);
+}
+
+.panel-btn--sync--muted:hover {
+  background: var(--gray-100, #F3F4F6);
+  color: var(--gray-500, #6B7280);
+  border-color: var(--gray-200, #E5E7EB);
+}
+</style>
