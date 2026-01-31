@@ -197,12 +197,12 @@ export const useCollabStore = defineStore('collab', () => {
                 socketManager.connect();
             }
 
-            // 2. Subscribe to room (signaling)
-            socketManager.subscribeToRoom(roomId.value);
-            // 2-1. Subscribe to chat (projectId)
-            socketManager.subscribeToChat(String(nextProjectId), handleChatMessage);
-            // 2-2. Subscribe to presence (projectId)
-            socketManager.subscribeToPresence(String(nextProjectId), handlePresenceMessage);
+        // 2. Subscribe to room (signaling)
+        socketManager.subscribeToRoom(roomId.value);
+        // 2-1. Subscribe to chat (projectId)
+        socketManager.subscribeToChat(String(nextProjectId), handleChatMessage);
+        // 2-2. Subscribe to presence (projectId)
+        socketManager.subscribeToPresence(String(nextProjectId), handlePresenceMessage);
 
             // 3. Setup WebRTC Callbacks (Prepare for later)
             peerConnectionService.setCallbacks({
@@ -306,6 +306,7 @@ export const useCollabStore = defineStore('collab', () => {
         isMediaConnected.value = false;
         isMuted.value = false;
         localStream.value = null;
+        isPanelOpen.value = false;
         stopSpeakingMonitor(localUserId.value);
     }
 
@@ -363,6 +364,7 @@ export const useCollabStore = defineStore('collab', () => {
 
     function startCall(projectId: number) {
         isAutoStarting.value = true;
+        isPanelOpen.value = false;
         joinRoom(projectId);
         showFloatingBar(true);
         if (status.value === 'connected') {

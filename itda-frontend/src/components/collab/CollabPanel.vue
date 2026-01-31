@@ -112,8 +112,8 @@ function formatTime(timestamp: number): string {
             <Mic v-else class="icon" />
           </button>
         </div>
-        <button class="leave-btn" @click="collabStore.leaveRoom">
-          &#53685;&#54868; &#51333;&#47308;
+        <button class="leave-btn" @click="collabStore.disableMedia">
+          통화 종료
         </button>
       </div>
     </div>
@@ -328,4 +328,5 @@ function formatTime(timestamp: number): string {
 .leave-btn:hover {
   background: var(--error-soft);
 }
+
 </style>

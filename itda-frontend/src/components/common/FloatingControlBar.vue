@@ -3,7 +3,6 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useCollabStore } from '../../stores/collab'
 import CollabPanel from '../collab/CollabPanel.vue'
-import Button from './Button.vue'
 import { Mic, MicOff, MessageCircle, PhoneOff } from 'lucide-vue-next'
 
 const collabStore = useCollabStore()
@@ -23,7 +22,6 @@ const isProjectPage = computed(() => {
 const isDashboardPage = computed(() => route.path === '/dashboard')
 
 const isConnected = computed(() => collabStore.isConnected)
-const isAutoStarting = computed(() => collabStore.isAutoStarting)
 const statusText = computed(() => {
   if (isConnected.value) {
     return collabStore.isMuted ? 'Online (Mic Off)' : 'Online (Mic On)'
@@ -261,7 +259,7 @@ onBeforeUnmount(() => {
     @pointerdown="onPointerDown"
   >
     <!-- Active Bar (Expanded State) -->
-    <div v-if="!isDashboardPage && collabStore.isFloatingBarVisible" class="bar-container">
+    <div v-if="!isDashboardPage && collabStore.isFloatingBarVisible && collabStore.isMediaConnected" class="bar-container">
     <div
       ref="panelWrapRef"
       class="panel-pop"
@@ -273,39 +271,8 @@ onBeforeUnmount(() => {
     >
       <CollabPanel v-show="collabStore.isPanelOpen" />
     </div>
-
-    <!-- Standby Mode (No Media) -->
-    <div v-if="!collabStore.isMediaConnected" class="floating-bar">
-         <!-- Status -->
-         <div class="status-indicator">
-            <div class="status-dot bg-yellow-500"></div>
-            <span class="status-text">{{ isAutoStarting ? '?? ?' : 'Ready' }}</span>
-         </div>
-         <div class="divider"></div>
-
-         <template v-if="!isAutoStarting">
-           <Button 
-              class="go-live-btn"
-              @click="collabStore.enableMedia()"
-           >
-              <Mic class="icon-sm" />
-              <span>Go Live</span>
-           </Button>
-           <div class="divider"></div>
-         </template>
-         <div v-else class="connecting-hint">?? ?? ?...</div>
-         <div v-if="isAutoStarting" class="divider"></div>
-         <button
-            class="control-btn"
-            @click="collabStore.hideFloatingBar()"
-            title="Hide Control Bar"
-         >
-            <PhoneOff class="icon" />
-         </button>
-    </div>
-
     <!-- Live Mode (Media Connected) -->
-    <div v-else class="floating-bar" :class="{ hidden: collabStore.isPanelOpen }">
+    <div class="floating-bar" :class="{ hidden: collabStore.isPanelOpen }">
       <!-- Status Indicator -->
       <div class="status-indicator" :title="statusText">
         <div class="status-dot" :class="statusColor"></div>
@@ -337,7 +304,7 @@ onBeforeUnmount(() => {
 
       <button
         class="control-btn danger"
-        @click="collabStore.leaveRoom()"
+        @click="collabStore.disableMedia(); collabStore.hideFloatingBar()"
         :disabled="!isConnected"
         title="End Call"
       >
@@ -413,8 +380,7 @@ onBeforeUnmount(() => {
 }
 
 .floating-bar button,
-.floating-bar .control-btn,
-.floating-bar .go-live-btn {
+.floating-bar .control-btn {
   cursor: pointer;
 }
 
@@ -493,37 +459,12 @@ onBeforeUnmount(() => {
   height: 14px;
 }
 
-.go-live-btn {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.25rem 0.75rem;
-  background: var(--rose-500);
-  color: white;
-  border: none;
-  border-radius: 999px;
-  font-size: 0.75rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.2s;
-}
-
-.go-live-btn:hover {
-  background: var(--rose-600);
-}
 
 .icon-sm {
   width: 14px;
   height: 14px;
 }
 
-.connecting-hint {
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: var(--gray-600);
-  padding: 0 0.25rem;
-  white-space: nowrap;
-}
 
 /* Tailwind-like utilities since we might not have full tailwind configured as classes yet */
 .bg-green-500 { background-color: #22c55e; }
