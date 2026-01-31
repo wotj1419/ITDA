@@ -10,6 +10,7 @@ import { Handle, Position } from '@vue-flow/core';
 import { NodeResizer } from '@vue-flow/node-resizer';
 import { useSceneNodeStore } from '../../../stores/sceneNode';
 import type { StoryboardGridNodeData } from '../../../types/ui/sceneNodes';
+import { JobStatus } from '../../../types/ui/sceneNodes';
 import { useNodeStatus } from '../../../composables/useNodeStatus';
 import { useNodeThumbnail } from '../../../composables/useNodeThumbnail';
 import { getNodeMinSize, NODE_RESIZER_STYLE } from '../../../utils/nodeUi';
@@ -70,6 +71,31 @@ const {
   isGenerationRequested: () => isGenerationRequested.value,
   hasGenerationFailure: () => hasGenerationFailure.value,
 });
+
+const gridDimensions = computed(() => {
+  const layout = props.data.layout || '2x2';
+  const [rowsRaw, colsRaw] = layout.split('x');
+  const rows = Number(rowsRaw);
+  const cols = Number(colsRaw);
+  return {
+    rows: Number.isFinite(rows) ? rows : 0,
+    cols: Number.isFinite(cols) ? cols : 0,
+  };
+});
+
+const gridCells = computed(() => {
+  const { rows, cols } = gridDimensions.value;
+  const total = rows * cols;
+  return Array.from({ length: total }, (_, index) => ({ index }));
+});
+
+const showGridOverlay = computed(() =>
+  props.data.jobStatus === JobStatus.SUCCEEDED &&
+  hasThumbnailSource.value &&
+  isThumbnailVisible.value &&
+  !isThumbnailLoading.value &&
+  !showFailureOverlay.value
+);
 
 // =============================================================================
 // Handlers
@@ -142,6 +168,18 @@ function handleRetry(event: Event): void {
           @load="handleThumbnailLoad"
           @error="handleThumbnailError"
         />
+        <div
+          v-if="showGridOverlay"
+          class="node-glass__thumbnail-grid"
+          :style="{
+            gridTemplateColumns: `repeat(${gridDimensions.cols}, 1fr)`,
+            gridTemplateRows: `repeat(${gridDimensions.rows}, 1fr)`,
+          }"
+        >
+          <div v-for="cell in gridCells" :key="`grid-cell-${cell.index}`" class="node-glass__thumbnail-grid-cell">
+            <span class="node-glass__thumbnail-grid-number">{{ cell.index + 1 }}</span>
+          </div>
+        </div>
         <div
           v-if="isThumbnailLoading && !isThumbnailVisible"
           class="node-glass__thumbnail-loader"

@@ -360,6 +360,36 @@
     object-fit: cover;
 }
 
+.node-glass__thumbnail-grid {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    pointer-events: none;
+    z-index: 3;
+}
+
+.node-glass__thumbnail-grid-cell {
+    display: flex;
+    align-items: flex-start;
+    justify-content: flex-start;
+    position: relative;
+    padding: 0.7rem 0.35rem 0.35rem;
+}
+
+.node-glass__thumbnail-grid-number {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.4rem;
+    height: 1.4rem;
+    border-radius: 999px;
+    background: rgba(253, 224, 232, 0.95);
+    color: #ec4899;
+    font-size: 0.65rem;
+    font-weight: 700;
+    box-shadow: 0 2px 6px rgba(236, 72, 153, 0.25);
+}
+
 .node-glass__thumbnail-video {
     width: 100%;
     height: 100%;
