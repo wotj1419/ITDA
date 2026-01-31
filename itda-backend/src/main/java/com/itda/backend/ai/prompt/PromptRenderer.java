@@ -85,6 +85,7 @@ public class PromptRenderer {
         }
         lines.add("Lighting: " + safeOrNone(time) + ". Mood: " + safeOrNone(mood) + ".");
         lines.add("Camera: preferably 24-35mm wide lens, deep focus (establishing shot).");
+        lines.add("Film stock feel: Fuji Eterna-like color science, subtle film grain, gentle halation, soft highlight roll-off.");
         lines.add("Maintain consistent character identity, outfits, lighting, and key props across all shots.");
         lines.add("No text, no subtitles, no watermark, no logo.");
         lines.add("Aspect ratio: " + safeOrNone(aspectRatio) + ".");
