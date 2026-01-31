@@ -43,6 +43,7 @@ export const useCollabStore = defineStore('collab', () => {
     const currentLocation = ref('');
     const currentSceneId = ref<number | null>(null);
     const currentNodeId = ref<number | null>(null);
+    const pendingPresence = ref<{ location: PresenceLocation; sceneId: number | null; nodeId: number | null } | null>(null);
 
     // Cursors (Map for performance)
     const cursors = reactive(new Map<string, { x: number, y: number, color: string }>());
@@ -82,6 +83,7 @@ export const useCollabStore = defineStore('collab', () => {
     const localParticipant = computed<CollabParticipant>(() => ({
         odps: localUserId.value,
         name: authStore.user?.name || 'Guest',
+        avatarUrl: authStore.user?.profileImageUrl ?? undefined,
         isMuted: isMuted.value,
         isVideoOff: isVideoOff.value,
         isScreenSharing: isScreenSharing.value,
@@ -172,6 +174,7 @@ export const useCollabStore = defineStore('collab', () => {
      */
     async function joinRoom(projectId: number): Promise<void> {
         const nextRoomId = `project-${projectId}`;
+        const nextProjectId = projectId;
 
         if (status.value !== 'disconnected' && roomId.value && roomId.value !== nextRoomId) {
             leaveRoom();
@@ -185,7 +188,7 @@ export const useCollabStore = defineStore('collab', () => {
 
         status.value = 'connecting';
         roomId.value = nextRoomId;
-        currentProjectId.value = projectId;
+        currentProjectId.value = nextProjectId;
         localStorage.setItem(STORAGE_KEY, nextRoomId);
 
         try {
@@ -194,12 +197,12 @@ export const useCollabStore = defineStore('collab', () => {
                 socketManager.connect();
             }
 
-            // 2. Subscribe to room (signaling)
-            socketManager.subscribeToRoom(roomId.value);
-            // 2-1. Subscribe to chat
-            socketManager.subscribeToChat(String(projectId), handleChatMessage);
-            // 2-2. Subscribe to presence
-            socketManager.subscribeToPresence(String(projectId), handlePresenceMessage);
+        // 2. Subscribe to room (signaling)
+        socketManager.subscribeToRoom(roomId.value);
+        // 2-1. Subscribe to chat (projectId)
+        socketManager.subscribeToChat(String(nextProjectId), handleChatMessage);
+        // 2-2. Subscribe to presence (projectId)
+        socketManager.subscribeToPresence(String(nextProjectId), handlePresenceMessage);
 
             // 3. Setup WebRTC Callbacks (Prepare for later)
             peerConnectionService.setCallbacks({
@@ -208,19 +211,14 @@ export const useCollabStore = defineStore('collab', () => {
                 onConnectionStateChange: handleConnectionStateChange,
             });
 
-            // 4. Broadcast Join (Signaling Only)
-            setTimeout(() => {
-                socketManager.sendSignal({
-                    type: 'join',
-                    payload: {
-                        user: localParticipant.value
-                    }
-                });
+            // 4. Broadcast Join + Presence after connection is ready
+            socketManager.onConnected(() => {
                 status.value = 'connected';
-            }, 1000);
+                announcePresence();
+            });
 
             // 5. Load chat history (optional)
-            void loadChatHistory(projectId);
+            void loadChatHistory(nextProjectId);
 
         } catch (error) {
             console.error('Failed to join room:', error);
@@ -630,29 +628,60 @@ export const useCollabStore = defineStore('collab', () => {
         currentLocation.value = location;
         currentSceneId.value = sceneId ?? null;
         currentNodeId.value = nodeId ?? null;
-        if (currentProjectId.value !== null) {
-            socketManager.sendPresence(String(currentProjectId.value), {
-                type: 'LOCATION',
-                location,
-                sceneId: sceneId ?? null,
-                nodeId: nodeId ?? null,
-            });
-        }
+        pendingPresence.value = {
+            location,
+            sceneId: sceneId ?? null,
+            nodeId: nodeId ?? null,
+        };
+
+        flushPresence();
         broadcastState();
     }
 
     function handlePresenceMessage(message: any) {
+        const type = message?.type;
+
+        if (type === 'SNAPSHOT') {
+            if (message?.projectId && currentProjectId.value && Number(message.projectId) !== currentProjectId.value) {
+                return;
+            }
+            const snapshot = Array.isArray(message?.participants) ? message.participants : [];
+            const existing = new Map(participants.value.map((participant) => [participant.odps, participant]));
+            const next = snapshot
+                .map(mapPresenceToParticipant)
+                .filter((participant): participant is CollabParticipant => !!participant)
+                .map((participant) => {
+                    const prev = existing.get(participant.odps);
+                    return prev ? { ...prev, ...participant } : participant;
+                });
+            participants.value = next;
+            return;
+        }
+
         const userId = message?.userId;
         if (!userId) return;
         const peerId = String(userId);
-        addParticipant(peerId, {
+        if (type === 'LEAVE') {
+            removeParticipant(peerId);
+            return;
+        }
+        const participant = mapPresenceToParticipant(message);
+        if (!participant) return;
+        addParticipant(peerId, participant);
+    }
+
+    function mapPresenceToParticipant(message: any): CollabParticipant | null {
+        const userId = message?.userId;
+        if (!userId) return null;
+        const peerId = String(userId);
+        return {
             odps: peerId,
             name: message?.name ?? 'Guest',
             avatarUrl: message?.profileImageUrl ?? undefined,
             currentLocation: message?.location ?? '',
             sceneId: message?.sceneId ?? null,
             nodeId: message?.nodeId ?? null,
-        });
+        };
     }
 
     // ================================
@@ -745,6 +774,37 @@ export const useCollabStore = defineStore('collab', () => {
             type: 'state_update',
             payload: localParticipant.value
         });
+    }
+
+    function announcePresence() {
+        if (!roomId.value || currentProjectId.value === null) return;
+        socketManager.sendSignal({
+            type: 'join',
+            payload: {
+                user: localParticipant.value
+            }
+        });
+        const location = currentLocation.value || 'PROJECT_LIST';
+        socketManager.sendPresence(String(currentProjectId.value), {
+            type: 'LOCATION',
+            location,
+            sceneId: currentSceneId.value ?? null,
+            nodeId: currentNodeId.value ?? null,
+        });
+        pendingPresence.value = null;
+        broadcastState();
+    }
+
+    function flushPresence() {
+        if (currentProjectId.value === null || !pendingPresence.value) return;
+        if (!socketManager.getClient().connected || status.value !== 'connected') return;
+        socketManager.sendPresence(String(currentProjectId.value), {
+            type: 'LOCATION',
+            location: pendingPresence.value.location,
+            sceneId: pendingPresence.value.sceneId,
+            nodeId: pendingPresence.value.nodeId,
+        });
+        pendingPresence.value = null;
     }
 
     function rejoinIfNeeded() {

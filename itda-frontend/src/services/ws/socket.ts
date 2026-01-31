@@ -13,10 +13,13 @@ class WebSocketManager {
     private chatHandlers = new Map<string, (message: any) => void>();
     private presenceSubscriptions = new Map<string, ReturnType<Client['subscribe']>>();
     private presenceHandlers = new Map<string, (message: any) => void>();
+    private presenceQueueSubscription: ReturnType<Client['subscribe']> | null = null;
+    private presenceQueueHandler: ((message: any) => void) | null = null;
     private rtcSubscription: ReturnType<Client['subscribe']> | null = null;
     private rtcHandler: ((message: any) => void) | null = null;
     private currentProjectId: string | null = null;
     private currentRoomId: string | null = null;
+    private connectCallbacks: Array<() => void> = [];
 
     constructor() {
         this.client = new Client({
@@ -35,7 +38,9 @@ class WebSocketManager {
             this.subscribe();
             this.resubscribeChats();
             this.resubscribePresence();
+            this.resubscribePresenceQueue();
             this.resubscribeRTC();
+            this.flushConnectCallbacks();
         };
 
         this.client.onStompError = (frame) => {
@@ -58,6 +63,14 @@ class WebSocketManager {
             this.client.connectHeaders = {};
         }
         this.client.activate();
+    }
+
+    public onConnected(callback: () => void) {
+        if (this.client.connected) {
+            callback();
+            return;
+        }
+        this.connectCallbacks.push(callback);
     }
 
     public disconnect() {
@@ -119,6 +132,7 @@ class WebSocketManager {
     public subscribeToPresence(projectId: string, handler: (message: any) => void) {
         if (this.presenceSubscriptions.has(projectId)) return;
         this.presenceHandlers.set(projectId, handler);
+        this.presenceQueueHandler = handler;
         if (!this.client.connected) return;
 
         const subscription = this.client.subscribe(`/topic/presence/${projectId}`, (message) => {
@@ -130,6 +144,7 @@ class WebSocketManager {
             }
         });
         this.presenceSubscriptions.set(projectId, subscription);
+        this.subscribePresenceQueue();
     }
 
     public unsubscribePresence(projectId: string) {
@@ -139,6 +154,13 @@ class WebSocketManager {
             this.presenceSubscriptions.delete(projectId);
         }
         this.presenceHandlers.delete(projectId);
+        if (this.presenceHandlers.size === 0) {
+            if (this.presenceQueueSubscription) {
+                this.presenceQueueSubscription.unsubscribe();
+                this.presenceQueueSubscription = null;
+            }
+            this.presenceQueueHandler = null;
+        }
     }
 
     public sendPresence(projectId: string, payload: { type: 'LOCATION'; location: string; sceneId?: number | null; nodeId?: number | null }) {
@@ -261,6 +283,34 @@ class WebSocketManager {
         });
     }
 
+    private subscribePresenceQueue() {
+        if (!this.client.connected || this.presenceQueueSubscription || !this.presenceQueueHandler) return;
+        this.presenceQueueSubscription = this.client.subscribe('/user/queue/presence', (message) => {
+            try {
+                const payload = JSON.parse(message.body);
+                this.presenceQueueHandler?.(payload);
+            } catch (error) {
+                console.error('Failed to parse presence snapshot', error);
+            }
+        });
+    }
+
+    private resubscribePresenceQueue() {
+        if (!this.client.connected || !this.presenceQueueHandler) return;
+        if (this.presenceQueueSubscription) {
+            this.presenceQueueSubscription.unsubscribe();
+            this.presenceQueueSubscription = null;
+        }
+        this.presenceQueueSubscription = this.client.subscribe('/user/queue/presence', (message) => {
+            try {
+                const payload = JSON.parse(message.body);
+                this.presenceQueueHandler?.(payload);
+            } catch (error) {
+                console.error('Failed to parse presence snapshot', error);
+            }
+        });
+    }
+
     private resubscribeRTC() {
         if (!this.client.connected || !this.rtcHandler || !this.currentProjectId) return;
         if (this.rtcSubscription) {
@@ -278,6 +328,18 @@ class WebSocketManager {
         });
         this.rtcSubscription = subscription;
         console.log('[RTC] Resubscribed to /user/queue/rtc');
+    }
+
+    private flushConnectCallbacks() {
+        const callbacks = this.connectCallbacks;
+        this.connectCallbacks = [];
+        callbacks.forEach((callback) => {
+            try {
+                callback();
+            } catch (error) {
+                console.error('Failed to run WS connect callback', error);
+            }
+        });
     }
 
     public getClient() {
