@@ -17,6 +17,8 @@ class WebSocketManager {
     private presenceQueueHandler: ((message: any) => void) | null = null;
     private rtcSubscription: ReturnType<Client['subscribe']> | null = null;
     private rtcHandler: ((message: any) => void) | null = null;
+    private errorSubscription: ReturnType<Client['subscribe']> | null = null;
+    private errorHandler: ((message: any) => void) | null = null;
     private currentProjectId: string | null = null;
     private currentRoomId: string | null = null;
     private connectCallbacks: Array<() => void> = [];
@@ -40,6 +42,7 @@ class WebSocketManager {
             this.resubscribePresence();
             this.resubscribePresenceQueue();
             this.resubscribeRTC();
+            this.resubscribeErrors();
             this.flushConnectCallbacks();
         };
 
@@ -203,6 +206,28 @@ class WebSocketManager {
         this.currentProjectId = null;
     }
 
+    public subscribeToErrors(handler: (message: any) => void) {
+        this.errorHandler = handler;
+        if (this.errorSubscription || !this.client.connected) return;
+
+        this.errorSubscription = this.client.subscribe('/user/queue/errors', (message) => {
+            try {
+                const payload = JSON.parse(message.body);
+                handler(payload);
+            } catch (error) {
+                console.error('Failed to parse error message', error);
+            }
+        });
+    }
+
+    public unsubscribeErrors() {
+        if (this.errorSubscription) {
+            this.errorSubscription.unsubscribe();
+            this.errorSubscription = null;
+        }
+        this.errorHandler = null;
+    }
+
     public sendRTC(projectId: string, payload: any) {
         if (!this.client.connected) {
             console.warn('Cannot send RTC signal: disconnected');
@@ -328,6 +353,22 @@ class WebSocketManager {
         });
         this.rtcSubscription = subscription;
         console.log('[RTC] Resubscribed to /user/queue/rtc');
+    }
+
+    private resubscribeErrors() {
+        if (!this.client.connected || !this.errorHandler) return;
+        if (this.errorSubscription) {
+            this.errorSubscription.unsubscribe();
+            this.errorSubscription = null;
+        }
+        this.errorSubscription = this.client.subscribe('/user/queue/errors', (message) => {
+            try {
+                const payload = JSON.parse(message.body);
+                this.errorHandler?.(payload);
+            } catch (error) {
+                console.error('Failed to parse error message', error);
+            }
+        });
     }
 
     private flushConnectCallbacks() {

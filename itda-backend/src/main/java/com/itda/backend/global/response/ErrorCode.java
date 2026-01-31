@@ -45,6 +45,7 @@ public enum ErrorCode {
     INPUT_IMAGE_NOT_READY(409, "입력 이미지가 준비되지 않았습니다"),
     SCENARIO_VERSION_CONFLICT(409, "시나리오가 최신 상태가 아닙니다"),
     MEMBER_ALREADY_EXISTS(409, "이미 프로젝트의 멤버입니다"),
+    RTC_ROOM_FULL(409, "방 인원이 초과했습니다. 최대 6명까지 접속가능 합니다"),
 
     // ===== 403 Forbidden (Node specific) =====
     SCENE_HEADER_NOT_MODIFIABLE(403, "씬 헤더 노드는 수정/삭제/이동할 수 없습니다"),
@@ -78,3 +79,4 @@ public enum ErrorCode {
         return name();
     }
 }
+
