@@ -119,7 +119,7 @@ public class AiPromptController {
             log.warn("Prompt translate failed: reason={}", e.getMessage());
             promptKo = "";
         }
-        return ApiResponse.success(new AiPromptResponse(promptEnBase, promptKo));
+        return ApiResponse.success(new AiPromptResponse(promptEnBase, promptKo, null));
     }
 
     @Operation(
@@ -153,6 +153,6 @@ public class AiPromptController {
             log.warn("Prompt rewrite failed: reason={}", e.getMessage());
             promptEnBase = "";
         }
-        return ApiResponse.success(new AiPromptResponse(promptEnBase, promptKo));
+        return ApiResponse.success(new AiPromptResponse(promptEnBase, promptKo, null));
     }
 }

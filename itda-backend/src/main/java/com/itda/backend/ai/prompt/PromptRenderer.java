@@ -19,6 +19,7 @@ import java.util.Optional;
 public class PromptRenderer {
 
     private static final String DEFAULT_NONE = "None";
+    private static final int TIMELINE_CUT_INTERVAL_SECONDS = 2;
 
     private final KoEnTranslator koEnTranslator;
     private final VideoActionPlanGenerator videoActionPlanGenerator;
@@ -66,6 +67,7 @@ public class PromptRenderer {
 
         List<String> lines = new ArrayList<>();
         lines.add("A " + safeOrNone(filmLook) + " " + safeOrNone(style) + " wide establishing shot of " + requireEn(promptEnBase) + ".");
+        lines.add("This is an opening establishing still frame with no temporal progression or passing-by.");
         lines.add("Set in the scene \"" + safeOrNone(sceneTitleEn) + "\" — " + safeOrNone(sceneDescriptionEn) + ".");
         lines.add("Lighting: " + safeOrNone(time) + ". Mood: " + safeOrNone(mood) + ".");
         lines.add("Camera: 24-35mm wide lens, deep focus (establishing shot).");
@@ -126,13 +128,14 @@ public class PromptRenderer {
         String mood = PresetFragments.moodFragment(read(settings, "moodKey"));
 
         List<String> lines = new ArrayList<>();
-        lines.add("Create ONE storyboard grid image with " + safeOrNone(layout) + " panels that depict a short sequence.");
+        lines.add("Create ONE storyboard grid image with " + safeOrNone(layout) + " panels that depict sequential still frames sampled every " + TIMELINE_CUT_INTERVAL_SECONDS + " seconds.");
         lines.add("Base content: " + requireEn(promptEnBase) + ".");
-        lines.add("Panels 1.." + panelCount + " are sequential beats:");
+        lines.add("Panels 1.." + panelCount + " are timeline cuts (single still frames):");
         for (int i = 0; i < beatsKo.size(); i++) {
             String beatEn = translated.getOrDefault("beat" + i, "");
-            lines.add((i + 1) + ") " + safeOrNone(beatEn));
+            lines.add((i + 1) + ") (" + formatTimelineRangeLabel(i) + ") " + safeOrNone(beatEn));
         }
+        lines.add("Each panel is a single frozen moment with no transitions or motion blur.");
         lines.add("Keep continuity across panels with the same characters, outfits, lighting, and location.");
         lines.add("Rendered in a " + safeOrNone(filmLook) + " " + safeOrNone(style) + " look under " + safeOrNone(time) + " lighting with a " + safeOrNone(mood) + " feel.");
         lines.add("Continuity rules: " + safeOrNone(continuityRulesEn) + ".");
@@ -323,5 +326,11 @@ public class PromptRenderer {
             return new ArrayList<>(corrected.subList(0, panelCount));
         }
         return corrected;
+    }
+
+    private String formatTimelineRangeLabel(int index) {
+        int start = index * TIMELINE_CUT_INTERVAL_SECONDS;
+        int end = start + TIMELINE_CUT_INTERVAL_SECONDS;
+        return start + "-" + end + "s";
     }
 }
