@@ -23,6 +23,7 @@ interface UseNodeGenerationOptions {
   getPromptOverride?: () => string | undefined;
   getPromptPreviewPayload?: () => PromptPreviewRequest;
   onPromptPreview?: (result: PromptPreviewResponse) => Partial<AnyNodeData>;
+  previewEnabled?: boolean;
   getJobSuccessUpdate: (result: { resultUrl?: string; thumbnailUrl?: string | null }) => Partial<AnyNodeData>;
   messages?: {
     promptError?: string;
@@ -42,7 +43,8 @@ export function useNodeGeneration(options: UseNodeGenerationOptions) {
     errorMessage.value = null;
   };
 
-  const refreshPromptPreview = async (): Promise<void> => {
+  const refreshPromptPreview = async (force = false): Promise<void> => {
+    if (!force && !options.previewEnabled) return;
     if (!options.getPromptPreviewPayload) return;
     try {
       const result = await aiService.previewPrompt(options.nodeId, options.getPromptPreviewPayload());
@@ -68,7 +70,7 @@ export function useNodeGeneration(options: UseNodeGenerationOptions) {
         ...options.getPromptUpdate(result),
         promptStatus: PromptStatus.GENERATED,
       });
-      await refreshPromptPreview();
+      await refreshPromptPreview(true);
       // 성공 토스트
       finishGenerationToast(toastId, 'prompt', 'success');
     } catch (error) {

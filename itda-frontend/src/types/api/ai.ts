@@ -5,6 +5,9 @@
 export interface GeneratePromptRequest {
   nodeType: 'MASTER' | 'GRID' | 'SHOT' | 'VIDEO';
   sceneOneLine?: string;
+  prompt?: string;
+  gridMode?: 'SHOT_VARIATIONS' | 'STORY_BEATS';
+  timelineIntervalSeconds?: number;
   // Master Image
   style?: string;
   timeOfDay?: string;
@@ -28,6 +31,7 @@ export interface GeneratePromptRequest {
 export interface GeneratePromptResponse {
   promptEnBase: string;
   promptKo: string;
+  timelineCuts?: string[];
 }
 
 export interface TranslatePromptResponse {

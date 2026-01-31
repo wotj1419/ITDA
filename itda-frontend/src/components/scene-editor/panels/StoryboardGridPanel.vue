@@ -4,7 +4,7 @@
  */
 import { ref, computed, watch, nextTick, onUnmounted } from 'vue';
 import type { Node as VueFlowNode } from '@vue-flow/core';
-import type { StoryboardGridNodeData, GridLayout, GridMode } from '../../../types/ui/sceneNodes';
+import type { StoryboardGridNodeData, GridLayout, GridMode, MasterImageNodeData } from '../../../types/ui/sceneNodes';
 import { JobStatus, NodeType, PromptStatus } from '../../../types/ui/sceneNodes';
 import BasePanel from './BasePanel.vue';
 import { useSceneNodeStore } from '../../../stores/sceneNode';
@@ -50,6 +50,8 @@ const lastSyncedKo = ref('');
 const promptSectionRef = ref<HTMLElement | null>(null);
 const promptKoRef = ref<HTMLTextAreaElement | null>(null);
 const isFinalEditing = ref(false);
+const timelineCutsSectionRef = ref<HTMLElement | null>(null);
+const isTimelineCutsEditorOpen = ref(false);
 let promptPreviewTimeout: ReturnType<typeof setTimeout> | null = null;
 
 const {
@@ -68,7 +70,10 @@ const {
   getPromptPayload: () => ({
     nodeType: 'GRID',
     sceneOneLine: buildSceneOneLine(),
+    prompt: form.value.prompt,
+    gridMode: form.value.gridMode,
     layout: form.value.layout,
+    timelineIntervalSeconds: TIMELINE_CUT_INTERVAL_SECONDS,
     ...(form.value.gridMode === 'SHOT_VARIATIONS'
       ? {
         shotTypes: form.value.shotTypes,
@@ -81,7 +86,9 @@ const {
     layout: form.value.layout,
     shotTypes: form.value.shotTypes,
     compositionHint: form.value.compositionHint,
-    beats: form.value.beats,
+    beats: (form.value.gridMode === 'STORY_BEATS' && result.timelineCuts && result.timelineCuts.length > 0)
+      ? normalizeBeats(result.timelineCuts, form.value.layout)
+      : form.value.beats,
     continuityRules: form.value.continuityRules,
     prompt: result.promptEnBase,
     promptKo: result.promptKo,
@@ -144,8 +151,9 @@ const {
 const layoutOptions: GridLayout[] = ['2x2', '2x3', '3x3'];
 const gridModeOptions = [
   { value: 'SHOT_VARIATIONS', label: '샷 변주' },
-  { value: 'STORY_BEATS', label: '스토리 비트' },
+  { value: 'STORY_BEATS', label: '타임라인 컷' },
 ] as const;
+const TIMELINE_CUT_INTERVAL_SECONDS = 2;
 const shotTypeHelpItems = [
   {
     label: '와이드샷',
@@ -190,9 +198,26 @@ const isPromptGenerated = computed(
 const isPromptApproved = computed(() => data.value?.promptStatus === PromptStatus.APPROVED);
 const isKoOutOfSync = computed(() => koDirty.value);
 const isStoryBeats = computed(() => form.value.gridMode === 'STORY_BEATS');
+const timelineCutsCount = computed(() => form.value.beats.filter((beat) => beat.trim().length > 0).length);
+const timelineCutsButtonLabel = computed(() => {
+  if (isTimelineCutsEditorOpen.value) return '접기';
+  if (timelineCutsCount.value > 0) return `컷 편집하기 (${timelineCutsCount.value}개 입력됨)`;
+  return '컷 편집하기';
+});
 const sceneHeaderData = computed(() =>
   nodeStore.nodes.find((node) => node.data?.type === NodeType.SCENE_HEADER)?.data
 );
+const activeMasterNode = computed(() =>
+  nodeStore.nodes.find((node) => node.data?.type === NodeType.MASTER_IMAGE && (node.data as MasterImageNodeData).isActive)
+    ?? nodeStore.nodes.find((node) => node.data?.type === NodeType.MASTER_IMAGE)
+);
+const activeMasterPrompt = computed(() => {
+  const masterData = activeMasterNode.value?.data as MasterImageNodeData | undefined;
+  return {
+    prompt: masterData?.prompt?.trim() ?? '',
+    promptKo: masterData?.promptKo ?? '',
+  };
+});
 const parentMasterData = computed(() =>
   nodeStore.nodes.find((node) => node.id === data.value?.parentNodeId)?.data
 );
@@ -212,8 +237,9 @@ function buildSceneOneLine(): string {
     if (form.value.shotTypes.length) parts.push(`shotTypes: ${form.value.shotTypes.join(', ')}`);
     if (form.value.compositionHint) parts.push(`composition: ${form.value.compositionHint}`);
   } else {
+    parts.push(`timelineInterval: ${TIMELINE_CUT_INTERVAL_SECONDS}s`);
     const beats = form.value.beats.filter((beat) => beat.trim().length > 0);
-    if (beats.length) parts.push(`beats: ${beats.join(' | ')}`);
+    if (beats.length) parts.push(`timelineCuts: ${beats.join(' | ')}`);
     if (form.value.continuityRules) parts.push(`continuityRules: ${form.value.continuityRules}`);
   }
   return parts.join(', ');
@@ -226,6 +252,12 @@ function getPanelCount(layout: GridLayout): number {
   const cols = Number(parts[1]);
   if (!Number.isFinite(rows) || !Number.isFinite(cols)) return 0;
   return rows * cols;
+}
+
+function formatTimelineRange(index: number): string {
+  const start = index * TIMELINE_CUT_INTERVAL_SECONDS;
+  const end = start + TIMELINE_CUT_INTERVAL_SECONDS;
+  return `${start}-${end}s`;
 }
 
 function normalizeBeats(beats: string[], layout: GridLayout): string[] {
@@ -260,6 +292,8 @@ watch(() => props.node.id, () => {
   koDirty.value = false;
   lastSyncedKo.value = form.value.promptKo;
   isFinalEditing.value = false;
+  isTimelineCutsEditorOpen.value = false;
+  maybeAutofillPromptFromMaster();
   clearError();
 }, { immediate: true });
 
@@ -339,8 +373,14 @@ watch(
 watch(
   () => form.value.gridMode,
   (nextMode) => {
+    if (data.value?.gridMode !== nextMode) {
+      nodeStore.updateNodeLocal(props.node.id, { gridMode: nextMode });
+    }
     if (nextMode === 'STORY_BEATS') {
       form.value.beats = normalizeBeats(form.value.beats, form.value.layout);
+      maybeAutofillPromptFromMaster();
+    } else {
+      isTimelineCutsEditorOpen.value = false;
     }
   }
 );
@@ -387,6 +427,17 @@ function toggleShotType(type: string): void {
   }
 }
 
+function maybeAutofillPromptFromMaster(): void {
+  if (form.value.gridMode !== 'STORY_BEATS') return;
+  if (form.value.prompt.trim()) return;
+  const masterPrompt = activeMasterPrompt.value.prompt;
+  if (!masterPrompt) return;
+  form.value.prompt = masterPrompt;
+  if (!form.value.promptKo && activeMasterPrompt.value.promptKo) {
+    form.value.promptKo = activeMasterPrompt.value.promptKo;
+  }
+}
+
 const isRewriting = ref(false);
 
 async function rewritePrompt(): Promise<void> {
@@ -407,6 +458,48 @@ async function rewritePrompt(): Promise<void> {
   } finally {
     isRewriting.value = false;
   }
+}
+
+async function openTimelineCutsEditor(): Promise<void> {
+  isTimelineCutsEditorOpen.value = true;
+  await nextTick();
+  if (!timelineCutsSectionRef.value) return;
+  const container = timelineCutsSectionRef.value.closest('.base-panel__content') as HTMLElement | null;
+  if (container) {
+    const containerRect = container.getBoundingClientRect();
+    const sectionRect = timelineCutsSectionRef.value.getBoundingClientRect();
+    const currentScroll = container.scrollTop;
+    const offset = sectionRect.top - containerRect.top;
+    const centeredOffset = (container.clientHeight - sectionRect.height) / 2;
+    const rawTarget = currentScroll + offset - centeredOffset;
+    const maxScroll = Math.max(0, container.scrollHeight - container.clientHeight);
+    const targetScroll = Math.min(Math.max(0, rawTarget), maxScroll);
+    gsap.to(container, { scrollTop: targetScroll, duration: 0.45, ease: 'power2.out' });
+  } else {
+    timelineCutsSectionRef.value.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+  gsap.killTweensOf(timelineCutsSectionRef.value);
+  gsap.fromTo(
+    timelineCutsSectionRef.value,
+    { boxShadow: '0 0 0 0 rgba(255, 107, 138, 0)', backgroundColor: 'rgba(255, 250, 252, 0)' },
+    {
+      boxShadow: '0 0 0 12px rgba(255, 107, 138, 0.35)',
+      backgroundColor: 'rgba(255, 250, 252, 0.9)',
+      duration: 0.35,
+      yoyo: true,
+      repeat: 1,
+      ease: 'power2.out',
+      clearProps: 'boxShadow,backgroundColor',
+    }
+  );
+}
+
+function toggleTimelineCutsEditor(): void {
+  if (isTimelineCutsEditorOpen.value) {
+    isTimelineCutsEditorOpen.value = false;
+    return;
+  }
+  void openTimelineCutsEditor();
 }
 
 function toggleFinalEditing(): void {
@@ -603,20 +696,28 @@ function handleGenerateGrid(): void {
         />
       </div>
 
-      <!-- Story Beats -->
-      <div v-if="isStoryBeats" class="panel-section">
-        <label class="panel-label">
-          <FileText class="panel-label-icon" />
-          비트 입력
-        </label>
-        <div class="panel-beats">
+      <!-- Timeline Cuts -->
+      <div v-if="isStoryBeats" class="panel-section" ref="timelineCutsSectionRef">
+        <div class="panel-label-row">
+          <label class="panel-label">
+            <FileText class="panel-label-icon" />
+            타임라인 컷
+          </label>
+          <button class="panel-btn panel-btn--text" type="button" @click="toggleTimelineCutsEditor">
+            {{ timelineCutsButtonLabel }}
+          </button>
+        </div>
+        <p class="panel-subtext">
+          AI로 다듬기를 누르면 2초 간격의 정지 프레임이 자동으로 채워집니다.
+        </p>
+        <div v-if="isTimelineCutsEditorOpen" class="panel-beats">
           <div v-for="(_, index) in form.beats" :key="`beat-${index}`" class="panel-beat-item">
-            <div class="panel-beat-label">비트 {{ index + 1 }}</div>
+            <div class="panel-beat-label">컷 {{ index + 1 }} · {{ formatTimelineRange(index) }}</div>
             <textarea
               v-model="form.beats[index]"
               class="panel-textarea panel-textarea--beat"
               rows="2"
-              placeholder="예: 0~4s: 사건 설명"
+              placeholder="예: 0-2s 구간 장면 설명"
             ></textarea>
           </div>
         </div>

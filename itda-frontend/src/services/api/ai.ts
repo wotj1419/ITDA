@@ -41,6 +41,10 @@ export async function generatePrompt(
 function mapGeneratePromptPayload(request: GeneratePromptRequest): {
     nodeType: GeneratePromptRequest['nodeType'];
     sceneOneLine?: string;
+    prompt?: string;
+    gridMode?: GeneratePromptRequest['gridMode'];
+    layout?: string;
+    timelineIntervalSeconds?: number;
     style?: string;
     timeOfDay?: string;
     mood?: string;
@@ -72,6 +76,10 @@ function mapGeneratePromptPayload(request: GeneratePromptRequest): {
     return {
         nodeType: request.nodeType,
         sceneOneLine: request.sceneOneLine || derivedSceneOneLine || undefined,
+        prompt: request.prompt,
+        gridMode: request.gridMode,
+        layout: request.layout,
+        timelineIntervalSeconds: request.timelineIntervalSeconds,
         style: request.style,
         timeOfDay: request.timeOfDay,
         mood: request.mood,
