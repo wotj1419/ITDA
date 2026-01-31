@@ -337,6 +337,32 @@ watch(
 );
 
 watch(
+  () => [
+    form.value.prompt,
+    form.value.promptKo,
+    form.value.promptEnFinalOverride,
+    form.value.usePromptOverride,
+  ],
+  () => {
+    if (!data.value) return;
+    const updates: Partial<MasterImageNodeData> = {};
+    if (form.value.prompt !== (data.value.prompt ?? '')) {
+      updates.prompt = form.value.prompt;
+    }
+    if (form.value.promptKo !== (data.value.promptKo ?? '')) {
+      updates.promptKo = form.value.promptKo;
+    }
+    const nextOverride = form.value.usePromptOverride ? form.value.promptEnFinalOverride : '';
+    if (nextOverride !== (data.value.promptEnFinalOverride ?? '')) {
+      updates.promptEnFinalOverride = nextOverride;
+    }
+    if (Object.keys(updates).length > 0) {
+      nodeStore.updateNodeLocal(props.node.id, updates);
+    }
+  }
+);
+
+watch(
   () => ({
     prompt: form.value.prompt,
     style: form.value.style,
