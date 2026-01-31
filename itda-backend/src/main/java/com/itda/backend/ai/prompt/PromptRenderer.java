@@ -214,10 +214,16 @@ public class PromptRenderer {
         String time = PresetFragments.timeOfDayFragment(read(settings, "timeOfDayKey"));
         String mood = PresetFragments.moodFragment(read(settings, "moodKey"));
 
-        String actionPlanEn = videoActionPlanGenerator.generate(duration == null ? 4 : duration, promptEnBase);
+        int resolvedDuration = duration == null ? 4 : duration;
+        boolean hasEndFrame = read(settings, "endShotNodeId") != null;
+        String actionPlanEn = videoActionPlanGenerator.generate(resolvedDuration, promptEnBase, hasEndFrame);
 
         List<String> lines = new ArrayList<>();
-        lines.add("Generate a " + (duration == null ? 4 : duration) + "-second single continuous shot video from the provided start image, with no cuts or time jumps.");
+        lines.add("Generate a " + resolvedDuration + "-second single continuous shot video from the provided start image, with no cuts or time jumps.");
+        if (hasEndFrame) {
+            lines.add("The video must start exactly at the start image and end exactly at the provided end image (pose, framing, and composition must match).");
+            lines.add("Interpolate smoothly between the two keyframes with no sudden jumps or drifting from the target framing.");
+        }
         lines.add(requireEn(actionPlanEn));
 
         String cameraLine = "The camera uses " + safeOrNone(cameraMotionEn) + ".";
@@ -227,10 +233,10 @@ public class PromptRenderer {
         lines.add(cameraLine);
         lines.add("The scene has a " + safeOrNone(filmLook) + " " + safeOrNone(style) + " look under " + safeOrNone(time) + " lighting with a " + safeOrNone(mood) + " feel.");
         lines.add("Maintain character identity, outfits, and location consistency throughout. No text, no watermark, no logo.");
-        lines.add("Hold the final pose steadily for the last half-second.");
-
-        if (read(settings, "endShotNodeId") != null) {
-            lines.add("End should gently approach the end shot composition (no hard cut).");
+        if (hasEndFrame) {
+            lines.add(buildEndFrameTimingGuidance(resolvedDuration));
+        } else {
+            lines.add("Hold the final pose steadily for the last half-second.");
         }
 
         return joinAndValidate(lines);
@@ -243,6 +249,15 @@ public class PromptRenderer {
         }
         String legacy = readString(settings, "cameraMotion");
         return legacy;
+    }
+
+    private String buildEndFrameTimingGuidance(int durationSeconds) {
+        return switch (durationSeconds) {
+            case 4 -> "Timing: hold the start for ~1s, transition over ~2s, and hold the end pose for ~1s.";
+            case 6 -> "Timing: hold the start for ~1.5s, transition over ~3s, and hold the end pose for ~1.5s.";
+            case 8 -> "Timing: hold the start for ~2s, transition over ~4-5s, and hold the end pose for the final ~1.5-2s.";
+            default -> "Timing: hold the start briefly, transition smoothly, and end with a steady hold on the final pose.";
+        };
     }
 
     private String joinAndValidate(List<String> lines) {
