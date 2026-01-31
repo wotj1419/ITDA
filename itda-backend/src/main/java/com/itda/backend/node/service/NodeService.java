@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.itda.backend.ai.prompt.PromptRenderer;
 import com.itda.backend.ai.service.PromptTranslationService;
+import com.itda.backend.ai.veo.VeoPromptSafetyValidator;
 import com.itda.backend.global.exception.BusinessException;
 import com.itda.backend.global.response.ErrorCode;
 import com.itda.backend.job.domain.Job;
@@ -62,6 +63,7 @@ public class NodeService {
     private final MediaUrlResolver mediaUrlResolver;
     private final PromptRenderer promptRenderer;
     private final PromptTranslationService promptTranslationService;
+    private final VeoPromptSafetyValidator veoPromptSafetyValidator;
     private final GenerationSettingsResolver generationSettingsResolver;
 
     private record VideoShotIds(Long startShotNodeId, Long endShotNodeId) {}
@@ -276,6 +278,9 @@ public class NodeService {
         String promptEnFinal = (overrideFromSettings != null && !overrideFromSettings.isBlank())
                 ? overrideFromSettings
                 : promptRenderer.render(node.getNodeType(), scene, promptEnBase, effectiveSettings);
+        if (node.getNodeType() == NodeType.VIDEO) {
+            veoPromptSafetyValidator.validate(promptEnFinal);
+        }
         Map<String, Object> cachedSettings = new LinkedHashMap<>(effectiveSettings);
         if (overrideFromRequest != null) {
             if (overrideFromRequest.isBlank()) {

@@ -89,7 +89,7 @@ public class AiPromptService {
                     yield "Guide: describe the shared scene moment; avoid sequencing; keep details consistent across panels.";
                 }
                 case SHOT -> "Guide: focus on a single frame with clear subject pose, gaze, hands, and foreground/background relation.";
-                case VIDEO -> "Guide: single continuous shot; describe a natural motion arc from start to end (no cuts).";
+                case VIDEO -> "Guide: single continuous shot; describe a natural motion arc from start to end (no cuts). Avoid real people or celebrities; use fictional characters only.";
                 case SCENE_HEADER -> "Guide: summarize the scene context briefly.";
             });
             lines.add("");
