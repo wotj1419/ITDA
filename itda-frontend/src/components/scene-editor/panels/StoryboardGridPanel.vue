@@ -114,6 +114,8 @@ const {
       compositionHintKo: form.value.compositionHint,
     };
   },
+  getReferenceObjectIds: () =>
+    activeMasterObjectIds.value.length ? [...activeMasterObjectIds.value] : undefined,
   getPromptOverride: () =>
     form.value.usePromptOverride ? form.value.promptEnFinalOverride : '',
   getPromptPreviewPayload: () => ({
@@ -217,6 +219,10 @@ const activeMasterPrompt = computed(() => {
     prompt: masterData?.prompt?.trim() ?? '',
     promptKo: masterData?.promptKo ?? '',
   };
+});
+const activeMasterObjectIds = computed(() => {
+  const masterData = activeMasterNode.value?.data as MasterImageNodeData | undefined;
+  return masterData?.objectIds ?? [];
 });
 const parentMasterData = computed(() =>
   nodeStore.nodes.find((node) => node.id === data.value?.parentNodeId)?.data

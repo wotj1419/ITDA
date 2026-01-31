@@ -161,6 +161,8 @@ const {
     detailKo: form.value.additionalDetail,
     gridCellCutKo: gridCellCutKo.value,
   }),
+  getReferenceObjectIds: () =>
+    activeMasterData.value?.objectIds?.length ? [...activeMasterData.value.objectIds] : undefined,
   getPromptOverride: () =>
     form.value.usePromptOverride ? form.value.promptEnFinalOverride : '',
   getPromptPreviewPayload: () => ({

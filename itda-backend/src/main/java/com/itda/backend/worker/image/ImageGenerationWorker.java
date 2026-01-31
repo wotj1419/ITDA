@@ -62,22 +62,23 @@ public class ImageGenerationWorker {
     }
 
     private GeminiImageResult generateImage(Job job, ParsedJobRequest request) {
+        Node node = loadNode(job);
+        List<ReferenceImage> referenceImages = new java.util.ArrayList<>();
         List<Long> referenceObjectIds = request.referenceObjectIds();
         if (referenceObjectIds != null && !referenceObjectIds.isEmpty()) {
-            List<ReferenceImage> referenceImages = referenceImageLoader.load(job.getProjectId(), referenceObjectIds);
+            referenceImages.addAll(referenceImageLoader.load(job.getProjectId(), referenceObjectIds));
+        }
+
+        NodeContent referenceImage = resolveReferenceImage(node);
+        if (referenceImage != null && referenceImage.bytes() != null && referenceImage.bytes().length > 0) {
+            // Place parent frame last to preserve its aspect ratio in multi-image mode.
+            referenceImages.add(new ReferenceImage(referenceImage.bytes(), referenceImage.contentType()));
+        }
+
+        if (!referenceImages.isEmpty()) {
             return geminiImageClient.generateImage(request.prompt(), request.settings(), referenceImages);
         }
-        Node node = loadNode(job);
-        NodeContent referenceImage = resolveReferenceImage(node);
-        if (referenceImage == null) {
-            return geminiImageClient.generateImage(request.prompt(), request.settings());
-        }
-        return geminiImageClient.generateImage(
-                request.prompt(),
-                request.settings(),
-                referenceImage.bytes(),
-                referenceImage.contentType()
-        );
+        return geminiImageClient.generateImage(request.prompt(), request.settings());
     }
 
     private Node loadNode(Job job) {

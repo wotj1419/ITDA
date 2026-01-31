@@ -109,6 +109,10 @@ public class PromptRenderer {
         List<String> lines = new ArrayList<>();
         lines.add("Create ONE storyboard grid image with " + safeOrNone(layout) + " panels, all showing the SAME moment in the SAME scene (not sequential).");
         lines.add("Base content: " + requireEn(promptEnBase) + ".");
+        if (hasNonEmptyIdList(settings, "objectIds") || hasNonEmptyIdList(settings, "referenceObjectIds")) {
+            lines.add("Use the provided reference images to match the appearance of the selected characters/objects.");
+            lines.add("Keep their identity, materials, and distinctive features consistent with the references.");
+        }
         lines.add("Panels must differ only by camera framing:");
         for (int i = 0; i < shotTypes.size(); i++) {
             String shotTypeEn = PresetFragments.shotTypeEn(shotTypes.get(i));
@@ -144,6 +148,10 @@ public class PromptRenderer {
         List<String> lines = new ArrayList<>();
         lines.add("Create ONE storyboard grid image with " + safeOrNone(layout) + " panels that depict sequential still frames sampled every " + TIMELINE_CUT_INTERVAL_SECONDS + " seconds.");
         lines.add("Base content: " + requireEn(promptEnBase) + ".");
+        if (hasNonEmptyIdList(settings, "objectIds") || hasNonEmptyIdList(settings, "referenceObjectIds")) {
+            lines.add("Use the provided reference images to match the appearance of the selected characters/objects.");
+            lines.add("Keep their identity, materials, and distinctive features consistent with the references.");
+        }
         lines.add("Panels 1.." + panelCount + " are timeline cuts (single still frames):");
         for (int i = 0; i < beatsKo.size(); i++) {
             String beatEn = translated.getOrDefault("beat" + i, "").trim();
@@ -186,6 +194,10 @@ public class PromptRenderer {
         int cellNumberHuman = safeGridCellIndex + 1;
         lines.add("A " + safeOrNone(filmLook) + " " + safeOrNone(style) + " high-quality single cinematic frame based on storyboard cell #" + cellNumberHuman + ":");
         lines.add(requireEn(promptEnBase) + ".");
+        if (hasNonEmptyIdList(settings, "objectIds") || hasNonEmptyIdList(settings, "referenceObjectIds")) {
+            lines.add("Use the provided reference images to match the appearance of the selected characters/objects.");
+            lines.add("Keep their identity, materials, and distinctive features consistent with the references.");
+        }
         if (!safeOrNone(gridCellCutEn).equals(DEFAULT_NONE)) {
             lines.add("Match the content and framing of grid cell #" + cellNumberHuman + ": " + ensurePeriod(gridCellCutEn));
         }
