@@ -951,6 +951,14 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
     // Actions - Persist Positions
     // ==========================================================================
 
+    function applyRemoteNodeMove(nodeId: string, x: number, y: number): void {
+        const target = nodes.value.find((node) => node.id === nodeId);
+        if (!target) return;
+        if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+        if (target.position?.x === x && target.position?.y === y) return;
+        target.position = { x, y };
+    }
+
     let persistPositionsTimeout: ReturnType<typeof setTimeout> | null = null;
     async function sendNodePositions(): Promise<void> {
         if (!sceneId.value) return;
@@ -1574,6 +1582,7 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
         canConnect: canConnectNode,
 
         // Actions - Persist
+        applyRemoteNodeMove,
         persistNodePositions,
         flushPersistNodePositions,
 

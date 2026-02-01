@@ -166,7 +166,7 @@ class WebSocketManager {
         }
     }
 
-    public sendPresence(projectId: string, payload: { type: 'LOCATION'; location: string; sceneId?: number | null; nodeId?: number | null }) {
+    public sendPresence(projectId: string, payload: { type: string; [key: string]: unknown }) {
         if (!this.client.connected) {
             console.warn('Cannot send presence: disconnected');
             return;
