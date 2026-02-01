@@ -7,6 +7,7 @@
 import { computed, inject, nextTick, provide, ref, watch } from 'vue';
 import { panelRegistry } from './index';
 import { useSceneNodeStore } from '../../../stores/sceneNode';
+import { useCollabStore } from '../../../stores/collab';
 import { NodeType } from '../../../types/ui/sceneNodes';
 import type { AnyNodeData } from '../../../types/ui/sceneNodes';
 
@@ -15,6 +16,7 @@ import type { AnyNodeData } from '../../../types/ui/sceneNodes';
 // =============================================================================
 
 const nodeStore = useSceneNodeStore();
+const collabStore = useCollabStore();
 const requestDeleteNode = inject<((nodeId: string) => void) | null>('nodeDeleteRequest', null);
 
 // =============================================================================
@@ -30,9 +32,27 @@ const panelComponent = computed(() => {
   return panelRegistry[nodeType] || null;
 });
 
-const canDeleteSelected = computed(
-  () => selectedNode.value?.data?.type !== NodeType.SCENE_HEADER
-);
+const isLockedByOther = computed(() => {
+  if (!selectedNode.value) return false;
+  return collabStore.isNodeLockedByOther(selectedNode.value.id);
+});
+
+const lockInfo = computed(() => {
+  if (!selectedNode.value) return null;
+  const lock = collabStore.getNodeLock(selectedNode.value.id);
+  if (!lock) return null;
+  if (!collabStore.isNodeLockedByOther(selectedNode.value.id)) return null;
+  return lock;
+});
+
+const canDeleteSelected = computed(() => {
+  const node = selectedNode.value;
+  if (!node) return false;
+  const dataType = (node.data as AnyNodeData | undefined)?.type;
+  const nodeType = dataType ?? (node as { type?: string }).type;
+  if (!nodeType) return false;
+  return nodeType !== NodeType.SCENE_HEADER;
+});
 
 // =============================================================================
 // Methods
@@ -55,6 +75,7 @@ function handleDelete(): void {
 provide('nodePanelClose', handleClose);
 provide('nodePanelDelete', handleDelete);
 provide('nodePanelCanDelete', canDeleteSelected);
+provide('nodePanelLock', lockInfo);
 
 // Scroll panel content to top when switching nodes (all node types)
 watch(
