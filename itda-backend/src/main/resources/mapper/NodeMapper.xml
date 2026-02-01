@@ -212,9 +212,20 @@
         SELECT n.id AS video_node_id,
                n.scene_id AS scene_id,
                s.order_index AS scene_order,
-               n.content_url AS content_url
+               n.asset_id AS asset_id,
+               n.content_url AS content_url,
+               shot.asset_id AS shot_asset_id,
+               shot.content_url AS shot_content_url,
+               master.asset_id AS master_asset_id,
+               master.content_url AS master_content_url
         FROM nodes n
         INNER JOIN scenes s ON n.scene_id = s.id
+        LEFT JOIN nodes shot
+            ON shot.id = n.parent_node_id
+           AND shot.node_type = 'SHOT'
+        LEFT JOIN nodes master
+            ON master.id = s.active_master_node_id
+           AND master.node_type = 'MASTER'
         WHERE s.project_id = #{projectId}
           AND n.node_type = 'VIDEO'
           AND n.is_confirmed = true
@@ -227,8 +238,20 @@
         SELECT n.id AS video_node_id,
                n.scene_id AS scene_id,
                NULL AS scene_order,
-               n.content_url AS content_url
+               n.asset_id AS asset_id,
+               n.content_url AS content_url,
+               shot.asset_id AS shot_asset_id,
+               shot.content_url AS shot_content_url,
+               master.asset_id AS master_asset_id,
+               master.content_url AS master_content_url
         FROM nodes n
+        INNER JOIN scenes s ON n.scene_id = s.id
+        LEFT JOIN nodes shot
+            ON shot.id = n.parent_node_id
+           AND shot.node_type = 'SHOT'
+        LEFT JOIN nodes master
+            ON master.id = s.active_master_node_id
+           AND master.node_type = 'MASTER'
         WHERE n.scene_id = #{sceneId}
           AND n.node_type = 'VIDEO'
           AND n.is_confirmed = true

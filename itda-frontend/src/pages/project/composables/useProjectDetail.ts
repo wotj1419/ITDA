@@ -185,15 +185,18 @@ export function useProjectDetail() {
   };
 
   const buildScenePreviewFromTimeline = (sceneId: number, items: TimelineItem[]): ScenePreview => {
-    const resolveItemUrl = (item: TimelineItem) => item.url ?? item.thumbnailUrl ?? '';
+    const resolveThumbnailUrl = (item: TimelineItem) =>
+      item.thumbnailUrl ?? (item.url && !item.videoUrl ? item.url : '');
+    const resolveVideoUrl = (item: TimelineItem) =>
+      item.videoUrl ?? item.url ?? '';
     const clips = items
       .filter((item) => item.sceneId === sceneId)
       .sort((a, b) => a.order - b.order)
       .map((item) => ({
-        thumbnailUrl: resolveItemUrl(item),
+        thumbnailUrl: resolveThumbnailUrl(item),
         duration: 4,
         label: `Video ${item.order}`,
-        contentUrl: resolveItemUrl(item),
+        contentUrl: resolveVideoUrl(item),
       }));
     const totalDuration = clips.reduce((sum, clip) => sum + clip.duration, 0);
     return { clips, totalDuration };

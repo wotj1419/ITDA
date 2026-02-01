@@ -15,5 +15,10 @@ public class TimelineNodeRow {
     private Long videoNodeId;
     private Long sceneId;
     private Integer sceneOrder;
+    private Long assetId;
     private String contentUrl;
+    private Long shotAssetId;
+    private String shotContentUrl;
+    private Long masterAssetId;
+    private String masterContentUrl;
 }
