@@ -12,6 +12,7 @@ import { getNodeMinSize, NODE_RESIZER_STYLE } from '../../../utils/nodeUi';
 import type { SceneHeaderNodeData } from '../../../types/ui/sceneNodes';
 import { BookOpen, Plus } from 'lucide-vue-next';
 import { useSceneNodeStore } from '../../../stores/sceneNode';
+import { useCollabStore } from '../../../stores/collab';
 
 // =============================================================================
 // Props
@@ -30,6 +31,7 @@ const emit = defineEmits<{
 }>();
 
 const store = useSceneNodeStore();
+const collabStore = useCollabStore();
 const nodeStyle = NODE_RESIZER_STYLE;
 const { minWidth, minHeight } = getNodeMinSize(props.data.type);
 const nodeRef = ref<HTMLElement | null>(null);
@@ -41,7 +43,10 @@ const nodeRef = ref<HTMLElement | null>(null);
 const nodeClasses = computed(() => [
   'node-glass',
   'node-glass--header',
-  { 'node-glass--selected': props.selected },
+  {
+    'node-glass--selected': props.selected,
+    'node-glass--locked': collabStore.isNodeLockedByOther(props.id),
+  },
 ]);
 
 function handleAddChild(event: Event) {

@@ -9,6 +9,7 @@ import { computed } from 'vue';
 import { Handle, Position } from '@vue-flow/core';
 import { NodeResizer } from '@vue-flow/node-resizer';
 import { useSceneNodeStore } from '../../../stores/sceneNode';
+import { useCollabStore } from '../../../stores/collab';
 import type { StoryboardGridNodeData } from '../../../types/ui/sceneNodes';
 import { JobStatus } from '../../../types/ui/sceneNodes';
 import { useNodeStatus } from '../../../composables/useNodeStatus';
@@ -28,6 +29,7 @@ interface Props {
 
 const props = defineProps<Props>();
 const store = useSceneNodeStore();
+const collabStore = useCollabStore();
 
 const nodeStyle = NODE_RESIZER_STYLE;
 const { minWidth, minHeight } = getNodeMinSize(props.data.type);
@@ -48,6 +50,7 @@ const nodeClasses = computed(() => [
   {
     'node-glass--selected': props.selected,
     'node-glass--inactive': isUnderInactiveMaster.value,
+    'node-glass--locked': collabStore.isNodeLockedByOther(props.id),
     [`node-glass--${statusKey.value}`]: true,
   },
 ]);

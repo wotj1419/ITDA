@@ -66,11 +66,15 @@ export const useCollabStore = defineStore('collab', () => {
     ];
     const cursorColorByUser = new Map<string, string>();
 
+    const nodeLocks = reactive(new Map<string, { userId: string; name: string; sceneId: number; updatedAt: number }>());
+    const nodeLockUpdatedAt = new Map<string, number>();
+
     // Throttle state
     let lastCursorSentAt = 0;
     const lastNodeMoveSentAt = new Map<string, number>();
     const lastRemoteNodeMoveAt = new Map<string, number>();
     const localDraggingNodes = new Set<string>();
+    let localLockedNodeId: string | null = null;
 
     // ================================
     // Getters
@@ -84,11 +88,43 @@ export const useCollabStore = defineStore('collab', () => {
     const flowToScreenCoordinate = ref<((pos: { x: number; y: number }) => { x: number; y: number }) | null>(null);
     const localUserId = ref(authStore.user?.id ? String(authStore.user.id) : `user-${Math.random().toString(36).slice(2, 7)}`);
 
+    function remapLocalLocks(prevId: string, nextId: string): void {
+        if (!prevId || prevId === nextId) return;
+        const now = Date.now();
+        const entries = Array.from(nodeLocks.entries());
+        entries.forEach(([nodeId, lock]) => {
+            if (lock.userId !== prevId) return;
+            nodeLocks.set(nodeId, { ...lock, userId: nextId, updatedAt: now });
+            nodeLockUpdatedAt.set(nodeId, now);
+        });
+        if (localLockedNodeId) {
+            sendNodeSelect('LOCK', localLockedNodeId);
+        }
+    }
+
     watch(
         () => authStore.user?.id,
         (nextId) => {
+            if (!nextId) return;
+            const nextUserId = String(nextId);
+            const prevUserId = localUserId.value;
+            if (prevUserId !== nextUserId) {
+                remapLocalLocks(prevUserId, nextUserId);
+                localUserId.value = nextUserId;
+            }
+        }
+    );
+
+    watch(
+        () => sceneNodeStore.selectedNodeId,
+        (nextId, prevId) => {
+            if (prevId && prevId !== nextId && prevId === localLockedNodeId) {
+                unlockNode(prevId);
+            }
             if (nextId) {
-                localUserId.value = String(nextId);
+                lockNode(nextId);
+            } else {
+                localLockedNodeId = null;
             }
         }
     );
@@ -414,6 +450,9 @@ export const useCollabStore = defineStore('collab', () => {
         lastNodeMoveSentAt.clear();
         lastRemoteNodeMoveAt.clear();
         localDraggingNodes.clear();
+        nodeLocks.clear();
+        nodeLockUpdatedAt.clear();
+        localLockedNodeId = null;
         isPanelOpen.value = false;
         localStorage.removeItem(STORAGE_KEY);
     }
@@ -844,6 +883,119 @@ export const useCollabStore = defineStore('collab', () => {
         stopNodeDrag(nodeId);
     }
 
+    function resolveLockName(userId: string, name?: string | null): string {
+        const rawName = typeof name === 'string' ? name.trim() : '';
+        if (rawName && rawName !== 'Guest') {
+            return rawName;
+        }
+        const participantName = participants.value.find((participant) => participant.odps === userId)?.name;
+        const fallbackName = typeof participantName === 'string' ? participantName.trim() : '';
+        if (fallbackName) {
+            return fallbackName;
+        }
+        return rawName || 'Guest';
+    }
+
+    function applyNodeLock(
+        nodeId: string,
+        lock: { userId: string; name: string; sceneId: number; updatedAt: number }
+    ): void {
+        const nextUpdatedAt = Number.isFinite(lock.updatedAt) ? lock.updatedAt : Date.now();
+        const lastUpdatedAt = nodeLockUpdatedAt.get(nodeId) ?? 0;
+        if (nextUpdatedAt < lastUpdatedAt) return;
+        const resolvedName = resolveLockName(lock.userId, lock.name);
+        nodeLockUpdatedAt.set(nodeId, nextUpdatedAt);
+        nodeLocks.set(nodeId, { ...lock, name: resolvedName, updatedAt: nextUpdatedAt });
+    }
+
+    function releaseNodeLock(nodeId: string, userId?: string, updatedAt?: number): void {
+        const nextUpdatedAt = Number.isFinite(updatedAt) ? (updatedAt as number) : Date.now();
+        const lastUpdatedAt = nodeLockUpdatedAt.get(nodeId) ?? 0;
+        if (nextUpdatedAt < lastUpdatedAt) return;
+        const existing = nodeLocks.get(nodeId);
+        if (userId && existing && existing.userId !== userId) {
+            return;
+        }
+        nodeLockUpdatedAt.set(nodeId, nextUpdatedAt);
+        nodeLocks.delete(nodeId);
+    }
+
+    function clearLocksByUser(userId: string): void {
+        const entries = Array.from(nodeLocks.entries());
+        entries.forEach(([nodeId, lock]) => {
+            if (lock.userId === userId) {
+                nodeLocks.delete(nodeId);
+                nodeLockUpdatedAt.delete(nodeId);
+            }
+        });
+    }
+
+    function sendNodeSelect(action: 'LOCK' | 'UNLOCK', nodeId: string): void {
+        if (!authStore.isAuthenticated) return;
+        if (currentProjectId.value === null || currentSceneId.value === null) return;
+        if (!socketManager.getClient().connected || status.value !== 'connected') return;
+        const numericNodeId = Number(nodeId);
+        if (!Number.isFinite(numericNodeId) || numericNodeId <= 0) return;
+
+        socketManager.sendPresence(String(currentProjectId.value), {
+            type: 'NODE_SELECT',
+            sceneId: currentSceneId.value,
+            nodeId: numericNodeId,
+            action,
+        });
+    }
+
+    function lockNode(nodeId: string): void {
+        if (!nodeId || currentSceneId.value === null) return;
+        if (currentProjectId.value === null || status.value !== 'connected') return;
+        if (isNodeLockedByOther(nodeId)) return;
+        localLockedNodeId = nodeId;
+        const ownerId = authStore.user?.id != null ? String(authStore.user.id) : localUserId.value;
+        applyNodeLock(nodeId, {
+            userId: ownerId,
+            name: localParticipant.value.name,
+            sceneId: currentSceneId.value,
+            updatedAt: Date.now(),
+        });
+        sendNodeSelect('LOCK', nodeId);
+    }
+
+    function unlockNode(nodeId: string): void {
+        if (!nodeId) return;
+        const existing = nodeLocks.get(nodeId);
+        if (localLockedNodeId !== nodeId && existing?.userId !== localUserId.value) {
+            return;
+        }
+        if (localLockedNodeId === nodeId) {
+            localLockedNodeId = null;
+        }
+        releaseNodeLock(nodeId, localUserId.value, Date.now());
+        sendNodeSelect('UNLOCK', nodeId);
+    }
+
+    function getNodeLock(nodeId: string): { userId: string; name: string; sceneId: number; updatedAt: number } | null {
+        const lock = nodeLocks.get(nodeId);
+        if (!lock) return null;
+        const resolvedName = resolveLockName(lock.userId, lock.name);
+        if (resolvedName !== lock.name) {
+            nodeLocks.set(nodeId, { ...lock, name: resolvedName });
+        }
+        return { ...lock, name: resolvedName };
+    }
+
+    function isNodeLockedByOther(nodeId: string): boolean {
+        const lock = nodeLocks.get(nodeId);
+        if (!lock) return false;
+        if (participants.value.length <= 1) return false;
+        const authId = authStore.user?.id != null ? String(authStore.user.id) : null;
+        if (lock.userId === localUserId.value) return false;
+        if (authId && lock.userId === authId) return false;
+        if (lock.name && lock.name === localParticipant.value.name) return false;
+        const isKnownParticipant = participants.value.some((participant) => participant.odps === lock.userId);
+        if (!isKnownParticipant) return false;
+        return true;
+    }
+
     function handleCursorUpdate(peerId: string, payload: { x: number; y: number; sceneId: number }) {
         const color = getOrAssignCursorColor(peerId);
         cursors.set(peerId, {
@@ -859,10 +1011,16 @@ export const useCollabStore = defineStore('collab', () => {
     function updateLocation(location: PresenceLocation, sceneId?: number | null, nodeId?: number | null) {
         currentLocation.value = location;
         const previousSceneId = currentSceneId.value;
+        if (previousSceneId !== (sceneId ?? null) && localLockedNodeId) {
+            unlockNode(localLockedNodeId);
+        }
         currentSceneId.value = sceneId ?? null;
         if (previousSceneId !== currentSceneId.value) {
             cursors.clear();
             lastRemoteNodeMoveAt.clear();
+            nodeLocks.clear();
+            nodeLockUpdatedAt.clear();
+            localLockedNodeId = null;
         }
         currentNodeId.value = nodeId ?? null;
         pendingPresence.value = {
@@ -931,7 +1089,35 @@ export const useCollabStore = defineStore('collab', () => {
             sceneNodeStore.applyRemoteNodeMove(nodeKey, x, y);
             return;
         }
-        if (type === 'STATUS' || type === 'NODE_SELECT') {
+        if (type === 'NODE_SELECT') {
+            const sceneId = message?.sceneId;
+            const nodeId = message?.nodeId;
+            const action = String(message?.action ?? '').toUpperCase();
+            if (currentSceneId.value === null || sceneId == null || nodeId == null) return;
+            if (Number(sceneId) !== currentSceneId.value) return;
+            if (!action) return;
+            const messageUserId = message?.userId != null ? String(message.userId) : peerId;
+            const authId = authStore.user?.id != null ? String(authStore.user.id) : null;
+            if (messageUserId === localUserId.value) return;
+            if (authId && messageUserId === authId) return;
+            const nodeKey = String(nodeId);
+            let updatedAt = message?.updatedAt ? Date.parse(message.updatedAt) : Date.now();
+            if (!Number.isFinite(updatedAt)) {
+                updatedAt = Date.now();
+            }
+            if (action === 'LOCK') {
+                applyNodeLock(nodeKey, {
+                    userId: messageUserId,
+                    name: message?.name ?? '',
+                    sceneId: Number(sceneId),
+                    updatedAt,
+                });
+            } else if (action === 'UNLOCK') {
+                releaseNodeLock(nodeKey, messageUserId, updatedAt);
+            }
+            return;
+        }
+        if (type === 'STATUS') {
             return;
         }
         if (type === 'LEAVE') {
@@ -983,11 +1169,23 @@ export const useCollabStore = defineStore('collab', () => {
         participants.value = participants.value.filter(p => p.odps !== peerId);
         cursors.delete(peerId);
         cursorColorByUser.delete(peerId);
+        clearLocksByUser(peerId);
         remoteVolumeMap.delete(peerId);
         stopSpeakingMonitor(peerId);
         // Cleanup audio
         const audio = document.getElementById(`audio-${peerId}`);
         if (audio) audio.remove();
+    }
+
+    function syncLockNamesFromParticipants(): void {
+        if (participants.value.length === 0 || nodeLocks.size === 0) return;
+        const now = Date.now();
+        nodeLocks.forEach((lock, nodeId) => {
+            const resolvedName = resolveLockName(lock.userId, lock.name);
+            if (resolvedName === lock.name) return;
+            nodeLockUpdatedAt.set(nodeId, Math.max(nodeLockUpdatedAt.get(nodeId) ?? 0, now));
+            nodeLocks.set(nodeId, { ...lock, name: resolvedName, updatedAt: now });
+        });
     }
 
     function updateParticipantMute(peerId: string, muted: boolean | undefined | null) {
@@ -1160,6 +1358,13 @@ export const useCollabStore = defineStore('collab', () => {
         }
     });
 
+    watch(
+        () => participants.value.map((participant) => `${participant.odps}:${participant.name ?? ''}`).join('|'),
+        () => {
+            syncLockNamesFromParticipants();
+        }
+    );
+
     function isSpeaking(peerId: string): boolean {
         return speakingMap.get(peerId) ?? false;
     }
@@ -1170,6 +1375,7 @@ export const useCollabStore = defineStore('collab', () => {
         participants,
         messages,
         cursors,
+        nodeLocks,
         isPanelOpen,
         isFloatingBarVisible, // Exported
         isMediaConnected,     // Exported
@@ -1207,6 +1413,8 @@ export const useCollabStore = defineStore('collab', () => {
         startNodeDrag,
         updateNodeMove,
         finishNodeDrag,
+        getNodeLock,
+        isNodeLockedByOther,
         updateLocation,
         rejoinIfNeeded,
         selectMicrophone,

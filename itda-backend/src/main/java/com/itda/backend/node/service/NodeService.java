@@ -8,6 +8,8 @@ import com.itda.backend.global.exception.BusinessException;
 import com.itda.backend.global.response.ErrorCode;
 import com.itda.backend.job.domain.Job;
 import com.itda.backend.job.domain.JobType;
+import com.itda.backend.job.event.NodePositionPayload;
+import com.itda.backend.job.event.ProjectEventWebSocketPublisher;
 import com.itda.backend.job.service.JobService;
 import com.itda.backend.media.MediaUrlResolver;
 import com.itda.backend.node.controller.dto.request.CreateNodeRequest;
@@ -60,6 +62,7 @@ public class NodeService {
     private final ObjectMapper objectMapper;
     private final com.itda.backend.object.repository.ObjectMapper objectSheetMapper;
     private final JobService jobService;
+    private final ProjectEventWebSocketPublisher projectEventPublisher;
     private final MediaUrlResolver mediaUrlResolver;
     private final PromptRenderer promptRenderer;
     private final PromptTranslationService promptTranslationService;
@@ -72,7 +75,7 @@ public class NodeService {
      */
     @Transactional
     public NodeCreateResponse createNode(Long userId, Long sceneId, CreateNodeRequest request) {
-        getSceneAndEnsureMemberForUpdate(sceneId, userId);
+        Scene scene = getSceneAndEnsureMemberForUpdate(sceneId, userId);
         NodeType nodeType = requireNodeType(request.nodeType());
 
         VideoShotIds shotIds = validateCreateRequestAndExtractShots(
@@ -86,6 +89,7 @@ public class NodeService {
 
         nodeMapper.insertNode(node);
         log.debug("Created node: id={}, type={}, sceneId={}", node.getId(), node.getNodeType(), sceneId);
+        projectEventPublisher.nodeChanged(scene.getProjectId(), sceneId, node.getId(), "CREATED", userId);
 
         return new NodeCreateResponse(node.getId());
     }
@@ -156,6 +160,7 @@ public class NodeService {
         nodeMapper.updateNode(updatedNode);
         log.debug("Updated node: id={}", nodeId);
         logFinalPromptEnIfPresent(scene, node, request);
+        projectEventPublisher.nodeChanged(scene.getProjectId(), scene.getId(), nodeId, "UPDATED", userId);
     }
 
     /**
@@ -164,13 +169,14 @@ public class NodeService {
     @Transactional
     public void deleteNode(Long userId, Long nodeId) {
         Node node = getNodeOrThrow(nodeId);
-        getSceneAndEnsureMember(node.getSceneId(), userId);
+        Scene scene = getSceneAndEnsureMember(node.getSceneId(), userId);
 
         // SCENE_HEADER 삭제 금지
         assertNotSceneHeader(node.getNodeType());
 
         nodeMapper.deleteById(nodeId);
         log.debug("Deleted node: id={}", nodeId);
+        projectEventPublisher.nodeChanged(scene.getProjectId(), scene.getId(), nodeId, "DELETED", userId);
     }
 
     /**
@@ -178,7 +184,7 @@ public class NodeService {
      */
     @Transactional
     public void updatePositions(Long userId, Long sceneId, List<NodePosition> positions) {
-        getSceneAndEnsureMember(sceneId, userId);
+        Scene scene = getSceneAndEnsureMember(sceneId, userId);
 
         List<NodePosition> validPositions = filterSceneHeaderPositions(positions);
         if (validPositions.isEmpty()) {
@@ -187,6 +193,10 @@ public class NodeService {
 
         nodeMapper.updatePositions(sceneId, validPositions);
         log.debug("Updated {} node positions for sceneId={}", validPositions.size(), sceneId);
+        List<NodePositionPayload> payload = validPositions.stream()
+                .map((p) -> new NodePositionPayload(p.nodeId(), p.x(), p.y()))
+                .toList();
+        projectEventPublisher.nodeChanged(scene.getProjectId(), scene.getId(), null, "POSITION", userId, payload);
     }
 
     /**
@@ -206,6 +216,7 @@ public class NodeService {
         }
 
         log.debug("Set active master: nodeId={}, sceneId={}", nodeId, scene.getId());
+        projectEventPublisher.nodeChanged(scene.getProjectId(), scene.getId(), nodeId, "ACTIVE_MASTER", userId);
     }
 
     /**
@@ -231,6 +242,7 @@ public class NodeService {
         syncSceneTimelineItem(scene, node, shotNodeId, userId);
 
         log.debug("Confirmed video: nodeId={}, shotNodeId={}, sceneId={}", nodeId, shotNodeId, scene.getId());
+        projectEventPublisher.nodeChanged(scene.getProjectId(), scene.getId(), nodeId, "CONFIRMED", userId);
     }
 
     /**
@@ -239,13 +251,14 @@ public class NodeService {
     @Transactional
     public void unconfirmVideo(Long userId, Long nodeId) {
         Node node = getNodeOrThrow(nodeId);
-        getSceneAndEnsureMemberForUpdate(node.getSceneId(), userId);
+        Scene scene = getSceneAndEnsureMemberForUpdate(node.getSceneId(), userId);
 
         assertVideoNode(node.getNodeType());
         nodeMapper.clearConfirmedVideo(nodeId);
         timelineMapper.deleteSceneTimelineItemByVideoNodeId(nodeId);
 
         log.debug("Unconfirmed video: nodeId={}", nodeId);
+        projectEventPublisher.nodeChanged(scene.getProjectId(), scene.getId(), nodeId, "UNCONFIRMED", userId);
     }
 
     /**
@@ -330,6 +343,7 @@ public class NodeService {
             Node updatedNode = buildGenerationNode(nodeId, node, updateRequest, shotIds, targetStatus);
             nodeMapper.updateNode(updatedNode);
         }
+        projectEventPublisher.nodeChanged(scene.getProjectId(), scene.getId(), nodeId, "GENERATE", userId);
         return job;
     }
 
