@@ -169,6 +169,12 @@ const endShotOptions = computed<EndShotOption[]>(() => {
     });
 });
 
+const selectedEndShotLabel = computed(() => {
+  const selected = endShotOptions.value.find((opt) => opt.id === data.value?.endShotId);
+  return selected?.label ?? '선택 안 함';
+});
+const hasEndShotSelected = computed(() => Boolean(data.value?.endShotId));
+
 
 const {
   isGeneratingPrompt,
@@ -432,14 +438,8 @@ function startSelectEndShot(): void {
   nodeStore.startSelectEndShot(props.node.id);
 }
 
-function handleEndShotChange(event: Event): void {
-  const selected = (event.target as HTMLSelectElement | null)?.value ?? '';
-  if (!selected) {
-    nodeStore.clearEndShot(props.node.id);
-    return;
-  }
-  nodeStore.startSelectEndShot(props.node.id);
-  nodeStore.setEndShot(selected);
+function toggleTransition(): void {
+  form.value.isTransition = !form.value.isTransition;
 }
 
 function toggleFinalEditing(): void {
@@ -555,7 +555,14 @@ function handleGenerateVideo(): void {
             <Repeat class="panel-label-icon" />
             트랜지션 영상
           </label>
-          <input type="checkbox" v-model="form.isTransition" class="panel-toggle" />
+          <button
+            type="button"
+            :class="['panel-btn', form.isTransition ? 'panel-btn--primary' : 'panel-btn--secondary']"
+            @click="toggleTransition"
+          >
+            <Repeat class="panel-btn-icon" />
+            {{ form.isTransition ? '사용 중' : '사용 안 함' }}
+          </button>
         </div>
       </div>
 
@@ -565,12 +572,11 @@ function handleGenerateVideo(): void {
           <Target class="panel-label-icon" />
           끝 샷
         </label>
-        <select :value="data.endShotId ?? ''" class="panel-select" @change="handleEndShotChange">
-          <option value="">선택 안 함</option>
-          <option v-for="opt in endShotOptions" :key="opt.id" :value="opt.id">
-            {{ opt.label }}
-          </option>
-        </select>
+        <div :class="['panel-selected-shot', { 'panel-selected-shot--empty': !hasEndShotSelected }]">
+          <span class="panel-selected-shot__label">현재 선택</span>
+          <span class="panel-selected-shot__value">{{ selectedEndShotLabel }}</span>
+          <span class="panel-label-badge">{{ hasEndShotSelected ? '선택됨' : '미선택' }}</span>
+        </div>
         <button class="panel-btn panel-btn--secondary panel-btn--full" @click="startSelectEndShot">
           <Target class="panel-btn-icon" />
           캔버스에서 끝 샷 선택
