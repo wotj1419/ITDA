@@ -55,7 +55,8 @@ export async function generatePrompt(
 export async function improvePrompt(
   currentPrompt: string,
   userFeedback: string,
-  _nodeType?: GeneratePromptRequest['nodeType']
+  _nodeType?: GeneratePromptRequest['nodeType'],
+  _context?: { sceneOneLine?: string }
 ): Promise<{ promptEnBase: string; promptKo: string }> {
   await delay(400)
   const promptEnBase = `${currentPrompt} (improved: ${userFeedback})`

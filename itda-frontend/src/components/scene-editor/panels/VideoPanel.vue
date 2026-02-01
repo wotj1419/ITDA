@@ -199,6 +199,9 @@ const {
     promptKo: result.promptKo,
   }),
   getImproveInstruction: () => form.value.motionDescription,
+  getImproveContext: () => ({
+    sceneOneLine: buildVideoSceneOneLine() || undefined,
+  }),
   getApprovedUpdate: () => ({
     prompt: form.value.prompt,
     promptKo: form.value.promptKo,
@@ -272,6 +275,20 @@ function buildVideoSceneOneLine(): string {
   }
   if (startShotData.value?.prompt) {
     parts.push(`shotPrompt: ${startShotData.value.prompt}`);
+  }
+  if (endShotData.value?.shotType) {
+    parts.push(`endShotType: ${endShotData.value.shotType}`);
+  } else if (endShotData.value?.shotTypes?.length) {
+    parts.push(`endShotTypes: ${endShotData.value.shotTypes.join(', ')}`);
+  }
+  if (endShotData.value?.expression) {
+    parts.push(`endExpression: ${endShotData.value.expression}`);
+  }
+  if (endShotData.value?.additionalDetail) {
+    parts.push(`endDetail: ${endShotData.value.additionalDetail}`);
+  }
+  if (endShotData.value?.prompt) {
+    parts.push(`endShotPrompt: ${endShotData.value.prompt}`);
   }
   if (form.value.motionDescription) {
     parts.push(`detail: ${form.value.motionDescription}`);

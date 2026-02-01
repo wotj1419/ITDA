@@ -130,6 +130,10 @@ public class AiPromptService {
             lines.add("Use fictional adult characters only. Do NOT mention students, schools, uniforms, or any child/teen terms.");
             lines.add("If the input contains forbidden terms, rewrite them to adult/neutral wording (e.g., young adult, woman/man, public corridor, casual outfit).");
             lines.add("Output must NOT include any of: student, school, uniform, teen, teenager, boy, girl, child, kid, kids, children, schoolgirl, schoolboy.");
+            String sceneOneLine = request.sceneOneLine();
+            if (sceneOneLine != null && !sceneOneLine.isBlank()) {
+                lines.add("context: " + sceneOneLine.trim());
+            }
         }
         if (request.instruction() != null && !request.instruction().isBlank()) {
             lines.add("userFeedback: " + request.instruction().trim());

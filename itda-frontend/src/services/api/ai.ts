@@ -94,11 +94,17 @@ function mapGeneratePromptPayload(request: GeneratePromptRequest): {
 export async function improvePrompt(
     currentPrompt: string,
     userFeedback: string,
-    nodeType?: GeneratePromptRequest['nodeType']
+    nodeType?: GeneratePromptRequest['nodeType'],
+    context?: { sceneOneLine?: string }
 ): Promise<GeneratePromptResponse> {
     const response = await apiClient.post<ApiResponse<GeneratePromptResponse>>(
         '/ai/prompts/improve',
-        { nodeType, prompt: currentPrompt, instruction: userFeedback }
+        {
+            nodeType,
+            prompt: currentPrompt,
+            instruction: userFeedback,
+            sceneOneLine: context?.sceneOneLine,
+        }
     );
     if (!response.data.data?.promptEnBase) {
         throw new Error('Failed to improve prompt');

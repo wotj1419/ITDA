@@ -15,6 +15,9 @@ public record AiPromptImproveRequest(
         String prompt,
 
         @Schema(description = "Improvement instruction", example = "조명과 카메라 구도를 더 구체적으로")
-        String instruction
+        String instruction,
+
+        @Schema(description = "Scene one line (context)", example = "shotType: over-the-shoulder, endShotType: close-up")
+        String sceneOneLine
 ) {
 }
