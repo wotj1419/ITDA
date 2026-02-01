@@ -73,8 +73,6 @@ const edgeTypes = markRaw({
   flowing: FlowingEdge,
 } as const);
 
-const canvasRef = ref<HTMLDivElement | null>(null);
-
 function handleWindowMouseMove(event: MouseEvent): void {
   const el = vueFlowRef?.value;
   if (!el) return;
@@ -285,7 +283,6 @@ defineExpose({
 
 <template>
   <div
-    ref="canvasRef"
     class="node-canvas"
     data-collab-canvas
     :class="{ 'selection-mode-active': nodeStore.selectionMode === 'selectEndShot' }"
