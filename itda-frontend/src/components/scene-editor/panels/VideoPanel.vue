@@ -118,12 +118,6 @@ const isPromptApproved = computed(() => data.value?.promptStatus === PromptStatu
 const isSucceeded = computed(() => data.value?.jobStatus === JobStatus.SUCCEEDED);
 const isConfirmed = computed(() => data.value?.isConfirmed ?? false);
 const promptOverride = computed(() => form.value.promptEnFinalOverride.trim());
-const promptSource = computed(() => {
-  if (form.value.usePromptOverride && promptOverride.value) {
-    return promptOverride.value;
-  }
-  return form.value.prompt;
-});
 const isStartShotReady = computed(() => {
   const start = startShotData.value as { jobStatus?: string; imageUrl?: string | null; thumbnailUrl?: string | null } | undefined;
   const hasImage = Boolean(start?.thumbnailUrl || start?.imageUrl);
@@ -175,6 +169,12 @@ const endShotOptions = computed<EndShotOption[]>(() => {
     });
 });
 
+const selectedEndShotLabel = computed(() => {
+  const selected = endShotOptions.value.find((opt) => opt.id === data.value?.endShotId);
+  return selected?.label ?? '선택 안 함';
+});
+const hasEndShotSelected = computed(() => Boolean(data.value?.endShotId));
+
 
 const {
   isGeneratingPrompt,
@@ -188,7 +188,7 @@ const {
   nodeId: props.node.id,
   nodeType: 'VIDEO',
   toastType: 'video',
-  getPrompt: () => promptSource.value,
+  getPrompt: () => form.value.prompt,
   getPromptPayload: () => ({
     nodeType: 'VIDEO',
     sceneOneLine: buildVideoSceneOneLine(),
@@ -203,11 +203,11 @@ const {
     motionDescription: form.value.motionDescription,
     prompt: result.promptEnBase,
     promptKo: result.promptKo,
-    ...(form.value.usePromptOverride
-      ? { promptEnFinalOverride: result.promptEnBase }
-      : {}),
   }),
   getImproveInstruction: () => form.value.motionDescription,
+  getImproveContext: () => ({
+    sceneOneLine: buildVideoSceneOneLine() || undefined,
+  }),
   getApprovedUpdate: () => ({
     prompt: form.value.prompt,
     promptKo: form.value.promptKo,
@@ -281,6 +281,20 @@ function buildVideoSceneOneLine(): string {
   }
   if (startShotData.value?.prompt) {
     parts.push(`shotPrompt: ${startShotData.value.prompt}`);
+  }
+  if (endShotData.value?.shotType) {
+    parts.push(`endShotType: ${endShotData.value.shotType}`);
+  } else if (endShotData.value?.shotTypes?.length) {
+    parts.push(`endShotTypes: ${endShotData.value.shotTypes.join(', ')}`);
+  }
+  if (endShotData.value?.expression) {
+    parts.push(`endExpression: ${endShotData.value.expression}`);
+  }
+  if (endShotData.value?.additionalDetail) {
+    parts.push(`endDetail: ${endShotData.value.additionalDetail}`);
+  }
+  if (endShotData.value?.prompt) {
+    parts.push(`endShotPrompt: ${endShotData.value.prompt}`);
   }
   if (form.value.motionDescription) {
     parts.push(`detail: ${form.value.motionDescription}`);
@@ -424,14 +438,8 @@ function startSelectEndShot(): void {
   nodeStore.startSelectEndShot(props.node.id);
 }
 
-function handleEndShotChange(event: Event): void {
-  const selected = (event.target as HTMLSelectElement | null)?.value ?? '';
-  if (!selected) {
-    nodeStore.clearEndShot(props.node.id);
-    return;
-  }
-  nodeStore.startSelectEndShot(props.node.id);
-  nodeStore.setEndShot(selected);
+function toggleTransition(): void {
+  form.value.isTransition = !form.value.isTransition;
 }
 
 function toggleFinalEditing(): void {
@@ -547,7 +555,14 @@ function handleGenerateVideo(): void {
             <Repeat class="panel-label-icon" />
             트랜지션 영상
           </label>
-          <input type="checkbox" v-model="form.isTransition" class="panel-toggle" />
+          <button
+            type="button"
+            :class="['panel-btn', form.isTransition ? 'panel-btn--primary' : 'panel-btn--secondary']"
+            @click="toggleTransition"
+          >
+            <Repeat class="panel-btn-icon" />
+            {{ form.isTransition ? '사용 중' : '사용 안 함' }}
+          </button>
         </div>
       </div>
 
@@ -557,12 +572,11 @@ function handleGenerateVideo(): void {
           <Target class="panel-label-icon" />
           끝 샷
         </label>
-        <select :value="data.endShotId ?? ''" class="panel-select" @change="handleEndShotChange">
-          <option value="">선택 안 함</option>
-          <option v-for="opt in endShotOptions" :key="opt.id" :value="opt.id">
-            {{ opt.label }}
-          </option>
-        </select>
+        <div :class="['panel-selected-shot', { 'panel-selected-shot--empty': !hasEndShotSelected }]">
+          <span class="panel-selected-shot__label">현재 선택</span>
+          <span class="panel-selected-shot__value">{{ selectedEndShotLabel }}</span>
+          <span class="panel-label-badge">{{ hasEndShotSelected ? '선택됨' : '미선택' }}</span>
+        </div>
         <button class="panel-btn panel-btn--secondary panel-btn--full" @click="startSelectEndShot">
           <Target class="panel-btn-icon" />
           캔버스에서 끝 샷 선택

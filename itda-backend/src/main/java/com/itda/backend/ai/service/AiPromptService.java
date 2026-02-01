@@ -90,7 +90,11 @@ public class AiPromptService {
                 }
                 case SHOT -> "Guide: focus on a single frame with clear subject pose, gaze, hands, and foreground/background relation.";
                 case VIDEO -> String.join(" ",
-                        "Guide: single continuous shot; describe a natural motion arc from start to end (no cuts).",
+                        "Guide: single continuous shot is preferred; describe a natural motion arc from start to end.",
+                        "If endShot* hints are present, a gentle cinematic transition (soft cross-dissolve or brief occlusion) is allowed; avoid hard cuts.",
+                        "Focus on the motion between the start and end frames; keep the scene, lighting, and background fixed.",
+                        "Do NOT add new objects, locations, or extra background description beyond what is necessary for the motion.",
+                        "If the inputs include endShot* fields, treat them as the target end-frame state.",
                         "Avoid real people, celebrities, minors, sexual content, graphic violence, hate/harassment, and self-harm.",
                         "Use fictional adult characters only.",
                         "Do not use school/student/uniform or child/teen language; use adult, neutral wording and public/corporate spaces instead.",
@@ -130,6 +134,12 @@ public class AiPromptService {
             lines.add("Use fictional adult characters only. Do NOT mention students, schools, uniforms, or any child/teen terms.");
             lines.add("If the input contains forbidden terms, rewrite them to adult/neutral wording (e.g., young adult, woman/man, public corridor, casual outfit).");
             lines.add("Output must NOT include any of: student, school, uniform, teen, teenager, boy, girl, child, kid, kids, children, schoolgirl, schoolboy.");
+            lines.add("Focus on the transition motion only; keep scene, lighting, and background fixed; do not invent new elements.");
+            lines.add("If endShot* hints are present, allow a gentle cinematic transition (soft cross-dissolve or brief occlusion) to connect frames; avoid hard cuts.");
+            String sceneOneLine = request.sceneOneLine();
+            if (sceneOneLine != null && !sceneOneLine.isBlank()) {
+                lines.add("context: " + sceneOneLine.trim());
+            }
         }
         if (request.instruction() != null && !request.instruction().isBlank()) {
             lines.add("userFeedback: " + request.instruction().trim());

@@ -13,6 +13,9 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @Component
 @RequiredArgsConstructor
@@ -20,6 +23,15 @@ public class PromptRenderer {
 
     private static final String DEFAULT_NONE = "None";
     private static final int TIMELINE_CUT_INTERVAL_SECONDS = 2;
+    private static final Set<String> NAME_STOPWORDS = Set.of(
+            "In", "The", "A", "An", "And", "Or", "But", "As", "Of", "On", "At",
+            "By", "For", "With", "From", "To", "Into", "Over", "Under", "Through",
+            "Between", "Within", "Without", "Against", "Across", "Near", "Far"
+    );
+    private static final Pattern NAME_SUBJECT_PATTERN = Pattern.compile(
+            "\\b([A-Z][a-z]+(?:-[A-Za-z][a-z]+)?)\\b(?=\\s+(?:\\w+\\s+){0,2}" +
+                    "(?:stands?|walks?|turns?|raises?|looks?|gazes?|smiles?|steps?|pauses?|moves?|runs?|sits?|faces?|approaches?|speaks?|talks?|holds?|waits?|leans?|reaches?|follows?|stops?|enters?|leaves?)\\b)"
+    );
 
     private final KoEnTranslator koEnTranslator;
     private final VideoActionPlanGenerator videoActionPlanGenerator;
@@ -250,25 +262,38 @@ public class PromptRenderer {
 
         int resolvedDuration = duration == null ? 4 : duration;
         boolean hasEndFrame = read(settings, "endShotNodeId") != null;
-        String actionPlanEn = videoActionPlanGenerator.generate(resolvedDuration, promptEnBase, hasEndFrame);
+        String actionPlanEn = resolveVideoActionPlan(resolvedDuration, promptEnBase, motionDescriptionEn, hasEndFrame);
 
         List<String> lines = new ArrayList<>();
-        lines.add("Generate a " + resolvedDuration + "-second single continuous shot video from the provided start image, with no cuts or time jumps.");
         if (hasEndFrame) {
+            lines.add("Generate a " + resolvedDuration + "-second video that transitions from the provided start image to the provided end image.");
+            lines.add("A smooth cinematic transition is allowed (soft cross-dissolve or brief motion-blur blend); avoid hard cuts.");
             lines.add("The video must start exactly at the start image and end exactly at the provided end image (pose, framing, and composition must match).");
             lines.add("Interpolate smoothly between the two keyframes with continuous motion (ease-in/ease-out), no popping or sudden snaps, and no drifting from the target framing.");
             lines.add("The camera motion should only be what’s necessary to transition from the start framing to the end framing.");
             lines.add("Ease out into the end frame and hold fully still for the final ~0.5s; all subjects and objects are motionless, and the camera is locked.");
+        } else {
+            lines.add("Generate a " + resolvedDuration + "-second single continuous shot video from the provided start image, with no cuts or time jumps.");
         }
         lines.add(requireEn(actionPlanEn));
 
-        String cameraLine = "The camera uses " + safeOrNone(cameraMotionEn) + ".";
-        if (!motionDescriptionEn.isBlank()) {
-            cameraLine += " " + ensurePeriod(motionDescriptionEn);
+        String cameraLine;
+        if (hasEndFrame) {
+            cameraLine = "Camera locked-off; no zoom, pan, tilt, dolly, or reframing.";
+        } else {
+            cameraLine = "The camera uses " + safeOrNone(cameraMotionEn) + ".";
+        }
+        if (!motionDescriptionEn.isBlank() && !hasEndFrame) {
+            String sanitizedMotion = neutralizeProperNames(motionDescriptionEn);
+            cameraLine += " " + ensurePeriod(sanitizedMotion);
         }
         lines.add(cameraLine);
-        lines.add("The scene has a " + safeOrNone(filmLook) + " " + safeOrNone(style) + " look under " + safeOrNone(time) + " lighting with a " + safeOrNone(mood) + " feel.");
-        lines.add("Maintain character identity, outfits, and location consistency throughout. No text, no watermark, no logo.");
+        if (hasEndFrame) {
+            lines.add("Keep lighting, color, and background consistent with the provided frames.");
+        } else {
+            lines.add("The scene has a " + safeOrNone(filmLook) + " " + safeOrNone(style) + " look under " + safeOrNone(time) + " lighting with a " + safeOrNone(mood) + " feel.");
+        }
+        lines.add("Maintain character identity, outfits, and location consistency throughout. No new elements. No text, no watermark, no logo.");
         if (!hasEndFrame) {
             lines.add("Hold the final pose steadily for the last half-second.");
         }
@@ -284,6 +309,52 @@ public class PromptRenderer {
         }
         String legacy = readString(settings, "cameraMotion");
         return legacy;
+    }
+
+    private String resolveVideoActionPlan(
+            int durationSeconds,
+            String promptEnBase,
+            String motionDescriptionEn,
+            boolean hasEndFrame
+    ) {
+        String base = neutralizeProperNames(safe(motionDescriptionEn));
+        if (base.isBlank()) {
+            base = neutralizeProperNames(safe(promptEnBase));
+        }
+        return videoActionPlanGenerator.generate(durationSeconds, base, hasEndFrame);
+    }
+
+    private String neutralizeProperNames(String text) {
+        if (text == null || text.isBlank()) {
+            return text;
+        }
+        Matcher matcher = NAME_SUBJECT_PATTERN.matcher(text);
+        Map<String, String> replacements = new LinkedHashMap<>();
+        int index = 0;
+        while (matcher.find()) {
+            String name = matcher.group(1);
+            if (NAME_STOPWORDS.contains(name)) {
+                continue;
+            }
+            if (!replacements.containsKey(name)) {
+                if (index == 0) {
+                    replacements.put(name, "the person");
+                } else if (index == 1) {
+                    replacements.put(name, "the other person");
+                } else {
+                    replacements.put(name, "the person");
+                }
+                index++;
+            }
+        }
+        if (replacements.isEmpty()) {
+            return text;
+        }
+        String result = text;
+        for (Map.Entry<String, String> entry : replacements.entrySet()) {
+            result = result.replaceAll("\\b" + Pattern.quote(entry.getKey()) + "\\b", entry.getValue());
+        }
+        return result;
     }
 
     private String joinAndValidate(List<String> lines) {
