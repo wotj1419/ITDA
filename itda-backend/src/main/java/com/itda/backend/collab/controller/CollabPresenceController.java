@@ -43,7 +43,13 @@ public class CollabPresenceController {
         Long userId = userDetails.getUserId();
 
         User user = userMapper.findById(userId).orElse(null);
-        String name = user != null && user.getName() != null ? user.getName() : userDetails.getUsername();
+        String name = user != null ? user.getName() : null;
+        if (name == null || name.isBlank()) {
+            name = userDetails.getUsername();
+        }
+        if (name == null || name.isBlank()) {
+            name = "Guest";
+        }
         String profileImageUrl = user != null ? user.getProfileImageUrl() : null;
 
         if (request == null || request.type() == null || request.type().isBlank()) {

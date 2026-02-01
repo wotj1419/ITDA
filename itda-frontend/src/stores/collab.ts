@@ -883,6 +883,19 @@ export const useCollabStore = defineStore('collab', () => {
         stopNodeDrag(nodeId);
     }
 
+    function resolveLockName(userId: string, name?: string | null): string {
+        const rawName = typeof name === 'string' ? name.trim() : '';
+        if (rawName && rawName !== 'Guest') {
+            return rawName;
+        }
+        const participantName = participants.value.find((participant) => participant.odps === userId)?.name;
+        const fallbackName = typeof participantName === 'string' ? participantName.trim() : '';
+        if (fallbackName) {
+            return fallbackName;
+        }
+        return rawName || 'Guest';
+    }
+
     function applyNodeLock(
         nodeId: string,
         lock: { userId: string; name: string; sceneId: number; updatedAt: number }
@@ -890,8 +903,9 @@ export const useCollabStore = defineStore('collab', () => {
         const nextUpdatedAt = Number.isFinite(lock.updatedAt) ? lock.updatedAt : Date.now();
         const lastUpdatedAt = nodeLockUpdatedAt.get(nodeId) ?? 0;
         if (nextUpdatedAt < lastUpdatedAt) return;
+        const resolvedName = resolveLockName(lock.userId, lock.name);
         nodeLockUpdatedAt.set(nodeId, nextUpdatedAt);
-        nodeLocks.set(nodeId, { ...lock, updatedAt: nextUpdatedAt });
+        nodeLocks.set(nodeId, { ...lock, name: resolvedName, updatedAt: nextUpdatedAt });
     }
 
     function releaseNodeLock(nodeId: string, userId?: string, updatedAt?: number): void {
@@ -960,7 +974,13 @@ export const useCollabStore = defineStore('collab', () => {
     }
 
     function getNodeLock(nodeId: string): { userId: string; name: string; sceneId: number; updatedAt: number } | null {
-        return nodeLocks.get(nodeId) ?? null;
+        const lock = nodeLocks.get(nodeId);
+        if (!lock) return null;
+        const resolvedName = resolveLockName(lock.userId, lock.name);
+        if (resolvedName !== lock.name) {
+            nodeLocks.set(nodeId, { ...lock, name: resolvedName });
+        }
+        return { ...lock, name: resolvedName };
     }
 
     function isNodeLockedByOther(nodeId: string): boolean {
@@ -1088,7 +1108,7 @@ export const useCollabStore = defineStore('collab', () => {
             if (action === 'LOCK') {
                 applyNodeLock(nodeKey, {
                     userId: messageUserId,
-                    name: message?.name ?? 'Guest',
+                    name: message?.name ?? '',
                     sceneId: Number(sceneId),
                     updatedAt,
                 });
@@ -1155,6 +1175,17 @@ export const useCollabStore = defineStore('collab', () => {
         // Cleanup audio
         const audio = document.getElementById(`audio-${peerId}`);
         if (audio) audio.remove();
+    }
+
+    function syncLockNamesFromParticipants(): void {
+        if (participants.value.length === 0 || nodeLocks.size === 0) return;
+        const now = Date.now();
+        nodeLocks.forEach((lock, nodeId) => {
+            const resolvedName = resolveLockName(lock.userId, lock.name);
+            if (resolvedName === lock.name) return;
+            nodeLockUpdatedAt.set(nodeId, Math.max(nodeLockUpdatedAt.get(nodeId) ?? 0, now));
+            nodeLocks.set(nodeId, { ...lock, name: resolvedName, updatedAt: now });
+        });
     }
 
     function updateParticipantMute(peerId: string, muted: boolean | undefined | null) {
@@ -1326,6 +1357,13 @@ export const useCollabStore = defineStore('collab', () => {
             isAutoStarting.value = false;
         }
     });
+
+    watch(
+        () => participants.value.map((participant) => `${participant.odps}:${participant.name ?? ''}`).join('|'),
+        () => {
+            syncLockNamesFromParticipants();
+        }
+    );
 
     function isSpeaking(peerId: string): boolean {
         return speakingMap.get(peerId) ?? false;

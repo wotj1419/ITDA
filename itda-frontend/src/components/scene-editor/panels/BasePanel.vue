@@ -1,9 +1,9 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 /**
- * BasePanel - 공통 패널 레이아웃
- * Sticky Footer 패턴 적용
+ * BasePanel - 怨듯넻 ?⑤꼸 ?덉씠?꾩썐
+ * Sticky Footer ?⑦꽩 ?곸슜
  * 
- * 설계 문서: docs/vue-flow-node-workflow-design.md Section 6.2
+ * ?ㅺ퀎 臾몄꽌: docs/vue-flow-node-workflow-design.md Section 6.2
  */
 
 // =============================================================================
@@ -69,8 +69,7 @@ const canDelete = computed(() => Boolean(panelCanDelete && panelCanDelete.value)
       <div v-if="isLocked" class="base-panel__lock-banner" role="alert">
         <Lock class="base-panel__lock-icon" />
         <span class="base-panel__lock-text">
-          {{ panelLock?.value?.name }}?님이 작업 중이에요.
-        </span>
+          {{ panelLock?.name || '다른 사용자' }} 님이 작업 중이에요.</span>
       </div>
       <div class="base-panel__content-body">
         <slot />
