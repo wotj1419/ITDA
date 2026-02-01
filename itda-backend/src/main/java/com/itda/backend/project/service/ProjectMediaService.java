@@ -122,9 +122,13 @@ public class ProjectMediaService {
 
     private ProjectTimelineItem toTimelineItem(TimelineNodeRow row, int order) {
         String contentUrl = mediaUrlResolver.nodeContentUrl(row.getVideoNodeId(), row.getContentUrl());
-        String publicUrl = resolvePublicContentUrl(row.getContentUrl());
-        String videoUrl = assetUrlResolver.resolveUrl(row.getAssetId(), publicUrl);
-        String thumbnailUrl = isImageUrl(publicUrl) ? publicUrl : null;
+        String videoPublicUrl = resolvePublicContentUrl(row.getContentUrl());
+        String videoUrl = assetUrlResolver.resolveUrl(row.getAssetId(), videoPublicUrl);
+        String shotPublicUrl = resolvePublicContentUrl(row.getShotContentUrl());
+        String shotThumbnail = assetUrlResolver.resolveUrl(row.getShotAssetId(), shotPublicUrl);
+        String masterPublicUrl = resolvePublicContentUrl(row.getMasterContentUrl());
+        String masterThumbnail = assetUrlResolver.resolveUrl(row.getMasterAssetId(), masterPublicUrl);
+        String thumbnailUrl = firstImageUrl(shotThumbnail, masterThumbnail);
         return new ProjectTimelineItem(
                 row.getVideoNodeId(),
                 row.getSceneId(),
@@ -132,6 +136,18 @@ public class ProjectMediaService {
                 contentUrl,
                 thumbnailUrl,
                 videoUrl);
+    }
+
+    private String firstImageUrl(String... candidates) {
+        if (candidates == null) {
+            return null;
+        }
+        for (String candidate : candidates) {
+            if (candidate != null && !candidate.isBlank() && isImageUrl(candidate)) {
+                return candidate;
+            }
+        }
+        return null;
     }
 
     private String resolvePublicContentUrl(String contentUrl) {
