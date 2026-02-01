@@ -5,18 +5,25 @@ import { computed } from 'vue'
 const collabStore = useCollabStore()
 
 const activeCursors = computed(() => {
+    const toScreen = collabStore.flowToScreenCoordinate
+    if (!toScreen) return []
     return Array.from(collabStore.cursors.entries())
         .filter(([userId]) => userId !== collabStore.localParticipant.odps)
         .map(([userId, cursor]) => {
             const participant = collabStore.participants.find(p => p.odps === userId);
+            const screen = toScreen({ x: cursor.x, y: cursor.y })
+            if (!Number.isFinite(screen.x) || !Number.isFinite(screen.y)) {
+                return null
+            }
             return {
                 userId,
-                x: cursor.x,
-                y: cursor.y,
+                left: screen.x,
+                top: screen.y,
                 color: cursor.color,
                 name: participant?.name || 'Unknown'
             }
         })
+        .filter((item): item is { userId: string; left: number; top: number; color: string; name: string } => !!item)
 })
 </script>
 
@@ -26,7 +33,7 @@ const activeCursors = computed(() => {
         v-for="cursor in activeCursors" 
         :key="cursor.userId"
         class="remote-cursor"
-        :style="{ left: `${cursor.x}%`, top: `${cursor.y}%` }"
+        :style="{ left: `${cursor.left}px`, top: `${cursor.top}px` }"
     >
         <!-- Standard cursor SVG icon -->
         <svg 
