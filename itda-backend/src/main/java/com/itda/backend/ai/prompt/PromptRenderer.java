@@ -250,25 +250,37 @@ public class PromptRenderer {
 
         int resolvedDuration = duration == null ? 4 : duration;
         boolean hasEndFrame = read(settings, "endShotNodeId") != null;
-        String actionPlanEn = videoActionPlanGenerator.generate(resolvedDuration, promptEnBase, hasEndFrame);
+        String actionPlanEn = resolveVideoActionPlan(resolvedDuration, promptEnBase, motionDescriptionEn, hasEndFrame);
 
         List<String> lines = new ArrayList<>();
-        lines.add("Generate a " + resolvedDuration + "-second single continuous shot video from the provided start image, with no cuts or time jumps.");
         if (hasEndFrame) {
+            lines.add("Generate a " + resolvedDuration + "-second video that transitions from the provided start image to the provided end image.");
+            lines.add("A smooth cinematic transition is allowed (soft cross-dissolve or brief motion-blur blend); avoid hard cuts.");
             lines.add("The video must start exactly at the start image and end exactly at the provided end image (pose, framing, and composition must match).");
             lines.add("Interpolate smoothly between the two keyframes with continuous motion (ease-in/ease-out), no popping or sudden snaps, and no drifting from the target framing.");
             lines.add("The camera motion should only be what’s necessary to transition from the start framing to the end framing.");
             lines.add("Ease out into the end frame and hold fully still for the final ~0.5s; all subjects and objects are motionless, and the camera is locked.");
+        } else {
+            lines.add("Generate a " + resolvedDuration + "-second single continuous shot video from the provided start image, with no cuts or time jumps.");
         }
         lines.add(requireEn(actionPlanEn));
 
-        String cameraLine = "The camera uses " + safeOrNone(cameraMotionEn) + ".";
-        if (!motionDescriptionEn.isBlank()) {
+        String cameraLine;
+        if (hasEndFrame) {
+            cameraLine = "Camera locked-off; no zoom, pan, tilt, dolly, or reframing.";
+        } else {
+            cameraLine = "The camera uses " + safeOrNone(cameraMotionEn) + ".";
+        }
+        if (!motionDescriptionEn.isBlank() && !hasEndFrame) {
             cameraLine += " " + ensurePeriod(motionDescriptionEn);
         }
         lines.add(cameraLine);
-        lines.add("The scene has a " + safeOrNone(filmLook) + " " + safeOrNone(style) + " look under " + safeOrNone(time) + " lighting with a " + safeOrNone(mood) + " feel.");
-        lines.add("Maintain character identity, outfits, and location consistency throughout. No text, no watermark, no logo.");
+        if (hasEndFrame) {
+            lines.add("Keep lighting, color, and background consistent with the provided frames.");
+        } else {
+            lines.add("The scene has a " + safeOrNone(filmLook) + " " + safeOrNone(style) + " look under " + safeOrNone(time) + " lighting with a " + safeOrNone(mood) + " feel.");
+        }
+        lines.add("Maintain character identity, outfits, and location consistency throughout. No new elements. No text, no watermark, no logo.");
         if (!hasEndFrame) {
             lines.add("Hold the final pose steadily for the last half-second.");
         }
@@ -284,6 +296,19 @@ public class PromptRenderer {
         }
         String legacy = readString(settings, "cameraMotion");
         return legacy;
+    }
+
+    private String resolveVideoActionPlan(
+            int durationSeconds,
+            String promptEnBase,
+            String motionDescriptionEn,
+            boolean hasEndFrame
+    ) {
+        String base = safe(motionDescriptionEn);
+        if (base.isBlank()) {
+            base = safe(promptEnBase);
+        }
+        return videoActionPlanGenerator.generate(durationSeconds, base, hasEndFrame);
     }
 
     private String joinAndValidate(List<String> lines) {
