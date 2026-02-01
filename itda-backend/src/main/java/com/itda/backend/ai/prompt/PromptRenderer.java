@@ -259,17 +259,10 @@ public class PromptRenderer {
             lines.add("Interpolate smoothly between the two keyframes with continuous motion (ease-in/ease-out), no popping or sudden snaps, and no drifting from the target framing.");
             lines.add("The camera motion should only be what’s necessary to transition from the start framing to the end framing.");
             lines.add("Ease out into the end frame and hold fully still for the final ~0.5s; all subjects and objects are motionless, and the camera is locked.");
-            lines.add("Keep subject scale and background alignment constant; no reframing, no parallax drift, and no new elements.");
-            lines.add("Only subtle, continuous subject motion is allowed to bridge the two keyframes.");
         }
         lines.add(requireEn(actionPlanEn));
 
-        String cameraLine;
-        if (hasEndFrame) {
-            cameraLine = "The camera is locked-off on a tripod; no zoom, pan, tilt, dolly, or reframing.";
-        } else {
-            cameraLine = "The camera uses " + safeOrNone(cameraMotionEn) + ".";
-        }
+        String cameraLine = "The camera uses " + safeOrNone(cameraMotionEn) + ".";
         if (!motionDescriptionEn.isBlank()) {
             cameraLine += " " + ensurePeriod(motionDescriptionEn);
         }

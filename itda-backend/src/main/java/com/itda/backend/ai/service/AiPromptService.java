@@ -112,12 +112,6 @@ public class AiPromptService {
         } else {
             lines.add("Objects: none");
         }
-        if (nodeType == NodeType.VIDEO) {
-            String endFrameHint = request == null ? null : request.endFrameHint();
-            if (endFrameHint != null && !endFrameHint.isBlank()) {
-                lines.add("End frame hint (must match end image): " + endFrameHint.trim());
-            }
-        }
         return String.join("\n", lines);
     }
 
@@ -136,9 +130,6 @@ public class AiPromptService {
             lines.add("Use fictional adult characters only. Do NOT mention students, schools, uniforms, or any child/teen terms.");
             lines.add("If the input contains forbidden terms, rewrite them to adult/neutral wording (e.g., young adult, woman/man, public corridor, casual outfit).");
             lines.add("Output must NOT include any of: student, school, uniform, teen, teenager, boy, girl, child, kid, kids, children, schoolgirl, schoolboy.");
-            if (request.endFrameHint() != null && !request.endFrameHint().isBlank()) {
-                lines.add("endFrameHint: " + request.endFrameHint().trim());
-            }
         }
         if (request.instruction() != null && !request.instruction().isBlank()) {
             lines.add("userFeedback: " + request.instruction().trim());

@@ -26,7 +26,6 @@ export interface GeneratePromptRequest {
   cameraMotion?: string;
   duration?: number;
   motionDescription?: string;
-  endFrameHint?: string;
 }
 
 export interface GeneratePromptResponse {

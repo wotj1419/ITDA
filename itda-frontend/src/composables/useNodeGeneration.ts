@@ -17,7 +17,6 @@ interface UseNodeGenerationOptions {
   toastType: GenerationToastType;
   getPrompt: () => string;
   getImproveInstruction?: () => string;
-  getImproveContext?: () => { endFrameHint?: string };
   getPromptPayload: () => GeneratePromptRequest;
   getPromptUpdate: (result: GeneratePromptResponse) => Partial<AnyNodeData>;
   getApprovedUpdate: () => Partial<AnyNodeData>;
@@ -80,9 +79,8 @@ export function useNodeGeneration(options: UseNodeGenerationOptions) {
         // Force regeneration from current inputs instead of echoing the existing prompt.
         promptPayload = { ...promptPayload, prompt: '' };
       }
-      const improveContext = options.getImproveContext?.();
       const result = shouldImprove
-        ? await aiService.improvePrompt(currentPrompt, instruction, options.nodeType, improveContext)
+        ? await aiService.improvePrompt(currentPrompt, instruction, options.nodeType)
         : await aiService.generatePrompt(promptPayload);
       nodeStore.updateNode(options.nodeId, {
         ...options.getPromptUpdate(result),
