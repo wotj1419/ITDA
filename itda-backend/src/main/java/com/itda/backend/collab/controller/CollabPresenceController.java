@@ -20,6 +20,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Controller;
 
 import java.security.Principal;
+import java.util.Locale;
 
 @Slf4j
 @Controller
@@ -42,17 +43,65 @@ public class CollabPresenceController {
         Long userId = userDetails.getUserId();
 
         User user = userMapper.findById(userId).orElse(null);
-        String name = user != null && user.getName() != null ? user.getName() : userDetails.getUsername();
+        String name = user != null ? user.getName() : null;
+        if (name == null || name.isBlank()) {
+            name = userDetails.getUsername();
+        }
+        if (name == null || name.isBlank()) {
+            name = "Guest";
+        }
         String profileImageUrl = user != null ? user.getProfileImageUrl() : null;
 
-        PresenceEvent event = PresenceEvent.location(userId, name, profileImageUrl, request);
+        if (request == null || request.type() == null || request.type().isBlank()) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST);
+        }
+
+        String type = request.type().trim().toUpperCase(Locale.ROOT);
+        PresenceEvent event;
+        boolean cacheEvent = false;
+
+        switch (type) {
+            case "LOCATION" -> {
+                if (request.location() == null || request.location().isBlank()) {
+                    throw new BusinessException(ErrorCode.INVALID_REQUEST);
+                }
+                event = PresenceEvent.location(userId, name, profileImageUrl, request);
+                cacheEvent = true;
+            }
+            case "STATUS" -> {
+                if (request.status() == null || request.status().isBlank()) {
+                    throw new BusinessException(ErrorCode.INVALID_REQUEST);
+                }
+                event = PresenceEvent.status(userId, name, profileImageUrl, request);
+            }
+            case "CURSOR" -> {
+                if (request.sceneId() == null || request.x() == null || request.y() == null) {
+                    throw new BusinessException(ErrorCode.INVALID_REQUEST);
+                }
+                event = PresenceEvent.cursor(userId, name, profileImageUrl, request);
+            }
+            case "NODE_SELECT" -> {
+                if (request.sceneId() == null || request.nodeId() == null || request.action() == null || request.action().isBlank()) {
+                    throw new BusinessException(ErrorCode.INVALID_REQUEST);
+                }
+                event = PresenceEvent.nodeSelect(userId, name, profileImageUrl, request);
+            }
+            case "NODE_MOVE" -> {
+                if (request.sceneId() == null || request.nodeId() == null || request.x() == null || request.y() == null) {
+                    throw new BusinessException(ErrorCode.INVALID_REQUEST);
+                }
+                event = PresenceEvent.nodeMove(userId, name, profileImageUrl, request);
+            }
+            default -> throw new BusinessException(ErrorCode.INVALID_REQUEST);
+        }
+
         boolean isNewSession = presenceSessionRegistry.upsert(
                 sessionId,
                 projectId,
                 userId,
                 name,
                 profileImageUrl,
-                event
+                cacheEvent ? event : null
         );
         String destination = "/topic/presence/" + projectId;
 

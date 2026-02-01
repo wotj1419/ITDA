@@ -35,6 +35,7 @@ import {
     type ProjectEventPayload,
 } from '../../services/ws/projectEvents';
 import { useSceneStore } from '../scene';
+import { useAuthStore } from '../auth';
 import type { SceneNode, NodePositionSnapshot } from './types';
 import { buildPositionSnapshot, snapshotsEqual } from './history';
 import { buildEdge, deriveEdges, canConnect, syncEdgeMeta } from './edges';
@@ -86,6 +87,7 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
     // ==========================================================================
 
     const sceneStore = useSceneStore();
+    const authStore = useAuthStore();
 
     const nodes = ref<SceneNode[]>([]);
     const edges = ref<Edge[]>([]);
@@ -104,12 +106,14 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
     const endShotTargetVideoId = ref<string | null>(null);
 
     const sceneId = ref<string | null>(null);
+    const sceneInfoRef = ref<{ title: string; description: string; order: number } | null>(null);
 
     // 로딩 상태
     const isLoading = ref(false);
     const isSaving = ref(false);
 
     let unsubscribeProjectEvents: (() => void) | null = null;
+    let nodeSyncTimeout: ReturnType<typeof setTimeout> | null = null;
 
     // ==========================================================================
     // Getters
@@ -241,8 +245,46 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
             .filter(Boolean) as SceneNode[]
     );
 
+    const scheduleNodeSync = (targetSceneId: number) => {
+        if (!sceneId.value) return;
+        const currentSceneId = toFiniteNumber(sceneId.value);
+        if (currentSceneId === null || currentSceneId !== targetSceneId) return;
+
+        if (nodeSyncTimeout) clearTimeout(nodeSyncTimeout);
+        nodeSyncTimeout = setTimeout(() => {
+            nodeSyncTimeout = null;
+            if (!sceneId.value || isLoading.value) return;
+            void loadSceneNodes(sceneId.value, sceneInfoRef.value ?? undefined, { preserveSelection: true });
+        }, 200);
+    };
+
     const handleProjectEvent = (message: ProjectEventMessage) => {
         const payload = message.data as ProjectEventPayload;
+
+        if (message.event === 'node.changed') {
+            const targetSceneId =
+                payload?.sceneId != null ? toFiniteNumber(payload.sceneId) : null;
+            if (targetSceneId === null) return;
+
+            const actorId = payload.actorId ?? null;
+            const localUserId = authStore.user?.id ?? null;
+            if (actorId != null && localUserId != null && actorId === localUserId) return;
+
+            if (payload.action === 'POSITION' && Array.isArray(payload.positions)) {
+                payload.positions.forEach((position) => {
+                    const nodeId = position?.nodeId != null ? String(position.nodeId) : null;
+                    if (!nodeId) return;
+                    const x = Number(position.x);
+                    const y = Number(position.y);
+                    if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+                    applyRemoteNodeMove(nodeId, x, y);
+                });
+                return;
+            }
+
+            scheduleNodeSync(targetSceneId);
+            return;
+        }
 
         if (!payload?.type || payload.target?.type !== 'NODE') return;
 
@@ -460,11 +502,15 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
 
     async function loadSceneNodes(
         sceneIdParam: string,
-        sceneInfo?: { title: string; description: string; order: number }
+        sceneInfo?: { title: string; description: string; order: number },
+        options?: { preserveSelection?: boolean }
     ): Promise<void> {
+        const preserveSelection = Boolean(options?.preserveSelection);
+        const previousSelectedId = preserveSelection ? selectedNodeId.value : null;
         isLoading.value = true;
         try {
             sceneId.value = sceneIdParam;
+            sceneInfoRef.value = sceneInfo ?? null;
             nodes.value = [];
             edges.value = [];
             positionHistory.value = [];
@@ -505,6 +551,13 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
                     unsubscribeProjectEvents();
                 }
                 unsubscribeProjectEvents = subscribeProjectEvents(projectId, handleProjectEvent);
+            }
+
+            if (preserveSelection && previousSelectedId) {
+                const stillExists = nodes.value.some((node) => node.id === previousSelectedId);
+                if (stillExists) {
+                    selectNode(previousSelectedId);
+                }
             }
         } catch (error) {
             console.error('Failed to load scene nodes:', error);
@@ -996,6 +1049,14 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
     // ==========================================================================
     // Actions - Persist Positions
     // ==========================================================================
+
+    function applyRemoteNodeMove(nodeId: string, x: number, y: number): void {
+        const target = nodes.value.find((node) => node.id === nodeId);
+        if (!target) return;
+        if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+        if (target.position?.x === x && target.position?.y === y) return;
+        target.position = { x, y };
+    }
 
     let persistPositionsTimeout: ReturnType<typeof setTimeout> | null = null;
     async function sendNodePositions(): Promise<void> {
@@ -1611,10 +1672,15 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
         positionHistory.value = [];
         resetInteractionState();
         sceneId.value = null;
+        sceneInfoRef.value = null;
         resetHydrationState();
         if (unsubscribeProjectEvents) {
             unsubscribeProjectEvents();
             unsubscribeProjectEvents = null;
+        }
+        if (nodeSyncTimeout) {
+            clearTimeout(nodeSyncTimeout);
+            nodeSyncTimeout = null;
         }
     }
 
@@ -1665,6 +1731,7 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
         canConnect: canConnectNode,
 
         // Actions - Persist
+        applyRemoteNodeMove,
         persistNodePositions,
         flushPersistNodePositions,
 

@@ -208,6 +208,13 @@
     background: var(--node-glass-bg-hover);
 }
 
+/* Locked by other user */
+.node-glass--locked {
+    border-color: var(--success, #22C55E);
+    border-width: 3px;
+    box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.22), var(--node-shadow);
+}
+
 /* =============================================================================
    Node Header
    ============================================================================= */

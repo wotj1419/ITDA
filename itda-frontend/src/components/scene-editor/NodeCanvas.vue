@@ -4,13 +4,14 @@
  *
  * 설계 문서: docs/vue-flow-node-workflow-design.md Section 2
  */
-import { markRaw, ref, watch } from 'vue';
+import { markRaw, onMounted, onUnmounted, ref, watch } from 'vue';
 import { VueFlow, useVueFlow } from '@vue-flow/core';
 import { Background } from '@vue-flow/background';
 import { Controls } from '@vue-flow/controls';
 import { nodeTypes } from './nodes';
 import FlowingEdge from './edges/FlowingEdge.vue';
 import { useSceneNodeStore } from '../../stores/sceneNode';
+import { useCollabStore } from '../../stores/collab';
 import { useAutoLayout } from '../../composables/useAutoLayout';
 import { NodeType } from '../../types/ui/sceneNodes';
 import type { AnyNodeData } from '../../types/ui/sceneNodes';
@@ -39,8 +40,20 @@ const emit = defineEmits<{
 // =============================================================================
 
 const nodeStore = useSceneNodeStore();
+const collabStore = useCollabStore();
 const { getLayoutedElements } = useAutoLayout();
-const { fitView, onNodeClick, onNodeDragStart, onNodeDragStop, onSelectionDragStart, onSelectionDragStop } = useVueFlow();
+const {
+  fitView,
+  onNodeClick,
+  onNodeDrag,
+  onNodeDragStart,
+  onNodeDragStop,
+  onSelectionDragStart,
+  onSelectionDragStop,
+  screenToFlowCoordinate,
+  vueFlowRef,
+  viewport,
+} = useVueFlow();
 
 type FitViewOptions = {
   padding?: number;
@@ -59,6 +72,48 @@ const INITIAL_FIT_OPTIONS: FitViewOptions = {
 const edgeTypes = markRaw({
   flowing: FlowingEdge,
 } as const);
+
+function handleWindowMouseMove(event: MouseEvent): void {
+  const el = vueFlowRef?.value;
+  if (!el) return;
+  const rect = el.getBoundingClientRect();
+  if (rect.width <= 0 || rect.height <= 0) return;
+  if (
+    event.clientX < rect.left ||
+    event.clientX > rect.right ||
+    event.clientY < rect.top ||
+    event.clientY > rect.bottom
+  ) {
+    return;
+  }
+  const flowPoint = screenToFlowCoordinate({ x: event.clientX, y: event.clientY });
+  if (!Number.isFinite(flowPoint.x) || !Number.isFinite(flowPoint.y)) return;
+  collabStore.updateCursor(flowPoint.x, flowPoint.y);
+}
+
+function flowToScreenCoordinate(pos: { x: number; y: number }): { x: number; y: number } {
+  const el = vueFlowRef?.value;
+  if (!el) return { x: 0, y: 0 };
+  const rect = el.getBoundingClientRect();
+  const view = viewport.value;
+  const zoom = view?.zoom ?? 1;
+  const tx = view?.x ?? 0;
+  const ty = view?.y ?? 0;
+  return {
+    x: pos.x * zoom + tx + rect.left,
+    y: pos.y * zoom + ty + rect.top,
+  };
+}
+
+onMounted(() => {
+  collabStore.setFlowToScreenCoordinate(flowToScreenCoordinate);
+  window.addEventListener('mousemove', handleWindowMouseMove);
+});
+
+onUnmounted(() => {
+  collabStore.setFlowToScreenCoordinate(null);
+  window.removeEventListener('mousemove', handleWindowMouseMove);
+});
 
 // =============================================================================
 // Lifecycle
@@ -154,15 +209,34 @@ onNodeClick(({ node }) => {
   emit('node-select', node.id);
 });
 
-const handleNodeDragStart = () => {
+const handleNodeDragStart = (event: any) => {
   nodeStore.pushPositionSnapshot();
+  const node = event?.node;
+  if (node?.id) {
+    collabStore.startNodeDrag(String(node.id));
+  }
 };
 
-const handleNodeDragStop = () => {
+const handleNodeDrag = (event: any) => {
+  const node = event?.node;
+  if (!node?.id) return;
+  const x = node.position?.x ?? 0;
+  const y = node.position?.y ?? 0;
+  collabStore.updateNodeMove(String(node.id), x, y);
+};
+
+const handleNodeDragStop = (event: any) => {
   nodeStore.persistNodePositions();
+  const node = event?.node;
+  if (node?.id) {
+    const x = node.position?.x ?? 0;
+    const y = node.position?.y ?? 0;
+    collabStore.finishNodeDrag(String(node.id), x, y);
+  }
 };
 
 onNodeDragStart(handleNodeDragStart);
+onNodeDrag(handleNodeDrag);
 onNodeDragStop(handleNodeDragStop);
 onSelectionDragStart(handleNodeDragStart);
 onSelectionDragStop(handleNodeDragStop);
@@ -172,6 +246,7 @@ function handlePaneClick(): void {
   nodeStore.selectNode(null);
   emit('node-select', null);
 }
+
 
 // =============================================================================
 // Node Actions
@@ -209,6 +284,7 @@ defineExpose({
 <template>
   <div
     class="node-canvas"
+    data-collab-canvas
     :class="{ 'selection-mode-active': nodeStore.selectionMode === 'selectEndShot' }"
   >
     <VueFlow

@@ -6,7 +6,12 @@ package com.itda.backend.collab.messaging;
 public record PresenceRequest(
         String type,
         String location,
+        String status,
+        String summary,
         Long sceneId,
-        Long nodeId
+        Long nodeId,
+        Double x,
+        Double y,
+        String action
 ) {
 }
