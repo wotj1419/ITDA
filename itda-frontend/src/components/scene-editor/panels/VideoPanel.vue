@@ -46,7 +46,6 @@ const form = ref({
   promptLang: 'EN' as 'EN' | 'KO',
 });
 
-const promptSectionRef = ref<HTMLElement | null>(null);
 const detailSectionRef = ref<HTMLElement | null>(null);
 const detailTextareaRef = ref<HTMLTextAreaElement | null>(null);
 const isFinalEditing = ref(false);
@@ -635,7 +634,7 @@ function handleGenerateVideo(): void {
       </div>
 
       <!-- Narrative Prompt -->
-      <div class="panel-section" ref="promptSectionRef">
+      <div class="panel-section">
         <div class="panel-label-row">
           <label class="panel-label">
             <FileText class="panel-label-icon" />

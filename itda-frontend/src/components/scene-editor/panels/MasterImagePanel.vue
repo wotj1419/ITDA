@@ -6,7 +6,7 @@
  */
 import { ref, computed, watch, nextTick, onUnmounted } from 'vue';
 import type { Node } from '@vue-flow/core';
-import type { MasterImageNodeData } from '../../../types/ui/sceneNodes';
+import type { MasterImageNodeData, SceneHeaderNodeData } from '../../../types/ui/sceneNodes';
 import { NodeType, PromptStatus } from '../../../types/ui/sceneNodes';
 import BasePanel from './BasePanel.vue';
 import { useSceneNodeStore } from '../../../stores/sceneNode';
@@ -30,7 +30,6 @@ const nodeStore = useSceneNodeStore();
 const objectStore = useObjectStore();
 const autoFilledNodes = new Set<string>();
 let promptPreviewTimeout: ReturnType<typeof setTimeout> | null = null;
-const promptSectionRef = ref<HTMLElement | null>(null);
 const detailSectionRef = ref<HTMLElement | null>(null);
 const detailTextareaRef = ref<HTMLTextAreaElement | null>(null);
 const isFinalEditing = ref(false);
@@ -144,9 +143,10 @@ const selectedObjectNames = computed(() =>
 );
 
 const data = computed(() => props.node.data as MasterImageNodeData | undefined);
-const sceneHeaderData = computed(() =>
-  nodeStore.nodes.find((node) => node.data?.type === NodeType.SCENE_HEADER)?.data
-);
+const sceneHeaderData = computed<SceneHeaderNodeData | undefined>(() => {
+  const node = nodeStore.nodes.find((candidate) => candidate.data?.type === NodeType.SCENE_HEADER);
+  return node?.data && node.data.type === NodeType.SCENE_HEADER ? node.data : undefined;
+});
 const hasPromptContent = computed(() => {
   if (!data.value) return false;
   return Boolean(
@@ -622,7 +622,7 @@ function setActive(): void {
       </div>
 
       <!-- Narrative Prompt -->
-      <div class="panel-section" ref="promptSectionRef">
+      <div class="panel-section">
         <div class="panel-label-row">
           <label class="panel-label">
             <FileText class="panel-label-icon" />
