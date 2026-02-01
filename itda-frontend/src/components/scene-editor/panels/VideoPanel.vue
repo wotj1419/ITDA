@@ -196,6 +196,7 @@ const {
     cameraMotion: form.value.cameraMotion,
     duration: normalizeDuration(form.value.duration),
     motionDescription: form.value.motionDescription,
+    endFrameHint: buildVideoEndFrameHint() || undefined,
   }),
   getPromptUpdate: (result) => ({
     cameraMotion: form.value.cameraMotion,
@@ -208,6 +209,9 @@ const {
       : {}),
   }),
   getImproveInstruction: () => form.value.motionDescription,
+  getImproveContext: () => ({
+    endFrameHint: buildVideoEndFrameHint() || undefined,
+  }),
   getApprovedUpdate: () => ({
     prompt: form.value.prompt,
     promptKo: form.value.promptKo,
@@ -284,6 +288,26 @@ function buildVideoSceneOneLine(): string {
   }
   if (form.value.motionDescription) {
     parts.push(`detail: ${form.value.motionDescription}`);
+  }
+  return parts.join(', ');
+}
+
+function buildVideoEndFrameHint(): string {
+  const parts: string[] = [];
+  if (!endShotData.value) return '';
+  if (endShotData.value.shotType) {
+    parts.push(`endShotType: ${endShotData.value.shotType}`);
+  } else if (endShotData.value.shotTypes?.length) {
+    parts.push(`endShotTypes: ${endShotData.value.shotTypes.join(', ')}`);
+  }
+  if (endShotData.value.expression) {
+    parts.push(`endExpression: ${endShotData.value.expression}`);
+  }
+  if (endShotData.value.additionalDetail) {
+    parts.push(`endDetail: ${endShotData.value.additionalDetail}`);
+  }
+  if (endShotData.value.prompt) {
+    parts.push(`endShotPrompt: ${endShotData.value.prompt}`);
   }
   return parts.join(', ');
 }

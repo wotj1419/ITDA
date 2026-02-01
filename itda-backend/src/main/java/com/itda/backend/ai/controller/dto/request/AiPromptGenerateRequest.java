@@ -16,6 +16,9 @@ public record AiPromptGenerateRequest(
         @Schema(description = "Scene one line", example = "사막 기지에서의 아침 식사")
         String sceneOneLine,
 
+        @Schema(description = "End frame hint (video only)", example = "endShotType: close-up, endExpression: neutral")
+        String endFrameHint,
+
         @Schema(description = "Existing English base prompt (optional)", example = "A quiet library interior with soft sunlight.")
         String prompt,
 
