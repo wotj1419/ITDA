@@ -212,6 +212,7 @@
         SELECT n.id AS video_node_id,
                n.scene_id AS scene_id,
                s.order_index AS scene_order,
+               n.asset_id AS asset_id,
                n.content_url AS content_url
         FROM nodes n
         INNER JOIN scenes s ON n.scene_id = s.id
@@ -227,6 +228,7 @@
         SELECT n.id AS video_node_id,
                n.scene_id AS scene_id,
                NULL AS scene_order,
+               n.asset_id AS asset_id,
                n.content_url AS content_url
         FROM nodes n
         WHERE n.scene_id = #{sceneId}

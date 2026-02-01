@@ -35,6 +35,7 @@ import java.util.Set;
 @RequiredArgsConstructor
 public class ProjectMediaService {
 
+    private static final String FILES_PREFIX = "/files/";
     private static final String MERGE_REQUEST_PROJECT_ID_KEY = "projectId";
     private static final String MERGE_REQUEST_INCLUDE_MUSIC_KEY = "includeMusic";
     private static final int TIMELINE_START_ORDER = 1;
@@ -121,11 +122,63 @@ public class ProjectMediaService {
 
     private ProjectTimelineItem toTimelineItem(TimelineNodeRow row, int order) {
         String contentUrl = mediaUrlResolver.nodeContentUrl(row.getVideoNodeId(), row.getContentUrl());
+        String publicUrl = resolvePublicContentUrl(row.getContentUrl());
+        String videoUrl = assetUrlResolver.resolveUrl(row.getAssetId(), publicUrl);
+        String thumbnailUrl = isImageUrl(publicUrl) ? publicUrl : null;
         return new ProjectTimelineItem(
                 row.getVideoNodeId(),
                 row.getSceneId(),
                 order,
-                contentUrl);
+                contentUrl,
+                thumbnailUrl,
+                videoUrl);
+    }
+
+    private String resolvePublicContentUrl(String contentUrl) {
+        if (contentUrl == null) {
+            return null;
+        }
+        String trimmed = contentUrl.trim();
+        if (trimmed.isEmpty()) {
+            return null;
+        }
+        if (isAbsoluteUrl(trimmed)) {
+            return trimmed;
+        }
+        if (trimmed.startsWith("/api/")) {
+            return trimmed;
+        }
+        if (trimmed.startsWith(FILES_PREFIX)) {
+            return trimmed;
+        }
+        if (trimmed.startsWith("files/")) {
+            return "/" + trimmed;
+        }
+        if (trimmed.startsWith("/")) {
+            return FILES_PREFIX + trimmed.substring(1);
+        }
+        return FILES_PREFIX + trimmed;
+    }
+
+    private boolean isAbsoluteUrl(String url) {
+        return url.startsWith("http://") || url.startsWith("https://");
+    }
+
+    private boolean isImageUrl(String url) {
+        if (url == null) {
+            return false;
+        }
+        String normalized = url;
+        int queryIndex = normalized.indexOf('?');
+        if (queryIndex >= 0) {
+            normalized = normalized.substring(0, queryIndex);
+        }
+        String lower = normalized.toLowerCase();
+        return lower.endsWith(".png")
+                || lower.endsWith(".jpg")
+                || lower.endsWith(".jpeg")
+                || lower.endsWith(".webp")
+                || lower.endsWith(".gif");
     }
 
     private Job enqueueProjectMergeJob(Long projectId, String requestJson, String mergeSignature) {
