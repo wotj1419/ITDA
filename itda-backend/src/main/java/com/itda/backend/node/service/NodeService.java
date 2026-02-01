@@ -28,6 +28,7 @@ import com.itda.backend.node.repository.NodeMapper;
 import com.itda.backend.project.repository.ProjectMemberMapper;
 import com.itda.backend.scene.domain.Scene;
 import com.itda.backend.scene.repository.SceneMapper;
+import com.itda.backend.timeline.repository.TimelineMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -40,7 +41,6 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * Node 서비스
  * 노드 CRUD 및 비즈니스 로직 처리
  */
 @Service
@@ -56,6 +56,7 @@ public class NodeService {
     private final NodeMapper nodeMapper;
     private final SceneMapper sceneMapper;
     private final ProjectMemberMapper projectMemberMapper;
+    private final TimelineMapper timelineMapper;
     private final ObjectMapper objectMapper;
     private final com.itda.backend.object.repository.ObjectMapper objectSheetMapper;
     private final JobService jobService;
@@ -90,7 +91,7 @@ public class NodeService {
     }
 
     /**
-     * 씬 노드 목록 조회 (scene_header 포함)
+     * 노드 목록 조회 (scene_header 포함)
      */
     @Transactional
     public NodeTreeResponse listNodes(Long userId, Long sceneId) {
@@ -108,7 +109,7 @@ public class NodeService {
         List<NodeSummaryResponse> responses = new ArrayList<>(nodes.size());
 
         boolean headerIncluded = false;
-        // 실제 노드들 변환
+        // 실제 노드 순회
         for (Node node : nodes) {
             if (node.getNodeType() == NodeType.SCENE_HEADER) {
                 if (!headerIncluded) {
@@ -168,7 +169,6 @@ public class NodeService {
         // SCENE_HEADER 삭제 금지
         assertNotSceneHeader(node.getNodeType());
 
-        // FK ON DELETE CASCADE로 하위 노드도 함께 삭제됨
         nodeMapper.deleteById(nodeId);
         log.debug("Deleted node: id={}", nodeId);
     }
@@ -190,7 +190,7 @@ public class NodeService {
     }
 
     /**
-     * Active master 설정 (씬 단위 1개)
+     * Active master 설정 (씬당 1개)
      */
     @Transactional
     public void setActiveMaster(Long userId, Long nodeId) {
@@ -228,6 +228,7 @@ public class NodeService {
         if (updated == 0) {
             throw new BusinessException(ErrorCode.INVALID_REQUEST);
         }
+        syncSceneTimelineItem(scene, node, shotNodeId, userId);
 
         log.debug("Confirmed video: nodeId={}, shotNodeId={}, sceneId={}", nodeId, shotNodeId, scene.getId());
     }
@@ -242,6 +243,7 @@ public class NodeService {
 
         assertVideoNode(node.getNodeType());
         nodeMapper.clearConfirmedVideo(nodeId);
+        timelineMapper.deleteSceneTimelineItemByVideoNodeId(nodeId);
 
         log.debug("Unconfirmed video: nodeId={}", nodeId);
     }
@@ -443,9 +445,8 @@ public class NodeService {
     private int nextOrderIndex(Long sceneId) {
         return nodeMapper.findMaxOrderIndex(sceneId) + 1;
     }
-
     /**
-     * 연결 규칙 검증: master → grid → shot → video
+     * 노드 관계 검증: master -> grid -> shot -> video
      */
     private void validateNodeRelation(NodeType nodeType, Long parentNodeId, Long sceneId) {
         if (nodeType == NodeType.MASTER) {
@@ -478,9 +479,8 @@ public class NodeService {
             throw new BusinessException(ErrorCode.INVALID_NODE_RELATION);
         }
     }
-
     /**
-     * 씬 헤더 노드 생성 (없으면 DB에 저장)
+     * 씬 헤더 노드 생성 (없으면 DB에 삽입)
      */
     private Node createSceneHeaderNode(Long sceneId, Long userId) {
         Node node = Node.builder()
@@ -495,7 +495,6 @@ public class NodeService {
         nodeMapper.insertNode(node);
         return node;
     }
-
     /**
      * 씬 헤더 응답 생성 (씬 메타 포함)
      */
@@ -525,6 +524,18 @@ public class NodeService {
         if (!node.getSceneId().equals(sceneId) || node.getNodeType() != NodeType.SHOT) {
             throw new BusinessException(ErrorCode.INVALID_NODE_RELATION);
         }
+    }
+
+    private void syncSceneTimelineItem(Scene scene, Node node, Long shotNodeId, Long userId) {
+        timelineMapper.deleteSceneTimelineItemsByShotId(shotNodeId);
+        int orderIndex = node.getOrderIndex() != null ? node.getOrderIndex() : 0;
+        timelineMapper.insertSceneTimelineItem(
+                scene.getProjectId(),
+                scene.getId(),
+                node.getId(),
+                orderIndex,
+                userId
+        );
     }
 
     private void validateInputImageReady(Node node, VideoShotIds shotIds) {

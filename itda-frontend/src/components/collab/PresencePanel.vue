@@ -1,10 +1,18 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { useCollabStore } from '../../stores/collab'
 import AvatarGroup from '../common/AvatarGroup.vue'
 import type { CollabParticipant } from '../../types/ui/collab'
 
 const collabStore = useCollabStore()
+const router = useRouter()
+const route = useRoute()
+
+const projectId = computed(() => {
+  const id = route.params.projectId ?? route.params.id
+  return id ? Number(id) : null
+})
 
 const presenceList = computed(() => {
   const map = new Map<string, CollabParticipant & { isMe?: boolean }>()
@@ -25,10 +33,53 @@ const avatars = computed(() =>
     src: p.avatarUrl || '',
     fallback: p.name?.[0]?.toUpperCase() || '?',
     alt: p.name,
+    title: `${p.name || 'Guest'}: ${locationLabel(p)}`,
+    onClick: p.isMe ? undefined : () => followMember(p),
   }))
 )
 
 const isConnected = computed(() => collabStore.isConnected)
+
+const locationLabel = (member: CollabParticipant) => {
+  const location = member.currentLocation
+  switch (location) {
+    case 'PROJECT_LIST':
+      return '프로젝트 목록'
+    case 'SCENE_LIST':
+      return '씬 목록'
+    case 'SCENE_EDIT':
+      return member.sceneId ? `Scene ${member.sceneId} 편집 중` : '씬 편집 중'
+    case 'TIMELINE':
+      return '타임라인'
+    default:
+      return 'Online'
+  }
+}
+
+const followMember = (member: CollabParticipant) => {
+  const pid = projectId.value
+  if (!pid) return
+
+  switch (member.currentLocation) {
+    case 'PROJECT_LIST':
+      router.push({ name: 'dashboard' })
+      break
+    case 'SCENE_EDIT':
+      if (member.sceneId) {
+        router.push({ name: 'scene-edit', params: { projectId: pid, sceneId: member.sceneId } })
+      } else {
+        router.push({ name: 'project-detail', params: { id: pid } })
+      }
+      break
+    case 'TIMELINE':
+      router.push({ name: 'timeline', params: { id: pid } })
+      break
+    case 'SCENE_LIST':
+    default:
+      router.push({ name: 'project-detail', params: { id: pid } })
+      break
+  }
+}
 </script>
 
 <template>
@@ -51,7 +102,7 @@ const isConnected = computed(() => collabStore.isConnected)
           <span v-if="member.isMe" class="presence-me">(ME)</span>
         </span>
         <span class="presence-location">
-          {{ member.currentLocation || 'Online' }}
+          {{ locationLabel(member) }}
         </span>
       </div>
     </div>

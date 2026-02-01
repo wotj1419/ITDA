@@ -1,23 +1,32 @@
 package com.itda.backend.worker.merge;
 
+import com.itda.backend.asset.domain.Asset;
+import com.itda.backend.asset.domain.StorageProvider;
+import com.itda.backend.asset.repository.AssetMapper;
 import com.itda.backend.global.config.FileStorageProperties;
 import com.itda.backend.job.domain.Job;
-import com.itda.backend.job.domain.JobType;
-import com.itda.backend.node.repository.NodeMapper;
-import com.itda.backend.node.repository.dto.TimelineNodeRow;
+import com.itda.backend.timeline.repository.TimelineMapper;
+import com.itda.backend.timeline.repository.dto.ProjectTimelineItem;
+import com.itda.backend.timeline.repository.dto.SceneTimelineItem;
 import com.itda.backend.worker.ExecutionResult;
+import com.itda.backend.worker.video.VideoContentLoader;
+import com.itda.backend.worker.video.VideoInput;
+import com.itda.backend.worker.video.VideoStorage;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.io.BufferedWriter;
 import java.io.IOException;
-import java.io.InputStream;
+import java.net.URI;
+import java.net.URISyntaxException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * FFmpeg 병합 Worker (SCENE_MERGE / PROJECT_MERGE)
@@ -28,12 +37,17 @@ import java.util.List;
 public class MergeWorker {
 
     private static final Duration PROCESS_TIMEOUT = Duration.ofMinutes(10);
-    private static final String EXPORTS_DIR = "exports";
-    private static final String SCENE_EXPORTS_DIR = "scenes";
-    private static final String EXPORT_FILE_NAME = "final.mp4";
+    private static final String PROJECTS_DIR = "projects";
+    private static final String SCENES_DIR = "scenes";
+    private static final String MERGES_DIR = "merges";
+    private static final String TEMP_MERGE_DIR = "tmp/merges";
+    private static final String MERGE_EXTENSION = ".mp4";
     private static final String FILES_PREFIX = "/files/";
 
-    private final NodeMapper nodeMapper;
+    private final TimelineMapper timelineMapper;
+    private final AssetMapper assetMapper;
+    private final VideoStorage videoStorage;
+    private final VideoContentLoader videoContentLoader;
     private final FileStorageProperties fileStorageProperties;
 
     public ExecutionResult execute(Job job) {
@@ -57,14 +71,24 @@ public class MergeWorker {
             throw new IllegalStateException("Project merge job missing projectId");
         }
 
-        List<TimelineNodeRow> rows = nodeMapper.findConfirmedVideoNodesByProjectId(projectId);
-        if (rows.isEmpty()) {
-            throw new IllegalStateException("No confirmed video nodes to merge");
+        List<ProjectTimelineItem> items = timelineMapper.findProjectTimelineItems(projectId);
+        if (items.isEmpty()) {
+            throw new IllegalStateException("No project timeline items to merge");
         }
 
-        Path outputPath = resolveProjectExportPath(projectId);
-        mergeConfirmedVideos(rows, outputPath);
-        return new ExecutionResult(null, null);
+        String mergeSignature = requireMergeSignature(job);
+        String storageKey = buildProjectMergeStorageKey(projectId, mergeSignature);
+        Path outputPath = createTempOutputPath(projectId);
+        List<VideoInput> inputs = List.of();
+        try {
+            inputs = resolveProjectInputPaths(items);
+            mergeTimelineItems(extractPaths(inputs), outputPath);
+            Asset asset = videoStorage.storeMergedVideo(outputPath, storageKey);
+            return new ExecutionResult(asset.getId(), asset.getStorageKey());
+        } finally {
+            cleanupTempInputs(inputs);
+            deleteQuietly(outputPath);
+        }
     }
 
     private ExecutionResult mergeScene(Job job) {
@@ -73,47 +97,95 @@ public class MergeWorker {
             throw new IllegalStateException("Scene merge job missing sceneId");
         }
 
-        List<TimelineNodeRow> rows = nodeMapper.findConfirmedVideoNodesBySceneId(sceneId);
-        if (rows.isEmpty()) {
-            throw new IllegalStateException("No confirmed video nodes to merge");
+        List<SceneTimelineItem> items = timelineMapper.findSceneTimelineItems(sceneId);
+        if (items.isEmpty()) {
+            throw new IllegalStateException("No scene timeline items to merge");
         }
 
-        Path outputPath = resolveSceneExportPath(sceneId);
-        mergeConfirmedVideos(rows, outputPath);
-        return new ExecutionResult(null, null);
+        String mergeSignature = requireMergeSignature(job);
+        String storageKey = buildSceneMergeStorageKey(job.getProjectId(), sceneId, mergeSignature);
+        Path outputPath = createTempOutputPath(job.getProjectId());
+        List<VideoInput> inputs = List.of();
+        try {
+            inputs = resolveSceneInputPaths(items);
+            mergeTimelineItems(extractPaths(inputs), outputPath);
+            Asset asset = videoStorage.storeMergedVideo(outputPath, storageKey);
+            return new ExecutionResult(asset.getId(), asset.getStorageKey());
+        } finally {
+            cleanupTempInputs(inputs);
+            deleteQuietly(outputPath);
+        }
     }
 
-    private void mergeConfirmedVideos(List<TimelineNodeRow> rows, Path outputPath) {
-        List<Path> inputPaths = resolveInputPaths(rows);
+    private void mergeTimelineItems(List<Path> inputPaths, Path outputPath) {
         ensureParentDir(outputPath);
 
         Path concatList = createConcatListFile(inputPaths, outputPath.getParent());
-        boolean keepAudio = allHaveAudio(inputPaths);
-        runFfmpeg(concatList, outputPath, keepAudio);
-        deleteQuietly(concatList);
+        try {
+            boolean keepAudio = allHaveAudio(inputPaths);
+            runFfmpeg(concatList, outputPath, keepAudio);
+        } finally {
+            deleteQuietly(concatList);
+        }
     }
 
-    private List<Path> resolveInputPaths(List<TimelineNodeRow> rows) {
-        List<Path> paths = new ArrayList<>();
-        for (TimelineNodeRow row : rows) {
-            Path path = resolveNodeVideoPath(row.getVideoNodeId(), row.getContentUrl());
-            if (!Files.exists(path)) {
-                throw new IllegalStateException("Video file missing: " + path);
+    private List<VideoInput> resolveSceneInputPaths(List<SceneTimelineItem> items) {
+        List<VideoInput> inputs = new ArrayList<>();
+        try {
+            for (SceneTimelineItem item : items) {
+                String context = "sceneId=" + item.getSceneId() + ", videoNodeId=" + item.getVideoNodeId();
+                VideoInput input = resolveVideoInput(item.getAssetId(), item.getFallbackUrl(), context);
+                inputs.add(input);
             }
-            paths.add(path);
+            return inputs;
+        } catch (RuntimeException e) {
+            cleanupTempInputs(inputs);
+            throw e;
         }
-        return paths;
     }
 
-    private Path resolveNodeVideoPath(Long nodeId, String contentUrl) {
-        String contentKey = normalizeContentKey(contentUrl);
-        if (contentKey == null) {
-            contentKey = defaultNodeContentKey(nodeId);
+    private List<VideoInput> resolveProjectInputPaths(List<ProjectTimelineItem> items) {
+        List<VideoInput> inputs = new ArrayList<>();
+        try {
+            for (ProjectTimelineItem item : items) {
+                String context = "sceneId=" + item.getSceneId() + ", sceneVideoId=" + item.getSceneVideoId();
+                VideoInput input = resolveVideoInput(item.getAssetId(), null, context);
+                inputs.add(input);
+            }
+            return inputs;
+        } catch (RuntimeException e) {
+            cleanupTempInputs(inputs);
+            throw e;
+        }
+    }
+
+    private VideoInput resolveVideoInput(Long assetId, String fallbackUrl, String context) {
+        Asset asset = resolveAsset(assetId);
+        String contentKey = asset == null ? null : asset.getStorageKey();
+        StorageProvider provider = asset == null ? null : asset.getStorageProvider();
+        if (contentKey == null || contentKey.isBlank()) {
+            contentKey = normalizeContentKey(fallbackUrl);
         }
         if (contentKey == null) {
-            throw new IllegalStateException("Node content missing: nodeId=" + nodeId);
+            throw new IllegalStateException("Video content missing: " + context);
         }
-        return resolveUnderUploadRoot(contentKey);
+        return videoContentLoader.load(contentKey, provider, context);
+    }
+
+    private Asset resolveAsset(Long assetId) {
+        if (assetId == null) {
+            return null;
+        }
+        Optional<Asset> asset = assetMapper.findById(assetId);
+        if (asset.isEmpty()) {
+            throw new IllegalStateException("Asset not found: assetId=" + assetId);
+        }
+        Asset resolved = asset.get();
+        String key = resolved.getStorageKey();
+        if (key == null || key.isBlank()) {
+            throw new IllegalStateException("Asset storageKey missing: assetId=" + assetId);
+        }
+        return resolved;
     }
 
     private String normalizeContentKey(String contentUrl) {
@@ -125,7 +197,17 @@ public class MergeWorker {
             return null;
         }
         if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
-            return null;
+            try {
+                URI uri = new URI(trimmed);
+                String path = uri.getPath();
+                if (path == null || path.isBlank()) {
+                    return null;
+                }
+                trimmed = path;
+            } catch (URISyntaxException e) {
+                log.warn("[MergeWorker] Invalid content URL: {}", trimmed);
+                return null;
+            }
         }
         if (trimmed.startsWith(FILES_PREFIX)) {
             return trimmed.substring(FILES_PREFIX.length());
@@ -136,41 +218,66 @@ public class MergeWorker {
         return trimmed;
     }
 
-    private String defaultNodeContentKey(Long nodeId) {
-        if (nodeId == null) {
-            return null;
+    private List<Path> extractPaths(List<VideoInput> inputs) {
+        List<Path> paths = new ArrayList<>();
+        for (VideoInput input : inputs) {
+            paths.add(input.path());
         }
-        return "ai/videos/node-" + nodeId + ".mp4";
+        return paths;
     }
 
-    private Path resolveUnderUploadRoot(String relativePath) {
-        Path root = Path.of(fileStorageProperties.getUploadDir())
-                .toAbsolutePath()
-                .normalize();
-        Path target = root.resolve(relativePath).normalize();
-        if (!target.startsWith(root)) {
-            throw new IllegalStateException("Invalid content path");
+    private void cleanupTempInputs(List<VideoInput> inputs) {
+        for (VideoInput input : inputs) {
+            if (input.temporary()) {
+                deleteQuietly(input.path());
+            }
         }
-        return target;
     }
 
-    private Path resolveProjectExportPath(Long projectId) {
-        return Path.of(
-                fileStorageProperties.getUploadDir(),
-                EXPORTS_DIR,
+    private String requireMergeSignature(Job job) {
+        String mergeSignature = job.getMergeSignature();
+        if (mergeSignature == null || mergeSignature.isBlank()) {
+            throw new IllegalStateException("Merge job missing mergeSignature");
+        }
+        return mergeSignature.trim();
+    }
+
+    private String buildProjectMergeStorageKey(Long projectId, String mergeSignature) {
+        return String.join("/",
+                PROJECTS_DIR,
                 String.valueOf(projectId),
-                EXPORT_FILE_NAME
-        ).toAbsolutePath().normalize();
+                MERGES_DIR,
+                mergeSignature + MERGE_EXTENSION
+        );
     }
 
-    private Path resolveSceneExportPath(Long sceneId) {
-        return Path.of(
-                fileStorageProperties.getUploadDir(),
-                EXPORTS_DIR,
-                SCENE_EXPORTS_DIR,
+    private String buildSceneMergeStorageKey(Long projectId, Long sceneId, String mergeSignature) {
+        if (projectId == null) {
+            throw new IllegalStateException("Scene merge job missing projectId");
+        }
+        return String.join("/",
+                PROJECTS_DIR,
+                String.valueOf(projectId),
+                SCENES_DIR,
                 String.valueOf(sceneId),
-                EXPORT_FILE_NAME
-        ).toAbsolutePath().normalize();
+                MERGES_DIR,
+                mergeSignature + MERGE_EXTENSION
+        );
+    }
+
+    private Path createTempOutputPath(Long projectId) {
+        try {
+            String projectDir = projectId == null ? "unknown" : String.valueOf(projectId);
+            Path tempDir = Path.of(
+                    fileStorageProperties.getUploadDir(),
+                    TEMP_MERGE_DIR,
+                    projectDir
+            ).toAbsolutePath().normalize();
+            Files.createDirectories(tempDir);
+            return Files.createTempFile(tempDir, "merge-", MERGE_EXTENSION);
+        } catch (IOException e) {
+            throw new IllegalStateException("Failed to create merge output temp file", e);
+        }
     }
 
     private void ensureParentDir(Path outputPath) {
@@ -184,11 +291,18 @@ public class MergeWorker {
     private Path createConcatListFile(List<Path> inputPaths, Path dir) {
         try {
             Path listFile = Files.createTempFile(dir, "concat-", ".txt");
-            try (BufferedWriter writer = Files.newBufferedWriter(listFile)) {
+            try (BufferedWriter writer = Files.newBufferedWriter(listFile, StandardCharsets.UTF_8)) {
                 for (Path path : inputPaths) {
-                    writer.write("file '" + escapePath(path.toAbsolutePath()) + "'");
+                    // concat 파일에 기록되는 경로 로그 출력
+                    String escapedPath = escapePath(path.toAbsolutePath());
+                    writer.write("file '" + escapedPath + "'");
                     writer.newLine();
                 }
+            }
+            // 디버그 로그: 생성된 리스트 파일 내용 확인
+            log.info("[MergeWorker] Created concat list file: {}", listFile);
+            if (log.isDebugEnabled()) {
+                log.debug("[MergeWorker] Concat file content:\n{}", Files.readString(listFile));
             }
             return listFile;
         } catch (IOException e) {
@@ -197,7 +311,7 @@ public class MergeWorker {
     }
 
     private String escapePath(Path path) {
-        String raw = path.toString();
+        String raw = path.toString().replace("\\", "/");
         return raw.replace("'", "'\\''");
     }
 
@@ -217,8 +331,7 @@ public class MergeWorker {
                 "-select_streams", "a",
                 "-show_entries", "stream=codec_type",
                 "-of", "csv=p=0",
-                path.toString()
-        );
+                path.toString());
         try {
             ProcessResult result = runProcess(command, Duration.ofSeconds(20));
             return !result.output().trim().isEmpty();
@@ -243,7 +356,7 @@ public class MergeWorker {
         command.add("-c:v");
         command.add("libx264");
         command.add("-preset");
-        command.add("veryfast");
+        command.add("ultrafast");
         command.add("-pix_fmt");
         command.add("yuv420p");
         if (keepAudio) {
@@ -252,42 +365,65 @@ public class MergeWorker {
             command.add("-b:a");
             command.add("128k");
         } else {
-            command.add("-an");
+            command.add("-an"); // Audio 비활성화
         }
         command.add("-movflags");
         command.add("+faststart");
         command.add(outputPath.toString());
 
+        log.info("[MergeWorker] FFmpeg command: {}", String.join(" ", command));
+
         ProcessResult result = runProcess(command, PROCESS_TIMEOUT);
+
+        // 디버깅을 위한 출력 로그 (FFmpeg 실행 결과 확인)
+        if (!result.output().isBlank()) {
+            log.debug("[MergeWorker] FFmpeg output:\n{}", result.output());
+        }
+
         if (result.exitCode() != 0) {
             List<String> lines = result.output().lines().toList();
-            int start = Math.max(0, lines.size() - 10);
+            int start = Math.max(0, lines.size() - 20); // 더 많은 라인 표시 (최근 20줄)
             String summary = String.join("\n", lines.subList(start, lines.size()));
+            log.error("[MergeWorker] FFmpeg failed with exitCode={}. Summary:\n{}", result.exitCode(), summary);
             throw new IllegalStateException("FFmpeg merge failed: " + summary);
+        } else {
+            log.info("[MergeWorker] FFmpeg merge success. Output: {}", outputPath);
         }
     }
 
     private ProcessResult runProcess(List<String> command, Duration timeout) {
+        Path logFile = null;
         try {
-            Process process = new ProcessBuilder(command).redirectErrorStream(true).start();
+            // Deadlock 방지: 출력 스트림이 꽉 차면 프로세스가 멈추므로 파일로 리다이렉트
+            logFile = Files.createTempFile("ffmpeg-output-", ".log");
+            Process process = new ProcessBuilder(command)
+                    .redirectErrorStream(true)
+                    .redirectOutput(logFile.toFile())
+                    .start();
+
             boolean finished = process.waitFor(timeout.toMillis(), java.util.concurrent.TimeUnit.MILLISECONDS);
+
             if (!finished) {
                 process.destroyForcibly();
                 throw new IllegalStateException("Process timeout: " + String.join(" ", command));
             }
-            String output = readAll(process.getInputStream());
+
+            String output = Files.exists(logFile) ? Files.readString(logFile, StandardCharsets.UTF_8) : "";
             return new ProcessResult(process.exitValue(), output);
+
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new IllegalStateException("Process interrupted: " + String.join(" ", command), e);
         } catch (IOException e) {
             throw new IllegalStateException("Process failed: " + String.join(" ", command), e);
+        } finally {
+            if (logFile != null) {
+                deleteQuietly(logFile);
+            }
         }
     }
 
-    private String readAll(InputStream stream) throws IOException {
-        return new String(stream.readAllBytes());
-    }
+    // private String readAll(InputStream stream) removed as it is no longer used
 
     private void deleteQuietly(Path path) {
         try {

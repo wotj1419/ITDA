@@ -9,13 +9,15 @@ import io.swagger.v3.oas.annotations.media.Schema;
  */
 @Schema(description = "Job accepted response")
 public record JobAcceptedResponse(
-        @Schema(description = "Job ID", example = "123")
-        Long jobId,
+        @Schema(description = "Job ID", example = "123") Long jobId,
 
-        @Schema(description = "Job status", example = "PENDING")
-        JobStatus status
-) {
+        @Schema(description = "Job status", example = "PENDING") JobStatus status) {
     public static JobAcceptedResponse from(Job job) {
         return new JobAcceptedResponse(job.getId(), job.getStatus());
+    }
+
+    // 캐시 히트 시 사용 (동일 signature의 active 결과가 이미 존재)
+    public static JobAcceptedResponse cacheHit() {
+        return new JobAcceptedResponse(null, JobStatus.SUCCEEDED);
     }
 }

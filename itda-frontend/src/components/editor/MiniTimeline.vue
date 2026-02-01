@@ -1,10 +1,11 @@
 <script setup lang="ts">
 /**
- * MiniTimeline - 확정된 비디오 클립을 보여주는 미니 타임라인
+ * MiniTimeline - 확정된 비디오 트랙 요약 표시
  */
 import { ref } from 'vue';
 import type { TimelineClip } from '../../types/ui';
 import { Star, Play, X } from 'lucide-vue-next';
+import { useVideoPreview } from '../../composables/useVideoPreview';
 
 // =============================================================================
 // Props
@@ -21,6 +22,8 @@ interface Props {
 const props = withDefaults(defineProps<Props>(), {
   maxDuration: 60,
 });
+
+const { isVideo, playVideoPreview, stopVideoPreview } = useVideoPreview();
 
 const emit = defineEmits<{
   (e: 'reorder', clipIds: string[]): void;
@@ -98,7 +101,7 @@ const progressPercent = Math.min(
     <!-- Label -->
     <div class="timeline-label">
       <Star class="label-icon" />
-      <span>Confirmed</span>
+      <span>확정</span>
     </div>
 
     <!-- Clips -->
@@ -119,7 +122,22 @@ const progressPercent = Math.min(
         <button class="clip-remove" @click.stop="handleRemove(clip.clipId)">
           <X class="remove-icon" />
         </button>
-        <img :src="clip.thumbnailUrl" :alt="clip.label || '확정 클립'" />
+        <video
+          v-if="clip.videoUrl || isVideo(clip.thumbnailUrl)"
+          :src="clip.videoUrl || clip.thumbnailUrl"
+          class="clip-content clip-video"
+          preload="metadata"
+          muted
+          playsinline
+          @mouseenter="playVideoPreview"
+          @mouseleave="stopVideoPreview"
+        />
+        <img
+          v-else
+          :src="clip.thumbnailUrl"
+          :alt="clip.label || '확정 클립'"
+          class="clip-content clip-img"
+        />
         <span class="clip-duration">{{ clip.duration }}s</span>
       </div>
 
@@ -137,12 +155,11 @@ const progressPercent = Math.min(
       />
     </div>
 
-    <!-- Timeline Link -->
+    <!-- Timeline Play -->
     <button class="timeline-play" @click="handlePlay">
       <Play class="link-icon" />
       재생
     </button>
-
   </div>
 </template>
 
@@ -228,10 +245,11 @@ const progressPercent = Math.min(
   transform: scale(1.05);
 }
 
-.timeline-clip img {
+.clip-content {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  display: block;
 }
 
 .clip-duration {

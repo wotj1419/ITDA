@@ -22,6 +22,7 @@
         <result property="isActive" column="is_active"/>
         <result property="isConfirmed" column="is_confirmed"/>
         <result property="contentUrl" column="content_url"/>
+        <result property="assetId" column="asset_id"/>
         <result property="startShotNodeId" column="start_shot_node_id"/>
         <result property="endShotNodeId" column="end_shot_node_id"/>
         <result property="createdBy" column="created_by"/>
@@ -33,7 +34,7 @@
     <sql id="nodeColumns">
         id, scene_id, node_type, parent_node_id, order_index,
         position_x, position_y, prompt, data_json, status,
-        is_active, is_confirmed, content_url,
+        is_active, is_confirmed, content_url, asset_id,
         start_shot_node_id, end_shot_node_id,
         created_by, created_at, updated_at
     </sql>
@@ -44,13 +45,13 @@
         INSERT INTO nodes (
             scene_id, node_type, parent_node_id, order_index,
             position_x, position_y, prompt, data_json, status,
-            is_active, is_confirmed, content_url,
+            is_active, is_confirmed, content_url, asset_id,
             start_shot_node_id, end_shot_node_id,
             created_by
         ) VALUES (
             #{sceneId}, #{nodeType}, #{parentNodeId}, #{orderIndex},
             #{positionX}, #{positionY}, #{prompt}, #{dataJson}, #{status},
-            #{isActive}, #{isConfirmed}, #{contentUrl},
+            #{isActive}, #{isConfirmed}, #{contentUrl}, #{assetId},
             #{startShotNodeId}, #{endShotNodeId},
             #{createdBy}
         )
@@ -193,6 +194,15 @@
         UPDATE nodes
         SET status = #{status},
             content_url = #{contentUrl}
+        WHERE id = #{nodeId}
+    </update>
+
+    <!-- Update node status + content URL + asset ID -->
+    <update id="updateStatusAndContentUrlAndAssetId">
+        UPDATE nodes
+        SET status = #{status},
+            content_url = #{contentUrl},
+            asset_id = #{assetId}
         WHERE id = #{nodeId}
     </update>
 

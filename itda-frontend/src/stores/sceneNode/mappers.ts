@@ -234,7 +234,8 @@ export function createSceneNodeFromApi(
   base.parentNodeId = resolvedParentId;
 
   let data: AnyNodeData;
-  const resolvedContentUrl = resolveApiUrl(node.contentUrl ?? null);
+  const isSucceeded = String(node.status ?? '').toUpperCase() === 'SUCCEEDED';
+  const resolvedContentUrl = isSucceeded ? resolveApiUrl(node.contentUrl ?? null) : null;
   switch (uiType) {
     case NodeType.SCENE_HEADER:
       data = {

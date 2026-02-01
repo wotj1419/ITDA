@@ -1,20 +1,25 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import { useCollabStore } from '../../stores/collab'
 import CollabPanel from '../collab/CollabPanel.vue'
 import { Mic, MicOff, MessageCircle, PhoneOff } from 'lucide-vue-next'
 
 const collabStore = useCollabStore()
-const STORAGE_KEY = 'collab:floatingPos'
-
 const floatRef = ref<HTMLElement | null>(null)
 const panelWrapRef = ref<HTMLDivElement | null>(null)
-const position = ref({ x: 0, y: 0 })
-const isDragging = ref(false)
-const dragOffset = ref({ x: 0, y: 0 })
 const panelPlacement = ref<'up' | 'down'>('up')
 const panelMaxHeight = ref<number | null>(null)
 const panelOffsetX = ref(0)
+const route = useRoute()
+const DEFAULT_BOTTOM_OFFSET = 60
+
+const isProjectPage = computed(() => {
+  // Only show on project-related pages, never on dashboard
+  return route.path.startsWith('/projects')
+})
+
+const isDashboardPage = computed(() => route.path === '/dashboard')
 
 const isConnected = computed(() => collabStore.isConnected)
 const statusText = computed(() => {
@@ -31,6 +36,11 @@ const statusColor = computed(() => {
   return 'bg-gray-500'
 })
 
+const STORAGE_KEY = 'collab:floatingPos'
+const position = ref({ x: 0, y: 0 })
+const isDragging = ref(false)
+const dragOffset = ref({ x: 0, y: 0 })
+
 function toggleMute() {
   collabStore.toggleMute()
 }
@@ -39,6 +49,7 @@ function togglePanel() {
   collabStore.togglePanel()
 }
 
+// Reverting to simple, working state
 function clampPosition(nextX: number, nextY: number) {
   const rect = floatRef.value?.getBoundingClientRect()
   const width = rect?.width ?? 280
@@ -52,11 +63,20 @@ function clampPosition(nextX: number, nextY: number) {
 }
 
 function setDefaultPosition() {
+  /* Button is smaller than Bar. 
+    If bar is visible -> fallback 280.
+    If button -> fallback ~150.
+  */
+  const defaultWidth = collabStore.isFloatingBarVisible ? 280 : 150
+  
   const rect = floatRef.value?.getBoundingClientRect()
-  const width = rect?.width ?? 280
-  const height = rect?.height ?? 64
-  const x = Math.max(8, window.innerWidth - width - 24)
-  const y = Math.max(8, window.innerHeight - height - 24)
+  const measuredWidth = (rect?.width && rect.width > 0) ? rect.width : defaultWidth
+  const width = collabStore.isFloatingBarVisible ? measuredWidth : defaultWidth
+  const height = (rect?.height && rect.height > 0) ? rect.height : 64
+  
+  const rightOffset = 2
+  const x = Math.max(8, window.innerWidth - width - rightOffset)
+  const y = Math.max(8, window.innerHeight - height - DEFAULT_BOTTOM_OFFSET)
   position.value = { x, y }
 }
 
@@ -97,7 +117,11 @@ function onPointerUp(event: PointerEvent) {
 }
 
 function handleResize() {
-  position.value = clampPosition(position.value.x, position.value.y)
+  if (!collabStore.isFloatingBarVisible) {
+    setDefaultPosition()
+  } else {
+    position.value = clampPosition(position.value.x, position.value.y)
+  }
   if (collabStore.isPanelOpen) {
     updatePanelPlacement()
   }
@@ -152,6 +176,10 @@ onMounted(() => {
 
   nextTick(() => {
     position.value = clampPosition(position.value.x, position.value.y)
+    // Double check initial position just in case
+    if (!collabStore.isFloatingBarVisible) {
+      setDefaultPosition()
+    }
   })
 })
 
@@ -167,13 +195,27 @@ watch(
 watch(
   () => collabStore.isFloatingBarVisible,
   async (visible) => {
-    if (!visible) return
     await nextTick()
+    if (!visible) {
+      setDefaultPosition()
+      return
+    }
+    // Always reset to default position when opening the bar.
     setDefaultPosition()
     localStorage.setItem(STORAGE_KEY, JSON.stringify(position.value))
     if (collabStore.isPanelOpen) {
       updatePanelPlacement()
     }
+  }
+)
+
+watch(
+  () => isProjectPage.value,
+  async (isProject) => {
+    if (!isProject) return
+    if (collabStore.isFloatingBarVisible) return
+    await nextTick()
+    setDefaultPosition()
   }
 )
 
@@ -210,12 +252,14 @@ onBeforeUnmount(() => {
 
 <template>
   <div
-    v-if="collabStore.isFloatingBarVisible"
-    ref="floatRef"
     class="floating-wrap"
+    ref="floatRef"
+    :class="{ dragging: isDragging }"
     :style="{ left: `${position.x}px`, top: `${position.y}px` }"
     @pointerdown="onPointerDown"
   >
+    <!-- Active Bar (Expanded State) -->
+    <div v-if="!isDashboardPage && collabStore.isFloatingBarVisible && collabStore.isMediaConnected" class="bar-container">
     <div
       ref="panelWrapRef"
       class="panel-pop"
@@ -227,36 +271,8 @@ onBeforeUnmount(() => {
     >
       <CollabPanel v-show="collabStore.isPanelOpen" />
     </div>
-
-    <!-- Standby Mode (No Media) -->
-    <div v-if="!collabStore.isMediaConnected" class="floating-bar">
-         <!-- Status -->
-         <div class="status-indicator">
-            <div class="status-dot bg-yellow-500"></div>
-            <span class="status-text">Ready</span>
-         </div>
-         <div class="divider"></div>
-         
-         <Button 
-            class="go-live-btn"
-            @click="collabStore.enableMedia()"
-         >
-            <Mic class="icon-sm" />
-            <span>Go Live</span>
-         </Button>
-         
-         <div class="divider"></div>
-         <button
-            class="control-btn"
-            @click="collabStore.hideFloatingBar()"
-            title="Hide Control Bar"
-         >
-            <PhoneOff class="icon" />
-         </button>
-    </div>
-
     <!-- Live Mode (Media Connected) -->
-    <div v-else class="floating-bar" :class="{ hidden: collabStore.isPanelOpen }">
+    <div class="floating-bar" :class="{ hidden: collabStore.isPanelOpen }">
       <!-- Status Indicator -->
       <div class="status-indicator" :title="statusText">
         <div class="status-dot" :class="statusColor"></div>
@@ -288,7 +304,7 @@ onBeforeUnmount(() => {
 
       <button
         class="control-btn danger"
-        @click="collabStore.disableMedia()"
+        @click="collabStore.disableMedia(); collabStore.hideFloatingBar()"
         :disabled="!isConnected"
         title="End Call"
       >
@@ -296,14 +312,23 @@ onBeforeUnmount(() => {
       </button>
     </div>
   </div>
+  </div>
 </template>
 
 <style scoped>
 .floating-wrap {
   position: fixed;
-  z-index: 900; /* Below modal overlay (1000) */
+  z-index: 900;
   touch-action: none;
   display: inline-block;
+  width: max-content;
+}
+
+
+.bar-container {
+  position: relative;
+  width: max-content;
+  display: inline-flex;
 }
 
 .panel-pop {
@@ -318,6 +343,7 @@ onBeforeUnmount(() => {
   transition: all 0.18s ease;
   margin-bottom: 0;
 }
+
 
 .panel-pop.open {
   opacity: 1;
@@ -345,6 +371,17 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 0.25rem;
   border: 1px solid var(--rose-200);
+  width: fit-content;
+  cursor: grab;
+}
+
+.floating-wrap.dragging .floating-bar {
+  cursor: grabbing;
+}
+
+.floating-bar button,
+.floating-bar .control-btn {
+  cursor: pointer;
 }
 
 .floating-bar.hidden {
@@ -422,29 +459,12 @@ onBeforeUnmount(() => {
   height: 14px;
 }
 
-.go-live-btn {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.25rem 0.75rem;
-  background: var(--rose-500);
-  color: white;
-  border: none;
-  border-radius: 999px;
-  font-size: 0.75rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.2s;
-}
-
-.go-live-btn:hover {
-  background: var(--rose-600);
-}
 
 .icon-sm {
   width: 14px;
   height: 14px;
 }
+
 
 /* Tailwind-like utilities since we might not have full tailwind configured as classes yet */
 .bg-green-500 { background-color: #22c55e; }

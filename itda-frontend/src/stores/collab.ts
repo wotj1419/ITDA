@@ -2,6 +2,7 @@ import { defineStore } from 'pinia';
 import { ref, computed, reactive, watch } from 'vue';
 import type { CollabParticipant, CollabMessage, CollabStatus } from '../types/ui/collab';
 import { socketManager } from '../services/ws/socket';
+import { fetchChatMessages } from '../services/api/chat';
 import { peerConnectionService } from '../services/webrtc/peerConnection';
 import { useAuthStore } from './auth';
 
@@ -22,6 +23,7 @@ export const useCollabStore = defineStore('collab', () => {
     // ================================
     const status = ref<CollabStatus>('disconnected');
     const roomId = ref<string | null>(null);
+    const currentProjectId = ref<number | null>(null);
     const participants = ref<CollabParticipant[]>([]);
     const messages = ref<CollabMessage[]>([]);
     const isPanelOpen = ref(false);
@@ -29,15 +31,25 @@ export const useCollabStore = defineStore('collab', () => {
     // UI State
     const isFloatingBarVisible = ref(false);
     const isMediaConnected = ref(false);
+    const isAutoStarting = ref(false);
     const floatingBarResetToken = ref(0);
     const speakingMap = reactive(new Map<string, boolean>());
     const localStream = ref<MediaStream | null>(null);
+    const audioInputDevices = ref<MediaDeviceInfo[]>([]);
+    const selectedMicId = ref<string>(localStorage.getItem('collab:micId') ?? '');
+    const remoteVolumeMap = reactive(new Map<string, number>());
+    const rtcJoinPending = ref(false);
+    const rtcJoined = ref(false);
+    const rtcPeers = reactive(new Set<string>());
 
     // Local User State
     const isMuted = ref(false);
     const isVideoOff = ref(true);
     const isScreenSharing = ref(false);
     const currentLocation = ref('');
+    const currentSceneId = ref<number | null>(null);
+    const currentNodeId = ref<number | null>(null);
+    const pendingPresence = ref<{ location: PresenceLocation; sceneId: number | null; nodeId: number | null } | null>(null);
 
     // Cursors (Map for performance)
     const cursors = reactive(new Map<string, { x: number, y: number, color: string }>());
@@ -77,10 +89,13 @@ export const useCollabStore = defineStore('collab', () => {
     const localParticipant = computed<CollabParticipant>(() => ({
         odps: localUserId.value,
         name: authStore.user?.name || 'Guest',
+        avatarUrl: authStore.user?.profileImageUrl ?? undefined,
         isMuted: isMuted.value,
         isVideoOff: isVideoOff.value,
         isScreenSharing: isScreenSharing.value,
         currentLocation: currentLocation.value,
+        sceneId: currentSceneId.value,
+        nodeId: currentNodeId.value,
     }));
 
     const speakingMonitors = new Map<
@@ -156,6 +171,59 @@ export const useCollabStore = defineStore('collab', () => {
         speakingMap.delete(id);
     };
 
+    let deviceChangeBound = false;
+    const handleDeviceChange = () => {
+        void loadAudioInputDevices();
+    };
+
+    async function loadAudioInputDevices() {
+        if (!navigator?.mediaDevices?.enumerateDevices) return;
+        try {
+            const devices = await navigator.mediaDevices.enumerateDevices();
+            const inputs = devices.filter((device) => device.kind === 'audioinput');
+            audioInputDevices.value = inputs;
+
+            if (inputs.length === 0) {
+                selectedMicId.value = '';
+                return;
+            }
+
+            if (!selectedMicId.value || !inputs.some((device) => device.deviceId === selectedMicId.value)) {
+                selectedMicId.value = inputs[0]?.deviceId ?? '';
+            }
+
+            if (!deviceChangeBound && navigator.mediaDevices.addEventListener) {
+                navigator.mediaDevices.addEventListener('devicechange', handleDeviceChange);
+                deviceChangeBound = true;
+            } else if (!deviceChangeBound) {
+                navigator.mediaDevices.ondevicechange = handleDeviceChange;
+                deviceChangeBound = true;
+            }
+        } catch (error) {
+            console.warn('Failed to load audio input devices', error);
+        }
+    }
+
+    async function selectMicrophone(deviceId: string) {
+        selectedMicId.value = deviceId;
+        if (deviceId) {
+            localStorage.setItem('collab:micId', deviceId);
+        } else {
+            localStorage.removeItem('collab:micId');
+        }
+
+        if (!isMediaConnected.value || !rtcJoined.value) return;
+        const stream = await peerConnectionService.switchMicrophone(deviceId);
+        if (stream) {
+            localStream.value = stream;
+            stopSpeakingMonitor(localUserId.value);
+            await startSpeakingMonitor(localUserId.value, stream);
+            if (isMuted.value) {
+                peerConnectionService.toggleMute(true);
+            }
+        }
+    }
+
     // ================================
     // Actions: Room Management
     // ================================
@@ -163,45 +231,57 @@ export const useCollabStore = defineStore('collab', () => {
     /**
      * Join a project room (Signaling Only)
      */
-    async function joinRoom(projectId: number) {
-        const nextRoomId = String(projectId);
+    async function joinRoom(projectId: number): Promise<void> {
+        const nextRoomId = `project-${projectId}`;
+        const nextProjectId = projectId;
 
         if (status.value !== 'disconnected' && roomId.value && roomId.value !== nextRoomId) {
             leaveRoom();
+        }
+
+        if (roomId.value === nextRoomId && status.value !== 'disconnected') {
+            return;
         }
 
         if (status.value === 'connected' || status.value === 'connecting') return;
 
         status.value = 'connecting';
         roomId.value = nextRoomId;
+        currentProjectId.value = nextProjectId;
         localStorage.setItem(STORAGE_KEY, nextRoomId);
 
         try {
+            void loadAudioInputDevices();
             // 1. Connect WebSocket
             if (!socketManager.getClient().connected) {
                 socketManager.connect();
             }
 
-            // 2. Subscribe to room
-            socketManager.subscribeToRoom(roomId.value);
+        // 2. Subscribe to room (legacy signaling)
+        socketManager.subscribeToRoom(roomId.value);
+        // 2-1. Subscribe to chat (projectId)
+        socketManager.subscribeToChat(String(nextProjectId), handleChatMessage);
+        // 2-2. Subscribe to presence (projectId)
+        socketManager.subscribeToPresence(String(nextProjectId), handlePresenceMessage);
+        // 2-3. Subscribe to RTC signaling + errors
+        socketManager.subscribeToRTC(String(nextProjectId), handleRtcMessage);
+        socketManager.subscribeToErrors(handleRtcError);
 
             // 3. Setup WebRTC Callbacks (Prepare for later)
-            peerConnectionService.setCallbacks({
-                onTrack: handleRemoteTrack,
-                onIceCandidate: (candidate, peerId) => handleIceCandidate(peerId, candidate),
-                onConnectionStateChange: handleConnectionStateChange,
+        peerConnectionService.setCallbacks({
+            onTrack: handleRemoteTrack,
+            onIceCandidate: (candidate, peerId) => handleLocalIceCandidate(peerId, candidate),
+            onConnectionStateChange: handleConnectionStateChange,
+        });
+
+            // 4. Broadcast Join + Presence after connection is ready
+            socketManager.onConnected(() => {
+                status.value = 'connected';
+                announcePresence();
             });
 
-            // 4. Broadcast Join (Signaling Only)
-            setTimeout(() => {
-                socketManager.sendSignal({
-                    type: 'join',
-                    payload: {
-                        user: localParticipant.value
-                    }
-                });
-                status.value = 'connected';
-            }, 1000);
+            // 5. Load chat history (optional)
+            void loadChatHistory(nextProjectId);
 
         } catch (error) {
             console.error('Failed to join room:', error);
@@ -214,45 +294,47 @@ export const useCollabStore = defineStore('collab', () => {
      */
     async function enableMedia() {
         if (!roomId.value || status.value !== 'connected') return;
-        if (isMediaConnected.value) return;
+        if (isMediaConnected.value || rtcJoinPending.value || rtcJoined.value) {
+            isAutoStarting.value = false;
+            return;
+        }
+
+        // Backend spec: max 6 participants for audio mesh
+        if (participants.value.length >= 6) {
+            console.warn('[RTC] Room is full (max 6 participants)');
+            alert('협업 통화는 최대 6명까지 참여할 수 있습니다.');
+            isAutoStarting.value = false;
+            return;
+        }
 
         try {
             // 1. Get Local Stream
-            const stream = await peerConnectionService.getLocalStream({ video: false, audio: true });
+            const stream = await peerConnectionService.getLocalStream({
+                video: false,
+                audio: true,
+                audioDeviceId: selectedMicId.value || undefined,
+            });
             localStream.value = stream;
             if (stream) {
                 await startSpeakingMonitor(localUserId.value, stream);
             }
+            await loadAudioInputDevices();
 
-            // 2. Initialize Peer Connections for existing participants
-            // (In a mesh, we need to offer to everyone who is already here? 
-            //  Or just wait for them? Ideally we offer to existing peers)
-            //  The current logic relied on 'join' signal trigger. 
-            //  Since we already joined, we might need to send a 'media_ready' signal?
-            //  Or just create offers now.
-
-            // Simplified: Just iterate participants and offer if they are media ready?
-            // For now, let's assume standard mesh: create offer to all existing.
-            participants.value.forEach(async (p) => {
-                if (p.odps && p.odps !== localParticipant.value.odps) {
-                    peerConnectionService.createPeerConnection(p.odps);
-                    const offer = await peerConnectionService.createOffer(p.odps);
-                    if (offer) {
-                        socketManager.sendSignal({
-                            type: 'offer',
-                            targetId: p.odps,
-                            payload: offer
-                        });
-                    }
-                }
+            // 2. Join RTC room (server will return JOIN_ACK with participant list)
+            if (currentProjectId.value === null) {
+                rtcJoinPending.value = false;
+                return;
+            }
+            rtcJoinPending.value = true;
+            socketManager.sendRTC(String(currentProjectId.value), {
+                type: 'JOIN',
+                projectId: currentProjectId.value,
             });
-
-            isMediaConnected.value = true;
-            isMuted.value = false; // Auto-unmute on connect? Or keep muted? User said "Live" button. Usually starts unmuted.
-            peerConnectionService.toggleMute(false);
-
         } catch (e) {
             console.error('Failed to enable media:', e);
+            rtcJoinPending.value = false;
+        } finally {
+            isAutoStarting.value = false;
         }
     }
 
@@ -260,17 +342,32 @@ export const useCollabStore = defineStore('collab', () => {
      * Disable Media - "End Call"
      */
     function disableMedia() {
-        if (!isMediaConnected.value) return;
+        if (!isMediaConnected.value && !rtcJoinPending.value && !rtcJoined.value) return;
+
+        if (rtcJoined.value && currentProjectId.value !== null) {
+            socketManager.sendRTC(String(currentProjectId.value), {
+                type: 'LEAVE',
+                projectId: currentProjectId.value,
+            });
+        }
 
         // Close all peer connections but keep socket
         peerConnectionService.closeAll();
         // peerConnectionService.stopLocalStream(); // Assuming this method exists or handled in closeAll
 
         isMediaConnected.value = false;
-        isFloatingBarVisible.value = false; // Hide bar as requested
         isMuted.value = false;
         localStream.value = null;
+        isPanelOpen.value = false;
+        rtcJoinPending.value = false;
+        rtcJoined.value = false;
+        rtcPeers.clear();
         stopSpeakingMonitor(localUserId.value);
+    }
+
+    function handleMediaStop(peerId: string) {
+        console.log(`[Collab] Peer stopped media: ${peerId}`);
+        peerConnectionService.removePeer(peerId);
     }
 
     /**
@@ -284,7 +381,17 @@ export const useCollabStore = defineStore('collab', () => {
             type: 'leave',
         });
 
+        if (currentProjectId.value !== null) {
+            socketManager.unsubscribeChat(String(currentProjectId.value));
+            socketManager.unsubscribePresence(String(currentProjectId.value));
+            socketManager.unsubscribeRTC();
+            socketManager.unsubscribeErrors();
+        }
         disableMedia(); // Handles WebRTC cleanup
+        isFloatingBarVisible.value = false;
+        floatingBarResetToken.value += 1;
+        isAutoStarting.value = false;
+        localStorage.removeItem('collab:floatingPos');
 
         // Close Socket Subscription
         socketManager.disconnect();
@@ -292,6 +399,7 @@ export const useCollabStore = defineStore('collab', () => {
         // Reset State
         status.value = 'disconnected';
         roomId.value = null;
+        currentProjectId.value = null;
         participants.value = [];
         messages.value = [];
         cursors.clear();
@@ -309,6 +417,16 @@ export const useCollabStore = defineStore('collab', () => {
 
     function hideFloatingBar() {
         isFloatingBarVisible.value = false;
+    }
+
+    function startCall(projectId: number) {
+        isAutoStarting.value = true;
+        isPanelOpen.value = false;
+        joinRoom(projectId);
+        showFloatingBar(true);
+        if (status.value === 'connected') {
+            void enableMedia();
+        }
     }
     async function handleSignal(signal: any) {
         const { type, senderId, payload, targetId } = signal;
@@ -333,24 +451,115 @@ export const useCollabStore = defineStore('collab', () => {
                 await handleAnswer(senderId, payload);
                 break;
             case 'candidate':
-                await handleIceCandidate(senderId, payload);
-                break;
-            case 'chat':
-                messages.value.push({
-                    messageId: `msg-${Date.now()}-${senderId}`,
-                    senderId,
-                    senderName: payload.name,
-                    content: payload.content,
-                    timestamp: payload.timestamp
-                });
+                await handleRemoteIceCandidate(senderId, payload);
                 break;
             case 'cursor':
                 handleCursorUpdate(senderId, payload);
+                break;
+            case 'media_stop':
+                handleMediaStop(senderId);
                 break;
             case 'state_update':
                 handleStateUpdate(senderId, payload);
                 break;
         }
+    }
+
+    async function handleRtcMessage(message: any) {
+        const type = String(message?.type || '').toUpperCase();
+        const senderId = message?.senderId != null ? String(message.senderId) : '';
+
+        switch (type) {
+            case 'JOIN_ACK':
+                await handleRtcJoinAck(message);
+                break;
+            case 'JOIN':
+                handleRtcJoin(senderId, message);
+                break;
+            case 'LEAVE':
+                handleRtcLeave(senderId);
+                break;
+            case 'MUTE':
+                handleRtcMute(senderId, message?.muted);
+                break;
+            case 'OFFER':
+                if (message?.sdp) {
+                    await handleOffer(senderId, message.sdp);
+                }
+                break;
+            case 'ANSWER':
+                if (message?.sdp) {
+                    await handleAnswer(senderId, message.sdp);
+                }
+                break;
+            case 'CANDIDATE':
+                if (message?.candidate) {
+                    await handleRemoteIceCandidate(senderId, message.candidate);
+                }
+                break;
+            default:
+                break;
+        }
+    }
+
+    function handleRtcError(error: any) {
+        const code = error?.code ?? 'RTC_ERROR';
+        const message = error?.message ?? 'RTC error';
+        console.warn('[RTC] Error:', code, message);
+        alert(message);
+        cleanupRtcState();
+        isAutoStarting.value = false;
+    }
+
+    async function handleRtcJoinAck(message: any) {
+        if (!rtcJoinPending.value && !rtcJoined.value) return;
+        if (rtcJoined.value) return;
+        rtcJoinPending.value = false;
+        rtcJoined.value = true;
+        isMediaConnected.value = true;
+        isMuted.value = false;
+        peerConnectionService.toggleMute(false);
+
+        const participantsList = Array.isArray(message?.participants) ? message.participants : [];
+        for (const participant of participantsList) {
+            const peerId = participant?.userId != null ? String(participant.userId) : null;
+            if (!peerId || peerId === localParticipant.value.odps) continue;
+
+            rtcPeers.add(peerId);
+            updateParticipantMute(peerId, participant?.muted);
+            peerConnectionService.createPeerConnection(peerId);
+            const offer = await peerConnectionService.createOffer(peerId);
+            if (offer && currentProjectId.value !== null) {
+                socketManager.sendRTC(String(currentProjectId.value), {
+                    type: 'OFFER',
+                    projectId: currentProjectId.value,
+                    targetId: Number(peerId),
+                    sdp: offer,
+                });
+            }
+        }
+    }
+
+    function handleRtcJoin(peerId: string, payload: any) {
+        if (!peerId || peerId === localParticipant.value.odps) return;
+        rtcPeers.add(peerId);
+        updateParticipantMute(peerId, payload?.muted);
+    }
+
+    function handleRtcLeave(peerId: string) {
+        if (!peerId) return;
+        rtcPeers.delete(peerId);
+        peerConnectionService.removePeer(peerId);
+        stopSpeakingMonitor(peerId);
+        remoteVolumeMap.delete(peerId);
+        const audio = document.getElementById(`audio-${peerId}`);
+        if (audio) audio.remove();
+        updateParticipantMute(peerId, undefined);
+    }
+
+    function handleRtcMute(peerId: string, muted: boolean | null | undefined) {
+        if (!peerId || muted == null) return;
+        updateParticipantMute(peerId, muted);
     }
 
     /**
@@ -404,11 +613,14 @@ export const useCollabStore = defineStore('collab', () => {
 
         const answer = await peerConnectionService.createAnswer(peerId);
         if (answer) {
-            socketManager.sendSignal({
-                type: 'answer',
-                targetId: peerId,
-                payload: answer
-            });
+            if (currentProjectId.value !== null) {
+                socketManager.sendRTC(String(currentProjectId.value), {
+                    type: 'ANSWER',
+                    projectId: currentProjectId.value,
+                    targetId: Number(peerId),
+                    sdp: answer,
+                });
+            }
         }
     }
 
@@ -423,7 +635,17 @@ export const useCollabStore = defineStore('collab', () => {
     /**
      * Handle Ice Candidate
      */
-    async function handleIceCandidate(peerId: string, candidate: RTCIceCandidateInit) {
+    function handleLocalIceCandidate(peerId: string, candidate: RTCIceCandidateInit) {
+        if (currentProjectId.value === null) return;
+        socketManager.sendRTC(String(currentProjectId.value), {
+            type: 'CANDIDATE',
+            projectId: currentProjectId.value,
+            targetId: Number(peerId),
+            candidate,
+        });
+    }
+
+    async function handleRemoteIceCandidate(peerId: string, candidate: RTCIceCandidateInit) {
         await peerConnectionService.addIceCandidate(peerId, candidate);
     }
 
@@ -444,6 +666,7 @@ export const useCollabStore = defineStore('collab', () => {
             document.body.appendChild(audio);
         }
         audio.srcObject = stream;
+        audio.volume = getRemoteVolume(peerId);
         void startSpeakingMonitor(peerId, stream);
     }
 
@@ -455,37 +678,102 @@ export const useCollabStore = defineStore('collab', () => {
     // Actions: Features
     // ================================
 
+    const canSendSignal = () => socketManager.canSendSignal() && status.value === 'connected' && !!roomId.value;
+
     function sendMessage(content: string) {
         if (!content.trim()) return;
+        if (!canSendSignal() || currentProjectId.value === null) return;
 
-        // Broadcast
-        socketManager.sendSignal({
-            type: 'chat',
-            payload: {
-                content,
-                name: localParticipant.value.name,
-                timestamp: Date.now()
-            }
+        // Backend spec: max 2000 characters
+        if (content.length > 2000) {
+            console.warn('[Chat] Message too long');
+            alert('메시지는 최대 2000자까지 입력할 수 있습니다.');
+            return;
+        }
+
+        const now = Date.now();
+        const localId = `local-${now}`;
+
+        // Publish to chat topic (spec)
+        socketManager.sendChat(String(currentProjectId.value), {
+            content,
+            type: 'TEXT',
         });
 
-        // Add to local immediately
+        // Optimistic local append
         messages.value.push({
-            messageId: `msg-${Date.now()}-me`,
+            messageId: localId,
             senderId: localParticipant.value.odps,
             senderName: localParticipant.value.name,
             content: content,
-            timestamp: Date.now()
+            timestamp: now,
+            type: 'chat',
         });
     }
 
-    function updateCursor(x: number, y: number) {
+    function handleChatMessage(message: any) {
+        const createdAt = message?.createdAt ? Date.parse(message.createdAt) : Date.now();
+        const senderId = message?.sender?.userId ? String(message.sender.userId) : 'system';
+        const senderName = message?.sender?.name ?? '알 수 없음';
+        const content = message?.content ?? '';
+        const messageId = message?.messageId ? String(message.messageId) : `msg-${createdAt}-${senderId}`;
+
+        // Replace optimistic local message if applicable
+        if (senderId === localParticipant.value.odps && content) {
+            const idx = [...messages.value].reverse().findIndex((m) =>
+                m.senderId === senderId && m.content === content && m.messageId.startsWith('local-')
+            );
+            if (idx !== -1) {
+                const realIdx = messages.value.length - 1 - idx;
+                messages.value[realIdx] = {
+                    ...messages.value[realIdx],
+                    messageId,
+                    timestamp: createdAt,
+                } as CollabMessage;
+                return;
+            }
+        }
+
+        messages.value.push({
+            messageId,
+            senderId,
+            senderName,
+            content,
+            timestamp: createdAt,
+            type: 'chat',
+        });
+    }
+
+    async function loadChatHistory(projectId: number) {
+        if (!authStore.isAuthenticated) return;
+        try {
+            const data = await fetchChatMessages(projectId, 50);
+            if (!data?.items?.length) return;
+            const mapped = data.items
+                .slice()
+                .reverse()
+                .map((item) => ({
+                    messageId: String(item.messageId),
+                    senderId: String(item.sender?.userId ?? 'system'),
+                    senderName: item.sender?.name ?? '알 수 없음',
+                    content: item.content ?? '',
+                    timestamp: Date.parse(item.createdAt),
+                    type: 'chat' as const,
+                }));
+            messages.value = mapped;
+        } catch (error) {
+            console.warn('Failed to load chat history', error);
+        }
+    }
+
+    function updateCursor(x: number, y: number, _sceneId?: number | null) {
         if (!authStore.isAuthenticated) return;
 
         const now = Date.now();
         if (now - lastCursorSentAt < CURSOR_THROTTLE_MS) return;
         lastCursorSentAt = now;
 
-        if (!roomId.value || status.value !== 'connected') return;
+        if (!canSendSignal()) return;
 
         socketManager.sendSignal({
             type: 'cursor',
@@ -502,18 +790,75 @@ export const useCollabStore = defineStore('collab', () => {
         });
     }
 
-    function updateLocation(location: string) {
+    type PresenceLocation = 'PROJECT_LIST' | 'SCENE_LIST' | 'SCENE_EDIT' | 'TIMELINE';
+
+    function updateLocation(location: PresenceLocation, sceneId?: number | null, nodeId?: number | null) {
         currentLocation.value = location;
+        currentSceneId.value = sceneId ?? null;
+        currentNodeId.value = nodeId ?? null;
+        pendingPresence.value = {
+            location,
+            sceneId: sceneId ?? null,
+            nodeId: nodeId ?? null,
+        };
+
+        flushPresence();
         broadcastState();
     }
 
-    function handleStateUpdate(peerId: string, userData: CollabParticipant) {
-        addParticipant(peerId, userData);
+    function handlePresenceMessage(message: any) {
+        const type = message?.type;
+
+        if (type === 'SNAPSHOT') {
+            if (message?.projectId && currentProjectId.value && Number(message.projectId) !== currentProjectId.value) {
+                return;
+            }
+            const snapshot = Array.isArray(message?.participants) ? message.participants : [];
+            const existing = new Map(participants.value.map((participant) => [participant.odps, participant]));
+            const next = snapshot
+                .map(mapPresenceToParticipant)
+                .filter((participant: CollabParticipant | null): participant is CollabParticipant => !!participant)
+                .map((participant: CollabParticipant) => {
+                    const prev = existing.get(participant.odps);
+                    return prev ? { ...prev, ...participant } : participant;
+                });
+            participants.value = next;
+            return;
+        }
+
+        const userId = message?.userId;
+        if (!userId) return;
+        const peerId = String(userId);
+        if (type === 'LEAVE') {
+            removeParticipant(peerId);
+            return;
+        }
+        const participant = mapPresenceToParticipant(message);
+        if (!participant) return;
+        addParticipant(peerId, participant);
+    }
+
+    function mapPresenceToParticipant(message: any): CollabParticipant | null {
+        const userId = message?.userId;
+        if (!userId) return null;
+        const peerId = String(userId);
+        return {
+            odps: peerId,
+            name: message?.name ?? 'Guest',
+            avatarUrl: message?.profileImageUrl ?? undefined,
+            currentLocation: message?.location ?? '',
+            sceneId: message?.sceneId ?? null,
+            nodeId: message?.nodeId ?? null,
+        };
     }
 
     // ================================
     // Helpers
     // ================================
+
+    function handleStateUpdate(peerId: string, userData: CollabParticipant) {
+        addParticipant(peerId, userData);
+    }
 
     function addParticipant(peerId: string, userData: CollabParticipant) {
         const idx = participants.value.findIndex(p => p.odps === peerId);
@@ -533,10 +878,56 @@ export const useCollabStore = defineStore('collab', () => {
         participants.value = participants.value.filter(p => p.odps !== peerId);
         cursors.delete(peerId);
         cursorColorByUser.delete(peerId);
+        remoteVolumeMap.delete(peerId);
         stopSpeakingMonitor(peerId);
         // Cleanup audio
         const audio = document.getElementById(`audio-${peerId}`);
         if (audio) audio.remove();
+    }
+
+    function updateParticipantMute(peerId: string, muted: boolean | undefined | null) {
+        if (!peerId) return;
+        const idx = participants.value.findIndex(p => p.odps === peerId);
+        if (idx === -1) return;
+        const next = muted == null ? undefined : muted;
+        const existing = participants.value[idx];
+        if (!existing) return;
+        participants.value[idx] = {
+            ...existing,
+            isMuted: next,
+        };
+    }
+
+    function getRemoteVolume(peerId: string): number {
+        const volume = remoteVolumeMap.get(peerId);
+        return typeof volume === 'number' ? volume : 1;
+    }
+
+    function setRemoteVolume(peerId: string, volume: number) {
+        const clamped = Math.max(0, Math.min(1, volume));
+        remoteVolumeMap.set(peerId, clamped);
+        const audio = document.getElementById(`audio-${peerId}`) as HTMLAudioElement | null;
+        if (audio) {
+            audio.volume = clamped;
+        }
+    }
+
+    function cleanupRtcState() {
+        rtcPeers.forEach((peerId) => {
+            stopSpeakingMonitor(peerId);
+            const audio = document.getElementById(`audio-${peerId}`);
+            if (audio) audio.remove();
+        });
+        rtcPeers.clear();
+        remoteVolumeMap.clear();
+        peerConnectionService.closeAll();
+        isMediaConnected.value = false;
+        isMuted.value = false;
+        localStream.value = null;
+        rtcJoinPending.value = false;
+        rtcJoined.value = false;
+        isPanelOpen.value = false;
+        stopSpeakingMonitor(localUserId.value);
     }
 
     function getOrAssignCursorColor(peerId: string): string {
@@ -554,6 +945,15 @@ export const useCollabStore = defineStore('collab', () => {
     function toggleMute() {
         isMuted.value = !isMuted.value;
         peerConnectionService.toggleMute(isMuted.value);
+
+        if (isMediaConnected.value && currentProjectId.value !== null) {
+            socketManager.sendRTC(String(currentProjectId.value), {
+                type: 'MUTE',
+                projectId: currentProjectId.value,
+                muted: isMuted.value,
+            });
+        }
+
         broadcastState();
     }
 
@@ -581,10 +981,42 @@ export const useCollabStore = defineStore('collab', () => {
     }
 
     function broadcastState() {
+        if (!canSendSignal()) return;
         socketManager.sendSignal({
             type: 'state_update',
             payload: localParticipant.value
         });
+    }
+
+    function announcePresence() {
+        if (!roomId.value || currentProjectId.value === null) return;
+        socketManager.sendSignal({
+            type: 'join',
+            payload: {
+                user: localParticipant.value
+            }
+        });
+        const location = currentLocation.value || 'PROJECT_LIST';
+        socketManager.sendPresence(String(currentProjectId.value), {
+            type: 'LOCATION',
+            location,
+            sceneId: currentSceneId.value ?? null,
+            nodeId: currentNodeId.value ?? null,
+        });
+        pendingPresence.value = null;
+        broadcastState();
+    }
+
+    function flushPresence() {
+        if (currentProjectId.value === null || !pendingPresence.value) return;
+        if (!socketManager.getClient().connected || status.value !== 'connected') return;
+        socketManager.sendPresence(String(currentProjectId.value), {
+            type: 'LOCATION',
+            location: pendingPresence.value.location,
+            sceneId: pendingPresence.value.sceneId,
+            nodeId: pendingPresence.value.nodeId,
+        });
+        pendingPresence.value = null;
     }
 
     function rejoinIfNeeded() {
@@ -593,15 +1025,34 @@ export const useCollabStore = defineStore('collab', () => {
         const savedRoomId = localStorage.getItem(STORAGE_KEY);
         if (!savedRoomId) return;
 
-        const parsedId = Number(savedRoomId);
-        if (!Number.isFinite(parsedId)) {
-        localStorage.removeItem(STORAGE_KEY);
-        stopSpeakingMonitor(localUserId.value);
+        let parsedId: number | null = null;
+        if (savedRoomId.startsWith('project-')) {
+            const raw = savedRoomId.replace('project-', '');
+            const value = Number(raw);
+            parsedId = Number.isFinite(value) ? value : null;
+        } else {
+            const value = Number(savedRoomId);
+            parsedId = Number.isFinite(value) ? value : null;
+        }
+
+        if (!parsedId) {
+            localStorage.removeItem(STORAGE_KEY);
+            stopSpeakingMonitor(localUserId.value);
             return;
         }
 
         joinRoom(parsedId);
     }
+
+    watch([status, isMediaConnected], ([nextStatus, nextMedia]) => {
+        if (!isAutoStarting.value) return;
+        if (nextStatus === 'connected' && !nextMedia) {
+            void enableMedia();
+        }
+        if (nextMedia || nextStatus === 'error' || nextStatus === 'disconnected') {
+            isAutoStarting.value = false;
+        }
+    });
 
     function isSpeaking(peerId: string): boolean {
         return speakingMap.get(peerId) ?? false;
@@ -616,21 +1067,26 @@ export const useCollabStore = defineStore('collab', () => {
         isPanelOpen,
         isFloatingBarVisible, // Exported
         isMediaConnected,     // Exported
+        isAutoStarting,
         floatingBarResetToken,
         isMuted,
         isVideoOff,
         isScreenSharing,
         localParticipant,
+        audioInputDevices,
+        selectedMicId,
         // Getters
         isConnected,
         hasUnreadMessages,
         participantCount,
         isSpeaking,
+        getRemoteVolume,
         // Actions
         joinRoom,
         leaveRoom,
         enableMedia,  // Exported
         disableMedia, // Exported
+        startCall,
         showFloatingBar, // Exported
         hideFloatingBar, // Exported
         sendMessage,
@@ -642,5 +1098,7 @@ export const useCollabStore = defineStore('collab', () => {
         updateCursor,
         updateLocation,
         rejoinIfNeeded,
+        selectMicrophone,
+        setRemoteVolume,
     };
 });

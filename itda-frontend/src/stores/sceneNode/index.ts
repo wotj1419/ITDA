@@ -59,7 +59,7 @@ import {
     resolveTimeOfDayLabel,
 } from '../../utils/nodeSettings';
 import { fetchProtectedBlobUrl } from '../../services/api/media';
-import { resolveApiUrl } from '../../services/api/urls';
+import { resolveApiUrl, isApiResourceUrl } from '../../services/api/urls';
 import { SHOT_FALLBACK_THUMBNAIL } from '../../utils/fallbacks';
 import {
     DEFAULT_GRID_LAYOUT,
@@ -188,12 +188,20 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
         const cached = videoDurationCache.get(url);
         if (cached) return Promise.resolve(cached);
         const resolved = resolveApiUrl(url) ?? url;
+        if (resolved.startsWith('blob:') || resolved.startsWith('data:')) {
+            const duration = await readDurationFromUrl(resolved);
+            if (duration && duration > 0) {
+                videoDurationCache.set(url, duration);
+            }
+            return duration;
+        }
         let duration = await readDurationFromUrl(resolved);
 
         if (!duration) {
             const blobUrl = await fetchProtectedBlobUrl(url).catch(() => null);
             if (blobUrl) {
                 duration = await readDurationFromUrl(blobUrl);
+                // blobUrl is created by fetchProtectedBlobUrl here, safe to revoke
                 if (blobUrl.startsWith('blob:')) {
                     URL.revokeObjectURL(blobUrl);
                 }
@@ -470,10 +478,11 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
             const apiNodes = await fetchSceneNodes(numericSceneId);
             const sceneHeaderNode = apiNodes.find((node) => node.type === 'SCENE_HEADER');
             const sceneHeaderId = sceneHeaderNode ? String(sceneHeaderNode.nodeId) : null;
-            nodes.value = apiNodes.map((node) =>
+            const nextNodes = apiNodes.map((node) =>
                 createSceneNodeFromApi(node, sceneIdParam, sceneInfo, sceneHeaderId)
             );
-            await hydrateNodeMedia();
+            await hydrateNodeMedia(nextNodes);
+            nodes.value = nextNodes;
             await hydrateVideoDurations();
             await hydrateVideoDetailsForEdges();
 
@@ -557,8 +566,8 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
         }
     }
 
-    async function hydrateNodeMedia(): Promise<void> {
-        const targets = nodes.value.filter(
+    async function hydrateNodeMedia(nodesToHydrate: SceneNode[]): Promise<void> {
+        const targets = nodesToHydrate.filter(
             (node) =>
                 node.data?.type !== NodeType.SCENE_HEADER &&
                 !!node.data &&
@@ -569,7 +578,28 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
                 const current = node.data?.thumbnailUrl || node.data?.imageUrl || node.data?.videoUrl;
                 if (!current || current.startsWith('blob:')) return;
                 const blobUrl = await fetchProtectedBlobUrl(current).catch(() => null);
-                if (!blobUrl || !node.data) return;
+                if (!blobUrl || !node.data) {
+                    if (node.data && isApiResourceUrl(current)) {
+                        if (node.data.type === NodeType.VIDEO) {
+                            const video = node.data as VideoNodeData;
+                            video.videoUrl = null;
+                            video.thumbnailUrl = null;
+                        } else if (node.data.type === NodeType.MASTER_IMAGE) {
+                            const master = node.data as MasterImageNodeData;
+                            master.imageUrl = null;
+                            master.thumbnailUrl = null;
+                        } else if (node.data.type === NodeType.STORYBOARD_GRID) {
+                            const grid = node.data as StoryboardGridNodeData;
+                            grid.imageUrl = null;
+                            grid.thumbnailUrl = null;
+                        } else if (node.data.type === NodeType.SHOT) {
+                            const shot = node.data as ShotNodeData;
+                            shot.imageUrl = null;
+                            shot.thumbnailUrl = null;
+                        }
+                    }
+                    return;
+                }
                 if (node.data.type === NodeType.VIDEO) {
                     (node.data as VideoNodeData).videoUrl = blobUrl;
                 } else if (node.data.type === NodeType.MASTER_IMAGE) {
@@ -1196,24 +1226,70 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
                     targetNode.data.jobStatus = detailStatus;
                 }
 
-                const detailUrl = resolveApiUrl(detail.contentUrl ?? null);
-                if (detailUrl && targetNode.data) {
+                let resolvedDetailUrl: string | null = null;
+                const hasApiDetailUrl = isApiResourceUrl(detail.contentUrl);
+                const shouldFetchDetailUrl =
+                    Boolean(detail.contentUrl) &&
+                    (detailStatus === JobStatus.SUCCEEDED || !hasApiDetailUrl);
+                if (shouldFetchDetailUrl && detail.contentUrl) {
+                    const blobUrl = await fetchProtectedBlobUrl(detail.contentUrl).catch(() => null);
+                    if (blobUrl) {
+                        resolvedDetailUrl = blobUrl;
+                    } else if (!hasApiDetailUrl) {
+                        resolvedDetailUrl = resolveApiUrl(detail.contentUrl);
+                    }
+                }
+                if (resolvedDetailUrl && targetNode.data) {
                     if (targetNode.data.type === NodeType.VIDEO) {
                         const videoData = targetNode.data as VideoNodeData;
-                        if (!videoData.videoUrl) videoData.videoUrl = detailUrl;
-                        if (!videoData.thumbnailUrl) videoData.thumbnailUrl = detailUrl;
+                        if (!videoData.videoUrl) videoData.videoUrl = resolvedDetailUrl;
+                        if (!videoData.thumbnailUrl) videoData.thumbnailUrl = resolvedDetailUrl;
                     } else if (targetNode.data.type === NodeType.MASTER_IMAGE) {
                         const masterData = targetNode.data as MasterImageNodeData;
-                        if (!masterData.imageUrl) masterData.imageUrl = detailUrl;
-                        if (!masterData.thumbnailUrl) masterData.thumbnailUrl = detailUrl;
+                        if (!masterData.imageUrl) masterData.imageUrl = resolvedDetailUrl;
+                        if (!masterData.thumbnailUrl) masterData.thumbnailUrl = resolvedDetailUrl;
                     } else if (targetNode.data.type === NodeType.STORYBOARD_GRID) {
                         const gridData = targetNode.data as StoryboardGridNodeData;
-                        if (!gridData.imageUrl) gridData.imageUrl = detailUrl;
-                        if (!gridData.thumbnailUrl) gridData.thumbnailUrl = detailUrl;
+                        if (!gridData.imageUrl) gridData.imageUrl = resolvedDetailUrl;
+                        if (!gridData.thumbnailUrl) gridData.thumbnailUrl = resolvedDetailUrl;
                     } else if (targetNode.data.type === NodeType.SHOT) {
                         const shotData = targetNode.data as ShotNodeData;
-                        if (!shotData.imageUrl) shotData.imageUrl = detailUrl;
-                        if (!shotData.thumbnailUrl) shotData.thumbnailUrl = detailUrl;
+                        if (!shotData.imageUrl) shotData.imageUrl = resolvedDetailUrl;
+                        if (!shotData.thumbnailUrl) shotData.thumbnailUrl = resolvedDetailUrl;
+                    }
+                } else if (hasApiDetailUrl && targetNode.data) {
+                    if (targetNode.data.type === NodeType.VIDEO) {
+                        const videoData = targetNode.data as VideoNodeData;
+                        if (videoData.videoUrl && isApiResourceUrl(videoData.videoUrl)) {
+                            videoData.videoUrl = null;
+                        }
+                        if (videoData.thumbnailUrl && isApiResourceUrl(videoData.thumbnailUrl)) {
+                            videoData.thumbnailUrl = null;
+                        }
+                    } else if (targetNode.data.type === NodeType.MASTER_IMAGE) {
+                        const masterData = targetNode.data as MasterImageNodeData;
+                        if (masterData.imageUrl && isApiResourceUrl(masterData.imageUrl)) {
+                            masterData.imageUrl = null;
+                        }
+                        if (masterData.thumbnailUrl && isApiResourceUrl(masterData.thumbnailUrl)) {
+                            masterData.thumbnailUrl = null;
+                        }
+                    } else if (targetNode.data.type === NodeType.STORYBOARD_GRID) {
+                        const gridData = targetNode.data as StoryboardGridNodeData;
+                        if (gridData.imageUrl && isApiResourceUrl(gridData.imageUrl)) {
+                            gridData.imageUrl = null;
+                        }
+                        if (gridData.thumbnailUrl && isApiResourceUrl(gridData.thumbnailUrl)) {
+                            gridData.thumbnailUrl = null;
+                        }
+                    } else if (targetNode.data.type === NodeType.SHOT) {
+                        const shotData = targetNode.data as ShotNodeData;
+                        if (shotData.imageUrl && isApiResourceUrl(shotData.imageUrl)) {
+                            shotData.imageUrl = null;
+                        }
+                        if (shotData.thumbnailUrl && isApiResourceUrl(shotData.thumbnailUrl)) {
+                            shotData.thumbnailUrl = null;
+                        }
                     }
                 }
 

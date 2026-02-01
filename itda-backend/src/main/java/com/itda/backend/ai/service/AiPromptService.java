@@ -101,6 +101,7 @@ public class AiPromptService {
             lines.add("");
         }
 
+<<<<<<< HEAD
         lines.add("Inputs:");
         lines.add("nodeType: " + safe(nodeType));
         lines.add("sceneOneLine: " + safe(request == null ? null : request.sceneOneLine()));
@@ -109,6 +110,15 @@ public class AiPromptService {
         lines.add("mood(optional constraint): " + safe(request == null ? null : request.mood()));
         if (request.objects() != null && !request.objects().isEmpty()) {
             lines.add("Objects: " + String.join(", ", request.objects()));
+=======
+        lines.add("노드 타입: " + safe(nodeType));
+        lines.add("장면 한줄: " + safe(request == null ? null : request.sceneOneLine()));
+        lines.add("스타일: " + safe(request == null ? null : request.style()));
+        lines.add("시간대: " + safe(request == null ? null : request.timeOfDay()));
+        lines.add("톤(조명/색감): " + safe(request == null ? null : request.mood()));
+        if (request != null && request.objects() != null && !request.objects().isEmpty()) {
+            lines.add("오브젝트: " + String.join(", ", request.objects()));
+>>>>>>> origin/develop
         } else {
             lines.add("Objects: none");
         }

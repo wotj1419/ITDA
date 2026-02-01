@@ -4,8 +4,11 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.itda.backend.global.exception.BusinessException;
 import com.itda.backend.global.response.ErrorCode;
+import com.itda.backend.asset.service.AssetUrlResolver;
 import com.itda.backend.job.domain.Job;
 import com.itda.backend.job.domain.JobType;
+import com.itda.backend.job.domain.MergeSource;
+import com.itda.backend.job.service.JobCreateRequest;
 import com.itda.backend.job.service.JobService;
 import com.itda.backend.project.repository.ProjectMapper;
 import com.itda.backend.project.repository.ProjectMemberMapper;
@@ -17,13 +20,19 @@ import com.itda.backend.timeline.controller.dto.response.ProjectTimelineItemResp
 import com.itda.backend.timeline.controller.dto.response.ProjectTimelineResponse;
 import com.itda.backend.timeline.controller.dto.response.SceneTimelineItemResponse;
 import com.itda.backend.timeline.controller.dto.response.SceneTimelineResponse;
+import com.itda.backend.timeline.repository.ProjectMergeMapper;
+import com.itda.backend.timeline.repository.SceneVideoMapper;
 import com.itda.backend.timeline.repository.TimelineMapper;
+import com.itda.backend.timeline.repository.dto.ProjectTimelineItem;
+import com.itda.backend.timeline.repository.dto.SceneTimelineItem;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
@@ -35,6 +44,10 @@ public class TimelineService {
     private final ProjectMapper projectMapper;
     private final JobService jobService;
     private final ObjectMapper objectMapper;
+    private final AssetUrlResolver assetUrlResolver;
+    private final MergeSignatureService mergeSignatureService;
+    private final SceneVideoMapper sceneVideoMapper;
+    private final ProjectMergeMapper projectMergeMapper;
 
     @Transactional(readOnly = true)
     public SceneTimelineResponse getSceneTimeline(Long userId, Long sceneId) {
@@ -42,7 +55,10 @@ public class TimelineService {
         ensureMember(scene.getProjectId(), userId);
 
         List<SceneTimelineItemResponse> items = timelineMapper.findSceneTimelineItems(sceneId).stream()
-                .map(SceneTimelineItemResponse::from)
+                .map(item -> SceneTimelineItemResponse.from(
+                        item,
+                        assetUrlResolver.resolveNodeUrl(item.getAssetId(), item.getVideoNodeId(),
+                                item.getFallbackUrl())))
                 .toList();
         int totalDuration = sumDuration(items);
 
@@ -55,7 +71,9 @@ public class TimelineService {
         ensureMember(projectId, userId);
 
         List<ProjectTimelineItemResponse> items = timelineMapper.findProjectTimelineItems(projectId).stream()
-                .map(ProjectTimelineItemResponse::from)
+                .map(item -> ProjectTimelineItemResponse.from(
+                        item,
+                        assetUrlResolver.resolveUrl(item.getAssetId(), item.getFallbackUrl())))
                 .toList();
         int totalDuration = sumProjectDuration(items);
 
@@ -67,21 +85,32 @@ public class TimelineService {
         Scene scene = requireScene(sceneId);
         ensureMember(scene.getProjectId(), userId);
 
-        if (timelineMapper.findSceneTimelineItems(sceneId).isEmpty()) {
+        List<SceneTimelineItem> timelineItems = timelineMapper.findSceneTimelineItems(sceneId);
+        if (timelineItems.isEmpty()) {
             throw new BusinessException(ErrorCode.INVALID_REQUEST);
         }
 
         boolean includeMusic = request != null && request.includeMusicOrFalse();
-        String requestJson = serializePayload(Map.of("includeMusic", includeMusic));
+        String mergeSignature = mergeSignatureService.computeSceneSignature(sceneId, includeMusic, timelineItems);
 
+        // 캐시 체크: 동일 signature의 active 결과 존재 확인
+        if (sceneVideoMapper.findActiveBySceneIdAndSignature(sceneId, mergeSignature).isPresent()) {
+            return MergeResponse.cacheHit();
+        }
+
+        // 캐시 미스: 새 Job 생성
+        String requestJson = serializePayload(Map.of("includeMusic", includeMusic));
         Job job = jobService.createAndEnqueue(
-                JobType.SCENE_MERGE,
-                scene.getProjectId(),
-                sceneId,
-                null,
-                requestJson,
-                null
-        );
+                new JobCreateRequest(
+                        JobType.SCENE_MERGE,
+                        scene.getProjectId(),
+                        sceneId,
+                        null,
+                        requestJson,
+                        null,
+                        mergeSignature,
+                        MergeSource.SCENE),
+                true);
 
         return MergeResponse.from(job);
     }
@@ -91,23 +120,52 @@ public class TimelineService {
         requireProject(projectId);
         ensureMember(projectId, userId);
 
-        if (timelineMapper.findProjectTimelineItems(projectId).isEmpty()) {
+        List<ProjectTimelineItem> timelineItems = timelineMapper.findProjectTimelineItems(projectId);
+        if (timelineItems.isEmpty()) {
             throw new BusinessException(ErrorCode.INVALID_REQUEST);
         }
 
         boolean includeMusic = request != null && request.includeMusicOrFalse();
-        String requestJson = serializePayload(Map.of("includeMusic", includeMusic));
+        String mergeSignature = mergeSignatureService.computeProjectSignature(projectId, includeMusic, timelineItems);
 
+        // 캐시 체크: 동일 signature의 active 결과 존재 시 재실행 금지
+        if (projectMergeMapper.findActiveByProjectIdAndSignature(projectId, mergeSignature).isPresent()) {
+            return MergeResponse.cacheHit();
+        }
+
+        String requestJson = serializePayload(Map.of("includeMusic", includeMusic));
         Job job = jobService.createAndEnqueue(
-                JobType.PROJECT_MERGE,
-                projectId,
-                null,
-                null,
-                requestJson,
-                null
-        );
+                new JobCreateRequest(
+                        JobType.PROJECT_MERGE,
+                        projectId,
+                        null,
+                        null,
+                        requestJson,
+                        null,
+                        mergeSignature,
+                        MergeSource.PROJECT),
+                true);
 
         return MergeResponse.from(job);
+    }
+
+    @Transactional
+    public void reorderSceneTimeline(Long userId, Long sceneId, List<Long> orderedVideoNodeIds) {
+        Scene scene = requireScene(sceneId);
+        ensureMember(scene.getProjectId(), userId);
+        validateOrderedIds(orderedVideoNodeIds);
+
+        int total = timelineMapper.countSceneTimelineItems(sceneId);
+        if (total == 0) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST);
+        }
+
+        int matched = timelineMapper.countSceneTimelineItemsByVideoNodeIds(sceneId, orderedVideoNodeIds);
+        if (matched != total || matched != orderedVideoNodeIds.size()) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST);
+        }
+
+        timelineMapper.reorderSceneTimelineItems(sceneId, orderedVideoNodeIds);
     }
 
     private int sumDuration(List<SceneTimelineItemResponse> items) {
@@ -145,6 +203,16 @@ public class TimelineService {
     private void ensureMember(Long projectId, Long userId) {
         if (!projectMemberMapper.existsMember(projectId, userId)) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
+    }
+
+    private void validateOrderedIds(List<Long> orderedIds) {
+        if (orderedIds == null || orderedIds.isEmpty()) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST);
+        }
+        Set<Long> uniqueIds = new HashSet<>(orderedIds);
+        if (uniqueIds.size() != orderedIds.size()) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST);
         }
     }
 }

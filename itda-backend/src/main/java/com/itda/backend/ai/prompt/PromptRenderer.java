@@ -360,7 +360,6 @@ public class PromptRenderer {
         }
     }
 
-    @SuppressWarnings("unchecked")
     private List<String> readStringList(Map<String, Object> settings, String key) {
         Object value = read(settings, key);
         if (!(value instanceof List<?> list)) {

@@ -1,9 +1,11 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { Play, Pause } from 'lucide-vue-next'
+import { useVideoPreview } from '../../composables/useVideoPreview'
 
 interface Props {
   thumbnailUrl?: string
+  videoUrl?: string
   currentTime: number
   totalTime: number
 }
@@ -11,6 +13,9 @@ interface Props {
 const props = defineProps<Props>()
 
 const isPlaying = ref(false)
+const videoRef = ref<HTMLVideoElement | null>(null)
+const { isVideo } = useVideoPreview()
+const sourceUrl = computed(() => props.videoUrl || props.thumbnailUrl)
 
 function formatTime(seconds: number): string {
   const m = Math.floor(seconds / 60)
@@ -19,7 +24,20 @@ function formatTime(seconds: number): string {
 }
 
 function togglePlay() {
-  isPlaying.value = !isPlaying.value
+  if (!videoRef.value) {
+    if (!sourceUrl.value) return
+    // If not video, just toggle state (though it won't play anything)
+    isPlaying.value = !isPlaying.value
+    return
+  }
+  
+  if (videoRef.value.paused) {
+    videoRef.value.play().catch(() => {})
+    isPlaying.value = true
+  } else {
+    videoRef.value.pause()
+    isPlaying.value = false
+  }
 }
 </script>
 
@@ -27,8 +45,17 @@ function togglePlay() {
   <div class="video-preview">
     <div
       class="preview-container"
-      :style="thumbnailUrl ? { backgroundImage: `url(${thumbnailUrl})` } : {}"
+      :style="(!isVideo(sourceUrl) && sourceUrl) ? { backgroundImage: `url(${sourceUrl})` } : {}"
     >
+      <video
+        v-if="isVideo(sourceUrl)"
+        ref="videoRef"
+        :src="sourceUrl"
+        class="preview-video"
+        preload="metadata"
+        playsinline
+        @ended="isPlaying = false"
+      />
       <!-- Play Overlay -->
       <div class="play-overlay" @click="togglePlay">
         <div class="play-button">
@@ -60,6 +87,13 @@ function togglePlay() {
   border-radius: 16px;
   position: relative;
   overflow: hidden;
+}
+
+.preview-video {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: black;
 }
 
 .play-overlay {
@@ -108,7 +142,6 @@ function togglePlay() {
   padding: 0.25rem 0.75rem;
   border-radius: 4px;
   font-size: 0.875rem;
-  font-family: monospace;
   color: white;
 }
 </style>

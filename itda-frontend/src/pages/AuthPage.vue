@@ -28,6 +28,29 @@ const registerForm = ref({
 })
 
 const loginError = ref('')
+const loginErrors = ref<{ email: string; password: string }>({
+  email: '',
+  password: '',
+})
+
+const registerErrors = ref<{
+  name: string
+  email: string
+  password: string
+  passwordConfirm: string
+}>({
+  name: '',
+  email: '',
+  password: '',
+  passwordConfirm: '',
+})
+
+const loginEmailInput = ref<HTMLInputElement | null>(null)
+const loginPasswordInput = ref<HTMLInputElement | null>(null)
+const registerNameInput = ref<HTMLInputElement | null>(null)
+const registerEmailInput = ref<HTMLInputElement | null>(null)
+const registerPasswordInput = ref<HTMLInputElement | null>(null)
+const registerPasswordConfirmInput = ref<HTMLInputElement | null>(null)
 
 // Password visibility
 const showLoginPassword = ref(false)
@@ -58,8 +81,63 @@ const isEmailValid = computed(() => {
   return emailRegex.test(registerForm.value.email)
 })
 
+function validateLoginFields() {
+  loginErrors.value.email = ''
+  loginErrors.value.password = ''
+
+  const emailInput = loginEmailInput.value
+  if (emailInput && !emailInput.checkValidity()) {
+    loginErrors.value.email = emailInput.validationMessage
+  }
+
+  const passwordInput = loginPasswordInput.value
+  if (passwordInput && !passwordInput.checkValidity()) {
+    loginErrors.value.password = passwordInput.validationMessage
+  }
+
+  return !loginErrors.value.email && !loginErrors.value.password
+}
+
+function validateRegisterFields() {
+  registerErrors.value.name = ''
+  registerErrors.value.email = ''
+  registerErrors.value.password = ''
+  registerErrors.value.passwordConfirm = ''
+
+  const nameInput = registerNameInput.value
+  if (nameInput && !nameInput.checkValidity()) {
+    registerErrors.value.name = nameInput.validationMessage
+  }
+
+  const emailInput = registerEmailInput.value
+  if (emailInput && !emailInput.checkValidity()) {
+    registerErrors.value.email = emailInput.validationMessage
+  }
+
+  const passwordInput = registerPasswordInput.value
+  if (passwordInput && !passwordInput.checkValidity()) {
+    registerErrors.value.password = passwordInput.validationMessage
+  }
+
+  const passwordConfirmInput = registerPasswordConfirmInput.value
+  if (passwordConfirmInput && !passwordConfirmInput.checkValidity()) {
+    registerErrors.value.passwordConfirm = passwordConfirmInput.validationMessage
+  }
+
+  return (
+    !registerErrors.value.name &&
+    !registerErrors.value.email &&
+    !registerErrors.value.password &&
+    !registerErrors.value.passwordConfirm
+  )
+}
+
 async function handleLogin() {
   if (isLoading.value) return
+
+  if (!validateLoginFields()) {
+    return
+  }
 
   isLoading.value = true
   loginError.value = '' // Reset error
@@ -93,6 +171,10 @@ async function handleRegister() {
   // Reset errors
   registerError.value = ''
   termsError.value = false
+
+  if (!validateRegisterFields()) {
+    return
+  }
 
   if (registerForm.value.name && !isNameValid.value) {
     // Already showing inline error via (registerForm.name && !isNameValid)
@@ -141,9 +223,8 @@ async function handleRegister() {
 
 <template>
   <div class="auth-page">
-    <!-- Decorative Background -->
-    <div class="auth-bg-blob auth-bg-blob-1"></div>
-    <div class="auth-bg-blob auth-bg-blob-2"></div>
+    <!-- From Uiverse.io by themrsami -->
+    <div class="auth-dot-pattern"></div>
 
     <main class="auth-container">
       <!-- Logo -->
@@ -178,18 +259,24 @@ async function handleRegister() {
         </div>
 
         <!-- Login Form -->
-        <form v-if="activeTab === 'login'" class="auth-form" @submit.prevent="handleLogin">
+        <form v-if="activeTab === 'login'" class="auth-form" @submit.prevent="handleLogin" novalidate>
           <div class="form-group">
             <label class="form-label required">이메일</label>
             <div class="input-icon-wrapper">
               <Mail class="w-5 h-5 input-icon" />
               <input
+                ref="loginEmailInput"
                 v-model="loginForm.email"
                 type="email"
                 class="form-input with-icon"
                 placeholder="your@email.com"
                 required
+                @input="loginErrors.email = ''"
               />
+            </div>
+            <div v-if="loginErrors.email" class="field-tooltip">
+              <span class="field-tooltip-icon">!</span>
+              <span class="field-tooltip-text">{{ loginErrors.email }}</span>
             </div>
           </div>
 
@@ -198,13 +285,14 @@ async function handleRegister() {
             <div class="input-icon-wrapper">
               <Lock class="w-5 h-5 input-icon" />
               <input
+                ref="loginPasswordInput"
                 v-model="loginForm.password"
                 :type="showLoginPassword ? 'text' : 'password'"
                 class="form-input with-icon with-right-icon"
                 :class="{ 'input-error': loginError }"
                 placeholder="비밀번호"
                 required
-                @input="loginError = ''"
+                @input="loginError = ''; loginErrors.password = ''"
               />
               <button
                 type="button"
@@ -213,6 +301,10 @@ async function handleRegister() {
               >
                 <component :is="showLoginPassword ? EyeOff : Eye" class="w-5 h-5" />
               </button>
+            </div>
+            <div v-if="loginErrors.password" class="field-tooltip">
+              <span class="field-tooltip-icon">!</span>
+              <span class="field-tooltip-text">{{ loginErrors.password }}</span>
             </div>
           </div>
 
@@ -241,17 +333,23 @@ async function handleRegister() {
         </form>
 
         <!-- Register Form -->
-        <form v-else class="auth-form" @submit.prevent="handleRegister">
+        <form v-else class="auth-form" @submit.prevent="handleRegister" novalidate>
           <div class="form-group">
             <label class="form-label required">이름</label>
             <input
+              ref="registerNameInput"
               v-model="registerForm.name"
               type="text"
               class="form-input"
               :class="{ 'input-error': registerForm.name && !isNameValid }"
               placeholder="이름을 입력하세요."
               required
+              @input="registerErrors.name = ''"
             />
+            <div v-if="registerErrors.name" class="field-tooltip">
+              <span class="field-tooltip-icon">!</span>
+              <span class="field-tooltip-text">{{ registerErrors.name }}</span>
+            </div>
             <div v-if="registerForm.name && !isNameValid" class="form-error">
               {{ nameErrorMessage }}
             </div>
@@ -262,15 +360,21 @@ async function handleRegister() {
             <div class="input-icon-wrapper">
               <Mail class="w-5 h-5 input-icon" />
               <input
+                ref="registerEmailInput"
                 v-model="registerForm.email"
                 type="email"
                 class="form-input with-icon"
                 :class="{ 'input-error': registerForm.email && !isEmailValid }"
                 placeholder="your@email.com"
                 required
+                @input="registerErrors.email = ''"
               />
             </div>
-            <div v-if="registerForm.email && !isEmailValid" class="form-error">
+            <div v-if="registerErrors.email" class="field-tooltip">
+              <span class="field-tooltip-icon">!</span>
+              <span class="field-tooltip-text">{{ registerErrors.email }}</span>
+            </div>
+            <div v-if="registerForm.email && !isEmailValid && !registerErrors.email" class="form-error">
               유효한 이메일 주소를 입력해주세요.
             </div>
           </div>
@@ -280,12 +384,14 @@ async function handleRegister() {
             <div class="input-icon-wrapper">
               <Lock class="w-5 h-5 input-icon" />
               <input
+                ref="registerPasswordInput"
                 v-model="registerForm.password"
                 :type="showRegisterPassword ? 'text' : 'password'"
                 class="form-input with-icon with-right-icon"
                 placeholder="8자 이상 입력"
                 required
                 minlength="8"
+                @input="registerErrors.password = ''"
               />
               <button
                 type="button"
@@ -295,19 +401,29 @@ async function handleRegister() {
                 <component :is="showRegisterPassword ? EyeOff : Eye" class="w-5 h-5" />
               </button>
             </div>
+            <div v-if="registerErrors.password" class="field-tooltip">
+              <span class="field-tooltip-icon">!</span>
+              <span class="field-tooltip-text">{{ registerErrors.password }}</span>
+            </div>
             <div class="form-helper">영문, 숫자 포함 8자 이상</div>
           </div>
 
           <div class="form-group">
             <label class="form-label required">비밀번호 확인</label>
             <input
+              ref="registerPasswordConfirmInput"
               v-model="registerForm.passwordConfirm"
               type="password"
               class="form-input"
               :class="{ 'input-error': registerForm.passwordConfirm && !passwordsMatch }"
               placeholder="비밀번호를 다시 입력하세요"
               required
+              @input="registerErrors.passwordConfirm = ''"
             />
+            <div v-if="registerErrors.passwordConfirm" class="field-tooltip">
+              <span class="field-tooltip-icon">!</span>
+              <span class="field-tooltip-text">{{ registerErrors.passwordConfirm }}</span>
+            </div>
             <div v-if="registerForm.passwordConfirm && !passwordsMatch" class="form-error">
               비밀번호가 일치하지 않습니다.
             </div>
@@ -387,30 +503,34 @@ async function handleRegister() {
   overflow: hidden;
 }
 
-.auth-bg-blob {
+/* From Uiverse.io by themrsami */
+.auth-dot-pattern {
   position: fixed;
-  border-radius: 50%;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: var(--rose-canvas);
   z-index: -1;
+  pointer-events: none;
 }
 
-.auth-bg-blob-1 {
-  top: -20%;
-  left: -10%;
-  width: 500px;
-  height: 500px;
-  background: var(--rose-200);
-  filter: blur(100px);
-  opacity: 0.5;
+.auth-dot-pattern::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(circle, #FFD6E5 1.25px, transparent 1.5px);
+  background-size: 40px 40px;
+  animation: dot-move 5s linear infinite;
 }
 
-.auth-bg-blob-2 {
-  bottom: -20%;
-  right: -10%;
-  width: 600px;
-  height: 600px;
-  background: var(--rose-300);
-  filter: blur(120px);
-  opacity: 0.4;
+@keyframes dot-move {
+  0% {
+    background-position: 0 0;
+  }
+  100% {
+    background-position: 30px 30px;
+  }
 }
 
 .auth-container {
@@ -554,6 +674,35 @@ async function handleRegister() {
 .form-divider span {
   font-size: 0.75rem;
   color: var(--gray-500);
+}
+
+/* Field tooltip */
+.field-tooltip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--gray-200);
+  border-radius: 0.5rem;
+  background: #fff;
+  color: var(--gray-700);
+  font-size: 0.75rem;
+  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.08);
+}
+
+.field-tooltip-icon {
+  width: 1.25rem;
+  height: 1.25rem;
+  border-radius: 0.35rem;
+  background: #ffe8f2;
+  color: var(--rose-500);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  font-weight: 700;
+  flex: 0 0 auto;
 }
 
 /* Error state */

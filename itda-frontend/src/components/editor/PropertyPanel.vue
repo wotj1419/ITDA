@@ -348,7 +348,6 @@ function handleDurationChange(duration: number): void {
 }
 
 .meta-value {
-  font-family: 'JetBrains Mono', monospace;
   font-size: 0.75rem;
 }
 

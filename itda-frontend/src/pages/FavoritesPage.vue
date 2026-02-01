@@ -3,12 +3,16 @@ import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useProjectStore } from '../stores/project'
 import { useUIStore } from '../stores/ui'
+import { useAuthStore } from '../stores/auth'
+import { Star } from 'lucide-vue-next'
 import DefaultLayout from '../layouts/DefaultLayout.vue'
 import ProjectCard from '../components/project/ProjectCard.vue'
+import UserWelcomeTitle from '../components/common/UserWelcomeTitle.vue'
 
 const router = useRouter()
 const projectStore = useProjectStore()
 const uiStore = useUIStore()
+const authStore = useAuthStore()
 const isCreatingProject = ref(false)
 
 onMounted(async () => {
@@ -46,99 +50,127 @@ const createEmptyProject = async () => {
 
 <template>
   <DefaultLayout>
-    <div class="dashboard-container">
-      <div class="toolbar">
-        <div class="toolbar-left">
+    <template #header-left-after-divider>
+      <UserWelcomeTitle :name="authStore.user?.name" />
+    </template>
+    <template #header-actions>
+      <button
+        class="button"
+        type="button"
+        :disabled="isCreatingProject"
+        @click="createEmptyProject"
+      >
+        <span class="button__text">새프로젝트</span>
+        <span class="button__icon">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 24 24"
+            class="svg"
+            aria-hidden="true"
+          >
+            <path d="M11 5h2v14h-2zM5 11h14v2H5z"></path>
+          </svg>
+        </span>
+      </button>
+    </template>
+    <div class="favorites-page">
+      <div class="page-header">
+        <div>
           <h1 class="page-title">즐겨찾기</h1>
-          <p class="project-count">{{ projectStore.favoriteProjects.length }} saved projects</p>
+          <p class="page-description">{{ projectStore.favoriteProjects.length }} 개의 즐겨찾기</p>
         </div>
       </div>
 
-      <section class="section">
-        <div v-if="projectStore.favoriteProjects.length > 0" class="projects-grid">
-          <ProjectCard
-            v-for="project in projectStore.favoriteProjects"
-            :key="project.projectId"
-            :project="project"
-            :is-favorite="true"
-            @toggle-favorite="handleToggleFavorite"
-          />
+      <div v-if="projectStore.favoriteProjects.length > 0" class="projects-grid">
+        <ProjectCard
+          v-for="project in projectStore.favoriteProjects"
+          :key="project.projectId"
+          :project="project"
+          :is-favorite="true"
+          @toggle-favorite="handleToggleFavorite"
+        />
+      </div>
+      <div v-else class="empty-state">
+        <div class="icon-wrapper">
+          <Star class="icon-lg" />
         </div>
-        <div v-else class="empty-state">
-          <div class="empty-icon">⭐</div>
-          <h3 class="empty-title">즐겨찾는 프로젝트가 없습니다</h3>
-          <p class="empty-desc">프로젝트 카드의 별 아이콘을 눌러 즐겨찾기에 추가해보세요.</p>
-          <button
-            class="button"
-            type="button"
-            :disabled="isCreatingProject"
-            @click="createEmptyProject"
-          >
-            <span class="button__text">? ????</span>
-            <span class="button__icon">
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 24 24"
-                class="svg"
-                aria-hidden="true"
-              >
-                <path d="M11 5h2v14h-2zM5 11h14v2H5z"></path>
-              </svg>
-            </span>
-          </button>
-        </div>
-      </section>
+        <h3 class="empty-title">즐겨찾는 프로젝트가 없습니다</h3>
+        <p class="empty-description">프로젝트 카드의 별 아이콘을 눌러 즐겨찾기에 추가해보세요.</p>
+        <button
+          class="button"
+          type="button"
+          :disabled="isCreatingProject"
+          @click="createEmptyProject"
+        >
+          <span class="button__text">새프로젝트</span>
+          <span class="button__icon">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              class="svg"
+              aria-hidden="true"
+            >
+              <path d="M11 5h2v14h-2zM5 11h14v2H5z"></path>
+            </svg>
+          </span>
+        </button>
+      </div>
     </div>
   </DefaultLayout>
 </template>
 
 <style scoped>
-.dashboard-container {
-  max-width: 1200px;
-  margin: 0 auto;
-}
-
-.toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 1.5rem;
+.page-header {
+  margin-bottom: 2rem;
 }
 
 .page-title {
-  font-size: 1.5rem;
+  font-size: 2.5rem;
   font-weight: 700;
   color: var(--gray-900);
-  margin: 0 0 0.25rem;
+  margin-bottom: 0.5rem;
 }
 
-.project-count {
-  font-size: 0.875rem;
+.page-description {
+  font-size: 1rem;
   color: var(--gray-500);
   margin: 0;
 }
 
+
 .projects-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1.5rem;
   margin-bottom: 1.5rem;
 }
 
 .empty-state {
+  text-align: center;
+  padding: 4rem 1rem;
+  background: var(--rose-50);
+  border: 1px dashed var(--rose-200);
+  border-radius: 16px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  padding: 4rem 1rem;
-  text-align: center;
-  background: white;
-  border-radius: 16px;
-  border: 1px dashed var(--rose-200);
 }
 
-.empty-icon {
-  font-size: 3rem;
-  margin-bottom: 1rem;
+.icon-wrapper {
+  width: 64px;
+  height: 64px;
+  background: var(--gray-100);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 1rem;
+  color: var(--gray-400);
+}
+
+.icon-lg {
+  width: 32px;
+  height: 32px;
 }
 
 .empty-title {
@@ -148,7 +180,7 @@ const createEmptyProject = async () => {
   margin: 0 0 0.5rem;
 }
 
-.empty-desc {
+.empty-description {
   color: var(--gray-500);
   margin-bottom: 1.5rem;
 }

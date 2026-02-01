@@ -3,7 +3,7 @@ import type { AnyNodeData } from '../types/ui/sceneNodes';
 import type { GeneratePromptRequest, GeneratePromptResponse, PromptPreviewRequest, PromptPreviewResponse } from '../types/api/ai';
 import { JobStatus, PromptStatus } from '../types/ui/sceneNodes';
 import { useSceneNodeStore } from '../stores/sceneNode';
-import { resolveApiUrl } from '../services/api/urls';
+import { resolveApiUrl, isApiResourceUrl } from '../services/api/urls';
 import { fetchProtectedBlobUrl } from '../services/api/media';
 import { SHOT_FALLBACK_THUMBNAIL } from '../utils/fallbacks';
 import { useGenerationToast } from './useGenerationToast';
@@ -135,17 +135,14 @@ export function useNodeGeneration(options: UseNodeGenerationOptions) {
       });
 
       if (result.status === 'SUCCEEDED') {
-        const node = nodeStore.nodes.find((item) => item.id === options.nodeId);
-        const existingUrl = node?.data?.thumbnailUrl || node?.data?.imageUrl || null;
-        if (existingUrl?.startsWith('blob:')) {
-          URL.revokeObjectURL(existingUrl);
-        }
         const blobUrl = await fetchProtectedBlobUrl(result.resultUrl).catch(() => null);
-        const resolvedResultUrl = blobUrl ?? resolveApiUrl(result.resultUrl);
+        const resolvedResultUrl =
+          blobUrl ?? (isApiResourceUrl(result.resultUrl) ? null : resolveApiUrl(result.resultUrl));
+        const thumbnailCandidate = result.thumbnailUrl ?? result.resultUrl ?? null;
         const resolvedThumbnailUrl =
           options.nodeType === 'VIDEO'
-            ? resolveApiUrl(result.thumbnailUrl ?? null)
-            : blobUrl ?? resolveApiUrl(result.thumbnailUrl ?? result.resultUrl ?? null);
+            ? (isApiResourceUrl(thumbnailCandidate) ? null : resolveApiUrl(thumbnailCandidate))
+            : blobUrl ?? (isApiResourceUrl(thumbnailCandidate) ? null : resolveApiUrl(thumbnailCandidate));
         nodeStore.updateNodeLocal(options.nodeId, {
           jobStatus: JobStatus.SUCCEEDED,
           generationState: null,
