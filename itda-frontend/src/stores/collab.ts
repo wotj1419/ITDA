@@ -5,6 +5,7 @@ import { socketManager } from '../services/ws/socket';
 import { fetchChatMessages } from '../services/api/chat';
 import { peerConnectionService } from '../services/webrtc/peerConnection';
 import { useAuthStore } from './auth';
+import { useSceneNodeStore } from './sceneNode';
 
 /**
  * Collaboration Store
@@ -17,6 +18,7 @@ import { useAuthStore } from './auth';
 export const useCollabStore = defineStore('collab', () => {
     const STORAGE_KEY = 'collab:lastRoomId';
     const CURSOR_THROTTLE_MS = 80;
+    const NODE_MOVE_THROTTLE_MS = 80;
 
     // ================================
     // State
@@ -52,7 +54,7 @@ export const useCollabStore = defineStore('collab', () => {
     const pendingPresence = ref<{ location: PresenceLocation; sceneId: number | null; nodeId: number | null } | null>(null);
 
     // Cursors (Map for performance)
-    const cursors = reactive(new Map<string, { x: number, y: number, color: string }>());
+    const cursors = reactive(new Map<string, { x: number; y: number; color: string; sceneId: number }>());
     const cursorColors = [
         '#FF0000', // red
         '#FF8C00', // orange
@@ -66,6 +68,9 @@ export const useCollabStore = defineStore('collab', () => {
 
     // Throttle state
     let lastCursorSentAt = 0;
+    const lastNodeMoveSentAt = new Map<string, number>();
+    const lastRemoteNodeMoveAt = new Map<string, number>();
+    const localDraggingNodes = new Set<string>();
 
     // ================================
     // Getters
@@ -75,6 +80,8 @@ export const useCollabStore = defineStore('collab', () => {
     const hasUnreadMessages = computed(() => messages.value.length > 0);
 
     const authStore = useAuthStore();
+    const sceneNodeStore = useSceneNodeStore();
+    const flowToScreenCoordinate = ref<((pos: { x: number; y: number }) => { x: number; y: number }) | null>(null);
     const localUserId = ref(authStore.user?.id ? String(authStore.user.id) : `user-${Math.random().toString(36).slice(2, 7)}`);
 
     watch(
@@ -404,6 +411,9 @@ export const useCollabStore = defineStore('collab', () => {
         messages.value = [];
         cursors.clear();
         lastCursorSentAt = 0;
+        lastNodeMoveSentAt.clear();
+        lastRemoteNodeMoveAt.clear();
+        localDraggingNodes.clear();
         isPanelOpen.value = false;
         localStorage.removeItem(STORAGE_KEY);
     }
@@ -454,7 +464,13 @@ export const useCollabStore = defineStore('collab', () => {
                 await handleRemoteIceCandidate(senderId, payload);
                 break;
             case 'cursor':
-                handleCursorUpdate(senderId, payload);
+                if (payload?.sceneId == null) break;
+                if (!Number.isFinite(payload?.x) || !Number.isFinite(payload?.y)) break;
+                handleCursorUpdate(senderId, {
+                    x: Number(payload.x),
+                    y: Number(payload.y),
+                    sceneId: Number(payload.sceneId),
+                });
                 break;
             case 'media_stop':
                 handleMediaStop(senderId);
@@ -766,27 +782,75 @@ export const useCollabStore = defineStore('collab', () => {
         }
     }
 
-    function updateCursor(x: number, y: number, _sceneId?: number | null) {
+    function updateCursor(x: number, y: number) {
         if (!authStore.isAuthenticated) return;
+        if (currentProjectId.value === null || currentSceneId.value === null) return;
 
         const now = Date.now();
         if (now - lastCursorSentAt < CURSOR_THROTTLE_MS) return;
         lastCursorSentAt = now;
 
-        if (!canSendSignal()) return;
+        if (!socketManager.getClient().connected || status.value !== 'connected') return;
 
-        socketManager.sendSignal({
-            type: 'cursor',
-            payload: { x, y }
+        socketManager.sendPresence(String(currentProjectId.value), {
+            type: 'CURSOR',
+            sceneId: currentSceneId.value,
+            x: Number.isFinite(x) ? x : 0,
+            y: Number.isFinite(y) ? y : 0,
         });
     }
 
-    function handleCursorUpdate(peerId: string, payload: { x: number, y: number }) {
+    function setFlowToScreenCoordinate(
+        transform: ((pos: { x: number; y: number }) => { x: number; y: number }) | null
+    ): void {
+        flowToScreenCoordinate.value = transform;
+    }
+
+    function startNodeDrag(nodeId: string): void {
+        if (!nodeId) return;
+        localDraggingNodes.add(nodeId);
+    }
+
+    function stopNodeDrag(nodeId: string): void {
+        if (!nodeId) return;
+        localDraggingNodes.delete(nodeId);
+    }
+
+    function updateNodeMove(nodeId: string, x: number, y: number, force = false): void {
+        if (!authStore.isAuthenticated) return;
+        if (currentProjectId.value === null || currentSceneId.value === null) return;
+        if (!socketManager.getClient().connected || status.value !== 'connected') return;
+        const numericNodeId = Number(nodeId);
+        if (!Number.isFinite(numericNodeId) || numericNodeId <= 0) return;
+
+        const now = Date.now();
+        if (!force) {
+            const lastSent = lastNodeMoveSentAt.get(nodeId) ?? 0;
+            if (now - lastSent < NODE_MOVE_THROTTLE_MS) return;
+            lastNodeMoveSentAt.set(nodeId, now);
+        }
+
+        socketManager.sendPresence(String(currentProjectId.value), {
+            type: 'NODE_MOVE',
+            sceneId: currentSceneId.value,
+            nodeId: numericNodeId,
+            x,
+            y,
+        });
+    }
+
+    function finishNodeDrag(nodeId: string, x: number, y: number): void {
+        updateNodeMove(nodeId, x, y, true);
+        stopNodeDrag(nodeId);
+    }
+
+    function handleCursorUpdate(peerId: string, payload: { x: number; y: number; sceneId: number }) {
         const color = getOrAssignCursorColor(peerId);
         cursors.set(peerId, {
             x: payload.x,
             y: payload.y,
             color,
+            sceneId: payload.sceneId,
         });
     }
 
@@ -794,7 +858,12 @@ export const useCollabStore = defineStore('collab', () => {
 
     function updateLocation(location: PresenceLocation, sceneId?: number | null, nodeId?: number | null) {
         currentLocation.value = location;
+        const previousSceneId = currentSceneId.value;
         currentSceneId.value = sceneId ?? null;
+        if (previousSceneId !== currentSceneId.value) {
+            cursors.clear();
+            lastRemoteNodeMoveAt.clear();
+        }
         currentNodeId.value = nodeId ?? null;
         pendingPresence.value = {
             location,
@@ -829,6 +898,42 @@ export const useCollabStore = defineStore('collab', () => {
         const userId = message?.userId;
         if (!userId) return;
         const peerId = String(userId);
+        if (type === 'CURSOR') {
+            const sceneId = message?.sceneId;
+            if (currentSceneId.value === null || sceneId == null) return;
+            if (Number(sceneId) !== currentSceneId.value) return;
+            const x = Number(message?.x);
+            const y = Number(message?.y);
+            if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+            handleCursorUpdate(peerId, { x, y, sceneId: Number(sceneId) });
+            return;
+        }
+        if (type === 'NODE_MOVE') {
+            if (peerId === localParticipant.value.odps) return;
+            const sceneId = message?.sceneId;
+            const nodeId = message?.nodeId;
+            if (currentSceneId.value === null || sceneId == null || nodeId == null) return;
+            if (Number(sceneId) !== currentSceneId.value) return;
+            const numericNodeId = Number(nodeId);
+            if (!Number.isFinite(numericNodeId) || numericNodeId <= 0) return;
+            const nodeKey = String(numericNodeId);
+            if (localDraggingNodes.has(nodeKey)) return;
+            const x = Number(message?.x);
+            const y = Number(message?.y);
+            if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+            let updatedAt = message?.updatedAt ? Date.parse(message.updatedAt) : Date.now();
+            if (!Number.isFinite(updatedAt)) {
+                updatedAt = Date.now();
+            }
+            const lastUpdated = lastRemoteNodeMoveAt.get(nodeKey) ?? 0;
+            if (updatedAt <= lastUpdated) return;
+            lastRemoteNodeMoveAt.set(nodeKey, updatedAt);
+            sceneNodeStore.applyRemoteNodeMove(nodeKey, x, y);
+            return;
+        }
+        if (type === 'STATUS' || type === 'NODE_SELECT') {
+            return;
+        }
         if (type === 'LEAVE') {
             removeParticipant(peerId);
             return;
@@ -934,10 +1039,11 @@ export const useCollabStore = defineStore('collab', () => {
         const existing = cursorColorByUser.get(peerId);
         if (existing) return existing;
 
-        const used = new Set(cursorColorByUser.values());
-        const available = cursorColors.filter((c) => !used.has(c));
-        const pool = available.length > 0 ? available : cursorColors;
-        const color = pool[Math.floor(Math.random() * pool.length)] ?? cursorColors[0] ?? '#9CA3AF';
+        let hash = 0;
+        for (let i = 0; i < peerId.length; i += 1) {
+            hash = (hash + peerId.charCodeAt(i)) % 2147483647;
+        }
+        const color = cursorColors[hash % cursorColors.length] ?? '#9CA3AF';
         cursorColorByUser.set(peerId, color);
         return color;
     }
@@ -1096,6 +1202,11 @@ export const useCollabStore = defineStore('collab', () => {
         togglePanel,
         handleSignal,
         updateCursor,
+        flowToScreenCoordinate,
+        setFlowToScreenCoordinate,
+        startNodeDrag,
+        updateNodeMove,
+        finishNodeDrag,
         updateLocation,
         rejoinIfNeeded,
         selectMicrophone,
