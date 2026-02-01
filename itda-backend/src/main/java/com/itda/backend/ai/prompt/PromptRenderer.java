@@ -13,6 +13,9 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @Component
 @RequiredArgsConstructor
@@ -20,6 +23,15 @@ public class PromptRenderer {
 
     private static final String DEFAULT_NONE = "None";
     private static final int TIMELINE_CUT_INTERVAL_SECONDS = 2;
+    private static final Set<String> NAME_STOPWORDS = Set.of(
+            "In", "The", "A", "An", "And", "Or", "But", "As", "Of", "On", "At",
+            "By", "For", "With", "From", "To", "Into", "Over", "Under", "Through",
+            "Between", "Within", "Without", "Against", "Across", "Near", "Far"
+    );
+    private static final Pattern NAME_SUBJECT_PATTERN = Pattern.compile(
+            "\\b([A-Z][a-z]+(?:-[A-Za-z][a-z]+)?)\\b(?=\\s+(?:\\w+\\s+){0,2}" +
+                    "(?:stands?|walks?|turns?|raises?|looks?|gazes?|smiles?|steps?|pauses?|moves?|runs?|sits?|faces?|approaches?|speaks?|talks?|holds?|waits?|leans?|reaches?|follows?|stops?|enters?|leaves?)\\b)"
+    );
 
     private final KoEnTranslator koEnTranslator;
     private final VideoActionPlanGenerator videoActionPlanGenerator;
@@ -272,7 +284,8 @@ public class PromptRenderer {
             cameraLine = "The camera uses " + safeOrNone(cameraMotionEn) + ".";
         }
         if (!motionDescriptionEn.isBlank() && !hasEndFrame) {
-            cameraLine += " " + ensurePeriod(motionDescriptionEn);
+            String sanitizedMotion = neutralizeProperNames(motionDescriptionEn);
+            cameraLine += " " + ensurePeriod(sanitizedMotion);
         }
         lines.add(cameraLine);
         if (hasEndFrame) {
@@ -304,11 +317,44 @@ public class PromptRenderer {
             String motionDescriptionEn,
             boolean hasEndFrame
     ) {
-        String base = safe(motionDescriptionEn);
+        String base = neutralizeProperNames(safe(motionDescriptionEn));
         if (base.isBlank()) {
-            base = safe(promptEnBase);
+            base = neutralizeProperNames(safe(promptEnBase));
         }
         return videoActionPlanGenerator.generate(durationSeconds, base, hasEndFrame);
+    }
+
+    private String neutralizeProperNames(String text) {
+        if (text == null || text.isBlank()) {
+            return text;
+        }
+        Matcher matcher = NAME_SUBJECT_PATTERN.matcher(text);
+        Map<String, String> replacements = new LinkedHashMap<>();
+        int index = 0;
+        while (matcher.find()) {
+            String name = matcher.group(1);
+            if (NAME_STOPWORDS.contains(name)) {
+                continue;
+            }
+            if (!replacements.containsKey(name)) {
+                if (index == 0) {
+                    replacements.put(name, "the person");
+                } else if (index == 1) {
+                    replacements.put(name, "the other person");
+                } else {
+                    replacements.put(name, "the person");
+                }
+                index++;
+            }
+        }
+        if (replacements.isEmpty()) {
+            return text;
+        }
+        String result = text;
+        for (Map.Entry<String, String> entry : replacements.entrySet()) {
+            result = result.replaceAll("\\b" + Pattern.quote(entry.getKey()) + "\\b", entry.getValue());
+        }
+        return result;
     }
 
     private String joinAndValidate(List<String> lines) {
