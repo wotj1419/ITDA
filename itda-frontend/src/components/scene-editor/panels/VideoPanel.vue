@@ -118,6 +118,12 @@ const isPromptApproved = computed(() => data.value?.promptStatus === PromptStatu
 const isSucceeded = computed(() => data.value?.jobStatus === JobStatus.SUCCEEDED);
 const isConfirmed = computed(() => data.value?.isConfirmed ?? false);
 const promptOverride = computed(() => form.value.promptEnFinalOverride.trim());
+const promptSource = computed(() => {
+  if (form.value.usePromptOverride && promptOverride.value) {
+    return promptOverride.value;
+  }
+  return form.value.prompt;
+});
 const isStartShotReady = computed(() => {
   const start = startShotData.value as { jobStatus?: string; imageUrl?: string | null; thumbnailUrl?: string | null } | undefined;
   const hasImage = Boolean(start?.thumbnailUrl || start?.imageUrl);
@@ -182,7 +188,7 @@ const {
   nodeId: props.node.id,
   nodeType: 'VIDEO',
   toastType: 'video',
-  getPrompt: () => form.value.prompt,
+  getPrompt: () => promptSource.value,
   getPromptPayload: () => ({
     nodeType: 'VIDEO',
     sceneOneLine: buildVideoSceneOneLine(),
@@ -197,6 +203,9 @@ const {
     motionDescription: form.value.motionDescription,
     prompt: result.promptEnBase,
     promptKo: result.promptKo,
+    ...(form.value.usePromptOverride
+      ? { promptEnFinalOverride: result.promptEnBase }
+      : {}),
   }),
   getImproveInstruction: () => form.value.motionDescription,
   getApprovedUpdate: () => ({
