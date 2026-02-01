@@ -32,11 +32,6 @@ const panelComponent = computed(() => {
   return panelRegistry[nodeType] || null;
 });
 
-const isLockedByOther = computed(() => {
-  if (!selectedNode.value) return false;
-  return collabStore.isNodeLockedByOther(selectedNode.value.id);
-});
-
 const lockInfo = computed(() => {
   if (!selectedNode.value) return null;
   const lock = collabStore.getNodeLock(selectedNode.value.id);
