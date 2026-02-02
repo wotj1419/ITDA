@@ -11,7 +11,7 @@ import org.springframework.stereotype.Component;
 @ConfigurationProperties(prefix = "ai.gemini")
 public class GeminiImageProperties {
 
-    private static final long DEFAULT_TIMEOUT_MS = 60_000;
+    private static final long DEFAULT_TIMEOUT_MS = 180_000;
 
     private String imageModel = "gemini-2.5-flash-image";
 

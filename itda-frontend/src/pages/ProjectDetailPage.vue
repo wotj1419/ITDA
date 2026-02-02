@@ -74,18 +74,9 @@ watch(projectId, (newId) => {
     }
 })
 
-const tabLabelMap: Record<string, string> = {
-  story: '스토리',
-  scenes: '씬',
-  objects: '오브젝트',
-  timeline: 'Timeline',
-  settings: '설정',
-}
 
-const projectLocation = computed(() => {
-  const label = tabLabelMap[activeTab.value] || 'Project'
-  return project.value?.title ? `${project.value.title} · ${label}` : label
-})
+
+
 
 const openScenarioDrawer = () => scenarioStore.openDrawer()
 </script>

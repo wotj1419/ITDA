@@ -5,6 +5,7 @@ import { socketManager } from '../services/ws/socket';
 import { fetchChatMessages } from '../services/api/chat';
 import { peerConnectionService } from '../services/webrtc/peerConnection';
 import { useAuthStore } from './auth';
+import { useSceneNodeStore } from './sceneNode';
 
 /**
  * Collaboration Store
@@ -17,12 +18,14 @@ import { useAuthStore } from './auth';
 export const useCollabStore = defineStore('collab', () => {
     const STORAGE_KEY = 'collab:lastRoomId';
     const CURSOR_THROTTLE_MS = 80;
+    const NODE_MOVE_THROTTLE_MS = 80;
 
     // ================================
     // State
     // ================================
     const status = ref<CollabStatus>('disconnected');
     const roomId = ref<string | null>(null);
+    const currentProjectId = ref<number | null>(null);
     const participants = ref<CollabParticipant[]>([]);
     const messages = ref<CollabMessage[]>([]);
     const isPanelOpen = ref(false);
@@ -30,9 +33,16 @@ export const useCollabStore = defineStore('collab', () => {
     // UI State
     const isFloatingBarVisible = ref(false);
     const isMediaConnected = ref(false);
+    const isAutoStarting = ref(false);
     const floatingBarResetToken = ref(0);
     const speakingMap = reactive(new Map<string, boolean>());
     const localStream = ref<MediaStream | null>(null);
+    const audioInputDevices = ref<MediaDeviceInfo[]>([]);
+    const selectedMicId = ref<string>(localStorage.getItem('collab:micId') ?? '');
+    const remoteVolumeMap = reactive(new Map<string, number>());
+    const rtcJoinPending = ref(false);
+    const rtcJoined = ref(false);
+    const rtcPeers = reactive(new Set<string>());
 
     // Local User State
     const isMuted = ref(false);
@@ -41,9 +51,10 @@ export const useCollabStore = defineStore('collab', () => {
     const currentLocation = ref('');
     const currentSceneId = ref<number | null>(null);
     const currentNodeId = ref<number | null>(null);
+    const pendingPresence = ref<{ location: PresenceLocation; sceneId: number | null; nodeId: number | null } | null>(null);
 
     // Cursors (Map for performance)
-    const cursors = reactive(new Map<string, { x: number, y: number, color: string }>());
+    const cursors = reactive(new Map<string, { x: number; y: number; color: string; sceneId: number }>());
     const cursorColors = [
         '#FF0000', // red
         '#FF8C00', // orange
@@ -55,8 +66,15 @@ export const useCollabStore = defineStore('collab', () => {
     ];
     const cursorColorByUser = new Map<string, string>();
 
+    const nodeLocks = reactive(new Map<string, { userId: string; name: string; sceneId: number; updatedAt: number }>());
+    const nodeLockUpdatedAt = new Map<string, number>();
+
     // Throttle state
     let lastCursorSentAt = 0;
+    const lastNodeMoveSentAt = new Map<string, number>();
+    const lastRemoteNodeMoveAt = new Map<string, number>();
+    const localDraggingNodes = new Set<string>();
+    let localLockedNodeId: string | null = null;
 
     // ================================
     // Getters
@@ -66,13 +84,47 @@ export const useCollabStore = defineStore('collab', () => {
     const hasUnreadMessages = computed(() => messages.value.length > 0);
 
     const authStore = useAuthStore();
+    const sceneNodeStore = useSceneNodeStore();
+    const flowToScreenCoordinate = ref<((pos: { x: number; y: number }) => { x: number; y: number }) | null>(null);
     const localUserId = ref(authStore.user?.id ? String(authStore.user.id) : `user-${Math.random().toString(36).slice(2, 7)}`);
+
+    function remapLocalLocks(prevId: string, nextId: string): void {
+        if (!prevId || prevId === nextId) return;
+        const now = Date.now();
+        const entries = Array.from(nodeLocks.entries());
+        entries.forEach(([nodeId, lock]) => {
+            if (lock.userId !== prevId) return;
+            nodeLocks.set(nodeId, { ...lock, userId: nextId, updatedAt: now });
+            nodeLockUpdatedAt.set(nodeId, now);
+        });
+        if (localLockedNodeId) {
+            sendNodeSelect('LOCK', localLockedNodeId);
+        }
+    }
 
     watch(
         () => authStore.user?.id,
         (nextId) => {
+            if (!nextId) return;
+            const nextUserId = String(nextId);
+            const prevUserId = localUserId.value;
+            if (prevUserId !== nextUserId) {
+                remapLocalLocks(prevUserId, nextUserId);
+                localUserId.value = nextUserId;
+            }
+        }
+    );
+
+    watch(
+        () => sceneNodeStore.selectedNodeId,
+        (nextId, prevId) => {
+            if (prevId && prevId !== nextId && prevId === localLockedNodeId) {
+                unlockNode(prevId);
+            }
             if (nextId) {
-                localUserId.value = String(nextId);
+                lockNode(nextId);
+            } else {
+                localLockedNodeId = null;
             }
         }
     );
@@ -80,6 +132,7 @@ export const useCollabStore = defineStore('collab', () => {
     const localParticipant = computed<CollabParticipant>(() => ({
         odps: localUserId.value,
         name: authStore.user?.name || 'Guest',
+        avatarUrl: authStore.user?.profileImageUrl ?? undefined,
         isMuted: isMuted.value,
         isVideoOff: isVideoOff.value,
         isScreenSharing: isScreenSharing.value,
@@ -161,6 +214,59 @@ export const useCollabStore = defineStore('collab', () => {
         speakingMap.delete(id);
     };
 
+    let deviceChangeBound = false;
+    const handleDeviceChange = () => {
+        void loadAudioInputDevices();
+    };
+
+    async function loadAudioInputDevices() {
+        if (!navigator?.mediaDevices?.enumerateDevices) return;
+        try {
+            const devices = await navigator.mediaDevices.enumerateDevices();
+            const inputs = devices.filter((device) => device.kind === 'audioinput');
+            audioInputDevices.value = inputs;
+
+            if (inputs.length === 0) {
+                selectedMicId.value = '';
+                return;
+            }
+
+            if (!selectedMicId.value || !inputs.some((device) => device.deviceId === selectedMicId.value)) {
+                selectedMicId.value = inputs[0]?.deviceId ?? '';
+            }
+
+            if (!deviceChangeBound && navigator.mediaDevices.addEventListener) {
+                navigator.mediaDevices.addEventListener('devicechange', handleDeviceChange);
+                deviceChangeBound = true;
+            } else if (!deviceChangeBound) {
+                navigator.mediaDevices.ondevicechange = handleDeviceChange;
+                deviceChangeBound = true;
+            }
+        } catch (error) {
+            console.warn('Failed to load audio input devices', error);
+        }
+    }
+
+    async function selectMicrophone(deviceId: string) {
+        selectedMicId.value = deviceId;
+        if (deviceId) {
+            localStorage.setItem('collab:micId', deviceId);
+        } else {
+            localStorage.removeItem('collab:micId');
+        }
+
+        if (!isMediaConnected.value || !rtcJoined.value) return;
+        const stream = await peerConnectionService.switchMicrophone(deviceId);
+        if (stream) {
+            localStream.value = stream;
+            stopSpeakingMonitor(localUserId.value);
+            await startSpeakingMonitor(localUserId.value, stream);
+            if (isMuted.value) {
+                peerConnectionService.toggleMute(true);
+            }
+        }
+    }
+
     // ================================
     // Actions: Room Management
     // ================================
@@ -170,6 +276,7 @@ export const useCollabStore = defineStore('collab', () => {
      */
     async function joinRoom(projectId: number): Promise<void> {
         const nextRoomId = `project-${projectId}`;
+        const nextProjectId = projectId;
 
         if (status.value !== 'disconnected' && roomId.value && roomId.value !== nextRoomId) {
             leaveRoom();
@@ -183,41 +290,41 @@ export const useCollabStore = defineStore('collab', () => {
 
         status.value = 'connecting';
         roomId.value = nextRoomId;
+        currentProjectId.value = nextProjectId;
         localStorage.setItem(STORAGE_KEY, nextRoomId);
 
         try {
+            void loadAudioInputDevices();
             // 1. Connect WebSocket
             if (!socketManager.getClient().connected) {
                 socketManager.connect();
             }
 
-            // 2. Subscribe to room (signaling)
-            socketManager.subscribeToRoom(roomId.value);
-            // 2-1. Subscribe to chat
-            socketManager.subscribeToChat(roomId.value, handleChatMessage);
-            // 2-2. Subscribe to presence
-            socketManager.subscribeToPresence(roomId.value, handlePresenceMessage);
+        // 2. Subscribe to room (legacy signaling)
+        socketManager.subscribeToRoom(roomId.value);
+        // 2-1. Subscribe to chat (projectId)
+        socketManager.subscribeToChat(String(nextProjectId), handleChatMessage);
+        // 2-2. Subscribe to presence (projectId)
+        socketManager.subscribeToPresence(String(nextProjectId), handlePresenceMessage);
+        // 2-3. Subscribe to RTC signaling + errors
+        socketManager.subscribeToRTC(String(nextProjectId), handleRtcMessage);
+        socketManager.subscribeToErrors(handleRtcError);
 
             // 3. Setup WebRTC Callbacks (Prepare for later)
-            peerConnectionService.setCallbacks({
-                onTrack: handleRemoteTrack,
-                onIceCandidate: (candidate, peerId) => handleIceCandidate(peerId, candidate),
-                onConnectionStateChange: handleConnectionStateChange,
+        peerConnectionService.setCallbacks({
+            onTrack: handleRemoteTrack,
+            onIceCandidate: (candidate, peerId) => handleLocalIceCandidate(peerId, candidate),
+            onConnectionStateChange: handleConnectionStateChange,
+        });
+
+            // 4. Broadcast Join + Presence after connection is ready
+            socketManager.onConnected(() => {
+                status.value = 'connected';
+                announcePresence();
             });
 
-            // 4. Broadcast Join (Signaling Only)
-            setTimeout(() => {
-                socketManager.sendSignal({
-                    type: 'join',
-                    payload: {
-                        user: localParticipant.value
-                    }
-                });
-                status.value = 'connected';
-            }, 1000);
-
             // 5. Load chat history (optional)
-            void loadChatHistory(projectId);
+            void loadChatHistory(nextProjectId);
 
         } catch (error) {
             console.error('Failed to join room:', error);
@@ -230,52 +337,47 @@ export const useCollabStore = defineStore('collab', () => {
      */
     async function enableMedia() {
         if (!roomId.value || status.value !== 'connected') return;
-        if (isMediaConnected.value) return;
+        if (isMediaConnected.value || rtcJoinPending.value || rtcJoined.value) {
+            isAutoStarting.value = false;
+            return;
+        }
 
         // Backend spec: max 6 participants for audio mesh
         if (participants.value.length >= 6) {
             console.warn('[RTC] Room is full (max 6 participants)');
             alert('협업 통화는 최대 6명까지 참여할 수 있습니다.');
+            isAutoStarting.value = false;
             return;
         }
 
         try {
             // 1. Get Local Stream
-            const stream = await peerConnectionService.getLocalStream({ video: false, audio: true });
+            const stream = await peerConnectionService.getLocalStream({
+                video: false,
+                audio: true,
+                audioDeviceId: selectedMicId.value || undefined,
+            });
             localStream.value = stream;
             if (stream) {
                 await startSpeakingMonitor(localUserId.value, stream);
             }
+            await loadAudioInputDevices();
 
-            // 2. Initialize Peer Connections for existing participants
-            // (In a mesh, we need to offer to everyone who is already here? 
-            //  Or just wait for them? Ideally we offer to existing peers)
-            //  The current logic relied on 'join' signal trigger. 
-            //  Since we already joined, we might need to send a 'media_ready' signal?
-            //  Or just create offers now.
-
-            // Simplified: Just iterate participants and offer if they are media ready?
-            // For now, let's assume standard mesh: create offer to all existing.
-            participants.value.forEach(async (p) => {
-                if (p.odps && p.odps !== localParticipant.value.odps) {
-                    peerConnectionService.createPeerConnection(p.odps);
-                    const offer = await peerConnectionService.createOffer(p.odps);
-                    if (offer) {
-                        socketManager.sendSignal({
-                            type: 'offer',
-                            targetId: p.odps,
-                            payload: offer
-                        });
-                    }
-                }
+            // 2. Join RTC room (server will return JOIN_ACK with participant list)
+            if (currentProjectId.value === null) {
+                rtcJoinPending.value = false;
+                return;
+            }
+            rtcJoinPending.value = true;
+            socketManager.sendRTC(String(currentProjectId.value), {
+                type: 'JOIN',
+                projectId: currentProjectId.value,
             });
-
-            isMediaConnected.value = true;
-            isMuted.value = false; // Auto-unmute on connect? Or keep muted? User said "Live" button. Usually starts unmuted.
-            peerConnectionService.toggleMute(false);
-
         } catch (e) {
             console.error('Failed to enable media:', e);
+            rtcJoinPending.value = false;
+        } finally {
+            isAutoStarting.value = false;
         }
     }
 
@@ -283,12 +385,12 @@ export const useCollabStore = defineStore('collab', () => {
      * Disable Media - "End Call"
      */
     function disableMedia() {
-        if (!isMediaConnected.value) return;
+        if (!isMediaConnected.value && !rtcJoinPending.value && !rtcJoined.value) return;
 
-        // Broadcast Media Stop to peers so they can clean up
-        if (roomId.value) {
-            socketManager.sendSignal({
-                type: 'media_stop',
+        if (rtcJoined.value && currentProjectId.value !== null) {
+            socketManager.sendRTC(String(currentProjectId.value), {
+                type: 'LEAVE',
+                projectId: currentProjectId.value,
             });
         }
 
@@ -299,6 +401,10 @@ export const useCollabStore = defineStore('collab', () => {
         isMediaConnected.value = false;
         isMuted.value = false;
         localStream.value = null;
+        isPanelOpen.value = false;
+        rtcJoinPending.value = false;
+        rtcJoined.value = false;
+        rtcPeers.clear();
         stopSpeakingMonitor(localUserId.value);
     }
 
@@ -318,11 +424,16 @@ export const useCollabStore = defineStore('collab', () => {
             type: 'leave',
         });
 
-        socketManager.unsubscribeChat(roomId.value);
-        socketManager.unsubscribePresence(roomId.value);
+        if (currentProjectId.value !== null) {
+            socketManager.unsubscribeChat(String(currentProjectId.value));
+            socketManager.unsubscribePresence(String(currentProjectId.value));
+            socketManager.unsubscribeRTC();
+            socketManager.unsubscribeErrors();
+        }
         disableMedia(); // Handles WebRTC cleanup
         isFloatingBarVisible.value = false;
         floatingBarResetToken.value += 1;
+        isAutoStarting.value = false;
         localStorage.removeItem('collab:floatingPos');
 
         // Close Socket Subscription
@@ -331,10 +442,17 @@ export const useCollabStore = defineStore('collab', () => {
         // Reset State
         status.value = 'disconnected';
         roomId.value = null;
+        currentProjectId.value = null;
         participants.value = [];
         messages.value = [];
         cursors.clear();
         lastCursorSentAt = 0;
+        lastNodeMoveSentAt.clear();
+        lastRemoteNodeMoveAt.clear();
+        localDraggingNodes.clear();
+        nodeLocks.clear();
+        nodeLockUpdatedAt.clear();
+        localLockedNodeId = null;
         isPanelOpen.value = false;
         localStorage.removeItem(STORAGE_KEY);
     }
@@ -348,6 +466,16 @@ export const useCollabStore = defineStore('collab', () => {
 
     function hideFloatingBar() {
         isFloatingBarVisible.value = false;
+    }
+
+    function startCall(projectId: number) {
+        isAutoStarting.value = true;
+        isPanelOpen.value = false;
+        joinRoom(projectId);
+        showFloatingBar(true);
+        if (status.value === 'connected') {
+            void enableMedia();
+        }
     }
     async function handleSignal(signal: any) {
         const { type, senderId, payload, targetId } = signal;
@@ -372,10 +500,16 @@ export const useCollabStore = defineStore('collab', () => {
                 await handleAnswer(senderId, payload);
                 break;
             case 'candidate':
-                await handleIceCandidate(senderId, payload);
+                await handleRemoteIceCandidate(senderId, payload);
                 break;
             case 'cursor':
-                handleCursorUpdate(senderId, payload);
+                if (payload?.sceneId == null) break;
+                if (!Number.isFinite(payload?.x) || !Number.isFinite(payload?.y)) break;
+                handleCursorUpdate(senderId, {
+                    x: Number(payload.x),
+                    y: Number(payload.y),
+                    sceneId: Number(payload.sceneId),
+                });
                 break;
             case 'media_stop':
                 handleMediaStop(senderId);
@@ -384,6 +518,103 @@ export const useCollabStore = defineStore('collab', () => {
                 handleStateUpdate(senderId, payload);
                 break;
         }
+    }
+
+    async function handleRtcMessage(message: any) {
+        const type = String(message?.type || '').toUpperCase();
+        const senderId = message?.senderId != null ? String(message.senderId) : '';
+
+        switch (type) {
+            case 'JOIN_ACK':
+                await handleRtcJoinAck(message);
+                break;
+            case 'JOIN':
+                handleRtcJoin(senderId, message);
+                break;
+            case 'LEAVE':
+                handleRtcLeave(senderId);
+                break;
+            case 'MUTE':
+                handleRtcMute(senderId, message?.muted);
+                break;
+            case 'OFFER':
+                if (message?.sdp) {
+                    await handleOffer(senderId, message.sdp);
+                }
+                break;
+            case 'ANSWER':
+                if (message?.sdp) {
+                    await handleAnswer(senderId, message.sdp);
+                }
+                break;
+            case 'CANDIDATE':
+                if (message?.candidate) {
+                    await handleRemoteIceCandidate(senderId, message.candidate);
+                }
+                break;
+            default:
+                break;
+        }
+    }
+
+    function handleRtcError(error: any) {
+        const code = error?.code ?? 'RTC_ERROR';
+        const message = error?.message ?? 'RTC error';
+        console.warn('[RTC] Error:', code, message);
+        alert(message);
+        cleanupRtcState();
+        isAutoStarting.value = false;
+    }
+
+    async function handleRtcJoinAck(message: any) {
+        if (!rtcJoinPending.value && !rtcJoined.value) return;
+        if (rtcJoined.value) return;
+        rtcJoinPending.value = false;
+        rtcJoined.value = true;
+        isMediaConnected.value = true;
+        isMuted.value = false;
+        peerConnectionService.toggleMute(false);
+
+        const participantsList = Array.isArray(message?.participants) ? message.participants : [];
+        for (const participant of participantsList) {
+            const peerId = participant?.userId != null ? String(participant.userId) : null;
+            if (!peerId || peerId === localParticipant.value.odps) continue;
+
+            rtcPeers.add(peerId);
+            updateParticipantMute(peerId, participant?.muted);
+            peerConnectionService.createPeerConnection(peerId);
+            const offer = await peerConnectionService.createOffer(peerId);
+            if (offer && currentProjectId.value !== null) {
+                socketManager.sendRTC(String(currentProjectId.value), {
+                    type: 'OFFER',
+                    projectId: currentProjectId.value,
+                    targetId: Number(peerId),
+                    sdp: offer,
+                });
+            }
+        }
+    }
+
+    function handleRtcJoin(peerId: string, payload: any) {
+        if (!peerId || peerId === localParticipant.value.odps) return;
+        rtcPeers.add(peerId);
+        updateParticipantMute(peerId, payload?.muted);
+    }
+
+    function handleRtcLeave(peerId: string) {
+        if (!peerId) return;
+        rtcPeers.delete(peerId);
+        peerConnectionService.removePeer(peerId);
+        stopSpeakingMonitor(peerId);
+        remoteVolumeMap.delete(peerId);
+        const audio = document.getElementById(`audio-${peerId}`);
+        if (audio) audio.remove();
+        updateParticipantMute(peerId, undefined);
+    }
+
+    function handleRtcMute(peerId: string, muted: boolean | null | undefined) {
+        if (!peerId || muted == null) return;
+        updateParticipantMute(peerId, muted);
     }
 
     /**
@@ -437,11 +668,14 @@ export const useCollabStore = defineStore('collab', () => {
 
         const answer = await peerConnectionService.createAnswer(peerId);
         if (answer) {
-            socketManager.sendSignal({
-                type: 'answer',
-                targetId: peerId,
-                payload: answer
-            });
+            if (currentProjectId.value !== null) {
+                socketManager.sendRTC(String(currentProjectId.value), {
+                    type: 'ANSWER',
+                    projectId: currentProjectId.value,
+                    targetId: Number(peerId),
+                    sdp: answer,
+                });
+            }
         }
     }
 
@@ -456,7 +690,17 @@ export const useCollabStore = defineStore('collab', () => {
     /**
      * Handle Ice Candidate
      */
-    async function handleIceCandidate(peerId: string, candidate: RTCIceCandidateInit) {
+    function handleLocalIceCandidate(peerId: string, candidate: RTCIceCandidateInit) {
+        if (currentProjectId.value === null) return;
+        socketManager.sendRTC(String(currentProjectId.value), {
+            type: 'CANDIDATE',
+            projectId: currentProjectId.value,
+            targetId: Number(peerId),
+            candidate,
+        });
+    }
+
+    async function handleRemoteIceCandidate(peerId: string, candidate: RTCIceCandidateInit) {
         await peerConnectionService.addIceCandidate(peerId, candidate);
     }
 
@@ -477,6 +721,7 @@ export const useCollabStore = defineStore('collab', () => {
             document.body.appendChild(audio);
         }
         audio.srcObject = stream;
+        audio.volume = getRemoteVolume(peerId);
         void startSpeakingMonitor(peerId, stream);
     }
 
@@ -492,7 +737,7 @@ export const useCollabStore = defineStore('collab', () => {
 
     function sendMessage(content: string) {
         if (!content.trim()) return;
-        if (!canSendSignal()) return;
+        if (!canSendSignal() || currentProjectId.value === null) return;
 
         // Backend spec: max 2000 characters
         if (content.length > 2000) {
@@ -505,7 +750,7 @@ export const useCollabStore = defineStore('collab', () => {
         const localId = `local-${now}`;
 
         // Publish to chat topic (spec)
-        socketManager.sendChat(roomId.value, {
+        socketManager.sendChat(String(currentProjectId.value), {
             content,
             type: 'TEXT',
         });
@@ -539,7 +784,7 @@ export const useCollabStore = defineStore('collab', () => {
                     ...messages.value[realIdx],
                     messageId,
                     timestamp: createdAt,
-                };
+                } as CollabMessage;
                 return;
             }
         }
@@ -576,27 +821,188 @@ export const useCollabStore = defineStore('collab', () => {
         }
     }
 
-    function updateCursor(x: number, y: number, sceneId?: number | null) {
+    function updateCursor(x: number, y: number) {
         if (!authStore.isAuthenticated) return;
+        if (currentProjectId.value === null || currentSceneId.value === null) return;
 
         const now = Date.now();
         if (now - lastCursorSentAt < CURSOR_THROTTLE_MS) return;
         lastCursorSentAt = now;
 
-        if (!canSendSignal()) return;
+        if (!socketManager.getClient().connected || status.value !== 'connected') return;
 
-        socketManager.sendSignal({
-            type: 'cursor',
-            payload: { x, y }
+        socketManager.sendPresence(String(currentProjectId.value), {
+            type: 'CURSOR',
+            sceneId: currentSceneId.value,
+            x: Number.isFinite(x) ? x : 0,
+            y: Number.isFinite(y) ? y : 0,
         });
     }
 
-    function handleCursorUpdate(peerId: string, payload: { x: number, y: number }) {
+    function setFlowToScreenCoordinate(
+        transform: ((pos: { x: number; y: number }) => { x: number; y: number }) | null
+    ): void {
+        flowToScreenCoordinate.value = transform;
+    }
+
+    function startNodeDrag(nodeId: string): void {
+        if (!nodeId) return;
+        localDraggingNodes.add(nodeId);
+    }
+
+    function stopNodeDrag(nodeId: string): void {
+        if (!nodeId) return;
+        localDraggingNodes.delete(nodeId);
+    }
+
+    function updateNodeMove(nodeId: string, x: number, y: number, force = false): void {
+        if (!authStore.isAuthenticated) return;
+        if (currentProjectId.value === null || currentSceneId.value === null) return;
+        if (!socketManager.getClient().connected || status.value !== 'connected') return;
+        const numericNodeId = Number(nodeId);
+        if (!Number.isFinite(numericNodeId) || numericNodeId <= 0) return;
+
+        const now = Date.now();
+        if (!force) {
+            const lastSent = lastNodeMoveSentAt.get(nodeId) ?? 0;
+            if (now - lastSent < NODE_MOVE_THROTTLE_MS) return;
+            lastNodeMoveSentAt.set(nodeId, now);
+        }
+
+        socketManager.sendPresence(String(currentProjectId.value), {
+            type: 'NODE_MOVE',
+            sceneId: currentSceneId.value,
+            nodeId: numericNodeId,
+            x,
+            y,
+        });
+    }
+
+    function finishNodeDrag(nodeId: string, x: number, y: number): void {
+        updateNodeMove(nodeId, x, y, true);
+        stopNodeDrag(nodeId);
+    }
+
+    function resolveLockName(userId: string, name?: string | null): string {
+        const rawName = typeof name === 'string' ? name.trim() : '';
+        if (rawName && rawName !== 'Guest') {
+            return rawName;
+        }
+        const participantName = participants.value.find((participant) => participant.odps === userId)?.name;
+        const fallbackName = typeof participantName === 'string' ? participantName.trim() : '';
+        if (fallbackName) {
+            return fallbackName;
+        }
+        return rawName || 'Guest';
+    }
+
+    function applyNodeLock(
+        nodeId: string,
+        lock: { userId: string; name: string; sceneId: number; updatedAt: number }
+    ): void {
+        const nextUpdatedAt = Number.isFinite(lock.updatedAt) ? lock.updatedAt : Date.now();
+        const lastUpdatedAt = nodeLockUpdatedAt.get(nodeId) ?? 0;
+        if (nextUpdatedAt < lastUpdatedAt) return;
+        const resolvedName = resolveLockName(lock.userId, lock.name);
+        nodeLockUpdatedAt.set(nodeId, nextUpdatedAt);
+        nodeLocks.set(nodeId, { ...lock, name: resolvedName, updatedAt: nextUpdatedAt });
+    }
+
+    function releaseNodeLock(nodeId: string, userId?: string, updatedAt?: number): void {
+        const nextUpdatedAt = Number.isFinite(updatedAt) ? (updatedAt as number) : Date.now();
+        const lastUpdatedAt = nodeLockUpdatedAt.get(nodeId) ?? 0;
+        if (nextUpdatedAt < lastUpdatedAt) return;
+        const existing = nodeLocks.get(nodeId);
+        if (userId && existing && existing.userId !== userId) {
+            return;
+        }
+        nodeLockUpdatedAt.set(nodeId, nextUpdatedAt);
+        nodeLocks.delete(nodeId);
+    }
+
+    function clearLocksByUser(userId: string): void {
+        const entries = Array.from(nodeLocks.entries());
+        entries.forEach(([nodeId, lock]) => {
+            if (lock.userId === userId) {
+                nodeLocks.delete(nodeId);
+                nodeLockUpdatedAt.delete(nodeId);
+            }
+        });
+    }
+
+    function sendNodeSelect(action: 'LOCK' | 'UNLOCK', nodeId: string): void {
+        if (!authStore.isAuthenticated) return;
+        if (currentProjectId.value === null || currentSceneId.value === null) return;
+        if (!socketManager.getClient().connected || status.value !== 'connected') return;
+        const numericNodeId = Number(nodeId);
+        if (!Number.isFinite(numericNodeId) || numericNodeId <= 0) return;
+
+        socketManager.sendPresence(String(currentProjectId.value), {
+            type: 'NODE_SELECT',
+            sceneId: currentSceneId.value,
+            nodeId: numericNodeId,
+            action,
+        });
+    }
+
+    function lockNode(nodeId: string): void {
+        if (!nodeId || currentSceneId.value === null) return;
+        if (currentProjectId.value === null || status.value !== 'connected') return;
+        if (isNodeLockedByOther(nodeId)) return;
+        localLockedNodeId = nodeId;
+        const ownerId = authStore.user?.id != null ? String(authStore.user.id) : localUserId.value;
+        applyNodeLock(nodeId, {
+            userId: ownerId,
+            name: localParticipant.value.name,
+            sceneId: currentSceneId.value,
+            updatedAt: Date.now(),
+        });
+        sendNodeSelect('LOCK', nodeId);
+    }
+
+    function unlockNode(nodeId: string): void {
+        if (!nodeId) return;
+        const existing = nodeLocks.get(nodeId);
+        if (localLockedNodeId !== nodeId && existing?.userId !== localUserId.value) {
+            return;
+        }
+        if (localLockedNodeId === nodeId) {
+            localLockedNodeId = null;
+        }
+        releaseNodeLock(nodeId, localUserId.value, Date.now());
+        sendNodeSelect('UNLOCK', nodeId);
+    }
+
+    function getNodeLock(nodeId: string): { userId: string; name: string; sceneId: number; updatedAt: number } | null {
+        const lock = nodeLocks.get(nodeId);
+        if (!lock) return null;
+        const resolvedName = resolveLockName(lock.userId, lock.name);
+        if (resolvedName !== lock.name) {
+            nodeLocks.set(nodeId, { ...lock, name: resolvedName });
+        }
+        return { ...lock, name: resolvedName };
+    }
+
+    function isNodeLockedByOther(nodeId: string): boolean {
+        const lock = nodeLocks.get(nodeId);
+        if (!lock) return false;
+        if (participants.value.length <= 1) return false;
+        const authId = authStore.user?.id != null ? String(authStore.user.id) : null;
+        if (lock.userId === localUserId.value) return false;
+        if (authId && lock.userId === authId) return false;
+        if (lock.name && lock.name === localParticipant.value.name) return false;
+        const isKnownParticipant = participants.value.some((participant) => participant.odps === lock.userId);
+        if (!isKnownParticipant) return false;
+        return true;
+    }
+
+    function handleCursorUpdate(peerId: string, payload: { x: number; y: number; sceneId: number }) {
         const color = getOrAssignCursorColor(peerId);
         cursors.set(peerId, {
             x: payload.x,
             y: payload.y,
             color,
+            sceneId: payload.sceneId,
         });
     }
 
@@ -604,31 +1010,137 @@ export const useCollabStore = defineStore('collab', () => {
 
     function updateLocation(location: PresenceLocation, sceneId?: number | null, nodeId?: number | null) {
         currentLocation.value = location;
-        currentSceneId.value = sceneId ?? null;
-        currentNodeId.value = nodeId ?? null;
-        if (roomId.value) {
-            socketManager.sendPresence(roomId.value, {
-                type: 'LOCATION',
-                location,
-                sceneId: sceneId ?? null,
-                nodeId: nodeId ?? null,
-            });
+        const previousSceneId = currentSceneId.value;
+        if (previousSceneId !== (sceneId ?? null) && localLockedNodeId) {
+            unlockNode(localLockedNodeId);
         }
+        currentSceneId.value = sceneId ?? null;
+        if (previousSceneId !== currentSceneId.value) {
+            cursors.clear();
+            lastRemoteNodeMoveAt.clear();
+            nodeLocks.clear();
+            nodeLockUpdatedAt.clear();
+            localLockedNodeId = null;
+        }
+        currentNodeId.value = nodeId ?? null;
+        pendingPresence.value = {
+            location,
+            sceneId: sceneId ?? null,
+            nodeId: nodeId ?? null,
+        };
+
+        flushPresence();
         broadcastState();
     }
 
     function handlePresenceMessage(message: any) {
+        const type = message?.type;
+
+        if (type === 'SNAPSHOT') {
+            if (message?.projectId && currentProjectId.value && Number(message.projectId) !== currentProjectId.value) {
+                return;
+            }
+            const snapshot = Array.isArray(message?.participants) ? message.participants : [];
+            const existing = new Map(participants.value.map((participant) => [participant.odps, participant]));
+            const next = snapshot
+                .map(mapPresenceToParticipant)
+                .filter((participant: CollabParticipant | null): participant is CollabParticipant => !!participant)
+                .map((participant: CollabParticipant) => {
+                    const prev = existing.get(participant.odps);
+                    return prev ? { ...prev, ...participant } : participant;
+                });
+            participants.value = next;
+            return;
+        }
+
         const userId = message?.userId;
         if (!userId) return;
         const peerId = String(userId);
-        addParticipant(peerId, {
+        if (type === 'CURSOR') {
+            const sceneId = message?.sceneId;
+            if (currentSceneId.value === null || sceneId == null) return;
+            if (Number(sceneId) !== currentSceneId.value) return;
+            const x = Number(message?.x);
+            const y = Number(message?.y);
+            if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+            handleCursorUpdate(peerId, { x, y, sceneId: Number(sceneId) });
+            return;
+        }
+        if (type === 'NODE_MOVE') {
+            if (peerId === localParticipant.value.odps) return;
+            const sceneId = message?.sceneId;
+            const nodeId = message?.nodeId;
+            if (currentSceneId.value === null || sceneId == null || nodeId == null) return;
+            if (Number(sceneId) !== currentSceneId.value) return;
+            const numericNodeId = Number(nodeId);
+            if (!Number.isFinite(numericNodeId) || numericNodeId <= 0) return;
+            const nodeKey = String(numericNodeId);
+            if (localDraggingNodes.has(nodeKey)) return;
+            const x = Number(message?.x);
+            const y = Number(message?.y);
+            if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+            let updatedAt = message?.updatedAt ? Date.parse(message.updatedAt) : Date.now();
+            if (!Number.isFinite(updatedAt)) {
+                updatedAt = Date.now();
+            }
+            const lastUpdated = lastRemoteNodeMoveAt.get(nodeKey) ?? 0;
+            if (updatedAt <= lastUpdated) return;
+            lastRemoteNodeMoveAt.set(nodeKey, updatedAt);
+            sceneNodeStore.applyRemoteNodeMove(nodeKey, x, y);
+            return;
+        }
+        if (type === 'NODE_SELECT') {
+            const sceneId = message?.sceneId;
+            const nodeId = message?.nodeId;
+            const action = String(message?.action ?? '').toUpperCase();
+            if (currentSceneId.value === null || sceneId == null || nodeId == null) return;
+            if (Number(sceneId) !== currentSceneId.value) return;
+            if (!action) return;
+            const messageUserId = message?.userId != null ? String(message.userId) : peerId;
+            const authId = authStore.user?.id != null ? String(authStore.user.id) : null;
+            if (messageUserId === localUserId.value) return;
+            if (authId && messageUserId === authId) return;
+            const nodeKey = String(nodeId);
+            let updatedAt = message?.updatedAt ? Date.parse(message.updatedAt) : Date.now();
+            if (!Number.isFinite(updatedAt)) {
+                updatedAt = Date.now();
+            }
+            if (action === 'LOCK') {
+                applyNodeLock(nodeKey, {
+                    userId: messageUserId,
+                    name: message?.name ?? '',
+                    sceneId: Number(sceneId),
+                    updatedAt,
+                });
+            } else if (action === 'UNLOCK') {
+                releaseNodeLock(nodeKey, messageUserId, updatedAt);
+            }
+            return;
+        }
+        if (type === 'STATUS') {
+            return;
+        }
+        if (type === 'LEAVE') {
+            removeParticipant(peerId);
+            return;
+        }
+        const participant = mapPresenceToParticipant(message);
+        if (!participant) return;
+        addParticipant(peerId, participant);
+    }
+
+    function mapPresenceToParticipant(message: any): CollabParticipant | null {
+        const userId = message?.userId;
+        if (!userId) return null;
+        const peerId = String(userId);
+        return {
             odps: peerId,
             name: message?.name ?? 'Guest',
             avatarUrl: message?.profileImageUrl ?? undefined,
             currentLocation: message?.location ?? '',
             sceneId: message?.sceneId ?? null,
             nodeId: message?.nodeId ?? null,
-        });
+        };
     }
 
     // ================================
@@ -657,20 +1169,79 @@ export const useCollabStore = defineStore('collab', () => {
         participants.value = participants.value.filter(p => p.odps !== peerId);
         cursors.delete(peerId);
         cursorColorByUser.delete(peerId);
+        clearLocksByUser(peerId);
+        remoteVolumeMap.delete(peerId);
         stopSpeakingMonitor(peerId);
         // Cleanup audio
         const audio = document.getElementById(`audio-${peerId}`);
         if (audio) audio.remove();
     }
 
+    function syncLockNamesFromParticipants(): void {
+        if (participants.value.length === 0 || nodeLocks.size === 0) return;
+        const now = Date.now();
+        nodeLocks.forEach((lock, nodeId) => {
+            const resolvedName = resolveLockName(lock.userId, lock.name);
+            if (resolvedName === lock.name) return;
+            nodeLockUpdatedAt.set(nodeId, Math.max(nodeLockUpdatedAt.get(nodeId) ?? 0, now));
+            nodeLocks.set(nodeId, { ...lock, name: resolvedName, updatedAt: now });
+        });
+    }
+
+    function updateParticipantMute(peerId: string, muted: boolean | undefined | null) {
+        if (!peerId) return;
+        const idx = participants.value.findIndex(p => p.odps === peerId);
+        if (idx === -1) return;
+        const next = muted == null ? undefined : muted;
+        const existing = participants.value[idx];
+        if (!existing) return;
+        participants.value[idx] = {
+            ...existing,
+            isMuted: next,
+        };
+    }
+
+    function getRemoteVolume(peerId: string): number {
+        const volume = remoteVolumeMap.get(peerId);
+        return typeof volume === 'number' ? volume : 1;
+    }
+
+    function setRemoteVolume(peerId: string, volume: number) {
+        const clamped = Math.max(0, Math.min(1, volume));
+        remoteVolumeMap.set(peerId, clamped);
+        const audio = document.getElementById(`audio-${peerId}`) as HTMLAudioElement | null;
+        if (audio) {
+            audio.volume = clamped;
+        }
+    }
+
+    function cleanupRtcState() {
+        rtcPeers.forEach((peerId) => {
+            stopSpeakingMonitor(peerId);
+            const audio = document.getElementById(`audio-${peerId}`);
+            if (audio) audio.remove();
+        });
+        rtcPeers.clear();
+        remoteVolumeMap.clear();
+        peerConnectionService.closeAll();
+        isMediaConnected.value = false;
+        isMuted.value = false;
+        localStream.value = null;
+        rtcJoinPending.value = false;
+        rtcJoined.value = false;
+        isPanelOpen.value = false;
+        stopSpeakingMonitor(localUserId.value);
+    }
+
     function getOrAssignCursorColor(peerId: string): string {
         const existing = cursorColorByUser.get(peerId);
         if (existing) return existing;
 
-        const used = new Set(cursorColorByUser.values());
-        const available = cursorColors.filter((c) => !used.has(c));
-        const pool = available.length > 0 ? available : cursorColors;
-        const color = pool[Math.floor(Math.random() * pool.length)] ?? cursorColors[0] ?? '#9CA3AF';
+        let hash = 0;
+        for (let i = 0; i < peerId.length; i += 1) {
+            hash = (hash + peerId.charCodeAt(i)) % 2147483647;
+        }
+        const color = cursorColors[hash % cursorColors.length] ?? '#9CA3AF';
         cursorColorByUser.set(peerId, color);
         return color;
     }
@@ -679,13 +1250,11 @@ export const useCollabStore = defineStore('collab', () => {
         isMuted.value = !isMuted.value;
         peerConnectionService.toggleMute(isMuted.value);
 
-        // Broadcast mute state to other participants (Backend spec: MUTE type)
-        if (roomId.value && isMediaConnected.value) {
-            socketManager.sendSignal({
+        if (isMediaConnected.value && currentProjectId.value !== null) {
+            socketManager.sendRTC(String(currentProjectId.value), {
                 type: 'MUTE',
-                payload: {
-                    muted: isMuted.value,
-                },
+                projectId: currentProjectId.value,
+                muted: isMuted.value,
             });
         }
 
@@ -723,6 +1292,37 @@ export const useCollabStore = defineStore('collab', () => {
         });
     }
 
+    function announcePresence() {
+        if (!roomId.value || currentProjectId.value === null) return;
+        socketManager.sendSignal({
+            type: 'join',
+            payload: {
+                user: localParticipant.value
+            }
+        });
+        const location = currentLocation.value || 'PROJECT_LIST';
+        socketManager.sendPresence(String(currentProjectId.value), {
+            type: 'LOCATION',
+            location,
+            sceneId: currentSceneId.value ?? null,
+            nodeId: currentNodeId.value ?? null,
+        });
+        pendingPresence.value = null;
+        broadcastState();
+    }
+
+    function flushPresence() {
+        if (currentProjectId.value === null || !pendingPresence.value) return;
+        if (!socketManager.getClient().connected || status.value !== 'connected') return;
+        socketManager.sendPresence(String(currentProjectId.value), {
+            type: 'LOCATION',
+            location: pendingPresence.value.location,
+            sceneId: pendingPresence.value.sceneId,
+            nodeId: pendingPresence.value.nodeId,
+        });
+        pendingPresence.value = null;
+    }
+
     function rejoinIfNeeded() {
         if (status.value === 'connected' || status.value === 'connecting') return;
 
@@ -748,6 +1348,23 @@ export const useCollabStore = defineStore('collab', () => {
         joinRoom(parsedId);
     }
 
+    watch([status, isMediaConnected], ([nextStatus, nextMedia]) => {
+        if (!isAutoStarting.value) return;
+        if (nextStatus === 'connected' && !nextMedia) {
+            void enableMedia();
+        }
+        if (nextMedia || nextStatus === 'error' || nextStatus === 'disconnected') {
+            isAutoStarting.value = false;
+        }
+    });
+
+    watch(
+        () => participants.value.map((participant) => `${participant.odps}:${participant.name ?? ''}`).join('|'),
+        () => {
+            syncLockNamesFromParticipants();
+        }
+    );
+
     function isSpeaking(peerId: string): boolean {
         return speakingMap.get(peerId) ?? false;
     }
@@ -758,24 +1375,30 @@ export const useCollabStore = defineStore('collab', () => {
         participants,
         messages,
         cursors,
+        nodeLocks,
         isPanelOpen,
         isFloatingBarVisible, // Exported
         isMediaConnected,     // Exported
+        isAutoStarting,
         floatingBarResetToken,
         isMuted,
         isVideoOff,
         isScreenSharing,
         localParticipant,
+        audioInputDevices,
+        selectedMicId,
         // Getters
         isConnected,
         hasUnreadMessages,
         participantCount,
         isSpeaking,
+        getRemoteVolume,
         // Actions
         joinRoom,
         leaveRoom,
         enableMedia,  // Exported
         disableMedia, // Exported
+        startCall,
         showFloatingBar, // Exported
         hideFloatingBar, // Exported
         sendMessage,
@@ -785,7 +1408,16 @@ export const useCollabStore = defineStore('collab', () => {
         togglePanel,
         handleSignal,
         updateCursor,
+        flowToScreenCoordinate,
+        setFlowToScreenCoordinate,
+        startNodeDrag,
+        updateNodeMove,
+        finishNodeDrag,
+        getNodeLock,
+        isNodeLockedByOther,
         updateLocation,
         rejoinIfNeeded,
+        selectMicrophone,
+        setRemoteVolume,
     };
 });

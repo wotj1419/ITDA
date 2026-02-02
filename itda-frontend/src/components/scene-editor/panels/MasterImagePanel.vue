@@ -6,7 +6,7 @@
  */
 import { ref, computed, watch, nextTick, onUnmounted } from 'vue';
 import type { Node } from '@vue-flow/core';
-import type { MasterImageNodeData } from '../../../types/ui/sceneNodes';
+import type { MasterImageNodeData, SceneHeaderNodeData } from '../../../types/ui/sceneNodes';
 import { NodeType, PromptStatus } from '../../../types/ui/sceneNodes';
 import BasePanel from './BasePanel.vue';
 import { useSceneNodeStore } from '../../../stores/sceneNode';
@@ -28,13 +28,24 @@ interface Props {
 const props = defineProps<Props>();
 const nodeStore = useSceneNodeStore();
 const objectStore = useObjectStore();
+const autoFilledNodes = new Set<string>();
+let promptPreviewTimeout: ReturnType<typeof setTimeout> | null = null;
+const detailSectionRef = ref<HTMLElement | null>(null);
+const detailTextareaRef = ref<HTMLTextAreaElement | null>(null);
+const isFinalEditing = ref(false);
 // 폼 상태 - objectIds는 배열로 관리 (다중 선택)
 const form = ref({
   style: DEFAULT_MASTER_STYLE,
   timeOfDay: DEFAULT_MASTER_TIME_OF_DAY,
   mood: DEFAULT_MASTER_MOOD,
   objectIds: [] as number[],  // 등장 오브젝트 IDs (캐릭터 포함)
+  additionalDetail: '',
   prompt: '',
+  promptKo: '',
+  promptEnFinal: '',
+  promptEnFinalOverride: '',
+  usePromptOverride: false,
+  promptLang: 'EN' as 'EN' | 'KO',
 });
 
 const {
@@ -44,6 +55,7 @@ const {
   clearError,
   generatePrompt,
   approvePrompt,
+  refreshPromptPreview,
   runGeneration: generateImage,
 } = useNodeGeneration({
   nodeId: props.node.id,
@@ -53,24 +65,49 @@ const {
   getPromptPayload: () => ({
     nodeType: 'MASTER',
     sceneOneLine: buildSceneOneLine(),
+    additionalDetail: form.value.additionalDetail,
     style: form.value.style,
     timeOfDay: form.value.timeOfDay,
     mood: form.value.mood,
     objects: selectedObjectNames.value,
   }),
-  getPromptUpdate: (prompt) => ({
+  getPromptUpdate: (result) => ({
     style: form.value.style,
     timeOfDay: form.value.timeOfDay,
     mood: form.value.mood,
     objectIds: form.value.objectIds,
-    prompt,
+    prompt: result.promptEnBase,
+    promptKo: result.promptKo,
   }),
-  getApprovedUpdate: () => ({ prompt: form.value.prompt }),
+  getImproveInstruction: () => form.value.additionalDetail,
+  getApprovedUpdate: () => ({
+    prompt: form.value.prompt,
+    promptKo: form.value.promptKo,
+    promptEnFinalOverride: form.value.usePromptOverride ? form.value.promptEnFinalOverride : '',
+  }),
   getJobSettings: () => ({
     styleKey: resolveStyleKey(form.value.style),
     timeOfDayKey: resolveTimeOfDayKey(form.value.timeOfDay),
     moodKey: resolveMoodKey(form.value.mood) ?? 'NEUTRAL',
     objectIds: form.value.objectIds,
+    detailKo: form.value.additionalDetail,
+  }),
+  getReferenceObjectIds: () => (form.value.objectIds.length ? [...form.value.objectIds] : undefined),
+  getPromptOverride: () =>
+    form.value.usePromptOverride ? form.value.promptEnFinalOverride : '',
+  getPromptPreviewPayload: () => ({
+    prompt: form.value.prompt,
+    settings: {
+      styleKey: resolveStyleKey(form.value.style),
+      timeOfDayKey: resolveTimeOfDayKey(form.value.timeOfDay),
+      moodKey: resolveMoodKey(form.value.mood) ?? 'NEUTRAL',
+      objectIds: form.value.objectIds,
+      detailKo: form.value.additionalDetail,
+    },
+    promptEnFinalOverride: form.value.usePromptOverride ? form.value.promptEnFinalOverride : '',
+  }),
+  onPromptPreview: (result) => ({
+    promptEnFinal: result.promptEnFinal,
   }),
   getJobSuccessUpdate: ({ resultUrl, thumbnailUrl }) => ({
     imageUrl: resultUrl || null,
@@ -81,7 +118,7 @@ const {
   },
 });
 
-const styleOptions = ['실사', '애니메이션', '픽사', '수채화', '유화'];
+const styleOptions = ['시네마틱', '애니메이션', '픽사', '수채화', '유화'];
 const timeOptions = ['아침', '낮', '저녁', '밤'];
 const moodOptions = ['중립', '편안', '고독', '긴장', '행복', '우울'];
 
@@ -106,13 +143,27 @@ const selectedObjectNames = computed(() =>
 );
 
 const data = computed(() => props.node.data as MasterImageNodeData | undefined);
-const sceneHeaderData = computed(() =>
-  nodeStore.nodes.find((node) => node.data?.type === NodeType.SCENE_HEADER)?.data
+const sceneHeaderData = computed<SceneHeaderNodeData | undefined>(() => {
+  const node = nodeStore.nodes.find((candidate) => candidate.data?.type === NodeType.SCENE_HEADER);
+  return node?.data && node.data.type === NodeType.SCENE_HEADER ? node.data : undefined;
+});
+const hasPromptContent = computed(() => {
+  if (!data.value) return false;
+  return Boolean(
+    (data.value.prompt ?? '').trim() ||
+    (data.value.promptKo ?? '').trim() ||
+    (data.value.promptEnFinal ?? '').trim() ||
+    (data.value.promptEnFinalOverride ?? '').trim()
+  );
+});
+const isPromptGenerated = computed(
+  () => hasPromptContent.value || data.value?.promptStatus !== PromptStatus.DRAFT
 );
-const isPromptGenerated = computed(() => data.value?.promptStatus !== PromptStatus.DRAFT);
 const isPromptApproved = computed(() => data.value?.promptStatus === PromptStatus.APPROVED);
 const canGenerate = computed(() =>
-  isPromptApproved.value && !isGeneratingImage.value && !isGeneratingPrompt.value
+  isPromptApproved.value &&
+  !isGeneratingImage.value &&
+  !isGeneratingPrompt.value
 );
 
 function buildSceneOneLine(): string {
@@ -126,10 +177,41 @@ function buildSceneOneLine(): string {
   if (selectedObjectNames.value.length) {
     parts.push(`objects: ${selectedObjectNames.value.join(', ')}`);
   }
+  if (form.value.additionalDetail) {
+    parts.push(`detail: ${form.value.additionalDetail}`);
+  }
   return parts.join(', ');
 }
 const generateButtonRef = ref<HTMLButtonElement | null>(null);
 let generateButtonTween: gsap.core.Tween | null = null;
+
+function normalizeIds(ids: number[] | undefined | null): number[] {
+  return Array.isArray(ids) ? ids : [];
+}
+
+function areNumberArraysEqual(a: number[], b: number[]): boolean {
+  if (a === b) return true;
+  if (a.length !== b.length) return false;
+  for (let index = 0; index < a.length; index += 1) {
+    if (a[index] !== b[index]) return false;
+  }
+  return true;
+}
+
+let persistLookTimeout: ReturnType<typeof setTimeout> | null = null;
+function queuePersistLook(): void {
+  if (!data.value) return;
+  if (persistLookTimeout) clearTimeout(persistLookTimeout);
+  persistLookTimeout = setTimeout(() => {
+    persistLookTimeout = null;
+    nodeStore.updateNode(props.node.id, {
+      style: form.value.style,
+      timeOfDay: form.value.timeOfDay,
+      mood: form.value.mood,
+      objectIds: [...form.value.objectIds],
+    });
+  }, 300);
+}
 
 // 노드 변경 시 폼 동기화
 watch(() => props.node.id, () => {
@@ -139,10 +221,49 @@ watch(() => props.node.id, () => {
     timeOfDay: data.value.timeOfDay || DEFAULT_MASTER_TIME_OF_DAY,
     mood: data.value.mood || DEFAULT_MASTER_MOOD,
     objectIds: data.value.objectIds || [],
+    additionalDetail: data.value.additionalDetail || '',
     prompt: data.value.prompt || '',
+    promptKo: data.value.promptKo || '',
+    promptEnFinal: data.value.promptEnFinal || '',
+    promptEnFinalOverride: data.value.promptEnFinalOverride || '',
+    usePromptOverride: Boolean(data.value.promptEnFinalOverride),
+    promptLang: 'EN',
   };
+  isFinalEditing.value = false;
+  maybeAutofillPrompt();
   clearError();
 }, { immediate: true });
+
+watch(
+  () => ({
+    style: form.value.style,
+    timeOfDay: form.value.timeOfDay,
+    mood: form.value.mood,
+    objectIds: form.value.objectIds.slice(),
+  }),
+  (next) => {
+    if (!data.value) return;
+    const savedObjectIds = normalizeIds(data.value.objectIds);
+    const nextObjectIds = normalizeIds(next.objectIds);
+
+    const unchanged =
+      next.style === (data.value.style || DEFAULT_MASTER_STYLE) &&
+      next.timeOfDay === (data.value.timeOfDay || DEFAULT_MASTER_TIME_OF_DAY) &&
+      next.mood === (data.value.mood || DEFAULT_MASTER_MOOD) &&
+      areNumberArraysEqual(nextObjectIds, savedObjectIds);
+
+    if (unchanged) return;
+
+    nodeStore.updateNodeLocal(props.node.id, {
+      style: next.style,
+      timeOfDay: next.timeOfDay,
+      mood: next.mood,
+      objectIds: [...nextObjectIds],
+    });
+    queuePersistLook();
+  },
+  { deep: true }
+);
 
 watch(
   () => data.value?.prompt,
@@ -150,6 +271,47 @@ watch(
     const normalized = nextPrompt ?? '';
     if (normalized !== form.value.prompt) {
       form.value.prompt = normalized;
+    }
+  }
+);
+
+watch(
+  () => data.value?.promptKo,
+  (nextPromptKo) => {
+    const normalized = nextPromptKo ?? '';
+    if (normalized !== form.value.promptKo) {
+      form.value.promptKo = normalized;
+    }
+  }
+);
+
+watch(
+  () => data.value?.promptEnFinal,
+  (nextPromptEnFinal) => {
+    const normalized = nextPromptEnFinal ?? '';
+    if (normalized !== form.value.promptEnFinal) {
+      form.value.promptEnFinal = normalized;
+    }
+  }
+);
+
+watch(
+  () => data.value?.promptEnFinalOverride,
+  (nextPromptOverride) => {
+    const normalized = nextPromptOverride ?? '';
+    if (normalized !== form.value.promptEnFinalOverride) {
+      form.value.promptEnFinalOverride = normalized;
+    }
+    form.value.usePromptOverride = Boolean(normalized);
+  }
+);
+
+watch(
+  () => data.value?.additionalDetail,
+  (nextDetail) => {
+    const normalized = nextDetail ?? '';
+    if (normalized !== form.value.additionalDetail) {
+      form.value.additionalDetail = normalized;
     }
   }
 );
@@ -168,6 +330,59 @@ watch(
     form.value.mood = data.value.mood || DEFAULT_MASTER_MOOD;
     form.value.objectIds = [...(data.value.objectIds || [])];
   }
+);
+
+watch(
+  () => sceneHeaderData.value?.description,
+  () => {
+    maybeAutofillPrompt();
+  }
+);
+
+watch(
+  () => [
+    form.value.prompt,
+    form.value.promptKo,
+    form.value.promptEnFinalOverride,
+    form.value.usePromptOverride,
+    form.value.additionalDetail,
+  ],
+  () => {
+    if (!data.value) return;
+    const updates: Partial<MasterImageNodeData> = {};
+    if (form.value.prompt !== (data.value.prompt ?? '')) {
+      updates.prompt = form.value.prompt;
+    }
+    if (form.value.promptKo !== (data.value.promptKo ?? '')) {
+      updates.promptKo = form.value.promptKo;
+    }
+    if (form.value.additionalDetail !== (data.value.additionalDetail ?? '')) {
+      updates.additionalDetail = form.value.additionalDetail;
+    }
+    const nextOverride = form.value.usePromptOverride ? form.value.promptEnFinalOverride : '';
+    if (nextOverride !== (data.value.promptEnFinalOverride ?? '')) {
+      updates.promptEnFinalOverride = nextOverride;
+    }
+    if (Object.keys(updates).length > 0) {
+      nodeStore.updateNodeLocal(props.node.id, updates);
+    }
+  }
+);
+
+watch(
+  () => ({
+    prompt: form.value.prompt,
+    style: form.value.style,
+    timeOfDay: form.value.timeOfDay,
+    mood: form.value.mood,
+    objectIds: form.value.objectIds.slice(),
+    additionalDetail: form.value.additionalDetail,
+    usePromptOverride: form.value.usePromptOverride,
+  }),
+  () => {
+    queuePromptPreview();
+  },
+  { deep: true }
 );
 
 watch(
@@ -200,6 +415,14 @@ watch(
 onUnmounted(() => {
   generateButtonTween?.kill();
   generateButtonTween = null;
+  if (persistLookTimeout) {
+    clearTimeout(persistLookTimeout);
+    persistLookTimeout = null;
+  }
+  if (promptPreviewTimeout) {
+    clearTimeout(promptPreviewTimeout);
+    promptPreviewTimeout = null;
+  }
 });
 // 오브젝트 선택 토글
 function toggleObject(objectId: number): void {
@@ -209,6 +432,85 @@ function toggleObject(objectId: number): void {
   } else {
     form.value.objectIds.push(objectId);
   }
+}
+
+
+function toggleFinalEditing(): void {
+  if (!form.value.usePromptOverride) {
+    form.value.usePromptOverride = true;
+    form.value.promptEnFinalOverride = form.value.promptEnFinal || form.value.prompt;
+    isFinalEditing.value = true;
+    return;
+  }
+
+  if (isFinalEditing.value && !form.value.promptEnFinalOverride.trim()) {
+    form.value.promptEnFinalOverride = form.value.promptEnFinal || form.value.prompt;
+  }
+
+  isFinalEditing.value = !isFinalEditing.value;
+}
+
+function maybeAutofillPrompt(): void {
+  const nodeId = props.node.id;
+  if (autoFilledNodes.has(nodeId)) return;
+  if (form.value.prompt.trim()) return;
+  const header = sceneHeaderData.value as { description?: string } | undefined;
+  const description = header?.description?.trim();
+  if (!description) return;
+  const hasHangul = /[ㄱ-ㅎㅏ-ㅣ가-힣]/.test(description);
+  if (hasHangul) {
+    if (!form.value.promptKo.trim()) {
+      form.value.promptKo = description;
+    }
+    form.value.promptLang = 'KO';
+  }
+  form.value.prompt = description;
+  autoFilledNodes.add(nodeId);
+}
+
+async function focusDetailEditor(): Promise<void> {
+  await nextTick();
+  if (detailSectionRef.value) {
+    const container = detailSectionRef.value.closest('.base-panel__content') as HTMLElement | null;
+    if (container) {
+      const containerRect = container.getBoundingClientRect();
+      const sectionRect = detailSectionRef.value.getBoundingClientRect();
+      const currentScroll = container.scrollTop;
+      const offset = sectionRect.top - containerRect.top;
+      const centeredOffset = (container.clientHeight - sectionRect.height) / 2;
+      const rawTarget = currentScroll + offset - centeredOffset;
+      const maxScroll = Math.max(0, container.scrollHeight - container.clientHeight);
+      const targetScroll = Math.min(Math.max(0, rawTarget), maxScroll);
+      gsap.to(container, { scrollTop: targetScroll, duration: 0.45, ease: 'power2.out' });
+    } else {
+      detailSectionRef.value.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+    gsap.killTweensOf(detailSectionRef.value);
+    gsap.fromTo(
+      detailSectionRef.value,
+      { boxShadow: '0 0 0 0 rgba(255, 107, 138, 0)', backgroundColor: 'rgba(255, 250, 252, 0)' },
+      {
+        boxShadow: '0 0 0 12px rgba(255, 107, 138, 0.35)',
+        backgroundColor: 'rgba(255, 250, 252, 0.9)',
+        duration: 0.35,
+        yoyo: true,
+        repeat: 1,
+        ease: 'power2.out',
+        clearProps: 'boxShadow,backgroundColor',
+      }
+    );
+  }
+  detailTextareaRef.value?.focus();
+}
+
+function queuePromptPreview(): void {
+  if (!form.value.prompt.trim()) return;
+  if (form.value.usePromptOverride) return;
+  if (promptPreviewTimeout) clearTimeout(promptPreviewTimeout);
+  promptPreviewTimeout = setTimeout(() => {
+    promptPreviewTimeout = null;
+    refreshPromptPreview();
+  }, 600);
 }
 
 
@@ -250,7 +552,7 @@ function setActive(): void {
           <label
             v-for="opt in styleOptions"
             :key="opt"
-            :class="['panel-radio', 'panel-style-card', { 'panel-style-card--primary': opt === '실사' }]"
+            :class="['panel-radio', 'panel-style-card', { 'panel-style-card--primary': opt === '시네마틱' }]"
           >
             <input type="radio" v-model="form.style" :value="opt" />
             <span class="panel-radio-label">{{ opt }}</span>
@@ -304,6 +606,73 @@ function setActive(): void {
         </div>
       </div>
 
+      <!-- Detail Change -->
+      <div class="panel-section" ref="detailSectionRef">
+        <label class="panel-label">
+          <Star class="panel-label-icon" />
+          디테일 변경 (선택)
+        </label>
+        <textarea
+          ref="detailTextareaRef"
+          v-model="form.additionalDetail"
+          class="panel-textarea"
+          rows="2"
+          placeholder="예: 질감/소품/표정 등 추가 지시사항"
+        ></textarea>
+      </div>
+
+      <!-- Narrative Prompt -->
+      <div class="panel-section">
+        <div class="panel-label-row">
+          <label class="panel-label">
+            <FileText class="panel-label-icon" />
+            서술 프롬프트
+          </label>
+          <div class="panel-segmented" role="tablist" aria-label="Prompt language">
+            <button
+              type="button"
+              class="panel-segmented__btn"
+              :class="{ 'is-active': form.promptLang === 'EN' }"
+              @click="form.promptLang = 'EN'"
+            >
+              EN
+            </button>
+            <button
+              type="button"
+              class="panel-segmented__btn"
+              :class="{ 'is-active': form.promptLang === 'KO' }"
+              @click="form.promptLang = 'KO'"
+            >
+              KO
+            </button>
+          </div>
+        </div>
+        <p
+          class="panel-subtext panel-tooltip"
+          data-tooltip="서술 프롬프트는 읽기 전용입니다. 한글 수정은 디테일 변경에서 가능합니다."
+        >
+          {{ form.promptLang === 'EN' ? '원본(읽기 전용)' : '번역(읽기 전용)' }}
+          <span class="panel-tooltip__icon">?</span>
+        </p>
+        <div v-if="form.promptLang === 'EN'">
+          <textarea
+            v-model="form.prompt"
+            class="panel-textarea panel-textarea--prompt"
+            rows="4"
+            placeholder="예: A lone traveler stands at the edge of a foggy cliff, wind lifting their coat."
+            readonly
+          ></textarea>
+        </div>
+        <div v-else class="panel-translation-block">
+          <textarea
+            v-model="form.promptKo"
+            class="panel-textarea panel-textarea--prompt"
+            rows="4"
+            readonly
+          ></textarea>
+        </div>
+      </div>
+
       <!-- Error Message -->
       <div v-if="errorMessage" class="panel-error">
         {{ errorMessage }}
@@ -317,17 +686,45 @@ function setActive(): void {
       >
         <Loader2 v-if="isGeneratingPrompt" class="panel-btn-icon animate-spin" />
         <Sparkles v-else class="panel-btn-icon" />
-        {{ isGeneratingPrompt ? '생성 중...' : '프롬프트 생성' }}
+        {{ isGeneratingPrompt ? '생성 중...' : 'AI로 다듬기' }}
       </button>
 
       <!-- Generated Prompt -->
       <div v-if="isPromptGenerated" class="panel-section panel-section--prompt">
         <label class="panel-label">
           <FileText class="panel-label-icon" />
-          AI 프롬프트
-          <span class="panel-label-badge">생성됨</span>
+          최종 프롬프트 (영어)
         </label>
-        <textarea v-model="form.prompt" class="panel-textarea panel-textarea--prompt" rows="4"></textarea>
+        <textarea
+          v-if="form.usePromptOverride"
+          v-model="form.promptEnFinalOverride"
+          class="panel-textarea panel-textarea--prompt"
+          rows="4"
+          :readonly="!isFinalEditing"
+          placeholder="최종 영어 프롬프트를 직접 입력하세요."
+        ></textarea>
+        <textarea
+          v-else
+          :value="form.promptEnFinal"
+          class="panel-textarea panel-textarea--prompt"
+          rows="4"
+          readonly
+          placeholder="자동으로 갱신됩니다."
+        ></textarea>
+
+        <div class="panel-prompt-actions">
+          <button
+            class="panel-btn panel-btn--text"
+            :disabled="!form.promptEnFinal && !form.prompt"
+            @click="toggleFinalEditing"
+          >
+            {{ isFinalEditing ? '편집 완료' : '영문 직접 편집' }}
+          </button>
+          <button class="panel-btn panel-btn--text" @click="focusDetailEditor">
+            한글 편집
+          </button>
+        </div>
+
         <div class="panel-prompt-actions panel-prompt-actions--right">
           <button class="panel-btn panel-btn--text" :disabled="isGeneratingPrompt || isGeneratingImage" @click="generatePrompt">
             <Loader2 v-if="isGeneratingPrompt" class="panel-btn-icon panel-btn-icon--spin" />
@@ -415,5 +812,61 @@ function setActive(): void {
   line-height: 1.4;
   word-break: keep-all;
   white-space: normal;
+}
+
+.panel-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.35rem;
+}
+
+.panel-segmented {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0.15rem;
+  background: var(--gray-100, #F3F4F6);
+  border-radius: 999px;
+}
+
+.panel-segmented__btn {
+  border: 0;
+  background: transparent;
+  padding: 0.2rem 0.65rem;
+  font-size: 0.7rem;
+  color: var(--gray-600, #4B5563);
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.panel-segmented__btn.is-active {
+  background: var(--gray-900, #111827);
+  color: var(--gray-50, #F9FAFB);
+  box-shadow: 0 2px 6px rgba(17, 24, 39, 0.18);
+}
+
+.panel-subtext {
+  margin: 0 0 0.5rem;
+  font-size: 0.75rem;
+  color: var(--gray-500, #6B7280);
+}
+
+.panel-translation-block .panel-prompt-actions {
+  margin-top: 0.4rem;
+}
+
+
+.panel-btn--sync--muted {
+  background: var(--gray-100, #F3F4F6);
+  color: var(--gray-500, #6B7280);
+  border-color: var(--gray-200, #E5E7EB);
+}
+
+.panel-btn--sync--muted:hover {
+  background: var(--gray-100, #F3F4F6);
+  color: var(--gray-500, #6B7280);
+  border-color: var(--gray-200, #E5E7EB);
 }
 </style>

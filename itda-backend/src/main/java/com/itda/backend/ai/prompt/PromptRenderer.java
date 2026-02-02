@@ -13,202 +13,294 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @Component
 @RequiredArgsConstructor
 public class PromptRenderer {
 
     private static final String DEFAULT_NONE = "None";
+    private static final int TIMELINE_CUT_INTERVAL_SECONDS = 2;
+    private static final Set<String> NAME_STOPWORDS = Set.of(
+            "In", "The", "A", "An", "And", "Or", "But", "As", "Of", "On", "At",
+            "By", "For", "With", "From", "To", "Into", "Over", "Under", "Through",
+            "Between", "Within", "Without", "Against", "Across", "Near", "Far"
+    );
+    private static final Pattern NAME_SUBJECT_PATTERN = Pattern.compile(
+            "\\b([A-Z][a-z]+(?:-[A-Za-z][a-z]+)?)\\b(?=\\s+(?:\\w+\\s+){0,2}" +
+                    "(?:stands?|walks?|turns?|raises?|looks?|gazes?|smiles?|steps?|pauses?|moves?|runs?|sits?|faces?|approaches?|speaks?|talks?|holds?|waits?|leans?|reaches?|follows?|stops?|enters?|leaves?)\\b)"
+    );
 
     private final KoEnTranslator koEnTranslator;
     private final VideoActionPlanGenerator videoActionPlanGenerator;
 
-    public String render(NodeType nodeType, Scene scene, String promptKo, Map<String, Object> settings) {
+    public String render(NodeType nodeType, Scene scene, String promptEnBase, Map<String, Object> settings) {
         if (nodeType == null) {
             throw new BusinessException(ErrorCode.INVALID_REQUEST);
         }
-        String promptKoTrimmed = Optional.ofNullable(promptKo).map(String::trim).orElse("");
-        if (promptKoTrimmed.isEmpty()) {
+        String promptEnTrimmed = Optional.ofNullable(promptEnBase).map(String::trim).orElse("");
+        if (promptEnTrimmed.isEmpty()) {
             throw new BusinessException(ErrorCode.INVALID_REQUEST, "Prompt is empty");
         }
 
         return switch (nodeType) {
-            case MASTER -> renderMaster(scene, promptKoTrimmed, settings);
+            case MASTER -> renderMaster(scene, promptEnTrimmed, settings);
             case GRID -> {
                 String gridMode = readString(settings, "gridMode");
                 if (gridMode.isEmpty() || gridMode.equalsIgnoreCase("SHOT_VARIATIONS")) {
-                    yield renderGridShotVariations(scene, promptKoTrimmed, settings);
+                    yield renderGridShotVariations(scene, promptEnTrimmed, settings);
                 }
                 if (gridMode.equalsIgnoreCase("STORY_BEATS")) {
-                    yield renderGridStoryBeats(scene, promptKoTrimmed, settings);
+                    yield renderGridStoryBeats(scene, promptEnTrimmed, settings);
                 }
                 throw new BusinessException(ErrorCode.INVALID_REQUEST, "GRID gridMode must be SHOT_VARIATIONS or STORY_BEATS");
             }
-            case SHOT -> renderShot(scene, promptKoTrimmed, settings);
-            case VIDEO -> renderVideo(scene, promptKoTrimmed, settings);
+            case SHOT -> renderShot(scene, promptEnTrimmed, settings);
+            case VIDEO -> renderVideo(scene, promptEnTrimmed, settings);
             case SCENE_HEADER -> throw new BusinessException(ErrorCode.INVALID_REQUEST);
         };
     }
 
-    private String renderMaster(Scene scene, String promptKo, Map<String, Object> settings) {
+    private String renderMaster(Scene scene, String promptEnBase, Map<String, Object> settings) {
         Map<String, String> translated = koEnTranslator.toEnglishOneSentenceMany(Map.of(
                 "sceneTitle", scene == null ? "" : safe(scene.getTitle()),
-                "sceneDescription", scene == null ? "" : safe(scene.getDescription()),
-                "promptKo", promptKo
+                "sceneDescription", scene == null ? "" : safe(scene.getDescription())
         ));
         String sceneTitleEn = translated.getOrDefault("sceneTitle", "");
         String sceneDescriptionEn = translated.getOrDefault("sceneDescription", "");
-        String promptKoEn = translated.getOrDefault("promptKo", "");
 
         String aspectRatio = readString(settings, "aspectRatio");
         String style = PresetFragments.styleFragment(read(settings, "styleKey"));
+        String filmLook = PresetFragments.filmLookFragment(read(settings, "filmLookKey"));
         String time = PresetFragments.timeOfDayFragment(read(settings, "timeOfDayKey"));
         String mood = PresetFragments.moodFragment(read(settings, "moodKey"));
+        String detailEn = koEnTranslator.toEnglishMultiSentenceMany(Map.of(
+                "detailKo", readString(settings, "detailKo")
+        )).getOrDefault("detailKo", "");
 
         List<String> lines = new ArrayList<>();
-        lines.add("Scene: " + safeOrNone(sceneTitleEn) + ". " + safeOrNone(sceneDescriptionEn) + ".");
-        lines.add("Content: " + requireEn(promptKoEn) + ".");
-        lines.add("Wide establishing shot, single still frame.");
-        lines.add("Style: " + safeOrNone(style) + ". Time: " + safeOrNone(time) + ". Mood: " + safeOrNone(mood) + ".");
-        lines.add("Keep character identity, outfits, lighting, and key props consistent.");
+        lines.add("A " + safeOrNone(filmLook) + " " + safeOrNone(style) + " wide establishing shot of " + requireEn(promptEnBase) + ".");
+        lines.add("This is an opening establishing still frame: a single frozen moment with no motion blur, transitions, or time progression.");
+        if (hasNonEmptyIdList(settings, "objectIds") || hasNonEmptyIdList(settings, "referenceObjectIds")) {
+            lines.add("Use the provided reference images to match the appearance of the selected characters/objects.");
+            lines.add("Keep their identity, materials, and distinctive features consistent with the references.");
+        }
+        String sceneTitleSafe = safe(sceneTitleEn);
+        String sceneDescriptionSafe = safe(sceneDescriptionEn);
+        if (!sceneTitleSafe.isBlank() || !sceneDescriptionSafe.isBlank()) {
+            if (sceneTitleSafe.isBlank()) {
+                lines.add("Set in the scene: " + sceneDescriptionSafe + ".");
+            } else if (sceneDescriptionSafe.isBlank()) {
+                lines.add("Set in the scene \"" + sceneTitleSafe + "\".");
+            } else {
+                lines.add("Set in the scene \"" + sceneTitleSafe + "\" — " + sceneDescriptionSafe + ".");
+            }
+        }
+        if (!safeOrNone(detailEn).equals(DEFAULT_NONE)) {
+            lines.add("Additional detail: " + ensurePeriod(detailEn));
+        }
+        lines.add("Lighting: " + safeOrNone(time) + ". Mood: " + safeOrNone(mood) + ".");
+        lines.add("Camera: preferably 24-35mm wide lens, deep focus (establishing shot).");
+        lines.add("Film stock feel: Fuji Eterna-like color science, subtle film grain, gentle halation, soft highlight roll-off.");
+        lines.add("Maintain consistent character identity, outfits, lighting, and key props across all shots.");
         lines.add("No text, no subtitles, no watermark, no logo.");
         lines.add("Aspect ratio: " + safeOrNone(aspectRatio) + ".");
 
         return joinAndValidate(lines);
     }
 
-    private String renderGridShotVariations(Scene scene, String promptKo, Map<String, Object> settings) {
+    private String renderGridShotVariations(Scene scene, String promptEnBase, Map<String, Object> settings) {
         String layout = readString(settings, "layout");
         String aspectRatio = readString(settings, "aspectRatio");
         Map<String, String> translationInput = new LinkedHashMap<>();
-        translationInput.put("promptKo", promptKo);
         translationInput.put("compositionHintKo", readString(settings, "compositionHintKo"));
-        Map<String, String> translated = koEnTranslator.toEnglishOneSentenceMany(translationInput);
-        String promptKoEn = translated.getOrDefault("promptKo", "");
+        translationInput.put("detailKo", readString(settings, "detailKo"));
+        Map<String, String> translated = koEnTranslator.toEnglishMultiSentenceMany(translationInput);
         String compositionHintEn = translated.getOrDefault("compositionHintKo", "");
+        String detailEn = translated.getOrDefault("detailKo", "");
 
         String style = PresetFragments.styleFragment(read(settings, "styleKey"));
+        String filmLook = PresetFragments.filmLookFragment(read(settings, "filmLookKey"));
         String time = PresetFragments.timeOfDayFragment(read(settings, "timeOfDayKey"));
         String mood = PresetFragments.moodFragment(read(settings, "moodKey"));
 
         List<String> shotTypes = readStringList(settings, "shotTypes");
         List<String> lines = new ArrayList<>();
         lines.add("Create ONE storyboard grid image with " + safeOrNone(layout) + " panels, all showing the SAME moment in the SAME scene (not sequential).");
-        lines.add("Base content: " + requireEn(promptKoEn) + ".");
+        lines.add("Base content: " + requireEn(promptEnBase) + ".");
+        if (hasNonEmptyIdList(settings, "objectIds") || hasNonEmptyIdList(settings, "referenceObjectIds")) {
+            lines.add("Use the provided reference images to match the appearance of the selected characters/objects.");
+            lines.add("Keep their identity, materials, and distinctive features consistent with the references.");
+        }
+        if (!safeOrNone(detailEn).equals(DEFAULT_NONE)) {
+            lines.add("Additional detail (applies to all panels): " + ensurePeriod(detailEn));
+        }
         lines.add("Panels must differ only by camera framing:");
         for (int i = 0; i < shotTypes.size(); i++) {
             String shotTypeEn = PresetFragments.shotTypeEn(shotTypes.get(i));
             lines.add("Panel " + (i + 1) + ": " + safeOrNone(shotTypeEn));
         }
         lines.add("All panels share consistent characters, outfits, lighting, and location.");
-        lines.add("Style: " + safeOrNone(style) + ". Time: " + safeOrNone(time) + ". Mood: " + safeOrNone(mood) + ".");
+        lines.add("Rendered in a " + safeOrNone(filmLook) + " " + safeOrNone(style) + " look under " + safeOrNone(time) + " lighting with a " + safeOrNone(mood) + " feel.");
         lines.add("Composition note: " + safeOrNone(compositionHintEn) + ".");
         lines.add("No captions, no text, no watermark, no logo. Aspect ratio: " + safeOrNone(aspectRatio) + ".");
 
         return joinAndValidate(lines);
     }
 
-    private String renderGridStoryBeats(Scene scene, String promptKo, Map<String, Object> settings) {
+    private String renderGridStoryBeats(Scene scene, String promptEnBase, Map<String, Object> settings) {
         String layout = readString(settings, "layout");
         String aspectRatio = readString(settings, "aspectRatio");
         int panelCount = GridLayout.parse(layout).panelCount();
         List<String> beatsKo = ensureBeatCount(readStringList(settings, "beatsKo"), panelCount);
 
         Map<String, String> translationInput = new LinkedHashMap<>();
-        translationInput.put("promptKo", promptKo);
+        translationInput.put("detailKo", readString(settings, "detailKo"));
         translationInput.put("continuityRulesKo", readString(settings, "continuityRulesKo"));
         for (int i = 0; i < beatsKo.size(); i++) {
             translationInput.put("beat" + i, beatsKo.get(i));
         }
-        Map<String, String> translated = koEnTranslator.toEnglishOneSentenceMany(translationInput);
-        String promptKoEn = translated.getOrDefault("promptKo", "");
+        Map<String, String> translated = koEnTranslator.toEnglishMultiSentenceMany(translationInput);
         String continuityRulesEn = translated.getOrDefault("continuityRulesKo", "");
+        String detailEn = translated.getOrDefault("detailKo", "");
 
         String style = PresetFragments.styleFragment(read(settings, "styleKey"));
+        String filmLook = PresetFragments.filmLookFragment(read(settings, "filmLookKey"));
         String time = PresetFragments.timeOfDayFragment(read(settings, "timeOfDayKey"));
         String mood = PresetFragments.moodFragment(read(settings, "moodKey"));
 
         List<String> lines = new ArrayList<>();
-        lines.add("Create ONE storyboard grid image with " + safeOrNone(layout) + " panels that depict a short sequence.");
-        lines.add("Base content: " + requireEn(promptKoEn) + ".");
-        lines.add("Panels 1.." + panelCount + " are sequential beats:");
-        for (int i = 0; i < beatsKo.size(); i++) {
-            String beatEn = translated.getOrDefault("beat" + i, "");
-            lines.add((i + 1) + ") " + safeOrNone(beatEn));
+        lines.add("Create ONE storyboard grid image with " + safeOrNone(layout) + " panels that depict sequential still frames sampled every " + TIMELINE_CUT_INTERVAL_SECONDS + " seconds.");
+        lines.add("Base content: " + requireEn(promptEnBase) + ".");
+        if (hasNonEmptyIdList(settings, "objectIds") || hasNonEmptyIdList(settings, "referenceObjectIds")) {
+            lines.add("Use the provided reference images to match the appearance of the selected characters/objects.");
+            lines.add("Keep their identity, materials, and distinctive features consistent with the references.");
         }
+        if (!safeOrNone(detailEn).equals(DEFAULT_NONE)) {
+            lines.add("Additional detail (applies to all panels): " + ensurePeriod(detailEn));
+        }
+        lines.add("Panels 1.." + panelCount + " are timeline cuts (single still frames):");
+        for (int i = 0; i < beatsKo.size(); i++) {
+            String beatEn = translated.getOrDefault("beat" + i, "").trim();
+            if (beatEn.isEmpty()) {
+                continue;
+            }
+            lines.add((i + 1) + ") (" + formatTimelineRangeLabel(i) + ") " + beatEn);
+        }
+        lines.add("Each panel is a single frozen moment with no transitions or motion blur.");
         lines.add("Keep continuity across panels with the same characters, outfits, lighting, and location.");
-        lines.add("Style: " + safeOrNone(style) + ". Time: " + safeOrNone(time) + ". Mood: " + safeOrNone(mood) + ".");
-        lines.add("Continuity rules: " + safeOrNone(continuityRulesEn) + ".");
+        lines.add("Rendered in a " + safeOrNone(filmLook) + " " + safeOrNone(style) + " look under " + safeOrNone(time) + " lighting with a " + safeOrNone(mood) + " feel.");
+        if (!continuityRulesEn.isBlank()) {
+            lines.add("Continuity rules: " + ensurePeriod(continuityRulesEn));
+        }
         lines.add("No captions, no text, no watermark, no logo. Aspect ratio: " + safeOrNone(aspectRatio) + ".");
 
         return joinAndValidate(lines);
     }
 
-    private String renderShot(Scene scene, String promptKo, Map<String, Object> settings) {
+    private String renderShot(Scene scene, String promptEnBase, Map<String, Object> settings) {
         String aspectRatio = readString(settings, "aspectRatio");
         Map<String, String> translationInput = new LinkedHashMap<>();
-        translationInput.put("promptKo", promptKo);
         translationInput.put("detailKo", readString(settings, "detailKo"));
-        Map<String, String> translated = koEnTranslator.toEnglishOneSentenceMany(translationInput);
-        String promptKoEn = translated.getOrDefault("promptKo", "");
+        translationInput.put("gridCellCutKo", readString(settings, "gridCellCutKo"));
+        Map<String, String> translated = koEnTranslator.toEnglishMultiSentenceMany(translationInput);
         String detailEn = translated.getOrDefault("detailKo", "");
+        String gridCellCutEn = translated.getOrDefault("gridCellCutKo", "");
         Integer gridCellIndex = readInt(settings, "gridCellIndex");
 
         String shotTypeEn = PresetFragments.shotTypeEn(read(settings, "shotType"));
         String expressionEn = PresetFragments.expressionEn(read(settings, "expressionKey"));
 
+        String filmLook = PresetFragments.filmLookFragment(read(settings, "filmLookKey"));
+        String style = PresetFragments.styleFragment(read(settings, "styleKey"));
+        String time = PresetFragments.timeOfDayFragment(read(settings, "timeOfDayKey"));
+        String mood = PresetFragments.moodFragment(read(settings, "moodKey"));
+
         List<String> lines = new ArrayList<>();
         int safeGridCellIndex = gridCellIndex == null ? 0 : Math.max(0, gridCellIndex);
         int cellNumberHuman = safeGridCellIndex + 1;
-        lines.add("High-quality single cinematic frame based on storyboard cell #" + cellNumberHuman + ".");
-        lines.add("Content: " + requireEn(promptKoEn) + ".");
-        lines.add("Camera framing: " + safeOrNone(shotTypeEn) + ". Facial expression: " + safeOrNone(expressionEn) + ".");
-        lines.add("Extra detail: " + safeOrNone(detailEn) + ".");
-        lines.add("Match the master look and character identity. No text, no watermark, no logo.");
-        lines.add("Aspect ratio: " + safeOrNone(aspectRatio) + ".");
+        lines.add("A " + safeOrNone(filmLook) + " " + safeOrNone(style) + " high-quality single cinematic frame based on storyboard cell #" + cellNumberHuman + ":");
+        lines.add("Use the provided grid image as the primary reference. Extract the same moment from storyboard cell #" + cellNumberHuman + " with no reinterpretation or new elements.");
+        lines.add("Base content (context only): " + requireEn(promptEnBase) + ".");
+        if (hasNonEmptyIdList(settings, "objectIds") || hasNonEmptyIdList(settings, "referenceObjectIds")) {
+            lines.add("Use the provided reference images to match the appearance of the selected characters/objects.");
+            lines.add("Keep their identity, materials, and distinctive features consistent with the references.");
+        }
+        if (!safeOrNone(gridCellCutEn).equals(DEFAULT_NONE)) {
+            lines.add("Grid cell #" + cellNumberHuman + " description (for reference): " + ensurePeriod(gridCellCutEn));
+        }
+        lines.add("Captured as a " + safeOrNone(shotTypeEn) + ", with the subject showing a " + safeOrNone(expressionEn) + " expression. Keep framing and composition aligned with the grid cell.");
+        lines.add("Camera: match the grid cell perspective; lens and depth of field should reinforce the existing framing.");
+        lines.add("Lighting: " + safeOrNone(time) + ". Mood: " + safeOrNone(mood) + ".");
+        if (!safeOrNone(detailEn).equals(DEFAULT_NONE)) {
+            lines.add("Additional detail (only if consistent with the grid cell): " + ensurePeriod(detailEn));
+        }
+        lines.add("This frame matches the established master look with consistent character identity and visual continuity.");
+        lines.add("No text, no watermark, no logo. Aspect ratio: " + safeOrNone(aspectRatio) + ".");
 
         return joinAndValidate(lines);
     }
 
-    private String renderVideo(Scene scene, String promptKo, Map<String, Object> settings) {
+    private String renderVideo(Scene scene, String promptEnBase, Map<String, Object> settings) {
         Integer duration = readInt(settings, "duration");
         String cameraMotionEn = resolveCameraMotionEn(settings);
         Map<String, String> translationInput = new LinkedHashMap<>();
-        translationInput.put("promptKo", promptKo);
         String motionDescriptionRaw = readString(settings, "motionDescriptionKo");
         if (motionDescriptionRaw.isBlank()) {
             motionDescriptionRaw = readString(settings, "motionDescription");
         }
         translationInput.put("motionDescription", motionDescriptionRaw);
         Map<String, String> translated = koEnTranslator.toEnglishOneSentenceMany(translationInput);
-        String promptKoEn = translated.getOrDefault("promptKo", "");
         String motionDescriptionEn = translated.getOrDefault("motionDescription", "");
 
         String style = PresetFragments.styleFragment(read(settings, "styleKey"));
+        String filmLook = PresetFragments.filmLookFragment(read(settings, "filmLookKey"));
         String time = PresetFragments.timeOfDayFragment(read(settings, "timeOfDayKey"));
         String mood = PresetFragments.moodFragment(read(settings, "moodKey"));
 
-        String actionPlanEn = videoActionPlanGenerator.generate(duration == null ? 4 : duration, promptKoEn);
+        int resolvedDuration = duration == null ? 4 : duration;
+        boolean hasEndFrame = read(settings, "endShotNodeId") != null;
+        String actionPlanEn = resolveVideoActionPlan(resolvedDuration, promptEnBase, motionDescriptionEn, hasEndFrame);
 
         List<String> lines = new ArrayList<>();
-        lines.add("Generate a " + (duration == null ? 4 : duration) + "-second single continuous shot video from the provided start image. No cuts, no time jumps.");
-        lines.add("Action plan: " + requireEn(actionPlanEn));
+        if (hasEndFrame) {
+            lines.add("Generate a " + resolvedDuration + "-second video that transitions from the provided start image to the provided end image.");
+            lines.add("A smooth cinematic transition is allowed (soft cross-dissolve or brief motion-blur blend); avoid hard cuts.");
+            lines.add("The video must start exactly at the start image and end exactly at the provided end image (pose, framing, and composition must match).");
+            lines.add("Interpolate smoothly between the two keyframes with continuous motion (ease-in/ease-out), no popping or sudden snaps, and no drifting from the target framing.");
+            lines.add("The camera motion should only be what’s necessary to transition from the start framing to the end framing.");
+            lines.add("Ease out into the end frame and hold fully still for the final ~0.5s; all subjects and objects are motionless, and the camera is locked.");
+        } else {
+            lines.add("Generate a " + resolvedDuration + "-second single continuous shot video from the provided start image, with no cuts or time jumps.");
+        }
+        lines.add(requireEn(actionPlanEn));
 
-        String cameraLine = "Camera motion: " + safeOrNone(cameraMotionEn) + ".";
-        if (!motionDescriptionEn.isBlank()) {
-            cameraLine += " " + ensurePeriod(motionDescriptionEn);
+        String cameraLine;
+        if (hasEndFrame) {
+            cameraLine = "Camera locked-off; no zoom, pan, tilt, dolly, or reframing.";
+        } else {
+            cameraLine = "The camera uses " + safeOrNone(cameraMotionEn) + ".";
+        }
+        if (!motionDescriptionEn.isBlank() && !hasEndFrame) {
+            String sanitizedMotion = neutralizeProperNames(motionDescriptionEn);
+            cameraLine += " " + ensurePeriod(sanitizedMotion);
         }
         lines.add(cameraLine);
-        lines.add("Keep character identity, outfits, lighting, and location consistent. No text, no watermark, no logo.");
-        lines.add("Style: " + safeOrNone(style) + ". Time: " + safeOrNone(time) + ". Mood: " + safeOrNone(mood) + ".");
-        lines.add("Hold the final pose for the last half-second.");
-
-        if (read(settings, "endShotNodeId") != null) {
-            lines.add("End should gently approach the end shot composition (no hard cut).");
+        if (hasEndFrame) {
+            lines.add("Keep lighting, color, and background consistent with the provided frames.");
+        } else {
+            lines.add("The scene has a " + safeOrNone(filmLook) + " " + safeOrNone(style) + " look under " + safeOrNone(time) + " lighting with a " + safeOrNone(mood) + " feel.");
+        }
+        lines.add("Maintain character identity, outfits, and location consistency throughout. No new elements. No text, no watermark, no logo.");
+        if (!hasEndFrame) {
+            lines.add("Hold the final pose steadily for the last half-second.");
         }
 
         return joinAndValidate(lines);
     }
+
 
     private String resolveCameraMotionEn(Map<String, Object> settings) {
         String fromKey = PresetFragments.cameraMotionEn(read(settings, "cameraMotionKey"));
@@ -217,6 +309,52 @@ public class PromptRenderer {
         }
         String legacy = readString(settings, "cameraMotion");
         return legacy;
+    }
+
+    private String resolveVideoActionPlan(
+            int durationSeconds,
+            String promptEnBase,
+            String motionDescriptionEn,
+            boolean hasEndFrame
+    ) {
+        String base = neutralizeProperNames(safe(motionDescriptionEn));
+        if (base.isBlank()) {
+            base = neutralizeProperNames(safe(promptEnBase));
+        }
+        return videoActionPlanGenerator.generate(durationSeconds, base, hasEndFrame);
+    }
+
+    private String neutralizeProperNames(String text) {
+        if (text == null || text.isBlank()) {
+            return text;
+        }
+        Matcher matcher = NAME_SUBJECT_PATTERN.matcher(text);
+        Map<String, String> replacements = new LinkedHashMap<>();
+        int index = 0;
+        while (matcher.find()) {
+            String name = matcher.group(1);
+            if (NAME_STOPWORDS.contains(name)) {
+                continue;
+            }
+            if (!replacements.containsKey(name)) {
+                if (index == 0) {
+                    replacements.put(name, "the person");
+                } else if (index == 1) {
+                    replacements.put(name, "the other person");
+                } else {
+                    replacements.put(name, "the person");
+                }
+                index++;
+            }
+        }
+        if (replacements.isEmpty()) {
+            return text;
+        }
+        String result = text;
+        for (Map.Entry<String, String> entry : replacements.entrySet()) {
+            result = result.replaceAll("\\b" + Pattern.quote(entry.getKey()) + "\\b", entry.getValue());
+        }
+        return result;
     }
 
     private String joinAndValidate(List<String> lines) {
@@ -238,6 +376,28 @@ public class PromptRenderer {
     private String safeOrNone(String text) {
         String trimmed = Optional.ofNullable(text).map(String::trim).orElse("");
         return trimmed.isEmpty() ? DEFAULT_NONE : trimmed;
+    }
+
+    private boolean hasNonEmptyIdList(Map<String, Object> settings, String key) {
+        Object value = read(settings, key);
+        if (!(value instanceof List<?> list)) {
+            return false;
+        }
+        for (Object item : list) {
+            if (item instanceof Number number && number.longValue() > 0) {
+                return true;
+            }
+            if (item instanceof String text) {
+                try {
+                    if (Long.parseLong(text.trim()) > 0) {
+                        return true;
+                    }
+                } catch (NumberFormatException ignored) {
+                    // ignore non-numeric entries
+                }
+            }
+        }
+        return false;
     }
 
     private Object read(Map<String, Object> settings, String key) {
@@ -319,5 +479,11 @@ public class PromptRenderer {
             return new ArrayList<>(corrected.subList(0, panelCount));
         }
         return corrected;
+    }
+
+    private String formatTimelineRangeLabel(int index) {
+        int start = index * TIMELINE_CUT_INTERVAL_SECONDS;
+        int end = start + TIMELINE_CUT_INTERVAL_SECONDS;
+        return start + "-" + end + "s";
     }
 }

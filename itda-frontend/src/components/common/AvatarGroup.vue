@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 interface AvatarItem {
   src?: string
   alt?: string
@@ -18,8 +19,8 @@ const props = withDefaults(defineProps<Props>(), {
   size: 'sm',
 })
 
-const visibleAvatars = props.avatars.slice(0, props.max)
-const remaining = props.avatars.length - props.max
+const visibleAvatars = computed(() => props.avatars.slice(0, props.max))
+const remaining = computed(() => props.avatars.length - props.max)
 </script>
 
 <template>

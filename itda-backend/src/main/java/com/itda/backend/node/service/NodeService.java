@@ -3,20 +3,25 @@ package com.itda.backend.node.service;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.itda.backend.ai.prompt.PromptRenderer;
+import com.itda.backend.ai.service.PromptTranslationService;
 import com.itda.backend.global.exception.BusinessException;
 import com.itda.backend.global.response.ErrorCode;
 import com.itda.backend.job.domain.Job;
 import com.itda.backend.job.domain.JobType;
+import com.itda.backend.job.event.NodePositionPayload;
+import com.itda.backend.job.event.ProjectEventWebSocketPublisher;
 import com.itda.backend.job.service.JobService;
 import com.itda.backend.media.MediaUrlResolver;
 import com.itda.backend.node.controller.dto.request.CreateNodeRequest;
 import com.itda.backend.node.controller.dto.request.GenerateNodeRequest;
 import com.itda.backend.node.controller.dto.request.NodePosition;
+import com.itda.backend.node.controller.dto.request.PromptPreviewRequest;
 import com.itda.backend.node.controller.dto.request.UpdateNodeRequest;
 import com.itda.backend.node.controller.dto.response.NodeCreateResponse;
 import com.itda.backend.node.controller.dto.response.NodeDetailResponse;
 import com.itda.backend.node.controller.dto.response.NodeSummaryResponse;
 import com.itda.backend.node.controller.dto.response.NodeTreeResponse;
+import com.itda.backend.node.controller.dto.response.PromptPreviewResponse;
 import com.itda.backend.node.domain.Node;
 import com.itda.backend.node.domain.NodeStatus;
 import com.itda.backend.node.domain.NodeType;
@@ -57,8 +62,10 @@ public class NodeService {
     private final ObjectMapper objectMapper;
     private final com.itda.backend.object.repository.ObjectMapper objectSheetMapper;
     private final JobService jobService;
+    private final ProjectEventWebSocketPublisher projectEventPublisher;
     private final MediaUrlResolver mediaUrlResolver;
     private final PromptRenderer promptRenderer;
+    private final PromptTranslationService promptTranslationService;
     private final GenerationSettingsResolver generationSettingsResolver;
 
     private record VideoShotIds(Long startShotNodeId, Long endShotNodeId) {}
@@ -68,7 +75,7 @@ public class NodeService {
      */
     @Transactional
     public NodeCreateResponse createNode(Long userId, Long sceneId, CreateNodeRequest request) {
-        getSceneAndEnsureMemberForUpdate(sceneId, userId);
+        Scene scene = getSceneAndEnsureMemberForUpdate(sceneId, userId);
         NodeType nodeType = requireNodeType(request.nodeType());
 
         VideoShotIds shotIds = validateCreateRequestAndExtractShots(
@@ -82,6 +89,7 @@ public class NodeService {
 
         nodeMapper.insertNode(node);
         log.debug("Created node: id={}, type={}, sceneId={}", node.getId(), node.getNodeType(), sceneId);
+        projectEventPublisher.nodeChanged(scene.getProjectId(), sceneId, node.getId(), "CREATED", userId);
 
         return new NodeCreateResponse(node.getId());
     }
@@ -140,7 +148,7 @@ public class NodeService {
     @Transactional
     public void updateNode(Long userId, Long nodeId, UpdateNodeRequest request) {
         Node node = getNodeOrThrow(nodeId);
-        getSceneAndEnsureMember(node.getSceneId(), userId);
+        Scene scene = getSceneAndEnsureMember(node.getSceneId(), userId);
         NodeType nodeType = node.getNodeType();
 
         // SCENE_HEADER 수정 금지
@@ -151,6 +159,8 @@ public class NodeService {
 
         nodeMapper.updateNode(updatedNode);
         log.debug("Updated node: id={}", nodeId);
+        logFinalPromptEnIfPresent(scene, node, request);
+        projectEventPublisher.nodeChanged(scene.getProjectId(), scene.getId(), nodeId, "UPDATED", userId);
     }
 
     /**
@@ -159,13 +169,14 @@ public class NodeService {
     @Transactional
     public void deleteNode(Long userId, Long nodeId) {
         Node node = getNodeOrThrow(nodeId);
-        getSceneAndEnsureMember(node.getSceneId(), userId);
+        Scene scene = getSceneAndEnsureMember(node.getSceneId(), userId);
 
         // SCENE_HEADER 삭제 금지
         assertNotSceneHeader(node.getNodeType());
 
         nodeMapper.deleteById(nodeId);
         log.debug("Deleted node: id={}", nodeId);
+        projectEventPublisher.nodeChanged(scene.getProjectId(), scene.getId(), nodeId, "DELETED", userId);
     }
 
     /**
@@ -173,7 +184,7 @@ public class NodeService {
      */
     @Transactional
     public void updatePositions(Long userId, Long sceneId, List<NodePosition> positions) {
-        getSceneAndEnsureMember(sceneId, userId);
+        Scene scene = getSceneAndEnsureMember(sceneId, userId);
 
         List<NodePosition> validPositions = filterSceneHeaderPositions(positions);
         if (validPositions.isEmpty()) {
@@ -182,6 +193,10 @@ public class NodeService {
 
         nodeMapper.updatePositions(sceneId, validPositions);
         log.debug("Updated {} node positions for sceneId={}", validPositions.size(), sceneId);
+        List<NodePositionPayload> payload = validPositions.stream()
+                .map((p) -> new NodePositionPayload(p.nodeId(), p.x(), p.y()))
+                .toList();
+        projectEventPublisher.nodeChanged(scene.getProjectId(), scene.getId(), null, "POSITION", userId, payload);
     }
 
     /**
@@ -201,6 +216,7 @@ public class NodeService {
         }
 
         log.debug("Set active master: nodeId={}, sceneId={}", nodeId, scene.getId());
+        projectEventPublisher.nodeChanged(scene.getProjectId(), scene.getId(), nodeId, "ACTIVE_MASTER", userId);
     }
 
     /**
@@ -226,6 +242,7 @@ public class NodeService {
         syncSceneTimelineItem(scene, node, shotNodeId, userId);
 
         log.debug("Confirmed video: nodeId={}, shotNodeId={}, sceneId={}", nodeId, shotNodeId, scene.getId());
+        projectEventPublisher.nodeChanged(scene.getProjectId(), scene.getId(), nodeId, "CONFIRMED", userId);
     }
 
     /**
@@ -234,13 +251,14 @@ public class NodeService {
     @Transactional
     public void unconfirmVideo(Long userId, Long nodeId) {
         Node node = getNodeOrThrow(nodeId);
-        getSceneAndEnsureMemberForUpdate(node.getSceneId(), userId);
+        Scene scene = getSceneAndEnsureMemberForUpdate(node.getSceneId(), userId);
 
         assertVideoNode(node.getNodeType());
         nodeMapper.clearConfirmedVideo(nodeId);
         timelineMapper.deleteSceneTimelineItemByVideoNodeId(nodeId);
 
         log.debug("Unconfirmed video: nodeId={}", nodeId);
+        projectEventPublisher.nodeChanged(scene.getProjectId(), scene.getId(), nodeId, "UNCONFIRMED", userId);
     }
 
     /**
@@ -255,7 +273,8 @@ public class NodeService {
         Scene scene = getSceneAndEnsureMemberForUpdate(node.getSceneId(), userId);
         assertNotSceneHeader(node.getNodeType());
 
-        String promptKo = requirePromptKo(request.prompt());
+        String promptEnBase = requirePromptEnBase(request.prompt());
+        promptEnBase = ensureEnglishPrompt(promptEnBase);
         Map<String, Object> existingSettings = deserializeSettings(node.getDataJson());
         Map<String, Object> activeMasterSettings = resolveActiveMasterSettings(scene, node);
         Map<String, Object> effectiveSettings = generationSettingsResolver.resolve(
@@ -265,20 +284,32 @@ public class NodeService {
                 activeMasterSettings
         );
 
-        String promptEn = promptRenderer.render(node.getNodeType(), scene, promptKo, effectiveSettings);
+        String overrideFromRequest = normalizePromptOverride(request.promptEnFinalOverride());
+        String overrideFromSettings = overrideFromRequest == null
+                ? readString(effectiveSettings, "promptEnFinalOverride")
+                : overrideFromRequest;
+        String promptEnFinal = (overrideFromSettings != null && !overrideFromSettings.isBlank())
+                ? overrideFromSettings
+                : promptRenderer.render(node.getNodeType(), scene, promptEnBase, effectiveSettings);
         Map<String, Object> cachedSettings = new LinkedHashMap<>(effectiveSettings);
-        cachedSettings.put("promptEn", promptEn);
+        if (overrideFromRequest != null) {
+            if (overrideFromRequest.isBlank()) {
+                cachedSettings.remove("promptEnFinalOverride");
+            } else {
+                cachedSettings.put("promptEnFinalOverride", overrideFromRequest);
+            }
+        }
         if (node.getNodeType() == NodeType.VIDEO) {
             cachedSettings.putIfAbsent("promptEnRewritten", "");
         }
 
-        UpdateNodeRequest updateRequest = new UpdateNodeRequest(promptKo, cachedSettings);
+        UpdateNodeRequest updateRequest = new UpdateNodeRequest(promptEnBase, cachedSettings);
         VideoShotIds shotIds = resolveUpdatedVideoShotIds(node, updateRequest);
 
-        // Always persist promptKo + settings(promptEn cache) without touching status/contentUrl.
+        // Always persist promptEnBase + settings(promptEn cache) without touching status/contentUrl.
         nodeMapper.updateGenerationInputs(Node.builder()
                 .id(nodeId)
-                .prompt(promptKo)
+                .prompt(promptEnBase)
                 .dataJson(serializeSettings(cachedSettings))
                 .startShotNodeId(shotIds.startShotNodeId())
                 .endShotNodeId(shotIds.endShotNodeId())
@@ -288,7 +319,7 @@ public class NodeService {
 
         JobType jobType = resolveJobType(node.getNodeType());
         List<Long> referenceObjectIds = normalizeReferenceObjectIds(scene.getProjectId(), request.referenceObjectIds());
-        String requestJson = buildGenerationRequestJson(promptEn, cachedSettings, referenceObjectIds);
+        String requestJson = buildGenerationRequestJson(promptEnFinal, cachedSettings, referenceObjectIds);
         String idempotencyKey = request.force()
                 ? UUID.randomUUID().toString()
                 : request.idempotencyKey();
@@ -312,7 +343,51 @@ public class NodeService {
             Node updatedNode = buildGenerationNode(nodeId, node, updateRequest, shotIds, targetStatus);
             nodeMapper.updateNode(updatedNode);
         }
+        projectEventPublisher.nodeChanged(scene.getProjectId(), scene.getId(), nodeId, "GENERATE", userId);
         return job;
+    }
+
+    /**
+     * 노드 프롬프트 미리보기 (최종 English)
+     */
+    @Transactional(readOnly = true)
+    public PromptPreviewResponse previewPrompt(Long userId, Long nodeId, PromptPreviewRequest request) {
+        if (request == null) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST);
+        }
+        Node node = getNodeOrThrow(nodeId);
+        Scene scene = getSceneAndEnsureMember(node.getSceneId(), userId);
+        assertNotSceneHeader(node.getNodeType());
+
+        String promptEnBase = requirePromptEnBase(request.prompt());
+        promptEnBase = ensureEnglishPrompt(promptEnBase);
+        Map<String, Object> existingSettings = deserializeSettings(node.getDataJson());
+        Map<String, Object> activeMasterSettings = resolveActiveMasterSettings(scene, node);
+        Map<String, Object> effectiveSettings = generationSettingsResolver.resolve(
+                node.getNodeType(),
+                existingSettings,
+                request.settings(),
+                activeMasterSettings
+        );
+
+        String overrideFromRequest = normalizePromptOverride(request.promptEnFinalOverride());
+        String overrideFromSettings = overrideFromRequest == null
+                ? readString(effectiveSettings, "promptEnFinalOverride")
+                : overrideFromRequest;
+        boolean hasOverride = overrideFromSettings != null && !overrideFromSettings.isBlank();
+        String promptEnFinal = hasOverride
+                ? overrideFromSettings
+                : promptRenderer.render(node.getNodeType(), scene, promptEnBase, effectiveSettings);
+
+        String source = hasOverride ? "OVERRIDE" : "RENDERED";
+        log.info(
+                "Prompt preview (final English): nodeId={}, nodeType={}, source={}, promptEnFinal={}",
+                node.getId(),
+                node.getNodeType(),
+                source,
+                promptEnFinal
+        );
+        return new PromptPreviewResponse(promptEnFinal, source);
     }
 
     // ========== Private Helper Methods ==========
@@ -640,10 +715,10 @@ public class NodeService {
         return nodeType == NodeType.VIDEO ? JobType.VIDEO_GENERATION : JobType.IMAGE_GENERATION;
     }
 
-    private String buildGenerationRequestJson(String promptEn, Map<String, Object> settings, List<Long> referenceObjectIds) {
+    private String buildGenerationRequestJson(String promptEnFinal, Map<String, Object> settings, List<Long> referenceObjectIds) {
         try {
             Map<String, Object> payload = new java.util.LinkedHashMap<>();
-            payload.put("prompt", promptEn);
+            payload.put("prompt", promptEnFinal);
             payload.put("settings", settings);
             if (referenceObjectIds != null && !referenceObjectIds.isEmpty()) {
                 payload.put("referenceObjectIds", referenceObjectIds);
@@ -747,11 +822,66 @@ public class NodeService {
         return normalized;
     }
 
-    private String requirePromptKo(String prompt) {
+    private String requirePromptEnBase(String prompt) {
         if (prompt == null || prompt.isBlank()) {
             throw new BusinessException(ErrorCode.INVALID_REQUEST, "Prompt is empty");
         }
         return prompt.trim();
+    }
+
+    private String ensureEnglishPrompt(String promptEnBase) {
+        if (promptEnBase == null) {
+            return "";
+        }
+        String trimmed = promptEnBase.trim();
+        if (trimmed.isEmpty()) {
+            return trimmed;
+        }
+        if (!containsHangul(trimmed)) {
+            return trimmed;
+        }
+        try {
+            log.info("PromptEnBase contains Hangul; rewriting KO -> EN for rendering.");
+            String rewritten = promptTranslationService.rewriteKoToEn(trimmed);
+            if (rewritten != null && !rewritten.isBlank()) {
+                return rewritten.trim();
+            }
+        } catch (Exception e) {
+            log.warn("Prompt rewrite failed: reason={}", e.getMessage());
+        }
+        return trimmed;
+    }
+
+    private boolean containsHangul(String text) {
+        if (text == null || text.isEmpty()) {
+            return false;
+        }
+        for (int i = 0; i < text.length(); i++) {
+            char ch = text.charAt(i);
+            if (ch >= '가' && ch <= '힣') {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private String normalizePromptOverride(String override) {
+        if (override == null) {
+            return null;
+        }
+        return override.trim();
+    }
+
+    private String readString(Map<String, Object> settings, String key) {
+        if (settings == null || key == null) {
+            return "";
+        }
+        Object value = settings.get(key);
+        if (value == null) {
+            return "";
+        }
+        String text = value.toString().trim();
+        return text.isEmpty() ? "" : text;
     }
 
     private List<Long> normalizeReferenceObjectIds(Long projectId, List<Long> referenceObjectIds) {
@@ -772,6 +902,43 @@ public class NodeService {
             throw new BusinessException(ErrorCode.INVALID_REQUEST, "Invalid referenceObjectIds");
         }
         return deduped;
+    }
+
+    private void logFinalPromptEnIfPresent(Scene scene, Node node, UpdateNodeRequest request) {
+        if (request == null) {
+            return;
+        }
+        String promptEnBase = request.prompt();
+        if (promptEnBase == null || promptEnBase.isBlank()) {
+            return;
+        }
+        promptEnBase = ensureEnglishPrompt(promptEnBase);
+
+        try {
+            Map<String, Object> existingSettings = deserializeSettings(node.getDataJson());
+            Map<String, Object> activeMasterSettings = resolveActiveMasterSettings(scene, node);
+            Map<String, Object> effectiveSettings = generationSettingsResolver.resolve(
+                    node.getNodeType(),
+                    existingSettings,
+                    request.settings(),
+                    activeMasterSettings
+            );
+            String promptEn = promptRenderer.render(node.getNodeType(), scene, promptEnBase, effectiveSettings);
+            log.info(
+                    "Prompt preview (final English): nodeId={}, nodeType={}, promptEnBase={}, promptEnFinal={}",
+                    node.getId(),
+                    node.getNodeType(),
+                    promptEnBase,
+                    promptEn
+            );
+        } catch (Exception e) {
+            log.warn(
+                    "Prompt preview failed: nodeId={}, nodeType={}, reason={}",
+                    node.getId(),
+                    node.getNodeType(),
+                    e.getMessage()
+            );
+        }
     }
 
     private Map<String, Object> resolveActiveMasterSettings(Scene scene, Node node) {

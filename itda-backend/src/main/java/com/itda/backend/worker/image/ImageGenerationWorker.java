@@ -15,12 +15,14 @@ import com.itda.backend.worker.NodeContent;
 import com.itda.backend.worker.NodeContentLoader;
 import com.itda.backend.worker.ParsedJobRequest;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
 
 @Component
 @RequiredArgsConstructor
+@Slf4j
 public class ImageGenerationWorker {
 
     private final GeminiImageClient geminiImageClient;
@@ -34,6 +36,13 @@ public class ImageGenerationWorker {
     public ExecutionResult execute(Job job) {
         requireJobIdentifiers(job);
         ParsedJobRequest request = jobRequestParser.parse(job.getRequestJson());
+        log.info(
+                "Image generation prompt resolved: jobId={}, nodeId={}, projectId={}, prompt={}"
+                , job.getId()
+                , job.getNodeId()
+                , job.getProjectId()
+                , request.prompt()
+        );
         GeminiImageResult result = generateImage(job, request);
         ImageStorageResult storedImage = imageStorage.save(
                 job.getProjectId(),
@@ -53,22 +62,23 @@ public class ImageGenerationWorker {
     }
 
     private GeminiImageResult generateImage(Job job, ParsedJobRequest request) {
+        Node node = loadNode(job);
+        List<ReferenceImage> referenceImages = new java.util.ArrayList<>();
         List<Long> referenceObjectIds = request.referenceObjectIds();
         if (referenceObjectIds != null && !referenceObjectIds.isEmpty()) {
-            List<ReferenceImage> referenceImages = referenceImageLoader.load(job.getProjectId(), referenceObjectIds);
+            referenceImages.addAll(referenceImageLoader.load(job.getProjectId(), referenceObjectIds));
+        }
+
+        NodeContent referenceImage = resolveReferenceImage(node);
+        if (referenceImage != null && referenceImage.bytes() != null && referenceImage.bytes().length > 0) {
+            // Place parent frame last to preserve its aspect ratio in multi-image mode.
+            referenceImages.add(new ReferenceImage(referenceImage.bytes(), referenceImage.contentType()));
+        }
+
+        if (!referenceImages.isEmpty()) {
             return geminiImageClient.generateImage(request.prompt(), request.settings(), referenceImages);
         }
-        Node node = loadNode(job);
-        NodeContent referenceImage = resolveReferenceImage(node);
-        if (referenceImage == null) {
-            return geminiImageClient.generateImage(request.prompt(), request.settings());
-        }
-        return geminiImageClient.generateImage(
-                request.prompt(),
-                request.settings(),
-                referenceImage.bytes(),
-                referenceImage.contentType()
-        );
+        return geminiImageClient.generateImage(request.prompt(), request.settings());
     }
 
     private Node loadNode(Job job) {

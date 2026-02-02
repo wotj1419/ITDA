@@ -31,10 +31,10 @@ ai:
     aspect-ratio: ${GEMINI_ASPECT_RATIO:}
     response-mime-type: ${GEMINI_RESPONSE_MIME_TYPE:}
     response-modalities: ${GEMINI_RESPONSE_MODALITIES:IMAGE}
-    timeout-ms: ${GEMINI_TIMEOUT_MS:${VERTEX_IMAGE_TIMEOUT_MS:60000}}
+    timeout-ms: ${GEMINI_TIMEOUT_MS:${VERTEX_IMAGE_TIMEOUT_MS:180000}}
   scenario:
     model-text: ${VERTEX_TEXT_MODEL:gemini-2.5-flash}
-    timeout-ms: ${VERTEX_TIMEOUT_MS:60000}
+    timeout-ms: ${VERTEX_TIMEOUT_MS:180000}
   veo:
     stub: ${AI_VEO_STUB:false}
     model: ${VEO_MODEL:veo-3.1-generate-001}

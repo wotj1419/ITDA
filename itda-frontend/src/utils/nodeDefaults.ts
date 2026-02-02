@@ -1,6 +1,7 @@
 import type { AspectRatio, CameraMotion, GridLayout } from '../types/ui/sceneNodes';
 
-export const DEFAULT_MASTER_STYLE = '실사';
+export const DEFAULT_MASTER_STYLE = '시네마틱';
+export const DEFAULT_MASTER_FILM_LOOK = '시네마틱 모던';
 export const DEFAULT_MASTER_TIME_OF_DAY = '낮';
 export const DEFAULT_MASTER_MOOD = '중립';
 

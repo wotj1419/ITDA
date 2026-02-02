@@ -2,13 +2,16 @@
 import { computed } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { useUIStore } from '../stores/ui'
+import { useCollabStore } from '../stores/collab'
 import { useSidebarShortcut } from '../composables/useSidebarShortcut'
+import Button from '../components/common/Button.vue'
 import PresencePanel from '../components/collab/PresencePanel.vue'
 import {
   ArrowLeft,
   Layers,
   Film,
   Clock,
+  Phone,
 } from 'lucide-vue-next'
 
 interface Props {
@@ -26,6 +29,7 @@ const props = withDefaults(defineProps<Props>(), {
 const route = useRoute()
 const router = useRouter()
 const uiStore = useUIStore()
+const collabStore = useCollabStore()
 
 // Keyboard shortcut (Ctrl+B)
 useSidebarShortcut()
@@ -42,6 +46,13 @@ function formatDuration(seconds: number): string {
   const m = Math.floor(seconds / 60)
   const s = Math.round(seconds % 60)
   return `${m}:${s.toString().padStart(2, '0')}`
+}
+
+const handleStartCall = () => {
+  const pid = Number(projectId.value)
+  if (Number.isFinite(pid)) {
+    collabStore.startCall(pid)
+  }
 }
 </script>
 
@@ -96,6 +107,13 @@ function formatDuration(seconds: number): string {
       <div class="sidebar-section border-top">
         <div class="sidebar-text">
           <PresencePanel />
+        </div>
+        <div class="call-cta">
+          <div class="call-hint">빠른 통화</div>
+          <Button variant="secondary" class="start-call-btn" @click="handleStartCall">
+            <Phone class="icon-sm" />
+            <span class="nav-label call-label">통화 시작</span>
+          </Button>
         </div>
       </div>
     </aside>
@@ -497,5 +515,100 @@ function formatDuration(seconds: number): string {
   flex: 1;
   padding: 2rem;
   overflow-y: auto;
+}
+
+.start-call-btn {
+  width: 100%;
+  font-size: 0.75rem;
+  white-space: nowrap;
+  position: relative;
+  overflow: hidden;
+  transition:
+    width 0.3s cubic-bezier(0.22, 1, 0.36, 1),
+    height 0.3s cubic-bezier(0.22, 1, 0.36, 1),
+    padding 0.3s cubic-bezier(0.22, 1, 0.36, 1),
+    border-radius 0.3s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.start-call-btn :deep(.btn-label) {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.9rem;
+}
+
+.call-label {
+  transition: opacity 0.2s ease, transform 0.25s ease;
+  display: inline-block;
+}
+
+.start-call-btn .icon-sm {
+  transition: transform 0.25s ease;
+}
+
+.call-cta {
+  margin-top: 1rem;
+  padding: 0.5rem;
+  border-radius: 12px;
+  background: linear-gradient(135deg, var(--rose-50), white);
+  border: 1px solid var(--rose-100);
+  box-shadow: 0 8px 18px rgba(255, 133, 161, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  overflow: hidden;
+  max-height: 88px;
+  transition:
+    margin 0.25s ease,
+    padding 0.25s ease,
+    background 0.25s ease,
+    border-color 0.25s ease,
+    box-shadow 0.25s ease,
+    max-height 0.25s ease;
+}
+
+.call-hint {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--gray-500);
+  margin-bottom: 0.375rem;
+  transition: opacity 0.2s ease, max-height 0.2s ease, margin 0.2s ease;
+  max-height: 20px;
+}
+
+.sidebar-collapsed .call-cta {
+  margin-top: 0.5rem;
+  padding: 0;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  display: flex;
+  justify-content: center;
+  max-height: 48px;
+}
+
+.sidebar-collapsed .call-hint {
+  opacity: 0;
+  max-height: 0;
+  margin: 0;
+}
+
+.sidebar-collapsed .start-call-btn {
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border-radius: 999px;
+  gap: 0;
+  box-shadow: 0 6px 12px rgba(255, 133, 161, 0.18);
+  transition: width 0.25s ease, height 0.25s ease, padding 0.25s ease, box-shadow 0.25s ease;
+}
+
+.sidebar-collapsed .call-label {
+  opacity: 0;
+  transform: translateX(6px) scale(0.9);
+}
+
+.sidebar-collapsed .start-call-btn .icon-sm {
+  transform: scale(1.05);
 }
 </style>

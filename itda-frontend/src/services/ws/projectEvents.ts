@@ -18,6 +18,11 @@ export interface ProjectEventPayload {
     status?: string
     target?: ProjectEventTarget
     resultUrl?: string
+    sceneId?: number
+    nodeId?: number
+    action?: string
+    actorId?: number
+    positions?: Array<{ nodeId: number; x: number; y: number }>
 }
 
 type Listener = (message: ProjectEventMessage) => void

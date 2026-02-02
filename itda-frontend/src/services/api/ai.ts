@@ -12,6 +12,8 @@ import type {
     GenerateNodeRequest,
     GenerateJobResponse,
     JobStatusResponse,
+    PromptPreviewRequest,
+    PromptPreviewResponse,
 } from '../../types/api';
 
 // =============================================================================
@@ -24,21 +26,25 @@ import type {
  */
 export async function generatePrompt(
     request: GeneratePromptRequest
-): Promise<string> {
+): Promise<GeneratePromptResponse> {
     const payload = mapGeneratePromptPayload(request);
     const response = await apiClient.post<ApiResponse<GeneratePromptResponse>>(
         '/ai/prompts/generate',
         payload
     );
-    if (!response.data.data?.prompt) {
+    if (!response.data.data?.promptEnBase) {
         throw new Error('Failed to generate prompt');
     }
-    return response.data.data.prompt;
+    return response.data.data;
 }
 
 function mapGeneratePromptPayload(request: GeneratePromptRequest): {
     nodeType: GeneratePromptRequest['nodeType'];
     sceneOneLine?: string;
+    prompt?: string;
+    gridMode?: GeneratePromptRequest['gridMode'];
+    layout?: string;
+    timelineIntervalSeconds?: number;
     style?: string;
     timeOfDay?: string;
     mood?: string;
@@ -70,6 +76,10 @@ function mapGeneratePromptPayload(request: GeneratePromptRequest): {
     return {
         nodeType: request.nodeType,
         sceneOneLine: request.sceneOneLine || derivedSceneOneLine || undefined,
+        prompt: request.prompt,
+        gridMode: request.gridMode,
+        layout: request.layout,
+        timelineIntervalSeconds: request.timelineIntervalSeconds,
         style: request.style,
         timeOfDay: request.timeOfDay,
         mood: request.mood,
@@ -84,16 +94,48 @@ function mapGeneratePromptPayload(request: GeneratePromptRequest): {
 export async function improvePrompt(
     currentPrompt: string,
     userFeedback: string,
-    nodeType?: GeneratePromptRequest['nodeType']
-): Promise<string> {
+    nodeType?: GeneratePromptRequest['nodeType'],
+    context?: { sceneOneLine?: string }
+): Promise<GeneratePromptResponse> {
     const response = await apiClient.post<ApiResponse<GeneratePromptResponse>>(
         '/ai/prompts/improve',
-        { nodeType, prompt: currentPrompt, instruction: userFeedback }
+        {
+            nodeType,
+            prompt: currentPrompt,
+            instruction: userFeedback,
+            sceneOneLine: context?.sceneOneLine,
+        }
     );
-    if (!response.data.data?.prompt) {
+    if (!response.data.data?.promptEnBase) {
         throw new Error('Failed to improve prompt');
     }
-    return response.data.data.prompt;
+    return response.data.data;
+}
+
+export async function translatePrompt(
+    promptEn: string
+): Promise<GeneratePromptResponse> {
+    const response = await apiClient.post<ApiResponse<GeneratePromptResponse>>(
+        '/ai/prompts/translate',
+        { promptEn }
+    );
+    if (!response.data.data?.promptEnBase) {
+        throw new Error('Failed to translate prompt');
+    }
+    return response.data.data;
+}
+
+export async function rewritePrompt(
+    promptKo: string
+): Promise<GeneratePromptResponse> {
+    const response = await apiClient.post<ApiResponse<GeneratePromptResponse>>(
+        '/ai/prompts/rewrite',
+        { promptKo }
+    );
+    if (!response.data.data?.promptEnBase) {
+        throw new Error('Failed to rewrite prompt');
+    }
+    return response.data.data;
 }
 
 // =============================================================================
@@ -108,16 +150,41 @@ export async function improvePrompt(
 export async function generateNode(
     nodeId: string | number,
     prompt: string,
-    options?: { nodeType?: GenerateNodeRequest['nodeType']; settings?: Record<string, unknown> }
+    options?: {
+        nodeType?: GenerateNodeRequest['nodeType'];
+        settings?: Record<string, unknown>;
+        promptEnFinalOverride?: string;
+        referenceObjectIds?: number[];
+    }
 ): Promise<number> {
     const response = await apiClient.post<ApiResponse<GenerateJobResponse>>(
         `/nodes/${nodeId}/generate`,
-        { prompt, nodeType: options?.nodeType, settings: options?.settings }
+        {
+            prompt,
+            nodeType: options?.nodeType,
+            settings: options?.settings,
+            promptEnFinalOverride: options?.promptEnFinalOverride,
+            referenceObjectIds: options?.referenceObjectIds,
+        }
     );
     if (!response.data.data?.jobId) {
         throw new Error('Failed to start generation job');
     }
     return response.data.data.jobId;
+}
+
+export async function previewPrompt(
+    nodeId: string | number,
+    request: PromptPreviewRequest
+): Promise<PromptPreviewResponse> {
+    const response = await apiClient.post<ApiResponse<PromptPreviewResponse>>(
+        `/nodes/${nodeId}/prompt-preview`,
+        request
+    );
+    if (!response.data.data?.promptEnFinal) {
+        throw new Error('Failed to preview prompt');
+    }
+    return response.data.data;
 }
 
 // =============================================================================
@@ -142,13 +209,13 @@ export async function getJobStatus(jobId: number): Promise<JobStatusResponse> {
  * @param jobId 작업 ID
  * @param onProgress 진행 상태 콜백 (선택)
  * @param intervalMs 폴링 간격 (기본 2초)
- * @param maxAttempts 최대 시도 횟수 (기본 60회 = 2분)
+ * @param maxAttempts 최대 시도 횟수 (기본 90회 = 3분)
  */
 export async function pollJobUntilComplete(
     jobId: number,
     onProgress?: (status: JobStatusResponse) => void,
     intervalMs: number = 2000,
-    maxAttempts: number = 60
+    maxAttempts: number = 90
 ): Promise<JobStatusResponse> {
     let attempts = 0;
 
@@ -177,6 +244,9 @@ export async function pollJobUntilComplete(
 export const apiAiService = {
     generatePrompt,
     improvePrompt,
+    translatePrompt,
+    rewritePrompt,
+    previewPrompt,
     generateNode,
     getJobStatus,
     pollJobUntilComplete,

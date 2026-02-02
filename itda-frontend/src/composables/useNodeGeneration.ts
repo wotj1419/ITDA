@@ -1,9 +1,9 @@
 import { ref } from 'vue';
 import type { AnyNodeData } from '../types/ui/sceneNodes';
-import type { GeneratePromptRequest } from '../types/api/ai';
+import type { GeneratePromptRequest, GeneratePromptResponse, PromptPreviewRequest, PromptPreviewResponse } from '../types/api/ai';
 import { JobStatus, PromptStatus } from '../types/ui/sceneNodes';
 import { useSceneNodeStore } from '../stores/sceneNode';
-import { resolveApiUrl } from '../services/api/urls';
+import { resolveApiUrl, isApiResourceUrl } from '../services/api/urls';
 import { fetchProtectedBlobUrl } from '../services/api/media';
 import { SHOT_FALLBACK_THUMBNAIL } from '../utils/fallbacks';
 import { useGenerationToast } from './useGenerationToast';
@@ -16,10 +16,17 @@ interface UseNodeGenerationOptions {
   nodeType: 'MASTER' | 'GRID' | 'SHOT' | 'VIDEO';
   toastType: GenerationToastType;
   getPrompt: () => string;
+  getImproveInstruction?: () => string;
+  getImproveContext?: () => { sceneOneLine?: string };
   getPromptPayload: () => GeneratePromptRequest;
-  getPromptUpdate: (prompt: string) => Partial<AnyNodeData>;
+  getPromptUpdate: (result: GeneratePromptResponse) => Partial<AnyNodeData>;
   getApprovedUpdate: () => Partial<AnyNodeData>;
   getJobSettings: () => Record<string, unknown>;
+  getReferenceObjectIds?: () => number[] | undefined;
+  getPromptOverride?: () => string | undefined;
+  getPromptPreviewPayload?: () => PromptPreviewRequest;
+  onPromptPreview?: (result: PromptPreviewResponse) => Partial<AnyNodeData>;
+  previewEnabled?: boolean;
   getJobSuccessUpdate: (result: { resultUrl?: string; thumbnailUrl?: string | null }) => Partial<AnyNodeData>;
   messages?: {
     promptError?: string;
@@ -39,6 +46,23 @@ export function useNodeGeneration(options: UseNodeGenerationOptions) {
     errorMessage.value = null;
   };
 
+  const refreshPromptPreview = async (force = false, promptOverride?: string): Promise<void> => {
+    if (!force && !options.previewEnabled) return;
+    if (!options.getPromptPreviewPayload) return;
+    try {
+      const payload = options.getPromptPreviewPayload();
+      if (typeof promptOverride === 'string' && promptOverride.trim()) {
+        payload.prompt = promptOverride;
+      }
+      const result = await aiService.previewPrompt(options.nodeId, payload);
+      if (options.onPromptPreview) {
+        nodeStore.updateNodeLocal(options.nodeId, options.onPromptPreview(result));
+      }
+    } catch (error) {
+      console.error('Failed to preview prompt:', error);
+    }
+  };
+
   const generatePrompt = async (): Promise<void> => {
     if (isGeneratingPrompt.value || isGeneratingJob.value) return;
     isGeneratingPrompt.value = true;
@@ -48,11 +72,23 @@ export function useNodeGeneration(options: UseNodeGenerationOptions) {
     const toastId = startGenerationToast('prompt');
 
     try {
-      const prompt = await aiService.generatePrompt(options.getPromptPayload());
+      const currentPrompt = options.getPrompt().trim();
+      const instruction = options.getImproveInstruction?.().trim() ?? '';
+      const shouldImprove = currentPrompt.length > 0 && instruction.length > 0;
+      let promptPayload = options.getPromptPayload();
+      if (!shouldImprove && instruction.length === 0 && currentPrompt.length > 0) {
+        // Force regeneration from current inputs instead of echoing the existing prompt.
+        promptPayload = { ...promptPayload, prompt: '' };
+      }
+      const improveContext = options.getImproveContext?.();
+      const result = shouldImprove
+        ? await aiService.improvePrompt(currentPrompt, instruction, options.nodeType, improveContext)
+        : await aiService.generatePrompt(promptPayload);
       nodeStore.updateNode(options.nodeId, {
-        ...options.getPromptUpdate(prompt),
+        ...options.getPromptUpdate(result),
         promptStatus: PromptStatus.GENERATED,
       });
+      await refreshPromptPreview(true, result.promptEnBase);
       // 성공 토스트
       finishGenerationToast(toastId, 'prompt', 'success');
     } catch (error) {
@@ -92,6 +128,8 @@ export function useNodeGeneration(options: UseNodeGenerationOptions) {
       const jobId = await aiService.generateNode(options.nodeId, prompt, {
         nodeType: options.nodeType,
         settings: options.getJobSettings(),
+        promptEnFinalOverride: options.getPromptOverride?.(),
+        referenceObjectIds: options.getReferenceObjectIds?.(),
       });
 
       const result = await aiService.pollJobUntilComplete(jobId, (status) => {
@@ -99,17 +137,14 @@ export function useNodeGeneration(options: UseNodeGenerationOptions) {
       });
 
       if (result.status === 'SUCCEEDED') {
-        const node = nodeStore.nodes.find((item) => item.id === options.nodeId);
-        const existingUrl = node?.data?.thumbnailUrl || node?.data?.imageUrl || null;
-        if (existingUrl?.startsWith('blob:')) {
-          URL.revokeObjectURL(existingUrl);
-        }
         const blobUrl = await fetchProtectedBlobUrl(result.resultUrl).catch(() => null);
-        const resolvedResultUrl = blobUrl ?? resolveApiUrl(result.resultUrl);
+        const resolvedResultUrl =
+          blobUrl ?? (isApiResourceUrl(result.resultUrl) ? null : resolveApiUrl(result.resultUrl));
+        const thumbnailCandidate = result.thumbnailUrl ?? result.resultUrl ?? null;
         const resolvedThumbnailUrl =
           options.nodeType === 'VIDEO'
-            ? resolveApiUrl(result.thumbnailUrl ?? null)
-            : blobUrl ?? resolveApiUrl(result.thumbnailUrl ?? result.resultUrl ?? null);
+            ? (isApiResourceUrl(thumbnailCandidate) ? null : resolveApiUrl(thumbnailCandidate))
+            : blobUrl ?? (isApiResourceUrl(thumbnailCandidate) ? null : resolveApiUrl(thumbnailCandidate));
         nodeStore.updateNodeLocal(options.nodeId, {
           jobStatus: JobStatus.SUCCEEDED,
           generationState: null,
@@ -154,6 +189,7 @@ export function useNodeGeneration(options: UseNodeGenerationOptions) {
     clearError,
     generatePrompt,
     approvePrompt,
+    refreshPromptPreview,
     runGeneration,
   };
 }

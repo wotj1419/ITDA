@@ -1,6 +1,7 @@
 package com.itda.backend.worker;
 
 import com.itda.backend.global.config.FileStorageProperties;
+import com.itda.backend.worker.AssetRegistrar;
 import com.itda.backend.worker.image.LocalImageStorage;
 import com.itda.backend.worker.video.LocalVideoStorage;
 import org.junit.jupiter.api.Test;
@@ -9,6 +10,7 @@ import org.junit.jupiter.api.io.TempDir;
 import java.nio.file.Path;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
 
 class LocalJobAssetStorageTest {
 
@@ -29,7 +31,8 @@ class LocalJobAssetStorageTest {
     @Test
     void videoStorage_buildsExpectedPath() {
         LocalFileStorage fileStorage = new LocalFileStorage(propertiesWithUploadDir(tempDir));
-        LocalVideoStorage videoStorage = new LocalVideoStorage(fileStorage);
+        AssetRegistrar assetRegistrar = mock(AssetRegistrar.class);
+        LocalVideoStorage videoStorage = new LocalVideoStorage(fileStorage, assetRegistrar);
 
         StoredAsset stored = videoStorage.save(10L, 20L, new byte[]{1});
 

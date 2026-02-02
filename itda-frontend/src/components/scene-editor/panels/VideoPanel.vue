@@ -3,7 +3,7 @@
  * VideoPanel - 영상 생성/편집 패널
  * 트랜지션 영상 + 확정 기능 지원
  */
-import { ref, computed, watch } from 'vue';
+import { ref, computed, watch, nextTick, onUnmounted } from 'vue';
 import type { Node as VueFlowNode } from '@vue-flow/core';
 import type { VideoNodeData, CameraMotion, ShotNodeData } from '../../../types/ui/sceneNodes';
 import { PromptStatus, JobStatus, NodeType } from '../../../types/ui/sceneNodes';
@@ -12,7 +12,8 @@ import { useSceneNodeStore } from '../../../stores/sceneNode';
 import { useUIStore } from '../../../stores/ui';
 import { useNodeGeneration } from '../../../composables/useNodeGeneration';
 import { useHelpPopover } from '../../../composables/useHelpPopover';
-import { Video, Repeat, Move, Timer, Text, FileText, Sparkles, Check, RefreshCw, Target, ZoomIn, ZoomOut, ArrowRight, ArrowUp, Circle, Loader2 } from 'lucide-vue-next';
+import { Video, Repeat, Move, Timer, FileText, Sparkles, Check, RefreshCw, Target, ZoomIn, ZoomOut, ArrowRight, ArrowUp, Circle, Loader2, Star } from 'lucide-vue-next';
+import { gsap } from 'gsap';
 import { resolveCameraMotionKey } from '../../../utils/nodeSettings';
 import {
   DEFAULT_VIDEO_CAMERA_MOTION,
@@ -38,7 +39,17 @@ const form = ref({
   duration: DEFAULT_VIDEO_DURATION,
   motionDescription: '',
   prompt: '',
+  promptKo: '',
+  promptEnFinal: '',
+  promptEnFinalOverride: '',
+  usePromptOverride: false,
+  promptLang: 'EN' as 'EN' | 'KO',
 });
+
+const detailSectionRef = ref<HTMLElement | null>(null);
+const detailTextareaRef = ref<HTMLTextAreaElement | null>(null);
+const isFinalEditing = ref(false);
+let promptPreviewTimeout: ReturnType<typeof setTimeout> | null = null;
 
 const cameraOptions: { value: CameraMotion; label: string; icon: any }[] = [
   { value: 'lowZoomIn', label: '로우 줌인', icon: ZoomIn },
@@ -91,10 +102,22 @@ const endShotData = computed(() => {
   const node = nodeStore.nodes.find((n) => n.id === endId);
   return node?.data as ShotNodeData | undefined;
 });
-const isPromptGenerated = computed(() => data.value?.promptStatus !== PromptStatus.DRAFT);
+const hasPromptContent = computed(() => {
+  if (!data.value) return false;
+  return Boolean(
+    (data.value.prompt ?? '').trim() ||
+    (data.value.promptKo ?? '').trim() ||
+    (data.value.promptEnFinal ?? '').trim() ||
+    (data.value.promptEnFinalOverride ?? '').trim()
+  );
+});
+const isPromptGenerated = computed(
+  () => hasPromptContent.value || data.value?.promptStatus !== PromptStatus.DRAFT
+);
 const isPromptApproved = computed(() => data.value?.promptStatus === PromptStatus.APPROVED);
 const isSucceeded = computed(() => data.value?.jobStatus === JobStatus.SUCCEEDED);
 const isConfirmed = computed(() => data.value?.isConfirmed ?? false);
+const promptOverride = computed(() => form.value.promptEnFinalOverride.trim());
 const isStartShotReady = computed(() => {
   const start = startShotData.value as { jobStatus?: string; imageUrl?: string | null; thumbnailUrl?: string | null } | undefined;
   const hasImage = Boolean(start?.thumbnailUrl || start?.imageUrl);
@@ -146,6 +169,12 @@ const endShotOptions = computed<EndShotOption[]>(() => {
     });
 });
 
+const selectedEndShotLabel = computed(() => {
+  const selected = endShotOptions.value.find((opt) => opt.id === data.value?.endShotId);
+  return selected?.label ?? '선택 안 함';
+});
+const hasEndShotSelected = computed(() => Boolean(data.value?.endShotId));
+
 
 const {
   isGeneratingPrompt,
@@ -153,6 +182,7 @@ const {
   clearError,
   generatePrompt,
   approvePrompt,
+  refreshPromptPreview,
   runGeneration: generateVideo,
 } = useNodeGeneration({
   nodeId: props.node.id,
@@ -162,17 +192,27 @@ const {
   getPromptPayload: () => ({
     nodeType: 'VIDEO',
     sceneOneLine: buildVideoSceneOneLine(),
+    prompt: '',
     cameraMotion: form.value.cameraMotion,
     duration: normalizeDuration(form.value.duration),
     motionDescription: form.value.motionDescription,
   }),
-  getPromptUpdate: (prompt) => ({
+  getPromptUpdate: (result) => ({
     cameraMotion: form.value.cameraMotion,
     duration: normalizeDuration(form.value.duration),
     motionDescription: form.value.motionDescription,
-    prompt,
+    prompt: result.promptEnBase,
+    promptKo: result.promptKo,
   }),
-  getApprovedUpdate: () => ({ prompt: form.value.prompt }),
+  getImproveInstruction: () => form.value.motionDescription,
+  getImproveContext: () => ({
+    sceneOneLine: buildVideoSceneOneLine() || undefined,
+  }),
+  getApprovedUpdate: () => ({
+    prompt: form.value.prompt,
+    promptKo: form.value.promptKo,
+    promptEnFinalOverride: form.value.usePromptOverride ? form.value.promptEnFinalOverride : '',
+  }),
   getJobSettings: () => ({
     cameraMotionKey: resolveCameraMotionKey(form.value.cameraMotion),
     motionDescriptionKo: form.value.motionDescription,
@@ -181,6 +221,23 @@ const {
     endShotNodeId: form.value.isTransition && data.value?.endShotId
       ? Number(data.value.endShotId)
       : null,
+  }),
+  getPromptOverride: () => promptOverride.value,
+  getPromptPreviewPayload: () => ({
+    prompt: form.value.prompt,
+    settings: {
+      cameraMotionKey: resolveCameraMotionKey(form.value.cameraMotion),
+      motionDescriptionKo: form.value.motionDescription,
+      duration: normalizeDuration(form.value.duration),
+      startShotNodeId: data.value?.startShotId ? Number(data.value.startShotId) : undefined,
+      endShotNodeId: form.value.isTransition && data.value?.endShotId
+        ? Number(data.value.endShotId)
+        : null,
+    },
+    promptEnFinalOverride: promptOverride.value,
+  }),
+  onPromptPreview: (result) => ({
+    promptEnFinal: result.promptEnFinal,
   }),
   getJobSuccessUpdate: ({ resultUrl, thumbnailUrl }) => ({
     videoUrl: resultUrl || null,
@@ -225,6 +282,23 @@ function buildVideoSceneOneLine(): string {
   if (startShotData.value?.prompt) {
     parts.push(`shotPrompt: ${startShotData.value.prompt}`);
   }
+  if (endShotData.value?.shotType) {
+    parts.push(`endShotType: ${endShotData.value.shotType}`);
+  } else if (endShotData.value?.shotTypes?.length) {
+    parts.push(`endShotTypes: ${endShotData.value.shotTypes.join(', ')}`);
+  }
+  if (endShotData.value?.expression) {
+    parts.push(`endExpression: ${endShotData.value.expression}`);
+  }
+  if (endShotData.value?.additionalDetail) {
+    parts.push(`endDetail: ${endShotData.value.additionalDetail}`);
+  }
+  if (endShotData.value?.prompt) {
+    parts.push(`endShotPrompt: ${endShotData.value.prompt}`);
+  }
+  if (form.value.motionDescription) {
+    parts.push(`detail: ${form.value.motionDescription}`);
+  }
   return parts.join(', ');
 }
 
@@ -236,7 +310,13 @@ watch(() => props.node.id, () => {
     duration: normalizeDuration(data.value.duration),
     motionDescription: data.value.motionDescription || '',
     prompt: data.value.prompt || '',
+    promptKo: data.value.promptKo || '',
+    promptEnFinal: data.value.promptEnFinal || '',
+    promptEnFinalOverride: data.value.promptEnFinalOverride || '',
+    usePromptOverride: Boolean(data.value.promptEnFinalOverride),
+    promptLang: 'EN',
   };
+  isFinalEditing.value = false;
   clearError();
 }, { immediate: true });
 
@@ -247,6 +327,37 @@ watch(
     if (normalized !== form.value.prompt) {
       form.value.prompt = normalized;
     }
+  }
+);
+
+watch(
+  () => data.value?.promptKo,
+  (nextPromptKo) => {
+    const normalized = nextPromptKo ?? '';
+    if (normalized !== form.value.promptKo) {
+      form.value.promptKo = normalized;
+    }
+  }
+);
+
+watch(
+  () => data.value?.promptEnFinal,
+  (nextPromptEnFinal) => {
+    const normalized = nextPromptEnFinal ?? '';
+    if (normalized !== form.value.promptEnFinal) {
+      form.value.promptEnFinal = normalized;
+    }
+  }
+);
+
+watch(
+  () => data.value?.promptEnFinalOverride,
+  (nextPromptOverride) => {
+    const normalized = nextPromptOverride ?? '';
+    if (normalized !== form.value.promptEnFinalOverride) {
+      form.value.promptEnFinalOverride = normalized;
+    }
+    form.value.usePromptOverride = Boolean(normalized);
   }
 );
 
@@ -269,18 +380,127 @@ watch(
   }
 );
 
+watch(
+  () => [
+    form.value.prompt,
+    form.value.promptKo,
+    form.value.promptEnFinalOverride,
+    form.value.usePromptOverride,
+    form.value.motionDescription,
+  ],
+  () => {
+    if (!data.value) return;
+    const updates: Partial<VideoNodeData> = {};
+    if (form.value.prompt !== (data.value.prompt ?? '')) {
+      updates.prompt = form.value.prompt;
+    }
+    if (form.value.promptKo !== (data.value.promptKo ?? '')) {
+      updates.promptKo = form.value.promptKo;
+    }
+    if (form.value.motionDescription !== (data.value.motionDescription ?? '')) {
+      updates.motionDescription = form.value.motionDescription;
+    }
+    const nextOverride = form.value.usePromptOverride ? form.value.promptEnFinalOverride : '';
+    if (nextOverride !== (data.value.promptEnFinalOverride ?? '')) {
+      updates.promptEnFinalOverride = nextOverride;
+    }
+    if (Object.keys(updates).length > 0) {
+      nodeStore.updateNodeLocal(props.node.id, updates);
+    }
+  }
+);
+
+watch(
+  () => ({
+    prompt: form.value.prompt,
+    cameraMotion: form.value.cameraMotion,
+    duration: form.value.duration,
+    motionDescription: form.value.motionDescription,
+    isTransition: form.value.isTransition,
+    startShotId: data.value?.startShotId,
+    endShotId: data.value?.endShotId,
+    usePromptOverride: form.value.usePromptOverride,
+  }),
+  () => {
+    queuePromptPreview();
+  },
+  { deep: true }
+);
+
+onUnmounted(() => {
+  if (promptPreviewTimeout) {
+    clearTimeout(promptPreviewTimeout);
+    promptPreviewTimeout = null;
+  }
+});
+
 function startSelectEndShot(): void {
   nodeStore.startSelectEndShot(props.node.id);
 }
 
-function handleEndShotChange(event: Event): void {
-  const selected = (event.target as HTMLSelectElement | null)?.value ?? '';
-  if (!selected) {
-    nodeStore.clearEndShot(props.node.id);
+function toggleTransition(): void {
+  form.value.isTransition = !form.value.isTransition;
+}
+
+function toggleFinalEditing(): void {
+  if (!form.value.usePromptOverride) {
+    form.value.usePromptOverride = true;
+    form.value.promptEnFinalOverride = form.value.promptEnFinal || form.value.prompt;
+    isFinalEditing.value = true;
     return;
   }
-  nodeStore.startSelectEndShot(props.node.id);
-  nodeStore.setEndShot(selected);
+
+  if (isFinalEditing.value && !form.value.promptEnFinalOverride.trim()) {
+    form.value.promptEnFinalOverride = form.value.promptEnFinal || form.value.prompt;
+  }
+
+  isFinalEditing.value = !isFinalEditing.value;
+}
+
+function queuePromptPreview(): void {
+  if (!form.value.prompt.trim()) return;
+  if (form.value.usePromptOverride) return;
+  if (/[ㄱ-ㅎㅏ-ㅣ가-힣]/.test(form.value.prompt)) return;
+  if (promptPreviewTimeout) clearTimeout(promptPreviewTimeout);
+  promptPreviewTimeout = setTimeout(() => {
+    promptPreviewTimeout = null;
+    refreshPromptPreview();
+  }, 600);
+}
+
+async function focusDetailEditor(): Promise<void> {
+  await nextTick();
+  if (detailSectionRef.value) {
+    const container = detailSectionRef.value.closest('.base-panel__content') as HTMLElement | null;
+    if (container) {
+      const containerRect = container.getBoundingClientRect();
+      const sectionRect = detailSectionRef.value.getBoundingClientRect();
+      const currentScroll = container.scrollTop;
+      const offset = sectionRect.top - containerRect.top;
+      const centeredOffset = (container.clientHeight - sectionRect.height) / 2;
+      const rawTarget = currentScroll + offset - centeredOffset;
+      const maxScroll = Math.max(0, container.scrollHeight - container.clientHeight);
+      const targetScroll = Math.min(Math.max(0, rawTarget), maxScroll);
+      gsap.to(container, { scrollTop: targetScroll, duration: 0.45, ease: 'power2.out' });
+    } else {
+      detailSectionRef.value.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+    gsap.killTweensOf(detailSectionRef.value);
+    gsap.fromTo(
+      detailSectionRef.value,
+      { boxShadow: '0 0 0 0 rgba(255, 107, 138, 0)', backgroundColor: 'rgba(255, 250, 252, 0)' },
+      {
+        boxShadow: '0 0 0 12px rgba(255, 107, 138, 0.35)',
+        backgroundColor: 'rgba(255, 250, 252, 0.9)',
+        duration: 0.35,
+        yoyo: true,
+        repeat: 1,
+        ease: 'power2.out',
+        clearProps: 'boxShadow,backgroundColor',
+      }
+    );
+  }
+  detailTextareaRef.value?.focus();
 }
 
 function toggleConfirm(): void {
@@ -317,6 +537,10 @@ function handleGenerateVideo(): void {
     notifyBlocked('프롬프트 승인 필요', '승인 후 영상을 생성할 수 있습니다.');
     return;
   }
+  if (form.value.usePromptOverride && !promptOverride.value) {
+    notifyBlocked('영문 직접 편집 필요', '영문 직접 편집 내용이 비어 있습니다.');
+    return;
+  }
   generateVideo();
 }
 </script>
@@ -331,7 +555,14 @@ function handleGenerateVideo(): void {
             <Repeat class="panel-label-icon" />
             트랜지션 영상
           </label>
-          <input type="checkbox" v-model="form.isTransition" class="panel-toggle" />
+          <button
+            type="button"
+            :class="['panel-btn', form.isTransition ? 'panel-btn--primary' : 'panel-btn--secondary']"
+            @click="toggleTransition"
+          >
+            <Repeat class="panel-btn-icon" />
+            {{ form.isTransition ? '사용 중' : '사용 안 함' }}
+          </button>
         </div>
       </div>
 
@@ -341,12 +572,11 @@ function handleGenerateVideo(): void {
           <Target class="panel-label-icon" />
           끝 샷
         </label>
-        <select :value="data.endShotId ?? ''" class="panel-select" @change="handleEndShotChange">
-          <option value="">선택 안 함</option>
-          <option v-for="opt in endShotOptions" :key="opt.id" :value="opt.id">
-            {{ opt.label }}
-          </option>
-        </select>
+        <div :class="['panel-selected-shot', { 'panel-selected-shot--empty': !hasEndShotSelected }]">
+          <span class="panel-selected-shot__label">현재 선택</span>
+          <span class="panel-selected-shot__value">{{ selectedEndShotLabel }}</span>
+          <span class="panel-label-badge">{{ hasEndShotSelected ? '선택됨' : '미선택' }}</span>
+        </div>
         <button class="panel-btn panel-btn--secondary panel-btn--full" @click="startSelectEndShot">
           <Target class="panel-btn-icon" />
           캔버스에서 끝 샷 선택
@@ -405,18 +635,77 @@ function handleGenerateVideo(): void {
         </select>
       </div>
 
-      <!-- Motion Description -->
-      <div class="panel-section">
+      <!-- Detail Change -->
+      <div class="panel-section" ref="detailSectionRef">
         <label class="panel-label">
-          <Text class="panel-label-icon" />
-          모션 설명 (선택)
+          <Star class="panel-label-icon" />
+          디테일 변경 (선택)
+          <span
+            class="panel-tooltip"
+            data-tooltip="연예인/실존 인물 이름은 직접 언급하지 말아주세요."
+          >
+            <span class="panel-tooltip__icon">?</span>
+          </span>
         </label>
         <textarea
+          ref="detailTextareaRef"
           v-model="form.motionDescription"
           class="panel-textarea"
           rows="2"
-          placeholder="예: 우주인이 창밖을 바라보다 고개를 돌린다"
+          placeholder="예: 동작 흐름/세부 분위기/소품 등 추가 지시사항"
         ></textarea>
+      </div>
+
+      <!-- Narrative Prompt -->
+      <div class="panel-section">
+        <div class="panel-label-row">
+          <label class="panel-label">
+            <FileText class="panel-label-icon" />
+            서술 프롬프트
+          </label>
+          <div class="panel-segmented" role="tablist" aria-label="Prompt language">
+            <button
+              type="button"
+              class="panel-segmented__btn"
+              :class="{ 'is-active': form.promptLang === 'EN' }"
+              @click="form.promptLang = 'EN'"
+            >
+              EN
+            </button>
+            <button
+              type="button"
+              class="panel-segmented__btn"
+              :class="{ 'is-active': form.promptLang === 'KO' }"
+              @click="form.promptLang = 'KO'"
+            >
+              KO
+            </button>
+          </div>
+        </div>
+        <p
+          class="panel-subtext panel-tooltip"
+          data-tooltip="서술 프롬프트는 읽기 전용입니다. 한글 수정은 디테일 변경에서 가능합니다."
+        >
+          {{ form.promptLang === 'EN' ? '원본(읽기 전용)' : '번역(읽기 전용)' }}
+          <span class="panel-tooltip__icon">?</span>
+        </p>
+        <div v-if="form.promptLang === 'EN'">
+          <textarea
+            v-model="form.prompt"
+            class="panel-textarea panel-textarea--prompt"
+            rows="4"
+            placeholder="예: The camera glides toward the character as the city lights blur."
+            readonly
+          ></textarea>
+        </div>
+        <div v-else class="panel-translation-block">
+          <textarea
+            v-model="form.promptKo"
+            class="panel-textarea panel-textarea--prompt"
+            rows="4"
+            readonly
+          ></textarea>
+        </div>
       </div>
 
       <!-- Generate Prompt -->
@@ -427,17 +716,45 @@ function handleGenerateVideo(): void {
       >
         <Loader2 v-if="isGeneratingPrompt" class="panel-btn-icon panel-btn-icon--spin" />
         <Sparkles v-else class="panel-btn-icon" />
-        {{ isGeneratingPrompt ? '생성 중...' : '프롬프트 생성' }}
+        {{ isGeneratingPrompt ? '생성 중...' : 'AI로 다듬기' }}
       </button>
 
       <!-- Generated Prompt -->
       <div v-if="isPromptGenerated" class="panel-section panel-section--prompt">
         <label class="panel-label">
           <FileText class="panel-label-icon" />
-          AI 프롬프트
-          <span class="panel-label-badge">생성됨</span>
+          최종 프롬프트 (영어)
         </label>
-        <textarea v-model="form.prompt" class="panel-textarea panel-textarea--prompt" rows="3"></textarea>
+        <textarea
+          v-if="form.usePromptOverride"
+          v-model="form.promptEnFinalOverride"
+          class="panel-textarea panel-textarea--prompt"
+          rows="3"
+          :readonly="!isFinalEditing"
+          placeholder="최종 영어 프롬프트를 직접 입력하세요."
+        ></textarea>
+        <textarea
+          v-else
+          :value="form.promptEnFinal"
+          class="panel-textarea panel-textarea--prompt"
+          rows="3"
+          readonly
+          placeholder="자동으로 갱신됩니다."
+        ></textarea>
+
+        <div class="panel-prompt-actions">
+          <button
+            class="panel-btn panel-btn--text"
+            :disabled="!form.promptEnFinal && !form.prompt"
+            @click="toggleFinalEditing"
+          >
+            {{ isFinalEditing ? '편집 완료' : '영문 직접 편집' }}
+          </button>
+          <button class="panel-btn panel-btn--text" @click="focusDetailEditor">
+            한글 편집
+          </button>
+        </div>
+
         <div class="panel-prompt-actions panel-prompt-actions--right">
           <button class="panel-btn panel-btn--text" :disabled="isGeneratingPrompt || isGeneratingVideo" @click="generatePrompt">
             <Loader2 v-if="isGeneratingPrompt" class="panel-btn-icon panel-btn-icon--spin" />
@@ -463,11 +780,11 @@ function handleGenerateVideo(): void {
 
     <template #footer>
       <div class="panel-actions panel-actions--footer">
-        <button
-          class="panel-btn panel-btn--primary panel-btn--full"
-          :disabled="isGeneratingVideo || isGeneratingPrompt"
-          @click="handleGenerateVideo"
-        >
+      <button
+        class="panel-btn panel-btn--primary panel-btn--full"
+        :disabled="isGeneratingVideo || isGeneratingPrompt"
+        @click="handleGenerateVideo"
+      >
           <Video class="panel-btn-icon" />
           영상 생성
         </button>
@@ -495,12 +812,59 @@ function handleGenerateVideo(): void {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 0.5rem;
-  margin-bottom: 0.5rem;
+  gap: 0.75rem;
+  margin-bottom: 0.35rem;
 }
 
 .panel-label-row .panel-label {
   margin-bottom: 0;
+}
+
+.panel-segmented {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0.15rem;
+  background: var(--gray-100, #F3F4F6);
+  border-radius: 999px;
+}
+
+.panel-segmented__btn {
+  border: 0;
+  background: transparent;
+  padding: 0.2rem 0.65rem;
+  font-size: 0.7rem;
+  color: var(--gray-600, #4B5563);
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.panel-segmented__btn.is-active {
+  background: var(--gray-900, #111827);
+  color: var(--gray-50, #F9FAFB);
+  box-shadow: 0 2px 6px rgba(17, 24, 39, 0.18);
+}
+
+.panel-subtext {
+  margin: 0 0 0.5rem;
+  font-size: 0.75rem;
+  color: var(--gray-500, #6B7280);
+}
+
+.panel-translation-block .panel-prompt-actions {
+  margin-top: 0.4rem;
+}
+
+.panel-btn--sync--muted {
+  background: var(--gray-100, #F3F4F6);
+  color: var(--gray-500, #6B7280);
+  border-color: var(--gray-200, #E5E7EB);
+}
+
+.panel-btn--sync--muted:hover {
+  background: var(--gray-100, #F3F4F6);
+  color: var(--gray-500, #6B7280);
+  border-color: var(--gray-200, #E5E7EB);
 }
 
 .panel-info {

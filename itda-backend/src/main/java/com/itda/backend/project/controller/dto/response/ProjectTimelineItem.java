@@ -17,6 +17,12 @@ public record ProjectTimelineItem(
         Integer order,
 
         @Schema(description = "Content URL", example = "/api/nodes/301/content")
-        String url
+        String url,
+
+        @Schema(description = "Thumbnail URL", example = "/files/ai/thumbnails/scene-1.png")
+        String thumbnailUrl,
+
+        @Schema(description = "Video URL", example = "/files/ai/videos/node-301.mp4")
+        String videoUrl
 ) {
 }

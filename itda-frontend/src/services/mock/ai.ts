@@ -45,25 +45,47 @@ function buildPromptSummary(request: GeneratePromptRequest): string {
 
 export async function generatePrompt(
   request: GeneratePromptRequest
-): Promise<string> {
+): Promise<{ promptEnBase: string; promptKo: string }> {
   await delay(500)
   const summary = buildPromptSummary(request)
-  return `[${request.nodeType}] Mock prompt${summary ? ` - ${summary}` : ''}`
+  const promptEnBase = `[${request.nodeType}] Mock prompt${summary ? ` - ${summary}` : ''}`
+  return { promptEnBase, promptKo: `번역: ${promptEnBase}` }
 }
 
 export async function improvePrompt(
   currentPrompt: string,
   userFeedback: string,
-  _nodeType?: GeneratePromptRequest['nodeType']
-): Promise<string> {
+  _nodeType?: GeneratePromptRequest['nodeType'],
+  _context?: { sceneOneLine?: string }
+): Promise<{ promptEnBase: string; promptKo: string }> {
   await delay(400)
-  return `${currentPrompt} (improved: ${userFeedback})`
+  const promptEnBase = `${currentPrompt} (improved: ${userFeedback})`
+  return { promptEnBase, promptKo: `번역: ${promptEnBase}` }
+}
+
+export async function translatePrompt(
+  promptEn: string
+): Promise<{ promptEnBase: string; promptKo: string }> {
+  await delay(200)
+  return { promptEnBase: promptEn, promptKo: `번역: ${promptEn}` }
+}
+
+export async function rewritePrompt(
+  promptKo: string
+): Promise<{ promptEnBase: string; promptKo: string }> {
+  await delay(200)
+  return { promptEnBase: `Rewrite: ${promptKo}`, promptKo }
 }
 
 export async function generateNode(
   nodeId: string | number,
   prompt: string,
-  _options?: { nodeType?: GeneratePromptRequest['nodeType']; settings?: Record<string, unknown> }
+  _options?: {
+    nodeType?: GeneratePromptRequest['nodeType'];
+    settings?: Record<string, unknown>;
+    promptEnFinalOverride?: string;
+    referenceObjectIds?: number[];
+  }
 ): Promise<number> {
   await delay(300)
   const jobId = ++jobIdCounter
@@ -79,6 +101,17 @@ export async function generateNode(
     thumbnailUrl: buildThumbnailUrl(seed),
   })
   return jobId
+}
+
+export async function previewPrompt(
+  _nodeId: string | number,
+  request: { prompt: string; settings?: Record<string, unknown>; promptEnFinalOverride?: string }
+): Promise<{ promptEnFinal: string; source: 'RENDERED' | 'OVERRIDE' }> {
+  await delay(150)
+  if (request.promptEnFinalOverride && request.promptEnFinalOverride.trim()) {
+    return { promptEnFinal: request.promptEnFinalOverride, source: 'OVERRIDE' }
+  }
+  return { promptEnFinal: `Preview: ${request.prompt}`, source: 'RENDERED' }
 }
 
 export async function getJobStatus(jobId: number): Promise<JobStatusResponse> {
@@ -128,6 +161,9 @@ export async function pollJobUntilComplete(
 export const mockAiService = {
   generatePrompt,
   improvePrompt,
+  translatePrompt,
+  rewritePrompt,
+  previewPrompt,
   generateNode,
   getJobStatus,
   pollJobUntilComplete,

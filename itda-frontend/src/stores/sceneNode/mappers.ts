@@ -20,6 +20,7 @@ import { resolveApiUrl } from '../../services/api/urls';
 import {
   DEFAULT_GRID_LAYOUT,
   DEFAULT_GRID_SHOT_TYPES,
+  DEFAULT_MASTER_FILM_LOOK,
   DEFAULT_MASTER_MOOD,
   DEFAULT_MASTER_STYLE,
   DEFAULT_MASTER_TIME_OF_DAY,
@@ -30,6 +31,7 @@ import {
 } from '../../utils/nodeDefaults';
 import {
   mapShotTypeLabelsToKeys,
+  resolveFilmLookKey,
   resolveCameraMotionKey,
   resolveExpressionKey,
   resolveMoodKey,
@@ -107,38 +109,53 @@ export function toFiniteNumber(value: string | number): number | null {
 }
 
 export function buildNodeSettings(data: AnyNodeData): Record<string, unknown> {
+  const withPromptSettings = (settings: Record<string, unknown>) => {
+    if ('promptKo' in data) {
+      settings.promptKo = data.promptKo ?? '';
+    }
+    if ('promptEnFinalOverride' in data) {
+      settings.promptEnFinalOverride = data.promptEnFinalOverride ?? '';
+    }
+    return settings;
+  };
+
   switch (data.type) {
     case NodeType.MASTER_IMAGE:
       {
         const styleKey = resolveStyleKey((data as MasterImageNodeData).style);
+        const filmLookKey = resolveFilmLookKey((data as MasterImageNodeData).filmLook);
         const timeOfDayKey = resolveTimeOfDayKey((data as MasterImageNodeData).timeOfDay);
         const moodKey =
           resolveMoodKey((data as MasterImageNodeData).mood) ?? 'NEUTRAL';
-        return {
+        return withPromptSettings({
+          filmLookKey,
           styleKey,
           timeOfDayKey,
           moodKey,
           objectIds: (data as MasterImageNodeData).objectIds,
-        };
+          detailKo: (data as MasterImageNodeData).additionalDetail,
+        });
       }
     case NodeType.STORYBOARD_GRID:
       {
         const gridData = data as StoryboardGridNodeData;
         const gridMode = gridData.gridMode ?? 'SHOT_VARIATIONS';
         if (gridMode === 'STORY_BEATS') {
-          return {
+          return withPromptSettings({
             gridMode,
             layout: gridData.layout,
             beatsKo: gridData.beats ?? [],
             continuityRulesKo: gridData.continuityRules ?? '',
-          };
+            detailKo: gridData.additionalDetail,
+          });
         }
-        return {
+        return withPromptSettings({
           gridMode,
           layout: gridData.layout,
           shotTypes: mapShotTypeLabelsToKeys(gridData.shotTypes),
           compositionHintKo: gridData.compositionHint,
-        };
+          detailKo: gridData.additionalDetail,
+        });
       }
     case NodeType.SHOT:
       {
@@ -148,17 +165,17 @@ export function buildNodeSettings(data: AnyNodeData): Record<string, unknown> {
           shotData.shotTypes?.[0];
         const shotTypeKey = resolveShotTypeKey(fallbackShotType);
         const expressionKey = resolveExpressionKey(shotData.expression);
-        return {
+        return withPromptSettings({
           gridCellIndex: shotData.gridCellIndex,
           shotType: shotTypeKey,
           expressionKey,
           detailKo: shotData.additionalDetail,
-        };
+        });
       }
     case NodeType.VIDEO:
       {
         const videoData = data as VideoNodeData;
-        return {
+        return withPromptSettings({
           startShotNodeId: Number(videoData.startShotId),
           endShotNodeId: videoData.endShotId ? Number(videoData.endShotId) : null,
           cameraMotionKey: resolveCameraMotionKey(videoData.cameraMotion),
@@ -166,7 +183,7 @@ export function buildNodeSettings(data: AnyNodeData): Record<string, unknown> {
           duration: videoData.duration,
           aspectRatio: normalizeAspectRatio(videoData.aspectRatio),
           timelineOrder: videoData.timelineOrder,
-        };
+        });
       }
     default:
       return {};
@@ -217,7 +234,8 @@ export function createSceneNodeFromApi(
   base.parentNodeId = resolvedParentId;
 
   let data: AnyNodeData;
-  const resolvedContentUrl = resolveApiUrl(node.contentUrl ?? null);
+  const isSucceeded = String(node.status ?? '').toUpperCase() === 'SUCCEEDED';
+  const resolvedContentUrl = isSucceeded ? resolveApiUrl(node.contentUrl ?? null) : null;
   switch (uiType) {
     case NodeType.SCENE_HEADER:
       data = {
@@ -230,31 +248,40 @@ export function createSceneNodeFromApi(
       } as SceneHeaderNodeData;
       break;
     case NodeType.MASTER_IMAGE:
-      data = {
-        ...base,
-        type: NodeType.MASTER_IMAGE,
-        sceneId,
-        isActive: !!node.isActive,
-        imageUrl: resolvedContentUrl,
-        thumbnailUrl: resolvedContentUrl,
-        prompt: '',
-        style: DEFAULT_MASTER_STYLE,
-        timeOfDay: DEFAULT_MASTER_TIME_OF_DAY,
-        mood: DEFAULT_MASTER_MOOD,
-        objectIds: [],
-      } as MasterImageNodeData;
+        data = {
+            ...base,
+            type: NodeType.MASTER_IMAGE,
+            sceneId,
+            isActive: !!node.isActive,
+            imageUrl: resolvedContentUrl,
+            thumbnailUrl: resolvedContentUrl,
+            prompt: '',
+            promptKo: '',
+            promptEnFinal: '',
+            promptEnFinalOverride: '',
+            additionalDetail: '',
+            filmLook: DEFAULT_MASTER_FILM_LOOK,
+            style: DEFAULT_MASTER_STYLE,
+            timeOfDay: DEFAULT_MASTER_TIME_OF_DAY,
+            mood: DEFAULT_MASTER_MOOD,
+            objectIds: [],
+        } as MasterImageNodeData;
       break;
     case NodeType.STORYBOARD_GRID:
-      data = {
-        ...base,
-        type: NodeType.STORYBOARD_GRID,
-        imageUrl: resolvedContentUrl,
-        thumbnailUrl: resolvedContentUrl,
-        prompt: '',
-        layout: DEFAULT_GRID_LAYOUT,
-        shotTypes: [...DEFAULT_GRID_SHOT_TYPES],
-        compositionHint: '',
-        gridMode: 'SHOT_VARIATIONS',
+        data = {
+            ...base,
+            type: NodeType.STORYBOARD_GRID,
+            imageUrl: resolvedContentUrl,
+            thumbnailUrl: resolvedContentUrl,
+            prompt: '',
+            promptKo: '',
+            promptEnFinal: '',
+            promptEnFinalOverride: '',
+            additionalDetail: '',
+            layout: DEFAULT_GRID_LAYOUT,
+            shotTypes: [...DEFAULT_GRID_SHOT_TYPES],
+            compositionHint: '',
+            gridMode: 'SHOT_VARIATIONS',
         beats: [],
         continuityRules: '',
       } as StoryboardGridNodeData;
@@ -266,6 +293,9 @@ export function createSceneNodeFromApi(
         imageUrl: resolvedContentUrl,
         thumbnailUrl: resolvedContentUrl,
         prompt: '',
+        promptKo: '',
+        promptEnFinal: '',
+        promptEnFinalOverride: '',
         gridCellIndex: 0,
         shotTypes: [],
         shotType: '',
@@ -286,6 +316,9 @@ export function createSceneNodeFromApi(
         aspectRatio: DEFAULT_VIDEO_ASPECT_RATIO,
         isConfirmed: !!node.isConfirmed,
         prompt: '',
+        promptKo: '',
+        promptEnFinal: '',
+        promptEnFinalOverride: '',
         cameraMotion: DEFAULT_VIDEO_CAMERA_MOTION,
         motionDescription: '',
         timelineOrder: undefined,

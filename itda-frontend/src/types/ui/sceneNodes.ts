@@ -116,6 +116,11 @@ export interface MasterImageNodeData extends BaseNodeData {
 
     // 입력 파라미터
     prompt: string;
+    promptKo?: string;
+    promptEnFinal?: string;
+    promptEnFinalOverride?: string;
+    additionalDetail: string;
+    filmLook?: string;
     style: string;
     timeOfDay: string;
     mood: string;
@@ -131,6 +136,10 @@ export interface StoryboardGridNodeData extends BaseNodeData {
 
     // 입력 파라미터
     prompt: string;
+    promptKo?: string;
+    promptEnFinal?: string;
+    promptEnFinalOverride?: string;
+    additionalDetail: string;
     layout: GridLayout;
     shotTypes: string[];
     compositionHint: string;
@@ -148,6 +157,9 @@ export interface ShotNodeData extends BaseNodeData {
 
     // 입력 파라미터
     prompt: string;
+    promptKo?: string;
+    promptEnFinal?: string;
+    promptEnFinalOverride?: string;
     gridCellIndex: number;
     shotTypes?: string[];
     shotType: string;
@@ -171,6 +183,9 @@ export interface VideoNodeData extends BaseNodeData {
 
     // 입력 파라미터
     prompt: string;
+    promptKo?: string;
+    promptEnFinal?: string;
+    promptEnFinalOverride?: string;
     cameraMotion: CameraMotion;
     motionDescription: string;
     timelineOrder?: number;

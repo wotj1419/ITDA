@@ -13,5 +13,5 @@ public class ScenarioAiProperties {
 
     private String modelText;
 
-    private long timeoutMs = 8000;
+    private long timeoutMs = 180000;
 }

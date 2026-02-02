@@ -7,7 +7,7 @@ import { redirectToAccessDenied, redirectToAuth } from './redirects';
 
 const apiClient = axios.create({
     baseURL: API_BASE_URL,
-    timeout: 60000, // 60s timeout
+    timeout: 180000, // 3m timeout
 });
 
 // Request interceptor for API calls

@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { ref, nextTick } from 'vue';
+import { ref, nextTick, computed } from 'vue';
+import { storeToRefs } from 'pinia';
 import { useCollabStore } from '../../stores/collab';
 import ParticipantAvatar from './ParticipantAvatar.vue';
 import Button from '../common/Button.vue';
@@ -11,6 +12,7 @@ import {
   Plus,
 } from 'lucide-vue-next';
 const collabStore = useCollabStore();
+const { audioInputDevices, selectedMicId } = storeToRefs(collabStore);
 const messageInput = ref('');
 const chatMessagesRef = ref<HTMLElement | null>(null);
 const isLocalSpeaking = () => collabStore.isSpeaking(collabStore.localParticipant.odps);
@@ -38,6 +40,28 @@ function formatTime(timestamp: number): string {
     minute: '2-digit' 
   });
 }
+
+function handleMicChange() {
+  collabStore.selectMicrophone(selectedMicId.value || '');
+}
+
+function handleVolumeInput(peerId: string, event: Event) {
+  const target = event.target as HTMLInputElement | null;
+  if (!target) return;
+  const value = Number(target.value);
+  if (Number.isNaN(value)) return;
+  collabStore.setRemoteVolume(peerId, value / 100);
+}
+
+function formatDeviceLabel(label: string, fallback: string) {
+  if (!label) return fallback;
+  const cleaned = label.replace(/\s*\([^)]*\)\s*$/, '').trim();
+  return cleaned || fallback;
+}
+
+const remoteParticipants = computed(() =>
+  collabStore.participants.filter((p) => p.odps !== collabStore.localParticipant.odps)
+);
 </script>
 <template>
   <div class="collab-panel">
@@ -69,6 +93,46 @@ function formatTime(timestamp: number): string {
       <button class="add-participant" title="참여자 초대">
         <Plus class="icon" />
       </button>
+    </div>
+    <div class="audio-settings">
+      <div class="audio-row">
+        <label class="audio-label">마이크</label>
+        <select
+          class="audio-select"
+          v-model="selectedMicId"
+          @change="handleMicChange"
+          :disabled="audioInputDevices.length === 0"
+        >
+          <option v-if="audioInputDevices.length === 0" disabled value="">
+            사용 가능한 마이크 없음
+          </option>
+          <option
+            v-for="(device, idx) in audioInputDevices"
+            :key="device.deviceId"
+            :value="device.deviceId"
+          >
+            {{ formatDeviceLabel(device.label, `마이크 ${idx + 1}`) }}
+          </option>
+        </select>
+      </div>
+      <div v-if="remoteParticipants.length" class="volume-controls">
+        <div
+          v-for="p in remoteParticipants"
+          :key="p.odps"
+          class="volume-row"
+        >
+          <span class="volume-name">{{ p.name }}</span>
+          <input
+            class="volume-slider"
+            type="range"
+            min="0"
+            max="100"
+            step="1"
+            :value="collabStore.getRemoteVolume(p.odps) * 100"
+            @input="handleVolumeInput(p.odps, $event)"
+          />
+        </div>
+      </div>
     </div>
     <!-- Chat Area -->
     <div class="chat-area">
@@ -112,8 +176,8 @@ function formatTime(timestamp: number): string {
             <Mic v-else class="icon" />
           </button>
         </div>
-        <button class="leave-btn" @click="collabStore.leaveRoom">
-          &#53685;&#54868; &#51333;&#47308;
+        <button class="leave-btn" @click="collabStore.disableMedia">
+          통화 종료
         </button>
       </div>
     </div>
@@ -193,6 +257,70 @@ function formatTime(timestamp: number): string {
   padding: 1rem;
   border-bottom: 1px solid var(--rose-100);
   overflow-x: auto;
+}
+
+.audio-settings {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--rose-100);
+  background: var(--gray-50);
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.audio-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.audio-label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--gray-500);
+  min-width: 48px;
+}
+
+.audio-select {
+  flex: 1;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--rose-200);
+  border-radius: 8px;
+  font-size: 0.75rem;
+  background: white;
+  color: var(--gray-700);
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.volume-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.volume-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.volume-name {
+  flex: 0 0 80px;
+  font-size: 0.7rem;
+  color: var(--gray-600);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.volume-slider {
+  flex: 1;
+  accent-color: var(--rose-500);
 }
 .add-participant {
   width: 48px;
@@ -328,4 +456,5 @@ function formatTime(timestamp: number): string {
 .leave-btn:hover {
   background: var(--error-soft);
 }
+
 </style>

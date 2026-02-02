@@ -149,8 +149,26 @@ const getScenePresenceAvatars = (sceneId: number) =>
                   @click="openPreview(scene.sceneId, index)"
                 >
                   <img
-                    :src="clip.thumbnailUrl || scene.thumbnailUrl"
+                    v-if="clip.thumbnailUrl"
+                    :src="clip.thumbnailUrl"
                     :alt="clip.label || scene.title"
+                  />
+                  <video
+                    v-else-if="clip.contentUrl"
+                    :src="clip.contentUrl"
+                    muted
+                    playsinline
+                    preload="metadata"
+                  />
+                  <img
+                    v-else-if="scene.thumbnailUrl"
+                    :src="scene.thumbnailUrl"
+                    :alt="clip.label || scene.title"
+                  />
+                  <img
+                    v-else
+                    src="/icon.png"
+                    alt="No Preview"
                   />
                   <span class="preview-duration">{{ clip.duration }}s</span>
                   <span class="preview-play">

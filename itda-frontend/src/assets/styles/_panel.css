@@ -44,6 +44,63 @@
   color: var(--gray-800, #1F2937);
 }
 
+.panel-tooltip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  cursor: help;
+}
+
+.panel-tooltip::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  left: 0;
+  top: calc(100% + 6px);
+  max-width: 260px;
+  padding: 0.45rem 0.6rem;
+  background: var(--gray-900, #111827);
+  color: #fff;
+  font-size: 0.7rem;
+  line-height: 1.4;
+  border-radius: 0.5rem;
+  white-space: normal;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-4px);
+  transition: opacity 0.15s ease, transform 0.15s ease, visibility 0.15s ease;
+  z-index: 10;
+  box-shadow: 0 12px 24px rgba(17, 24, 39, 0.18);
+}
+
+.panel-tooltip:hover::after,
+.panel-tooltip:focus-visible::after {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+}
+
+.panel-tooltip__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  border: 1px solid var(--gray-300, #D1D5DB);
+  color: var(--gray-500, #6B7280);
+  background: #fff;
+  font-size: 0.65rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.panel-tooltip:hover .panel-tooltip__icon,
+.panel-tooltip:focus-visible .panel-tooltip__icon {
+  border-color: var(--gray-400, #9CA3AF);
+  color: var(--gray-700, #374151);
+}
+
 .panel-label-badge {
   display: inline-flex;
   align-items: center;
@@ -500,11 +557,43 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 0.75rem;
   padding: 0.5rem 0.75rem;
   background: var(--rose-50, #FFFAFC);
   border: 1px solid var(--rose-200, #FFE8F2);
   border-radius: 0.75rem;
   font-size: 0.75rem;
+}
+
+.panel-selected-shot__label {
+  font-size: 0.7rem;
+  color: var(--gray-500, #6B7280);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.panel-selected-shot__value {
+  flex: 1;
+  font-weight: 600;
+  color: var(--gray-900, #111827);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.panel-selected-shot--empty {
+  background: #F9FAFB;
+  border-color: var(--gray-200, #E5E7EB);
+}
+
+.panel-selected-shot--empty .panel-selected-shot__value {
+  color: var(--gray-400, #9CA3AF);
+}
+
+.panel-selected-shot--empty .panel-label-badge {
+  border-color: var(--gray-200, #E5E7EB);
+  background: #fff;
+  color: var(--gray-500, #6B7280);
 }
 
 .panel-camera-grid {

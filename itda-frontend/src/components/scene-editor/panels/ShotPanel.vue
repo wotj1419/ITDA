@@ -2,7 +2,7 @@
 /**
  * ShotPanel - 샷 생성/편집 패널
  */
-import { ref, computed, watch } from 'vue';
+import { ref, computed, watch, nextTick, onUnmounted } from 'vue';
 import type { Node } from '@vue-flow/core';
 import type { MasterImageNodeData, ShotNodeData, StoryboardGridNodeData } from '../../../types/ui/sceneNodes';
 import { JobStatus, NodeType, PromptStatus } from '../../../types/ui/sceneNodes';
@@ -12,6 +12,7 @@ import { useObjectStore } from '../../../stores/object';
 import { useUIStore } from '../../../stores/ui';
 import { useNodeGeneration } from '../../../composables/useNodeGeneration';
 import { Camera, Smile, PenLine, FileText, Sparkles, Check, RefreshCw, LayoutGrid, Loader2 } from 'lucide-vue-next';
+import { gsap } from 'gsap';
 import { resolveExpressionKey, resolveShotTypeKey } from '../../../utils/nodeSettings';
 import { DEFAULT_GRID_LAYOUT } from '../../../utils/nodeDefaults';
 
@@ -29,14 +30,35 @@ const form = ref({
   expression: '',
   additionalDetail: '',
   prompt: '',
+  promptKo: '',
+  promptEnFinal: '',
+  promptEnFinalOverride: '',
+  usePromptOverride: false,
+  promptLang: 'EN' as 'EN' | 'KO',
 });
+
+const detailSectionRef = ref<HTMLElement | null>(null);
+const detailTextareaRef = ref<HTMLTextAreaElement | null>(null);
+const isFinalEditing = ref(false);
+let promptPreviewTimeout: ReturnType<typeof setTimeout> | null = null;
 
 const shotTypeOptions = ['와이드샷', '미디엄샷', '클로즈업', '익스트림 클로즈업'];
 const expressionOptions = ['기본', '미소', '슬픔', '놀람', '분노', '무표정'];
 
 const data = computed(() => props.node.data as ShotNodeData | undefined);
 const shotLabel = computed(() => String.fromCharCode(65 + (data.value?.gridCellIndex || 0)));
-const isPromptGenerated = computed(() => data.value?.promptStatus !== PromptStatus.DRAFT);
+const hasPromptContent = computed(() => {
+  if (!data.value) return false;
+  return Boolean(
+    (data.value.prompt ?? '').trim() ||
+    (data.value.promptKo ?? '').trim() ||
+    (data.value.promptEnFinal ?? '').trim() ||
+    (data.value.promptEnFinalOverride ?? '').trim()
+  );
+});
+const isPromptGenerated = computed(
+  () => hasPromptContent.value || data.value?.promptStatus !== PromptStatus.DRAFT
+);
 const isPromptApproved = computed(() => data.value?.promptStatus === PromptStatus.APPROVED);
 const parentGridNode = computed(() =>
   nodeStore.nodes.find(
@@ -45,6 +67,7 @@ const parentGridNode = computed(() =>
 );
 const parentGridData = computed(() => parentGridNode.value?.data as StoryboardGridNodeData | undefined);
 const gridLayout = computed(() => parentGridData.value?.layout || DEFAULT_GRID_LAYOUT);
+const parentGridMode = computed(() => parentGridData.value?.gridMode ?? 'SHOT_VARIATIONS');
 const gridCellCount = computed(() => {
   const match = gridLayout.value.match(/(\d+)x(\d+)/);
   if (!match) return 6;
@@ -54,6 +77,18 @@ const gridCellOptions = computed(() =>
   Array.from({ length: gridCellCount.value }, (_, index) => index)
 );
 const selectedGridCell = computed(() => data.value?.gridCellIndex ?? 0);
+const gridCellCutKo = computed(() => {
+  if (parentGridMode.value !== 'STORY_BEATS') return '';
+  const beats = parentGridData.value?.beats ?? [];
+  const index = data.value?.gridCellIndex ?? 0;
+  return (beats[index] ?? '').trim();
+});
+const gridCellShotTypeHint = computed(() => {
+  if (parentGridMode.value !== 'SHOT_VARIATIONS') return '';
+  const types = parentGridData.value?.shotTypes ?? [];
+  const index = data.value?.gridCellIndex ?? 0;
+  return (types[index] ?? '').trim();
+});
 const sceneHeaderData = computed(() =>
   nodeStore.nodes.find((node) => node.data?.type === NodeType.SCENE_HEADER)?.data
 );
@@ -78,18 +113,42 @@ const activeMasterObjectNames = computed(() =>
     .filter((name): name is string => Boolean(name))
 );
 
+const FINAL_PROMPT_PREFIX = 'Single cinematic still, one frame only, full-frame.';
+const FINAL_PROMPT_REFERENCE =
+  'Use the reference image only for continuity: same characters, wardrobe, lighting, color palette, and environment.';
+const FINAL_PROMPT_NEGATIVE = 'No split frames, no panels, no collage, no borders.';
+
+function buildFinalPrompt(base?: string | null): string {
+  const trimmed = (base ?? '').trim();
+  if (!trimmed) return '';
+  const lower = trimmed.toLowerCase();
+  const lines: string[] = [];
+  if (!lower.includes('single cinematic still') && !lower.includes('one frame only')) {
+    lines.push(FINAL_PROMPT_PREFIX);
+  }
+  if (!lower.includes('reference image') && !lower.includes('continuity')) {
+    lines.push(FINAL_PROMPT_REFERENCE);
+  }
+  lines.push(trimmed);
+  if (!/no split frames|no panels|no collage|no borders/i.test(trimmed)) {
+    lines.push(FINAL_PROMPT_NEGATIVE);
+  }
+  return lines.join('\n');
+}
+
 const {
   isGeneratingPrompt,
   isGeneratingJob: isGeneratingShot,
   clearError,
   generatePrompt,
   approvePrompt,
+  refreshPromptPreview,
   runGeneration: generateShot,
 } = useNodeGeneration({
   nodeId: props.node.id,
   nodeType: 'SHOT',
   toastType: 'shot',
-  getPrompt: () => form.value.prompt,
+  getPrompt: () => buildFinalPrompt(form.value.prompt),
   getPromptPayload: () => ({
     nodeType: 'SHOT',
     sceneOneLine: buildSceneOneLine(),
@@ -101,19 +160,46 @@ const {
     expression: form.value.expression,
     additionalDetail: form.value.additionalDetail,
   }),
-  getPromptUpdate: (prompt) => ({
+  getPromptUpdate: (result) => ({
     shotType: buildShotTypeValue(form.value.shotTypes),
     shotTypes: [...form.value.shotTypes],
     expression: form.value.expression,
     additionalDetail: form.value.additionalDetail,
-    prompt,
+    prompt: result.promptEnBase,
+    promptKo: result.promptKo,
   }),
-  getApprovedUpdate: () => ({ prompt: form.value.prompt }),
+  getImproveInstruction: () => form.value.additionalDetail,
+  getApprovedUpdate: () => ({
+    prompt: form.value.prompt,
+    promptKo: form.value.promptKo,
+    promptEnFinalOverride: form.value.usePromptOverride ? form.value.promptEnFinalOverride : '',
+  }),
   getJobSettings: () => ({
     gridCellIndex: data.value?.gridCellIndex ?? 0,
     shotType: resolveShotTypeKey(form.value.shotTypes[0] ?? data.value?.shotType),
     expressionKey: resolveExpressionKey(form.value.expression),
     detailKo: form.value.additionalDetail,
+    gridCellCutKo: gridCellCutKo.value,
+  }),
+  getReferenceObjectIds: () =>
+    activeMasterData.value?.objectIds?.length ? [...activeMasterData.value.objectIds] : undefined,
+  getPromptOverride: () =>
+    form.value.usePromptOverride ? buildFinalPrompt(form.value.promptEnFinalOverride) : '',
+  getPromptPreviewPayload: () => ({
+    prompt: buildFinalPrompt(form.value.prompt),
+    settings: {
+      gridCellIndex: data.value?.gridCellIndex ?? 0,
+      shotType: resolveShotTypeKey(form.value.shotTypes[0] ?? data.value?.shotType),
+      expressionKey: resolveExpressionKey(form.value.expression),
+      detailKo: form.value.additionalDetail,
+      gridCellCutKo: gridCellCutKo.value,
+    },
+    promptEnFinalOverride: form.value.usePromptOverride
+      ? buildFinalPrompt(form.value.promptEnFinalOverride)
+      : '',
+  }),
+  onPromptPreview: (result) => ({
+    promptEnFinal: result.promptEnFinal,
   }),
   getJobSuccessUpdate: ({ resultUrl, thumbnailUrl }) => ({
     imageUrl: resultUrl || null,
@@ -154,8 +240,13 @@ function buildSceneOneLine(): string {
   if (parentGridData.value?.compositionHint) {
     parts.push(`composition: ${parentGridData.value.compositionHint}`);
   }
+  if (parentGridMode.value === 'STORY_BEATS' && gridCellCutKo.value) {
+    parts.push(`gridCut: ${gridCellCutKo.value}`);
+  }
   if (form.value.shotTypes.length) {
     parts.push(`shotType: ${buildShotTypeValue(form.value.shotTypes)}`);
+  } else if (gridCellShotTypeHint.value) {
+    parts.push(`shotType: ${gridCellShotTypeHint.value}`);
   }
   if (form.value.expression) parts.push(`expression: ${form.value.expression}`);
   if (form.value.additionalDetail) parts.push(`detail: ${form.value.additionalDetail}`);
@@ -171,6 +262,66 @@ function toggleShotType(type: string): void {
   }
 }
 
+function toggleFinalEditing(): void {
+  if (!form.value.usePromptOverride) {
+    form.value.usePromptOverride = true;
+    form.value.promptEnFinalOverride = form.value.promptEnFinal || form.value.prompt;
+    isFinalEditing.value = true;
+    return;
+  }
+
+  if (isFinalEditing.value && !form.value.promptEnFinalOverride.trim()) {
+    form.value.promptEnFinalOverride = form.value.promptEnFinal || form.value.prompt;
+  }
+
+  isFinalEditing.value = !isFinalEditing.value;
+}
+
+function queuePromptPreview(): void {
+  if (!form.value.prompt.trim()) return;
+  if (form.value.usePromptOverride) return;
+  if (promptPreviewTimeout) clearTimeout(promptPreviewTimeout);
+  promptPreviewTimeout = setTimeout(() => {
+    promptPreviewTimeout = null;
+    refreshPromptPreview();
+  }, 600);
+}
+
+async function focusDetailEditor(): Promise<void> {
+  await nextTick();
+  if (detailSectionRef.value) {
+    const container = detailSectionRef.value.closest('.base-panel__content') as HTMLElement | null;
+    if (container) {
+      const containerRect = container.getBoundingClientRect();
+      const sectionRect = detailSectionRef.value.getBoundingClientRect();
+      const currentScroll = container.scrollTop;
+      const offset = sectionRect.top - containerRect.top;
+      const centeredOffset = (container.clientHeight - sectionRect.height) / 2;
+      const rawTarget = currentScroll + offset - centeredOffset;
+      const maxScroll = Math.max(0, container.scrollHeight - container.clientHeight);
+      const targetScroll = Math.min(Math.max(0, rawTarget), maxScroll);
+      gsap.to(container, { scrollTop: targetScroll, duration: 0.45, ease: 'power2.out' });
+    } else {
+      detailSectionRef.value.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+    gsap.killTweensOf(detailSectionRef.value);
+    gsap.fromTo(
+      detailSectionRef.value,
+      { boxShadow: '0 0 0 0 rgba(255, 107, 138, 0)', backgroundColor: 'rgba(255, 250, 252, 0)' },
+      {
+        boxShadow: '0 0 0 12px rgba(255, 107, 138, 0.35)',
+        backgroundColor: 'rgba(255, 250, 252, 0.9)',
+        duration: 0.35,
+        yoyo: true,
+        repeat: 1,
+        ease: 'power2.out',
+        clearProps: 'boxShadow,backgroundColor',
+      }
+    );
+  }
+  detailTextareaRef.value?.focus();
+}
+
 watch(() => props.node.id, () => {
   if (!data.value) return;
   const fallbackShotTypes =
@@ -182,7 +333,13 @@ watch(() => props.node.id, () => {
     expression: data.value.expression || '',
     additionalDetail: data.value.additionalDetail || '',
     prompt: data.value.prompt || '',
+    promptKo: data.value.promptKo || '',
+    promptEnFinal: data.value.promptEnFinal || '',
+    promptEnFinalOverride: data.value.promptEnFinalOverride || '',
+    usePromptOverride: Boolean(data.value.promptEnFinalOverride),
+    promptLang: 'EN',
   };
+  isFinalEditing.value = false;
   clearError();
 }, { immediate: true });
 
@@ -193,6 +350,37 @@ watch(
     if (normalized !== form.value.prompt) {
       form.value.prompt = normalized;
     }
+  }
+);
+
+watch(
+  () => data.value?.promptKo,
+  (nextPromptKo) => {
+    const normalized = nextPromptKo ?? '';
+    if (normalized !== form.value.promptKo) {
+      form.value.promptKo = normalized;
+    }
+  }
+);
+
+watch(
+  () => data.value?.promptEnFinal,
+  (nextPromptEnFinal) => {
+    const normalized = nextPromptEnFinal ?? '';
+    if (normalized !== form.value.promptEnFinal) {
+      form.value.promptEnFinal = normalized;
+    }
+  }
+);
+
+watch(
+  () => data.value?.promptEnFinalOverride,
+  (nextPromptOverride) => {
+    const normalized = nextPromptOverride ?? '';
+    if (normalized !== form.value.promptEnFinalOverride) {
+      form.value.promptEnFinalOverride = normalized;
+    }
+    form.value.usePromptOverride = Boolean(normalized);
   }
 );
 
@@ -209,6 +397,71 @@ watch(
     form.value.additionalDetail = data.value.additionalDetail || '';
   }
 );
+
+watch(
+  () => [
+    form.value.prompt,
+    form.value.promptKo,
+    form.value.promptEnFinalOverride,
+    form.value.usePromptOverride,
+    form.value.additionalDetail,
+  ],
+  () => {
+    if (!data.value) return;
+    const updates: Partial<ShotNodeData> = {};
+    if (form.value.prompt !== (data.value.prompt ?? '')) {
+      updates.prompt = form.value.prompt;
+    }
+    if (form.value.promptKo !== (data.value.promptKo ?? '')) {
+      updates.promptKo = form.value.promptKo;
+    }
+    if (form.value.additionalDetail !== (data.value.additionalDetail ?? '')) {
+      updates.additionalDetail = form.value.additionalDetail;
+    }
+    const nextOverride = form.value.usePromptOverride ? form.value.promptEnFinalOverride : '';
+    if (nextOverride !== (data.value.promptEnFinalOverride ?? '')) {
+      updates.promptEnFinalOverride = nextOverride;
+    }
+    if (Object.keys(updates).length > 0) {
+      nodeStore.updateNodeLocal(props.node.id, updates);
+    }
+  }
+);
+
+watch(
+  () => [parentGridMode.value, gridCellShotTypeHint.value, data.value?.gridCellIndex],
+  () => {
+    if (parentGridMode.value !== 'SHOT_VARIATIONS') return;
+    if (form.value.shotTypes.length > 0) return;
+    if (!gridCellShotTypeHint.value) return;
+    form.value.shotTypes = [gridCellShotTypeHint.value];
+  }
+);
+
+watch(
+  () => ({
+    prompt: form.value.prompt,
+    shotTypes: form.value.shotTypes.slice(),
+    expression: form.value.expression,
+    additionalDetail: form.value.additionalDetail,
+    style: activeMasterData.value?.style,
+    timeOfDay: activeMasterData.value?.timeOfDay,
+    mood: activeMasterData.value?.mood,
+    objectIds: activeMasterData.value?.objectIds ?? [],
+    usePromptOverride: form.value.usePromptOverride,
+  }),
+  () => {
+    queuePromptPreview();
+  },
+  { deep: true }
+);
+
+onUnmounted(() => {
+  if (promptPreviewTimeout) {
+    clearTimeout(promptPreviewTimeout);
+    promptPreviewTimeout = null;
+  }
+});
 
 function selectGridCell(index: number): void {
   nodeStore.updateNode(props.node.id, { gridCellIndex: index });
@@ -294,18 +547,71 @@ function handleGenerateShot(): void {
         </div>
       </div>
 
-      <!-- Additional Detail -->
-      <div class="panel-section">
+      <!-- Detail Change -->
+      <div class="panel-section" ref="detailSectionRef">
         <label class="panel-label">
           <PenLine class="panel-label-icon" />
-          추가 디테일 (선택)
+          디테일 변경 (선택)
         </label>
         <textarea
+          ref="detailTextareaRef"
           v-model="form.additionalDetail"
           class="panel-textarea"
           rows="2"
-          placeholder="추가 지시사항 입력"
+          placeholder="예: 소품/질감/표정 등 추가 지시사항"
         ></textarea>
+      </div>
+
+      <!-- Narrative Prompt -->
+      <div class="panel-section">
+        <div class="panel-label-row">
+          <label class="panel-label">
+            <FileText class="panel-label-icon" />
+            서술 프롬프트
+          </label>
+          <div class="panel-segmented" role="tablist" aria-label="Prompt language">
+            <button
+              type="button"
+              class="panel-segmented__btn"
+              :class="{ 'is-active': form.promptLang === 'EN' }"
+              @click="form.promptLang = 'EN'"
+            >
+              EN
+            </button>
+            <button
+              type="button"
+              class="panel-segmented__btn"
+              :class="{ 'is-active': form.promptLang === 'KO' }"
+              @click="form.promptLang = 'KO'"
+            >
+              KO
+            </button>
+          </div>
+        </div>
+        <p
+          class="panel-subtext panel-tooltip"
+          data-tooltip="서술 프롬프트는 읽기 전용입니다. 한글 수정은 디테일 변경에서 가능합니다."
+        >
+          {{ form.promptLang === 'EN' ? '원본(읽기 전용)' : '번역(읽기 전용)' }}
+          <span class="panel-tooltip__icon">?</span>
+        </p>
+        <div v-if="form.promptLang === 'EN'">
+          <textarea
+            v-model="form.prompt"
+            class="panel-textarea panel-textarea--prompt"
+            rows="4"
+            placeholder="예: A quiet alley glows with neon reflections as the character pauses."
+            readonly
+          ></textarea>
+        </div>
+        <div v-else class="panel-translation-block">
+          <textarea
+            v-model="form.promptKo"
+            class="panel-textarea panel-textarea--prompt"
+            rows="4"
+            readonly
+          ></textarea>
+        </div>
       </div>
 
       <!-- Generate Prompt -->
@@ -316,17 +622,45 @@ function handleGenerateShot(): void {
       >
         <Loader2 v-if="isGeneratingPrompt" class="panel-btn-icon panel-btn-icon--spin" />
         <Sparkles v-else class="panel-btn-icon" />
-        {{ isGeneratingPrompt ? '생성 중...' : '프롬프트 생성' }}
+        {{ isGeneratingPrompt ? '생성 중...' : 'AI로 다듬기' }}
       </button>
 
       <!-- Generated Prompt -->
       <div v-if="isPromptGenerated" class="panel-section panel-section--prompt">
         <label class="panel-label">
           <FileText class="panel-label-icon" />
-          AI 프롬프트
-          <span class="panel-label-badge">생성됨</span>
+          최종 프롬프트 (영어)
         </label>
-        <textarea v-model="form.prompt" class="panel-textarea panel-textarea--prompt" rows="3"></textarea>
+        <textarea
+          v-if="form.usePromptOverride"
+          v-model="form.promptEnFinalOverride"
+          class="panel-textarea panel-textarea--prompt"
+          rows="3"
+          :readonly="!isFinalEditing"
+          placeholder="최종 영어 프롬프트를 직접 입력하세요."
+        ></textarea>
+        <textarea
+          v-else
+          :value="form.promptEnFinal"
+          class="panel-textarea panel-textarea--prompt"
+          rows="3"
+          readonly
+          placeholder="자동으로 갱신됩니다."
+        ></textarea>
+
+        <div class="panel-prompt-actions">
+          <button
+            class="panel-btn panel-btn--text"
+            :disabled="!form.promptEnFinal && !form.prompt"
+            @click="toggleFinalEditing"
+          >
+            {{ isFinalEditing ? '편집 완료' : '영문 직접 편집' }}
+          </button>
+          <button class="panel-btn panel-btn--text" @click="focusDetailEditor">
+            한글 편집
+          </button>
+        </div>
+
         <div class="panel-prompt-actions panel-prompt-actions--right">
           <button class="panel-btn panel-btn--text" :disabled="isGeneratingPrompt || isGeneratingShot" @click="generatePrompt">
             <Loader2 v-if="isGeneratingPrompt" class="panel-btn-icon panel-btn-icon--spin" />
@@ -361,3 +695,60 @@ function handleGenerateShot(): void {
     </template>
   </BasePanel>
 </template>
+
+<style scoped>
+.panel-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.35rem;
+}
+
+.panel-segmented {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0.15rem;
+  background: var(--gray-100, #F3F4F6);
+  border-radius: 999px;
+}
+
+.panel-segmented__btn {
+  border: 0;
+  background: transparent;
+  padding: 0.2rem 0.65rem;
+  font-size: 0.7rem;
+  color: var(--gray-600, #4B5563);
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.panel-segmented__btn.is-active {
+  background: var(--gray-900, #111827);
+  color: var(--gray-50, #F9FAFB);
+  box-shadow: 0 2px 6px rgba(17, 24, 39, 0.18);
+}
+
+.panel-subtext {
+  margin: 0 0 0.5rem;
+  font-size: 0.75rem;
+  color: var(--gray-500, #6B7280);
+}
+
+.panel-translation-block .panel-prompt-actions {
+  margin-top: 0.4rem;
+}
+
+.panel-btn--sync--muted {
+  background: var(--gray-100, #F3F4F6);
+  color: var(--gray-500, #6B7280);
+  border-color: var(--gray-200, #E5E7EB);
+}
+
+.panel-btn--sync--muted:hover {
+  background: var(--gray-100, #F3F4F6);
+  color: var(--gray-500, #6B7280);
+  border-color: var(--gray-200, #E5E7EB);
+}
+</style>

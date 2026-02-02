@@ -1,17 +1,17 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 /**
- * BasePanel - 공통 패널 레이아웃
- * Sticky Footer 패턴 적용
+ * BasePanel - 怨듯넻 ?⑤꼸 ?덉씠?꾩썐
+ * Sticky Footer ?⑦꽩 ?곸슜
  * 
- * 설계 문서: docs/vue-flow-node-workflow-design.md Section 6.2
+ * ?ㅺ퀎 臾몄꽌: docs/vue-flow-node-workflow-design.md Section 6.2
  */
 
 // =============================================================================
 // Props & Slots
 // =============================================================================
-import { inject } from 'vue';
+import { computed, inject } from 'vue';
 import type { Component, ComputedRef } from 'vue';
-import { Trash2, X } from 'lucide-vue-next';
+import { Lock, Trash2, X } from 'lucide-vue-next';
 
 interface Props {
   title: string;
@@ -23,10 +23,13 @@ defineProps<Props>();
 const panelClose = inject<(() => void) | null>('nodePanelClose', null);
 const panelDelete = inject<(() => void) | null>('nodePanelDelete', null);
 const panelCanDelete = inject<ComputedRef<boolean> | null>('nodePanelCanDelete', null);
+const panelLock = inject<ComputedRef<{ name: string } | null> | null>('nodePanelLock', null);
+const isLocked = computed(() => Boolean(panelLock?.value));
+const canDelete = computed(() => Boolean(panelCanDelete && panelCanDelete.value));
 </script>
 
 <template>
-  <div class="base-panel">
+  <div class="base-panel" :class="{ 'base-panel--locked': isLocked }">
     <!-- Header (Sticky) -->
     <header class="base-panel__header">
       <div class="base-panel__title-row">
@@ -38,9 +41,10 @@ const panelCanDelete = inject<ComputedRef<boolean> | null>('nodePanelCanDelete',
       <div v-if="panelClose" class="base-panel__actions">
         <slot name="header-actions" />
         <button
-          v-if="panelCanDelete && panelDelete"
+          v-if="canDelete && panelDelete"
           type="button"
           class="base-panel__delete"
+          :disabled="isLocked"
           title="노드 삭제"
           aria-label="노드 삭제"
           @click="panelDelete"
@@ -62,7 +66,14 @@ const panelCanDelete = inject<ComputedRef<boolean> | null>('nodePanelCanDelete',
 
     <!-- Content (Scrollable) -->
     <div class="base-panel__content">
-      <slot />
+      <div v-if="isLocked" class="base-panel__lock-banner" role="alert">
+        <Lock class="base-panel__lock-icon" />
+        <span class="base-panel__lock-text">
+          {{ panelLock?.name || '다른 사용자' }} 님이 작업 중이에요.</span>
+      </div>
+      <div class="base-panel__content-body">
+        <slot />
+      </div>
     </div>
 
     <!-- Footer (Sticky) -->
@@ -145,6 +156,42 @@ const panelCanDelete = inject<ComputedRef<boolean> | null>('nodePanelCanDelete',
   min-height: 0;
   padding: 0 2rem 2rem;
   background: #fff;
+}
+
+.base-panel__content-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.base-panel__lock-banner {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 0.75rem;
+  margin-bottom: 1rem;
+  border-radius: 0.75rem;
+  border: 1px solid #fed7aa;
+  background: #fff7ed;
+  color: #9a3412;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.base-panel__lock-icon {
+  width: 14px;
+  height: 14px;
+}
+
+.base-panel--locked .base-panel__content-body,
+.base-panel--locked .base-panel__footer {
+  pointer-events: none;
+  opacity: 0.6;
+}
+
+.base-panel--locked .base-panel__actions button:not(.base-panel__close) {
+  pointer-events: none;
+  opacity: 0.6;
 }
 
 .base-panel__footer {

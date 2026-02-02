@@ -43,7 +43,7 @@ public class GeminiProperties {
     /**
      * API timeout in milliseconds.
      */
-    private long timeoutMs = 60000;
+    private long timeoutMs = 180000;
 
     /**
      * Preferred response mime type for image generation (Gemini generateContent).

@@ -77,6 +77,7 @@ pipeline {
         DOCKER_IMAGE = 'yh2222/aimovie-api:latest'
         DEPLOY_DIR = '/opt/itda/deploy'
         LOG_FILE = 'jenkins-console.log'
+        VITE_WS_URL = 'https://itdas.duckdns.org/ws'
     }
 
     stages {
@@ -124,7 +125,7 @@ pipeline {
         stage('Frontend Build') {
             steps {
                 dir('itda-frontend') {
-                    shLog 'npm run build'
+                    shLog 'VITE_WS_URL=$VITE_WS_URL npm run build'
                 }
             }
         }

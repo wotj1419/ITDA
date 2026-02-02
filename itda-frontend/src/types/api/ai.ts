@@ -5,6 +5,9 @@
 export interface GeneratePromptRequest {
   nodeType: 'MASTER' | 'GRID' | 'SHOT' | 'VIDEO';
   sceneOneLine?: string;
+  prompt?: string;
+  gridMode?: 'SHOT_VARIATIONS' | 'STORY_BEATS';
+  timelineIntervalSeconds?: number;
   // Master Image
   style?: string;
   timeOfDay?: string;
@@ -26,7 +29,14 @@ export interface GeneratePromptRequest {
 }
 
 export interface GeneratePromptResponse {
-  prompt: string;
+  promptEnBase: string;
+  promptKo: string;
+  timelineCuts?: string[];
+}
+
+export interface TranslatePromptResponse {
+  promptEnBase: string;
+  promptKo: string;
 }
 
 // =============================================================================
@@ -37,6 +47,19 @@ export interface GenerateNodeRequest {
   prompt: string;
   nodeType: 'MASTER' | 'GRID' | 'SHOT' | 'VIDEO';
   settings?: Record<string, unknown>;
+  promptEnFinalOverride?: string;
+  referenceObjectIds?: number[];
+}
+
+export interface PromptPreviewRequest {
+  prompt: string;
+  settings?: Record<string, unknown>;
+  promptEnFinalOverride?: string;
+}
+
+export interface PromptPreviewResponse {
+  promptEnFinal: string;
+  source: 'RENDERED' | 'OVERRIDE';
 }
 
 export interface GenerateJobResponse {

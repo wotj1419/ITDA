@@ -224,7 +224,7 @@ public class ScenarioService {
         lines.add("[전개]");
         lines.add("... (3문장)");
         lines.add("");
-        lines.add("[클라이맥스]");
+        lines.add("[절정]");
         lines.add("... (3문장)");
         lines.add("");
         lines.add("[결말]");

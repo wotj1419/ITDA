@@ -29,6 +29,16 @@ public class VertexGeminiKoEnTranslator implements KoEnTranslator {
         return translateSingle(trimmed);
     }
 
+    @Override
+    public String toEnglishMultiSentence(String text) {
+        String trimmed = Optional.ofNullable(text).map(String::trim).orElse("");
+        if (trimmed.isEmpty()) {
+            return "";
+        }
+
+        return translateMultiSentence(trimmed);
+    }
+
     private String buildPrompt(String input) {
         return String.join(
                 "\n",
@@ -36,6 +46,18 @@ public class VertexGeminiKoEnTranslator implements KoEnTranslator {
                 "- Output ONLY the English sentence (no quotes, no bullet points, no JSON).",
                 "- If the input contains mixed languages, normalize the output to English only.",
                 "- Keep key proper nouns and concrete details.",
+                "Text:",
+                input
+        );
+    }
+
+    private String buildMultiSentencePrompt(String input) {
+        return String.join(
+                "\n",
+                "Translate the following text into 1-2 natural English sentences.",
+                "- Preserve key details; avoid over-summarizing.",
+                "- Output ONLY the English sentences (no quotes, no bullet points, no JSON).",
+                "- If the input contains mixed languages, normalize the output to English only.",
                 "Text:",
                 input
         );
@@ -79,6 +101,44 @@ public class VertexGeminiKoEnTranslator implements KoEnTranslator {
         return fallback;
     }
 
+    @Override
+    public Map<String, String> toEnglishMultiSentenceMany(Map<String, String> texts) {
+        if (texts == null || texts.isEmpty()) {
+            return Map.of();
+        }
+
+        Map<String, String> normalizedInput = new LinkedHashMap<>();
+        for (Map.Entry<String, String> entry : texts.entrySet()) {
+            String key = entry.getKey();
+            if (key == null || key.isBlank()) {
+                continue;
+            }
+            String value = Optional.ofNullable(entry.getValue()).map(String::trim).orElse("");
+            normalizedInput.put(key, value);
+        }
+        if (normalizedInput.isEmpty()) {
+            return Map.of();
+        }
+
+        try {
+            String prompt = buildBatchMultiSentencePrompt(normalizedInput);
+            TextGenerationResponse response = vertexAiGeminiClient.generate(new TextGenerationRequest(prompt, null));
+            Map<String, String> parsed = parseJsonMap(response == null ? null : response.text());
+            if (parsed != null && !parsed.isEmpty()) {
+                return fillMissingWithEmptyMulti(normalizedInput, parsed);
+            }
+        } catch (Exception ignored) {
+            // fall through to per-item translation
+        }
+
+        Map<String, String> fallback = new LinkedHashMap<>();
+        for (Map.Entry<String, String> entry : normalizedInput.entrySet()) {
+            String value = entry.getValue();
+            fallback.put(entry.getKey(), value.isEmpty() ? "" : translateMultiSentence(value));
+        }
+        return fallback;
+    }
+
     private String buildBatchPrompt(Map<String, String> inputs) throws Exception {
         String json = objectMapper.writeValueAsString(inputs);
         return String.join(
@@ -88,6 +148,22 @@ public class VertexGeminiKoEnTranslator implements KoEnTranslator {
                 "Rules:",
                 "- Output ONLY a valid JSON object with the SAME keys.",
                 "- Each value must be a single English sentence string (no bullet points, no markdown, no extra keys).",
+                "- If the input value is blank, output an empty string for that key.",
+                "- If the input contains mixed languages, normalize the output to English only.",
+                "Input JSON:",
+                json
+        );
+    }
+
+    private String buildBatchMultiSentencePrompt(Map<String, String> inputs) throws Exception {
+        String json = objectMapper.writeValueAsString(inputs);
+        return String.join(
+                "\n",
+                "You are given a JSON object of key-value pairs.",
+                "For each key, translate the value into 1-2 natural English sentences.",
+                "Rules:",
+                "- Output ONLY a valid JSON object with the SAME keys.",
+                "- Each value must be plain English sentences (no bullet points, no markdown, no extra keys).",
                 "- If the input value is blank, output an empty string for that key.",
                 "- If the input contains mixed languages, normalize the output to English only.",
                 "Input JSON:",
@@ -118,6 +194,15 @@ public class VertexGeminiKoEnTranslator implements KoEnTranslator {
         return result;
     }
 
+    private Map<String, String> fillMissingWithEmptyMulti(Map<String, String> requestedKeys, Map<String, String> parsed) {
+        Map<String, String> result = new LinkedHashMap<>();
+        for (String key : requestedKeys.keySet()) {
+            String value = parsed.get(key);
+            result.put(key, normalizeParagraph(value));
+        }
+        return result;
+    }
+
     private String translateSingle(String input) {
         if (input == null || input.isBlank()) {
             return "";
@@ -125,6 +210,15 @@ public class VertexGeminiKoEnTranslator implements KoEnTranslator {
         String prompt = buildPrompt(input);
         TextGenerationResponse response = vertexAiGeminiClient.generate(new TextGenerationRequest(prompt, null));
         return normalizeOneSentence(response == null ? null : response.text());
+    }
+
+    private String translateMultiSentence(String input) {
+        if (input == null || input.isBlank()) {
+            return "";
+        }
+        String prompt = buildMultiSentencePrompt(input);
+        TextGenerationResponse response = vertexAiGeminiClient.generate(new TextGenerationRequest(prompt, null));
+        return normalizeParagraph(response == null ? null : response.text());
     }
 
     private String normalizeOneSentence(String raw) {
@@ -141,5 +235,26 @@ public class VertexGeminiKoEnTranslator implements KoEnTranslator {
             firstLine = firstLine.substring(1, firstLine.length() - 1).trim();
         }
         return firstLine;
+    }
+
+    private String normalizeParagraph(String raw) {
+        if (raw == null) {
+            return "";
+        }
+        String trimmed = raw.trim();
+        if (trimmed.isEmpty()) {
+            return "";
+        }
+        if (trimmed.startsWith("\"") && trimmed.endsWith("\"") && trimmed.length() >= 2) {
+            trimmed = trimmed.substring(1, trimmed.length() - 1).trim();
+        }
+        if (trimmed.startsWith("- ")) {
+            trimmed = trimmed.substring(2).trim();
+        } else if (trimmed.startsWith("* ")) {
+            trimmed = trimmed.substring(2).trim();
+        }
+        trimmed = trimmed.replaceAll("\\s*\\n+\\s*", " ");
+        trimmed = trimmed.replaceAll("\\s{2,}", " ");
+        return trimmed;
     }
 }

@@ -4,6 +4,7 @@ export interface TimelineItem {
   sceneId: number;
   sceneTitle?: string;
   thumbnailUrl?: string;
+  videoUrl?: string;
   url?: string;
   duration: number;
   order: number;

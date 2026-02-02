@@ -1,12 +1,16 @@
 package com.itda.backend.ai.service;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.itda.backend.ai.VertexAiGeminiClient;
 import com.itda.backend.ai.controller.dto.request.AiPromptGenerateRequest;
 import com.itda.backend.ai.controller.dto.request.AiPromptImproveRequest;
+import com.itda.backend.ai.controller.dto.response.AiPromptResponse;
 import com.itda.backend.ai.dto.request.TextGenerationRequest;
 import com.itda.backend.ai.dto.response.TextGenerationResponse;
 import com.itda.backend.node.domain.NodeType;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -18,67 +22,133 @@ import java.util.Optional;
  */
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class AiPromptService {
 
-    private final VertexAiGeminiClient vertexAiGeminiClient;
+    private static final int DEFAULT_TIMELINE_INTERVAL_SECONDS = 2;
 
-    public String generatePrompt(AiPromptGenerateRequest request) {
-        String prompt = buildGeneratePrompt(request);
-        TextGenerationResponse response = vertexAiGeminiClient.generate(new TextGenerationRequest(prompt, null));
-        return sanitizePromptKo(response.text());
+    private final VertexAiGeminiClient vertexAiGeminiClient;
+    private final PromptTranslationService promptTranslationService;
+    private final ObjectMapper objectMapper;
+
+    public AiPromptResponse generatePrompt(AiPromptGenerateRequest request) {
+        String promptEnBase = resolvePromptEnBase(request);
+        String promptKo = "";
+        try {
+            promptKo = promptTranslationService.translateEnToKo(promptEnBase);
+        } catch (Exception e) {
+            log.warn("Failed to translate prompt to Korean: reason={}", e.getMessage());
+        }
+        var timelineCuts = generateTimelineCutsIfNeeded(request, promptEnBase);
+        logGeneratedPrompt(request, promptEnBase, promptKo);
+        return new AiPromptResponse(promptEnBase, promptKo, timelineCuts);
     }
 
-    public String improvePrompt(AiPromptImproveRequest request) {
+    public AiPromptResponse improvePrompt(AiPromptImproveRequest request) {
         String prompt = buildImprovePrompt(request);
         TextGenerationResponse response = vertexAiGeminiClient.generate(new TextGenerationRequest(prompt, null));
-        return sanitizePromptKo(response.text());
+        String promptEnBase = sanitizePromptLine(response == null ? null : response.text());
+        String promptKo = "";
+        try {
+            promptKo = promptTranslationService.translateEnToKo(promptEnBase);
+        } catch (Exception e) {
+            log.warn("Failed to translate prompt to Korean: reason={}", e.getMessage());
+        }
+        return new AiPromptResponse(promptEnBase, promptKo, null);
+    }
+
+    private String resolvePromptEnBase(AiPromptGenerateRequest request) {
+        String provided = sanitizePromptLine(request == null ? null : request.prompt());
+        if (!provided.isBlank()) {
+            return provided;
+        }
+        String prompt = buildGeneratePrompt(request);
+        TextGenerationResponse response = vertexAiGeminiClient.generate(new TextGenerationRequest(prompt, null));
+        return sanitizePromptLine(response == null ? null : response.text());
     }
 
     private String buildGeneratePrompt(AiPromptGenerateRequest request) {
         List<String> lines = new ArrayList<>();
-        lines.add("다음 정보를 바탕으로 한국어 프롬프트를 1~2문장으로 작성하세요.");
-        lines.add("출력 형식: 프롬프트 문장만. 줄바꿈/불릿/번호/접두어(\"프롬프트:\")/JSON/코드 금지.");
-        lines.add("톤(분위기)은 감정/서사(예: 슬픔/외로움) 대신 조명/색감/콘트라스트로만 표현하세요.");
+        lines.add("Write an English prompt for image/video generation.");
+        lines.add("- Describe ONE coherent scene as 2 to 4 sentences (no keyword list).");
+        lines.add("- Output ONLY the prompt text (no bullets, no numbering, no quotes, no JSON, no code, no 'prompt:' prefix).");
+        lines.add("- Focus on subject appearance, action, environment, and camera framing/angle.");
+        lines.add("- Keep lighting physically plausible: single time of day, single dominant light source; avoid contradictory color/lighting instructions.");
+        lines.add("- Do not mention watermarks, subtitles, captions, or logos.");
+        lines.add("");
 
         NodeType nodeType = request == null ? null : request.nodeType();
         if (nodeType != null) {
             lines.add(switch (nodeType) {
-                case MASTER -> "가이드: 씬의 기준 룩을 잡는 와이드 establishing shot을 떠올리게 쓰세요.";
-                case GRID -> "가이드: 한 장의 스토리보드 그리드 이미지(같은 순간/같은 장면, 프레이밍만 변화)를 떠올리게 쓰세요.";
-                case SHOT -> "가이드: 선택된 컷을 고품질 단일 프레임으로 재생성하는 느낌으로 쓰세요.";
-                case VIDEO -> "가이드: 단일 연속 숏(컷/시간점프 없음)으로 자연스러운 움직임을 유도하세요.";
-                case SCENE_HEADER -> "가이드: 장면의 제목/설명 컨텍스트를 요약하는 느낌으로 쓰세요.";
+                case MASTER -> "Guide: opening establishing still frame; wide shot; include environment, layout, key props; no temporal progression or passing-by.";
+                case GRID -> {
+                    String gridMode = safe(request == null ? null : request.gridMode());
+                    if (gridMode.equalsIgnoreCase("STORY_BEATS")) {
+                        yield "Guide: describe sequential still frames for timeline cuts; each panel is a frozen moment sampled every 2 seconds; keep details consistent across panels.";
+                    }
+                    yield "Guide: describe the shared scene moment; avoid sequencing; keep details consistent across panels.";
+                }
+                case SHOT -> "Guide: focus on a single frame with clear subject pose, gaze, hands, and foreground/background relation.";
+                case VIDEO -> String.join(" ",
+                        "Guide: single continuous shot is preferred; describe a natural motion arc from start to end.",
+                        "If endShot* hints are present, a gentle cinematic transition (soft cross-dissolve or brief occlusion) is allowed; avoid hard cuts.",
+                        "Focus on the motion between the start and end frames; keep the scene, lighting, and background fixed.",
+                        "Do NOT add new objects, locations, or extra background description beyond what is necessary for the motion.",
+                        "If the inputs include endShot* fields, treat them as the target end-frame state.",
+                        "Avoid real people, celebrities, minors, sexual content, graphic violence, hate/harassment, and self-harm.",
+                        "Use fictional adult characters only.",
+                        "Do not use school/student/uniform or child/teen language; use adult, neutral wording and public/corporate spaces instead.",
+                        "Output must NOT include any of: student, school, uniform, teen, teenager, boy, girl, child, kid, kids, children, schoolgirl, schoolboy."
+                );
+                case SCENE_HEADER -> "Guide: summarize the scene context briefly.";
             });
+            lines.add("");
         }
 
-        lines.add("노드 타입: " + safe(nodeType));
-        lines.add("장면 한줄: " + safe(request == null ? null : request.sceneOneLine()));
-        lines.add("스타일: " + safe(request == null ? null : request.style()));
-        lines.add("시간대: " + safe(request == null ? null : request.timeOfDay()));
-        lines.add("톤(조명/색감): " + safe(request == null ? null : request.mood()));
+        lines.add("Inputs:");
+        lines.add("nodeType: " + safe(nodeType));
+        lines.add("sceneOneLine: " + safe(request == null ? null : request.sceneOneLine()));
+        lines.add("style(optional constraint): " + safe(request == null ? null : request.style()));
+        lines.add("timeOfDay(optional constraint): " + safe(request == null ? null : request.timeOfDay()));
+        lines.add("mood(optional constraint): " + safe(request == null ? null : request.mood()));
         if (request != null && request.objects() != null && !request.objects().isEmpty()) {
-            lines.add("오브젝트: " + String.join(", ", request.objects()));
+            lines.add("Objects: " + String.join(", ", request.objects()));
         } else {
-            lines.add("오브젝트: 없음");
+            lines.add("Objects: none");
         }
         return String.join("\n", lines);
     }
 
     private String buildImprovePrompt(AiPromptImproveRequest request) {
         List<String> lines = new ArrayList<>();
-        lines.add("다음 프롬프트를 개선하세요.");
-        lines.add("기존 프롬프트의 핵심 키워드를 유지하고 한국어로 1~2문장으로 출력하세요.");
-        lines.add("출력 형식: 프롬프트 문장만. 줄바꿈/불릿/번호/접두어(\"프롬프트:\")/JSON/코드 금지.");
-        lines.add("톤(분위기)은 감정/서사 대신 조명/색감/콘트라스트로만 표현하세요.");
-        lines.add("노드 타입: " + safe(request.nodeType()));
-        if (request.instruction() != null && !request.instruction().isBlank()) {
-            lines.add("개선 지시: " + request.instruction().trim());
+        lines.add("Improve the following English image/video prompt.");
+        lines.add("- Keep the core content, but make it more concrete and visually specific.");
+        lines.add("- Output 2 to 4 sentences, English only.");
+        lines.add("- Output ONLY the prompt text (no bullets, no numbering, no JSON, no code).");
+        lines.add("- Keep lighting physically plausible and internally consistent.");
+        lines.add("");
+        NodeType nodeType = request.nodeType();
+        lines.add("nodeType: " + safe(nodeType));
+        if (nodeType != null && nodeType == NodeType.VIDEO) {
+            lines.add("Guide: single continuous shot; avoid real people, celebrities, minors, sexual content, graphic violence, hate/harassment, and self-harm.");
+            lines.add("Use fictional adult characters only. Do NOT mention students, schools, uniforms, or any child/teen terms.");
+            lines.add("If the input contains forbidden terms, rewrite them to adult/neutral wording (e.g., young adult, woman/man, public corridor, casual outfit).");
+            lines.add("Output must NOT include any of: student, school, uniform, teen, teenager, boy, girl, child, kid, kids, children, schoolgirl, schoolboy.");
+            lines.add("Focus on the transition motion only; keep scene, lighting, and background fixed; do not invent new elements.");
+            lines.add("If endShot* hints are present, allow a gentle cinematic transition (soft cross-dissolve or brief occlusion) to connect frames; avoid hard cuts.");
+            String sceneOneLine = request.sceneOneLine();
+            if (sceneOneLine != null && !sceneOneLine.isBlank()) {
+                lines.add("context: " + sceneOneLine.trim());
+            }
         }
-        lines.add("대상 프롬프트: " + safe(request.prompt()));
+        if (request.instruction() != null && !request.instruction().isBlank()) {
+            lines.add("userFeedback: " + request.instruction().trim());
+        }
+        lines.add("promptEnBase: " + safe(request.prompt()));
         return String.join("\n", lines);
     }
 
-    private String sanitizePromptKo(String raw) {
+    private String sanitizePromptLine(String raw) {
         String text = Optional.ofNullable(raw).orElse("").trim();
         if (text.isEmpty()) {
             return text;
@@ -95,11 +165,127 @@ public class AiPromptService {
         return text;
     }
 
+
+    private List<String> generateTimelineCutsIfNeeded(AiPromptGenerateRequest request, String promptEnBase) {
+        if (request == null || request.nodeType() != NodeType.GRID) {
+            return null;
+        }
+        String gridMode = safe(request.gridMode());
+        if (!gridMode.equalsIgnoreCase("STORY_BEATS")) {
+            return null;
+        }
+        String layout = safe(request.layout());
+        int panelCount = resolvePanelCount(layout);
+        if (panelCount <= 0 || promptEnBase.isBlank()) {
+            return null;
+        }
+        int intervalSeconds = request.timelineIntervalSeconds() == null
+                ? DEFAULT_TIMELINE_INTERVAL_SECONDS
+                : Math.max(1, request.timelineIntervalSeconds());
+        String prompt = buildTimelineCutsPrompt(promptEnBase, panelCount, intervalSeconds);
+        try {
+            TextGenerationResponse response = vertexAiGeminiClient.generate(new TextGenerationRequest(prompt, null));
+            List<String> parsed = parseTimelineCuts(response == null ? null : response.text());
+            return normalizeTimelineCuts(parsed, panelCount);
+        } catch (Exception e) {
+            log.warn("Failed to generate timeline cuts: reason={}", e.getMessage());
+            return normalizeTimelineCuts(List.of(), panelCount);
+        }
+    }
+
+    private String buildTimelineCutsPrompt(String promptEnBase, int panelCount, int intervalSeconds) {
+        return String.join(
+                "\n",
+                "You are given an English scene description for a storyboard grid.",
+                "Create " + panelCount + " Korean descriptions of sequential still frames sampled every " + intervalSeconds + " seconds.",
+                "Rules:",
+                "- Each item describes a single frozen moment (no transitions, no motion blur).",
+                "- Keep characters, outfits, lighting, and location consistent across all panels.",
+                "- Do not add new elements not present in the source.",
+                "- Each item should be 1-2 short sentences in Korean.",
+                "- Output ONLY a JSON array of " + panelCount + " strings (no extra text).",
+                "Source prompt:",
+                promptEnBase
+        );
+    }
+
+    private List<String> parseTimelineCuts(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return List.of();
+        }
+        String trimmed = raw.trim();
+        int start = trimmed.indexOf('[');
+        int end = trimmed.lastIndexOf(']');
+        if (start >= 0 && end > start) {
+            String json = trimmed.substring(start, end + 1);
+            try {
+                List<String> parsed = objectMapper.readValue(json, new TypeReference<List<String>>() {});
+                return parsed == null ? List.of() : parsed;
+            } catch (Exception ignored) {
+                // fall through to line parsing
+            }
+        }
+        String[] lines = trimmed.split("\\r?\\n");
+        List<String> result = new ArrayList<>();
+        for (String line : lines) {
+            String normalized = sanitizePromptLine(line);
+            if (!normalized.isBlank()) {
+                result.add(normalized);
+            }
+        }
+        return result;
+    }
+
+    private List<String> normalizeTimelineCuts(List<String> cuts, int panelCount) {
+        List<String> normalized = new ArrayList<>();
+        if (cuts != null) {
+            for (String cut : cuts) {
+                String cleaned = sanitizePromptLine(cut);
+                if (!cleaned.isBlank()) {
+                    normalized.add(cleaned);
+                }
+            }
+        }
+        while (normalized.size() < panelCount) {
+            normalized.add("");
+        }
+        if (normalized.size() > panelCount) {
+            return new ArrayList<>(normalized.subList(0, panelCount));
+        }
+        return normalized;
+    }
+
+    private int resolvePanelCount(String layout) {
+        if (layout == null || layout.isBlank()) {
+            return 0;
+        }
+        String[] parts = layout.trim().toLowerCase().split("x");
+        if (parts.length != 2) {
+            return 0;
+        }
+        try {
+            int rows = Integer.parseInt(parts[0]);
+            int cols = Integer.parseInt(parts[1]);
+            return Math.max(0, rows * cols);
+        } catch (NumberFormatException e) {
+            return 0;
+        }
+    }
+
+    private void logGeneratedPrompt(AiPromptGenerateRequest request, String promptEnBase, String promptKo) {
+        log.info(
+                "Prompt generate: nodeType={}, promptEnBase={}, promptKo={}",
+                request == null ? null : request.nodeType(),
+                promptEnBase,
+                promptKo
+        );
+    }
+
     private String safe(String value) {
-        return value == null || value.isBlank() ? "없음" : value.trim();
+        return value == null || value.isBlank() ? "none" : value.trim();
     }
 
     private String safe(NodeType nodeType) {
-        return nodeType == null ? "없음" : nodeType.name();
+        return nodeType == null ? "none" : nodeType.name();
     }
 }

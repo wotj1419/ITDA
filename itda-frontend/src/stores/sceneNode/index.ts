@@ -35,6 +35,7 @@ import {
     type ProjectEventPayload,
 } from '../../services/ws/projectEvents';
 import { useSceneStore } from '../scene';
+import { useAuthStore } from '../auth';
 import type { SceneNode, NodePositionSnapshot } from './types';
 import { buildPositionSnapshot, snapshotsEqual } from './history';
 import { buildEdge, deriveEdges, canConnect, syncEdgeMeta } from './edges';
@@ -52,17 +53,19 @@ import {
     mapShotTypeKeysToLabels,
     normalizeCameraMotionValue,
     resolveExpressionLabel,
+    resolveFilmLookLabel,
     resolveMoodLabel,
     resolveShotTypeLabel,
     resolveStyleLabel,
     resolveTimeOfDayLabel,
 } from '../../utils/nodeSettings';
 import { fetchProtectedBlobUrl } from '../../services/api/media';
-import { resolveApiUrl } from '../../services/api/urls';
+import { resolveApiUrl, isApiResourceUrl } from '../../services/api/urls';
 import { SHOT_FALLBACK_THUMBNAIL } from '../../utils/fallbacks';
 import {
     DEFAULT_GRID_LAYOUT,
     DEFAULT_GRID_SHOT_TYPES,
+    DEFAULT_MASTER_FILM_LOOK,
     DEFAULT_MASTER_MOOD,
     DEFAULT_MASTER_STYLE,
     DEFAULT_MASTER_TIME_OF_DAY,
@@ -84,6 +87,7 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
     // ==========================================================================
 
     const sceneStore = useSceneStore();
+    const authStore = useAuthStore();
 
     const nodes = ref<SceneNode[]>([]);
     const edges = ref<Edge[]>([]);
@@ -102,12 +106,14 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
     const endShotTargetVideoId = ref<string | null>(null);
 
     const sceneId = ref<string | null>(null);
+    const sceneInfoRef = ref<{ title: string; description: string; order: number } | null>(null);
 
     // 로딩 상태
     const isLoading = ref(false);
     const isSaving = ref(false);
 
     let unsubscribeProjectEvents: (() => void) | null = null;
+    let nodeSyncTimeout: ReturnType<typeof setTimeout> | null = null;
 
     // ==========================================================================
     // Getters
@@ -186,12 +192,20 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
         const cached = videoDurationCache.get(url);
         if (cached) return Promise.resolve(cached);
         const resolved = resolveApiUrl(url) ?? url;
+        if (resolved.startsWith('blob:') || resolved.startsWith('data:')) {
+            const duration = await readDurationFromUrl(resolved);
+            if (duration && duration > 0) {
+                videoDurationCache.set(url, duration);
+            }
+            return duration;
+        }
         let duration = await readDurationFromUrl(resolved);
 
         if (!duration) {
             const blobUrl = await fetchProtectedBlobUrl(url).catch(() => null);
             if (blobUrl) {
                 duration = await readDurationFromUrl(blobUrl);
+                // blobUrl is created by fetchProtectedBlobUrl here, safe to revoke
                 if (blobUrl.startsWith('blob:')) {
                     URL.revokeObjectURL(blobUrl);
                 }
@@ -231,8 +245,46 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
             .filter(Boolean) as SceneNode[]
     );
 
+    const scheduleNodeSync = (targetSceneId: number) => {
+        if (!sceneId.value) return;
+        const currentSceneId = toFiniteNumber(sceneId.value);
+        if (currentSceneId === null || currentSceneId !== targetSceneId) return;
+
+        if (nodeSyncTimeout) clearTimeout(nodeSyncTimeout);
+        nodeSyncTimeout = setTimeout(() => {
+            nodeSyncTimeout = null;
+            if (!sceneId.value || isLoading.value) return;
+            void loadSceneNodes(sceneId.value, sceneInfoRef.value ?? undefined, { preserveSelection: true });
+        }, 200);
+    };
+
     const handleProjectEvent = (message: ProjectEventMessage) => {
         const payload = message.data as ProjectEventPayload;
+
+        if (message.event === 'node.changed') {
+            const targetSceneId =
+                payload?.sceneId != null ? toFiniteNumber(payload.sceneId) : null;
+            if (targetSceneId === null) return;
+
+            const actorId = payload.actorId ?? null;
+            const localUserId = authStore.user?.id ?? null;
+            if (actorId != null && localUserId != null && actorId === localUserId) return;
+
+            if (payload.action === 'POSITION' && Array.isArray(payload.positions)) {
+                payload.positions.forEach((position) => {
+                    const nodeId = position?.nodeId != null ? String(position.nodeId) : null;
+                    if (!nodeId) return;
+                    const x = Number(position.x);
+                    const y = Number(position.y);
+                    if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+                    applyRemoteNodeMove(nodeId, x, y);
+                });
+                return;
+            }
+
+            scheduleNodeSync(targetSceneId);
+            return;
+        }
 
         if (!payload?.type || payload.target?.type !== 'NODE') return;
 
@@ -271,6 +323,51 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
             })();
         }
     };
+
+    function reindexNodeVersions(): void {
+        const groups = new Map<string, SceneNode[]>();
+
+        for (const node of nodes.value) {
+            if (!node.data) continue;
+            if (node.data.type === NodeType.SCENE_HEADER) continue;
+            const parentId = node.data.parentNodeId ?? '';
+            const key = `${node.data.type}::${parentId}`;
+            const group = groups.get(key);
+            if (group) {
+                group.push(node);
+            } else {
+                groups.set(key, [node]);
+            }
+        }
+
+        const compareNodeId = (a: SceneNode, b: SceneNode): number => {
+            const aNum = toFiniteNumber(a.id);
+            const bNum = toFiniteNumber(b.id);
+            if (aNum !== null && bNum !== null) return aNum - bNum;
+            if (aNum !== null) return -1;
+            if (bNum !== null) return 1;
+            return String(a.id).localeCompare(String(b.id));
+        };
+
+        for (const group of groups.values()) {
+            group.sort(compareNodeId);
+            group.forEach((node, index) => {
+                if (!node.data) return;
+                node.data.version = index + 1;
+            });
+        }
+    }
+
+    function getNextVersion(type: NodeType, parentNodeId: string | null): number {
+        const siblings = nodes.value.filter(
+            (n) => n.data?.type === type && (n.data.parentNodeId ?? null) === parentNodeId
+        );
+        const maxVersion = siblings.reduce((max, node) => {
+            const version = node.data?.version ?? 0;
+            return version > max ? version : max;
+        }, 0);
+        return maxVersion + 1;
+    }
 
     // ==========================================================================
     // Actions - Persistence
@@ -405,11 +502,15 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
 
     async function loadSceneNodes(
         sceneIdParam: string,
-        sceneInfo?: { title: string; description: string; order: number }
+        sceneInfo?: { title: string; description: string; order: number },
+        options?: { preserveSelection?: boolean }
     ): Promise<void> {
+        const preserveSelection = Boolean(options?.preserveSelection);
+        const previousSelectedId = preserveSelection ? selectedNodeId.value : null;
         isLoading.value = true;
         try {
             sceneId.value = sceneIdParam;
+            sceneInfoRef.value = sceneInfo ?? null;
             nodes.value = [];
             edges.value = [];
             positionHistory.value = [];
@@ -423,10 +524,11 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
             const apiNodes = await fetchSceneNodes(numericSceneId);
             const sceneHeaderNode = apiNodes.find((node) => node.type === 'SCENE_HEADER');
             const sceneHeaderId = sceneHeaderNode ? String(sceneHeaderNode.nodeId) : null;
-            nodes.value = apiNodes.map((node) =>
+            const nextNodes = apiNodes.map((node) =>
                 createSceneNodeFromApi(node, sceneIdParam, sceneInfo, sceneHeaderId)
             );
-            await hydrateNodeMedia();
+            await hydrateNodeMedia(nextNodes);
+            nodes.value = nextNodes;
             await hydrateVideoDurations();
             await hydrateVideoDetailsForEdges();
 
@@ -435,6 +537,7 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
             }
 
             await ensureActiveMasterNode();
+            reindexNodeVersions();
             edges.value = deriveEdges(nodes.value);
             ensureTimelineOrder();
 
@@ -448,6 +551,13 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
                     unsubscribeProjectEvents();
                 }
                 unsubscribeProjectEvents = subscribeProjectEvents(projectId, handleProjectEvent);
+            }
+
+            if (preserveSelection && previousSelectedId) {
+                const stillExists = nodes.value.some((node) => node.id === previousSelectedId);
+                if (stillExists) {
+                    selectNode(previousSelectedId);
+                }
             }
         } catch (error) {
             console.error('Failed to load scene nodes:', error);
@@ -509,8 +619,8 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
         }
     }
 
-    async function hydrateNodeMedia(): Promise<void> {
-        const targets = nodes.value.filter(
+    async function hydrateNodeMedia(nodesToHydrate: SceneNode[]): Promise<void> {
+        const targets = nodesToHydrate.filter(
             (node) =>
                 node.data?.type !== NodeType.SCENE_HEADER &&
                 !!node.data &&
@@ -521,7 +631,28 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
                 const current = node.data?.thumbnailUrl || node.data?.imageUrl || node.data?.videoUrl;
                 if (!current || current.startsWith('blob:')) return;
                 const blobUrl = await fetchProtectedBlobUrl(current).catch(() => null);
-                if (!blobUrl || !node.data) return;
+                if (!blobUrl || !node.data) {
+                    if (node.data && isApiResourceUrl(current)) {
+                        if (node.data.type === NodeType.VIDEO) {
+                            const video = node.data as VideoNodeData;
+                            video.videoUrl = null;
+                            video.thumbnailUrl = null;
+                        } else if (node.data.type === NodeType.MASTER_IMAGE) {
+                            const master = node.data as MasterImageNodeData;
+                            master.imageUrl = null;
+                            master.thumbnailUrl = null;
+                        } else if (node.data.type === NodeType.STORYBOARD_GRID) {
+                            const grid = node.data as StoryboardGridNodeData;
+                            grid.imageUrl = null;
+                            grid.thumbnailUrl = null;
+                        } else if (node.data.type === NodeType.SHOT) {
+                            const shot = node.data as ShotNodeData;
+                            shot.imageUrl = null;
+                            shot.thumbnailUrl = null;
+                        }
+                    }
+                    return;
+                }
                 if (node.data.type === NodeType.VIDEO) {
                     (node.data as VideoNodeData).videoUrl = blobUrl;
                 } else if (node.data.type === NodeType.MASTER_IMAGE) {
@@ -554,7 +685,7 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
             (n) => n.data?.type === NodeType.MASTER_IMAGE
         ).length;
         if (masterCount >= 3) return null;
-        const nextVersion = masterCount + 1;
+        const nextVersion = getNextVersion(NodeType.MASTER_IMAGE, parentNodeId);
         if (!sceneId.value) return null;
         const sceneNumericId = toFiniteNumber(sceneId.value);
         if (sceneNumericId === null) return null;
@@ -582,6 +713,8 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
             imageUrl: null,
             thumbnailUrl: null,
             prompt: '',
+            additionalDetail: '',
+            filmLook: DEFAULT_MASTER_FILM_LOOK,
             style: DEFAULT_MASTER_STYLE,
             timeOfDay: DEFAULT_MASTER_TIME_OF_DAY,
             mood: DEFAULT_MASTER_MOOD,
@@ -598,6 +731,7 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
 
         nodes.value.push(newNode);
         addEdge(parentNodeId, id);
+        reindexNodeVersions();
         ensureSceneInProgress();
         return newNode;
     }
@@ -605,12 +739,7 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
     async function addStoryboardGridNode(parentNodeId: string): Promise<SceneNode | null> {
         if (!canConnect(nodes.value, parentNodeId, NodeType.STORYBOARD_GRID)) return null;
 
-        const gridCount = nodes.value.filter(
-            (n) =>
-                n.data?.type === NodeType.STORYBOARD_GRID &&
-                n.data.parentNodeId === parentNodeId
-        ).length;
-        const nextVersion = gridCount + 1;
+        const nextVersion = getNextVersion(NodeType.STORYBOARD_GRID, parentNodeId);
 
         if (!sceneId.value) return null;
         const sceneNumericId = toFiniteNumber(sceneId.value);
@@ -634,6 +763,7 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
             imageUrl: null,
             thumbnailUrl: null,
             prompt: '',
+            additionalDetail: '',
             layout: DEFAULT_GRID_LAYOUT,
             shotTypes: [...DEFAULT_GRID_SHOT_TYPES],
             compositionHint: '',
@@ -650,6 +780,7 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
 
         nodes.value.push(newNode);
         addEdge(parentNodeId, id);
+        reindexNodeVersions();
         ensureSceneInProgress();
         return newNode;
     }
@@ -663,7 +794,7 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
                 n.data.parentNodeId === parentNodeId
         );
         const nextGridIndex = gridCellIndex ?? existingShots.length;
-        const nextVersion = existingShots.length + 1;
+        const nextVersion = getNextVersion(NodeType.SHOT, parentNodeId);
 
         if (!sceneId.value) return null;
         const sceneNumericId = toFiniteNumber(sceneId.value);
@@ -704,6 +835,7 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
 
         nodes.value.push(newNode);
         addEdge(parentNodeId, id);
+        reindexNodeVersions();
         ensureSceneInProgress();
         return newNode;
     }
@@ -711,12 +843,7 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
     async function addVideoNode(parentNodeId: string): Promise<SceneNode | null> {
         if (!canConnect(nodes.value, parentNodeId, NodeType.VIDEO)) return null;
 
-        const videoCount = nodes.value.filter(
-            (n) =>
-                n.data?.type === NodeType.VIDEO &&
-                n.data.parentNodeId === parentNodeId
-        ).length;
-        const nextVersion = videoCount + 1;
+        const nextVersion = getNextVersion(NodeType.VIDEO, parentNodeId);
 
         if (!sceneId.value) return null;
         const sceneNumericId = toFiniteNumber(sceneId.value);
@@ -763,6 +890,7 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
 
         nodes.value.push(newNode);
         addEdge(parentNodeId, id);
+        reindexNodeVersions();
         ensureSceneInProgress();
         return newNode;
     }
@@ -820,6 +948,7 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
         edges.value = edges.value.filter(
             (e) => !toDelete.includes(e.source) && !toDelete.includes(e.target)
         );
+        reindexNodeVersions();
 
         // 선택 해제
         if (selectedNodeId.value && toDelete.includes(selectedNodeId.value)) {
@@ -921,6 +1050,14 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
     // Actions - Persist Positions
     // ==========================================================================
 
+    function applyRemoteNodeMove(nodeId: string, x: number, y: number): void {
+        const target = nodes.value.find((node) => node.id === nodeId);
+        if (!target) return;
+        if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+        if (target.position?.x === x && target.position?.y === y) return;
+        target.position = { x, y };
+    }
+
     let persistPositionsTimeout: ReturnType<typeof setTimeout> | null = null;
     async function sendNodePositions(): Promise<void> {
         if (!sceneId.value) return;
@@ -985,20 +1122,57 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
     function applyDetailSettings(targetNode: SceneNode, detail: Awaited<ReturnType<typeof fetchNodeDetail>>): void {
         if (!targetNode.data) return;
         if (targetNode.data.type === NodeType.SCENE_HEADER) return;
-        if (detail.prompt !== null && detail.prompt !== undefined && 'prompt' in targetNode.data) {
-            targetNode.data.prompt = detail.prompt;
+        if ('prompt' in targetNode.data && typeof detail.prompt === 'string') {
+            const incoming = detail.prompt;
+            const current = targetNode.data.prompt ?? '';
+            const shouldOverwrite = incoming.trim().length > 0 || current.trim().length === 0;
+            if (shouldOverwrite) {
+                targetNode.data.prompt = incoming;
+            }
         }
 
         const settings = detail.settings ?? undefined;
         if (!settings) return;
 
+        if ('promptKo' in targetNode.data) {
+            const promptKo = settings.promptKo as string | undefined;
+            if (typeof promptKo === 'string') {
+                const current = targetNode.data.promptKo ?? '';
+                const shouldOverwrite = promptKo.trim().length > 0 || current.trim().length === 0;
+                if (shouldOverwrite) {
+                    targetNode.data.promptKo = promptKo;
+                }
+            }
+            const promptEnFinal = settings.promptEnFinal as string | undefined;
+            if (typeof promptEnFinal === 'string') {
+                const current = targetNode.data.promptEnFinal ?? '';
+                const shouldOverwrite =
+                    promptEnFinal.trim().length > 0 || current.trim().length === 0;
+                if (shouldOverwrite) {
+                    targetNode.data.promptEnFinal = promptEnFinal;
+                }
+            }
+            const promptEnFinalOverride = settings.promptEnFinalOverride as string | undefined;
+            if (typeof promptEnFinalOverride === 'string') {
+                const current = targetNode.data.promptEnFinalOverride ?? '';
+                const shouldOverwrite =
+                    promptEnFinalOverride.trim().length > 0 || current.trim().length === 0;
+                if (shouldOverwrite) {
+                    targetNode.data.promptEnFinalOverride = promptEnFinalOverride;
+                }
+            }
+        }
+
         if (targetNode.data.type === NodeType.MASTER_IMAGE) {
             const masterData = targetNode.data as MasterImageNodeData;
+            const filmLookValue = (settings.filmLookKey ?? settings.filmLook) as string | undefined;
             const styleValue = (settings.styleKey ?? settings.style) as string | undefined;
             const timeValue = (settings.timeOfDayKey ?? settings.timeOfDay) as string | undefined;
             const moodValue = (settings.moodKey ?? settings.mood) as string | undefined;
             const objectIdsRaw = (settings.objectIds ?? settings.objects) as unknown;
+            const detailKo = settings.detailKo as string | undefined;
 
+            masterData.filmLook = resolveFilmLookLabel(filmLookValue) || masterData.filmLook || DEFAULT_MASTER_FILM_LOOK;
             masterData.style = resolveStyleLabel(styleValue) || masterData.style;
             masterData.timeOfDay = resolveTimeOfDayLabel(timeValue) || masterData.timeOfDay;
             masterData.mood = resolveMoodLabel(moodValue) || masterData.mood;
@@ -1006,6 +1180,9 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
                 masterData.objectIds = objectIdsRaw
                     .map((item) => toFiniteNumber(item as string | number))
                     .filter((item): item is number => item !== null);
+            }
+            if (detailKo !== undefined) {
+                masterData.additionalDetail = detailKo ?? '';
             }
             return;
         }
@@ -1016,6 +1193,7 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
             const shotTypesRaw = settings.shotTypes as string[] | undefined;
             const compositionHint =
                 (settings.compositionHintKo ?? settings.compositionHint) as string | undefined;
+            const detailKo = settings.detailKo as string | undefined;
 
             if (layoutValue) gridData.layout = layoutValue as StoryboardGridNodeData['layout'];
             if (shotTypesRaw?.length) {
@@ -1023,6 +1201,9 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
             }
             if (compositionHint !== undefined) {
                 gridData.compositionHint = compositionHint ?? '';
+            }
+            if (detailKo !== undefined) {
+                gridData.additionalDetail = detailKo ?? '';
             }
             return;
         }
@@ -1106,24 +1287,70 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
                     targetNode.data.jobStatus = detailStatus;
                 }
 
-                const detailUrl = resolveApiUrl(detail.contentUrl ?? null);
-                if (detailUrl && targetNode.data) {
+                let resolvedDetailUrl: string | null = null;
+                const hasApiDetailUrl = isApiResourceUrl(detail.contentUrl);
+                const shouldFetchDetailUrl =
+                    Boolean(detail.contentUrl) &&
+                    (detailStatus === JobStatus.SUCCEEDED || !hasApiDetailUrl);
+                if (shouldFetchDetailUrl && detail.contentUrl) {
+                    const blobUrl = await fetchProtectedBlobUrl(detail.contentUrl).catch(() => null);
+                    if (blobUrl) {
+                        resolvedDetailUrl = blobUrl;
+                    } else if (!hasApiDetailUrl) {
+                        resolvedDetailUrl = resolveApiUrl(detail.contentUrl);
+                    }
+                }
+                if (resolvedDetailUrl && targetNode.data) {
                     if (targetNode.data.type === NodeType.VIDEO) {
                         const videoData = targetNode.data as VideoNodeData;
-                        if (!videoData.videoUrl) videoData.videoUrl = detailUrl;
-                        if (!videoData.thumbnailUrl) videoData.thumbnailUrl = detailUrl;
+                        if (!videoData.videoUrl) videoData.videoUrl = resolvedDetailUrl;
+                        if (!videoData.thumbnailUrl) videoData.thumbnailUrl = resolvedDetailUrl;
                     } else if (targetNode.data.type === NodeType.MASTER_IMAGE) {
                         const masterData = targetNode.data as MasterImageNodeData;
-                        if (!masterData.imageUrl) masterData.imageUrl = detailUrl;
-                        if (!masterData.thumbnailUrl) masterData.thumbnailUrl = detailUrl;
+                        if (!masterData.imageUrl) masterData.imageUrl = resolvedDetailUrl;
+                        if (!masterData.thumbnailUrl) masterData.thumbnailUrl = resolvedDetailUrl;
                     } else if (targetNode.data.type === NodeType.STORYBOARD_GRID) {
                         const gridData = targetNode.data as StoryboardGridNodeData;
-                        if (!gridData.imageUrl) gridData.imageUrl = detailUrl;
-                        if (!gridData.thumbnailUrl) gridData.thumbnailUrl = detailUrl;
+                        if (!gridData.imageUrl) gridData.imageUrl = resolvedDetailUrl;
+                        if (!gridData.thumbnailUrl) gridData.thumbnailUrl = resolvedDetailUrl;
                     } else if (targetNode.data.type === NodeType.SHOT) {
                         const shotData = targetNode.data as ShotNodeData;
-                        if (!shotData.imageUrl) shotData.imageUrl = detailUrl;
-                        if (!shotData.thumbnailUrl) shotData.thumbnailUrl = detailUrl;
+                        if (!shotData.imageUrl) shotData.imageUrl = resolvedDetailUrl;
+                        if (!shotData.thumbnailUrl) shotData.thumbnailUrl = resolvedDetailUrl;
+                    }
+                } else if (hasApiDetailUrl && targetNode.data) {
+                    if (targetNode.data.type === NodeType.VIDEO) {
+                        const videoData = targetNode.data as VideoNodeData;
+                        if (videoData.videoUrl && isApiResourceUrl(videoData.videoUrl)) {
+                            videoData.videoUrl = null;
+                        }
+                        if (videoData.thumbnailUrl && isApiResourceUrl(videoData.thumbnailUrl)) {
+                            videoData.thumbnailUrl = null;
+                        }
+                    } else if (targetNode.data.type === NodeType.MASTER_IMAGE) {
+                        const masterData = targetNode.data as MasterImageNodeData;
+                        if (masterData.imageUrl && isApiResourceUrl(masterData.imageUrl)) {
+                            masterData.imageUrl = null;
+                        }
+                        if (masterData.thumbnailUrl && isApiResourceUrl(masterData.thumbnailUrl)) {
+                            masterData.thumbnailUrl = null;
+                        }
+                    } else if (targetNode.data.type === NodeType.STORYBOARD_GRID) {
+                        const gridData = targetNode.data as StoryboardGridNodeData;
+                        if (gridData.imageUrl && isApiResourceUrl(gridData.imageUrl)) {
+                            gridData.imageUrl = null;
+                        }
+                        if (gridData.thumbnailUrl && isApiResourceUrl(gridData.thumbnailUrl)) {
+                            gridData.thumbnailUrl = null;
+                        }
+                    } else if (targetNode.data.type === NodeType.SHOT) {
+                        const shotData = targetNode.data as ShotNodeData;
+                        if (shotData.imageUrl && isApiResourceUrl(shotData.imageUrl)) {
+                            shotData.imageUrl = null;
+                        }
+                        if (shotData.thumbnailUrl && isApiResourceUrl(shotData.thumbnailUrl)) {
+                            shotData.thumbnailUrl = null;
+                        }
                     }
                 }
 
@@ -1424,6 +1651,7 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
                 : generateMockSceneNodes(sceneIdParam);
             nodes.value = mockData.nodes;
             edges.value = mockData.edges;
+            reindexNodeVersions();
             positionHistory.value = [];
             resetInteractionState();
             resetHydrationState();
@@ -1444,10 +1672,15 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
         positionHistory.value = [];
         resetInteractionState();
         sceneId.value = null;
+        sceneInfoRef.value = null;
         resetHydrationState();
         if (unsubscribeProjectEvents) {
             unsubscribeProjectEvents();
             unsubscribeProjectEvents = null;
+        }
+        if (nodeSyncTimeout) {
+            clearTimeout(nodeSyncTimeout);
+            nodeSyncTimeout = null;
         }
     }
 
@@ -1498,6 +1731,7 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
         canConnect: canConnectNode,
 
         // Actions - Persist
+        applyRemoteNodeMove,
         persistNodePositions,
         flushPersistNodePositions,
 

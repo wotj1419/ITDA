@@ -63,6 +63,7 @@ public class GenerationSettingsResolver {
             return;
         }
         copyIfMissing(target, master, "styleKey");
+        copyIfMissing(target, master, "filmLookKey");
         copyIfMissing(target, master, "timeOfDayKey");
         copyIfMissing(target, master, "moodKey");
         copyIfMissing(target, master, "objectIds");
@@ -72,6 +73,7 @@ public class GenerationSettingsResolver {
     private void applyGlobalDefaults(NodeType nodeType, Map<String, Object> settings) {
         putIfMissing(settings, KEY_ASPECT_RATIO, DEFAULT_ASPECT_RATIO);
         putIfMissing(settings, "styleKey", "PHOTO_REAL");
+        putIfMissing(settings, "filmLookKey", "CINEMATIC_MODERN");
         putIfMissing(settings, "timeOfDayKey", "DAY");
         putIfMissing(settings, "moodKey", "NEUTRAL");
 
@@ -267,10 +269,12 @@ public class GenerationSettingsResolver {
         }
 
         removeIfBlank(settings, "styleKey");
+        removeIfBlank(settings, "filmLookKey");
         removeIfBlank(settings, "timeOfDayKey");
         removeIfBlank(settings, "moodKey");
 
         normalizeStringKey(settings, "styleKey");
+        normalizeStringKey(settings, "filmLookKey");
         normalizeStringKey(settings, "timeOfDayKey");
         normalizeStringKey(settings, "moodKey");
 
@@ -286,6 +290,16 @@ public class GenerationSettingsResolver {
                 } else {
                     settings.remove("styleKey");
                 }
+            }
+        }
+
+        String filmLookKey = readString(settings, "filmLookKey");
+        if (!filmLookKey.isEmpty()) {
+            PresetFragments.FilmLookKey parsed = PresetFragments.FilmLookKey.from(filmLookKey);
+            if (parsed != null) {
+                settings.put("filmLookKey", parsed.name());
+            } else {
+                settings.remove("filmLookKey");
             }
         }
 

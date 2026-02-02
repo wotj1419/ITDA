@@ -25,6 +25,7 @@ import TimelinePlaybackModal from '../components/timeline/TimelinePlaybackModal.
 import NodeDeleteConfirmModal from '../components/scene-editor/NodeDeleteConfirmModal.vue';
 import { useLayoutButtonPosition } from '../composables/useLayoutButtonPosition';
 import { useSceneEditorEvents } from '../composables/useSceneEditorEvents';
+import { getSceneNodeDisplayName } from '../utils/sceneNodeLabels';
 
 // =============================================================================
 // Composables & Stores
@@ -213,12 +214,15 @@ watch([projectId, sceneId], async ([, newSceneId]) => {
  * 노드 선택
  */
 function handleNodeSelect(nodeId: string | null): void {
+  const wasSelected = nodeId !== null && nodeId === nodeStore.selectedNodeId;
   nodeStore.selectNode(nodeId);
-  if (nodeId) {
+  if (nodeId && !wasSelected) {
+    const node = nodeStore.nodes.find((n) => n.id === nodeId);
+    const nodeLabel = node?.data ? getSceneNodeDisplayName(node.data) : `노드 ${nodeId}`;
     uiStore.showToast({
       type: 'info',
       title: '노드 선택',
-      message: `노드 ${nodeId} 선택됨`,
+      message: `${nodeLabel} 선택됨`,
       duration: 2000,
     });
   }

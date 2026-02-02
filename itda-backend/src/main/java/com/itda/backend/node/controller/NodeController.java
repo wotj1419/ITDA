@@ -8,11 +8,13 @@ import com.itda.backend.media.MediaFile;
 import com.itda.backend.media.MediaFileService;
 import com.itda.backend.node.controller.dto.request.CreateNodeRequest;
 import com.itda.backend.node.controller.dto.request.GenerateNodeRequest;
+import com.itda.backend.node.controller.dto.request.PromptPreviewRequest;
 import com.itda.backend.node.controller.dto.request.UpdateNodePositionsRequest;
 import com.itda.backend.node.controller.dto.request.UpdateNodeRequest;
 import com.itda.backend.node.controller.dto.response.NodeCreateResponse;
 import com.itda.backend.node.controller.dto.response.NodeDetailResponse;
 import com.itda.backend.node.controller.dto.response.NodeTreeResponse;
+import com.itda.backend.node.controller.dto.response.PromptPreviewResponse;
 import com.itda.backend.node.service.NodeService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -208,6 +210,42 @@ public class NodeController {
             @Valid @RequestBody GenerateNodeRequest request) {
         Job job = nodeService.generateNode(userDetails.getUserId(), id, request);
         return ApiResponse.accepted(JobAcceptedResponse.from(job));
+    }
+
+    @Operation(
+            summary = "노드 프롬프트 미리보기",
+            description = "노드의 최종 영어 프롬프트를 미리보기로 반환합니다."
+    )
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "200",
+                    description = "미리보기 성공",
+                    content = @Content(schema = @Schema(implementation = PromptPreviewResponse.class))
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "400",
+                    description = "입력 값 검증 실패"
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "401",
+                    description = "인증 필요"
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "403",
+                    description = "프로젝트 접근 권한 없음"
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "404",
+                    description = "노드를 찾을 수 없음"
+            )
+    })
+    @PostMapping("/nodes/{id}/prompt-preview")
+    public ResponseEntity<ApiResponse<PromptPreviewResponse>> previewPrompt(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @Parameter(description = "노드 ID") @PathVariable Long id,
+            @Valid @RequestBody PromptPreviewRequest request) {
+        PromptPreviewResponse response = nodeService.previewPrompt(userDetails.getUserId(), id, request);
+        return ApiResponse.success(response);
     }
 
     @Operation(

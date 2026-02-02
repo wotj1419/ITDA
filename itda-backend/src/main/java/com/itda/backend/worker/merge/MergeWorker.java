@@ -1,6 +1,7 @@
 package com.itda.backend.worker.merge;
 
 import com.itda.backend.asset.domain.Asset;
+import com.itda.backend.asset.domain.StorageProvider;
 import com.itda.backend.asset.repository.AssetMapper;
 import com.itda.backend.global.config.FileStorageProperties;
 import com.itda.backend.job.domain.Job;
@@ -8,6 +9,8 @@ import com.itda.backend.timeline.repository.TimelineMapper;
 import com.itda.backend.timeline.repository.dto.ProjectTimelineItem;
 import com.itda.backend.timeline.repository.dto.SceneTimelineItem;
 import com.itda.backend.worker.ExecutionResult;
+import com.itda.backend.worker.video.VideoContentLoader;
+import com.itda.backend.worker.video.VideoInput;
 import com.itda.backend.worker.video.VideoStorage;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -44,6 +47,7 @@ public class MergeWorker {
     private final TimelineMapper timelineMapper;
     private final AssetMapper assetMapper;
     private final VideoStorage videoStorage;
+    private final VideoContentLoader videoContentLoader;
     private final FileStorageProperties fileStorageProperties;
 
     public ExecutionResult execute(Job job) {
@@ -75,11 +79,14 @@ public class MergeWorker {
         String mergeSignature = requireMergeSignature(job);
         String storageKey = buildProjectMergeStorageKey(projectId, mergeSignature);
         Path outputPath = createTempOutputPath(projectId);
+        List<VideoInput> inputs = List.of();
         try {
-            mergeTimelineItems(resolveProjectInputPaths(items), outputPath);
+            inputs = resolveProjectInputPaths(items);
+            mergeTimelineItems(extractPaths(inputs), outputPath);
             Asset asset = videoStorage.storeMergedVideo(outputPath, storageKey);
             return new ExecutionResult(asset.getId(), asset.getStorageKey());
         } finally {
+            cleanupTempInputs(inputs);
             deleteQuietly(outputPath);
         }
     }
@@ -98,11 +105,14 @@ public class MergeWorker {
         String mergeSignature = requireMergeSignature(job);
         String storageKey = buildSceneMergeStorageKey(job.getProjectId(), sceneId, mergeSignature);
         Path outputPath = createTempOutputPath(job.getProjectId());
+        List<VideoInput> inputs = List.of();
         try {
-            mergeTimelineItems(resolveSceneInputPaths(items), outputPath);
+            inputs = resolveSceneInputPaths(items);
+            mergeTimelineItems(extractPaths(inputs), outputPath);
             Asset asset = videoStorage.storeMergedVideo(outputPath, storageKey);
             return new ExecutionResult(asset.getId(), asset.getStorageKey());
         } finally {
+            cleanupTempInputs(inputs);
             deleteQuietly(outputPath);
         }
     }
@@ -119,42 +129,50 @@ public class MergeWorker {
         }
     }
 
-    private List<Path> resolveSceneInputPaths(List<SceneTimelineItem> items) {
-        List<Path> paths = new ArrayList<>();
-        for (SceneTimelineItem item : items) {
-            String context = "sceneId=" + item.getSceneId() + ", videoNodeId=" + item.getVideoNodeId();
-            Path path = resolveVideoPath(item.getAssetId(), item.getFallbackUrl(), context);
-            paths.add(path);
+    private List<VideoInput> resolveSceneInputPaths(List<SceneTimelineItem> items) {
+        List<VideoInput> inputs = new ArrayList<>();
+        try {
+            for (SceneTimelineItem item : items) {
+                String context = "sceneId=" + item.getSceneId() + ", videoNodeId=" + item.getVideoNodeId();
+                VideoInput input = resolveVideoInput(item.getAssetId(), item.getFallbackUrl(), context);
+                inputs.add(input);
+            }
+            return inputs;
+        } catch (RuntimeException e) {
+            cleanupTempInputs(inputs);
+            throw e;
         }
-        return paths;
     }
 
-    private List<Path> resolveProjectInputPaths(List<ProjectTimelineItem> items) {
-        List<Path> paths = new ArrayList<>();
-        for (ProjectTimelineItem item : items) {
-            String context = "sceneId=" + item.getSceneId() + ", sceneVideoId=" + item.getSceneVideoId();
-            Path path = resolveVideoPath(item.getAssetId(), null, context);
-            paths.add(path);
+    private List<VideoInput> resolveProjectInputPaths(List<ProjectTimelineItem> items) {
+        List<VideoInput> inputs = new ArrayList<>();
+        try {
+            for (ProjectTimelineItem item : items) {
+                String context = "sceneId=" + item.getSceneId() + ", sceneVideoId=" + item.getSceneVideoId();
+                VideoInput input = resolveVideoInput(item.getAssetId(), null, context);
+                inputs.add(input);
+            }
+            return inputs;
+        } catch (RuntimeException e) {
+            cleanupTempInputs(inputs);
+            throw e;
         }
-        return paths;
     }
 
-    private Path resolveVideoPath(Long assetId, String fallbackUrl, String context) {
-        String contentKey = resolveAssetStorageKey(assetId);
-        if (contentKey == null) {
+    private VideoInput resolveVideoInput(Long assetId, String fallbackUrl, String context) {
+        Asset asset = resolveAsset(assetId);
+        String contentKey = asset == null ? null : asset.getStorageKey();
+        StorageProvider provider = asset == null ? null : asset.getStorageProvider();
+        if (contentKey == null || contentKey.isBlank()) {
             contentKey = normalizeContentKey(fallbackUrl);
         }
         if (contentKey == null) {
             throw new IllegalStateException("Video content missing: " + context);
         }
-        Path path = resolveUnderUploadRoot(contentKey);
-        if (!Files.exists(path)) {
-            throw new IllegalStateException("Video file missing: " + context + ", path=" + path);
-        }
-        return path;
+        return videoContentLoader.load(contentKey, provider, context);
     }
 
-    private String resolveAssetStorageKey(Long assetId) {
+    private Asset resolveAsset(Long assetId) {
         if (assetId == null) {
             return null;
         }
@@ -162,11 +180,12 @@ public class MergeWorker {
         if (asset.isEmpty()) {
             throw new IllegalStateException("Asset not found: assetId=" + assetId);
         }
-        String key = asset.get().getStorageKey();
+        Asset resolved = asset.get();
+        String key = resolved.getStorageKey();
         if (key == null || key.isBlank()) {
             throw new IllegalStateException("Asset storageKey missing: assetId=" + assetId);
         }
-        return key;
+        return resolved;
     }
 
     private String normalizeContentKey(String contentUrl) {
@@ -199,15 +218,20 @@ public class MergeWorker {
         return trimmed;
     }
 
-    private Path resolveUnderUploadRoot(String relativePath) {
-        Path root = Path.of(fileStorageProperties.getUploadDir())
-                .toAbsolutePath()
-                .normalize();
-        Path target = root.resolve(relativePath).normalize();
-        if (!target.startsWith(root)) {
-            throw new IllegalStateException("Invalid content path");
+    private List<Path> extractPaths(List<VideoInput> inputs) {
+        List<Path> paths = new ArrayList<>();
+        for (VideoInput input : inputs) {
+            paths.add(input.path());
         }
-        return target;
+        return paths;
+    }
+
+    private void cleanupTempInputs(List<VideoInput> inputs) {
+        for (VideoInput input : inputs) {
+            if (input.temporary()) {
+                deleteQuietly(input.path());
+            }
+        }
     }
 
     private String requireMergeSignature(Job job) {

@@ -3,12 +3,20 @@ export function useVideoPreview() {
   function isVideo(url?: string): boolean {
     if (!url) return false
     const lower = url.toLowerCase()
+    const normalized = (() => {
+      try {
+        const parsed = new URL(lower, window.location.origin)
+        return parsed.pathname
+      } catch {
+        return lower.replace(/[?#].*$/, '')
+      }
+    })()
     return (
       lower.startsWith('blob:') ||
       lower.startsWith('data:video') ||
-      lower.endsWith('.mp4') ||
-      lower.endsWith('.webm') ||
-      lower.endsWith('.mov') ||
+      normalized.endsWith('.mp4') ||
+      normalized.endsWith('.webm') ||
+      normalized.endsWith('.mov') ||
       lower.endsWith('/content')
     )
   }

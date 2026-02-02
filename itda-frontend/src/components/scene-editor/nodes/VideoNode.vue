@@ -9,6 +9,7 @@ import { computed, ref } from 'vue';
 import { Handle, Position } from '@vue-flow/core';
 import { NodeResizer } from '@vue-flow/node-resizer';
 import { useSceneNodeStore } from '../../../stores/sceneNode';
+import { useCollabStore } from '../../../stores/collab';
 import { JobStatus } from '../../../types/ui/sceneNodes';
 import type { VideoNodeData } from '../../../types/ui/sceneNodes';
 import { useNodeStatus } from '../../../composables/useNodeStatus';
@@ -28,6 +29,7 @@ interface Props {
 
 const props = defineProps<Props>();
 const store = useSceneNodeStore();
+const collabStore = useCollabStore();
 const videoRef = ref<HTMLVideoElement | null>(null);
 
 const nodeStyle = NODE_RESIZER_STYLE;
@@ -50,6 +52,7 @@ const nodeClasses = computed(() => [
     'node-glass--selected': props.selected,
     'node-glass--inactive': isUnderInactiveMaster.value,
     'node-glass--confirmed': props.data.isConfirmed,
+    'node-glass--locked': collabStore.isNodeLockedByOther(props.id),
     [`node-glass--${statusKey.value}`]: !props.data.isConfirmed,
   },
 ]);

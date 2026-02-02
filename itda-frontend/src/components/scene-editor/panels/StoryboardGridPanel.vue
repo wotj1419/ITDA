@@ -2,16 +2,17 @@
 /**
  * StoryboardGridPanel - 스토리보드 그리드 생성/편집 패널
  */
-import { ref, computed, watch } from 'vue';
+import { ref, computed, watch, nextTick, onUnmounted } from 'vue';
 import type { Node as VueFlowNode } from '@vue-flow/core';
-import type { StoryboardGridNodeData, GridLayout, GridMode } from '../../../types/ui/sceneNodes';
+import type { StoryboardGridNodeData, GridLayout, GridMode, MasterImageNodeData } from '../../../types/ui/sceneNodes';
 import { JobStatus, NodeType, PromptStatus } from '../../../types/ui/sceneNodes';
 import BasePanel from './BasePanel.vue';
 import { useSceneNodeStore } from '../../../stores/sceneNode';
 import { useUIStore } from '../../../stores/ui';
 import { useNodeGeneration } from '../../../composables/useNodeGeneration';
 import { useHelpPopover } from '../../../composables/useHelpPopover';
-import { LayoutGrid, Camera, Target, FileText, Sparkles, Check, RefreshCw, Loader2 } from 'lucide-vue-next';
+import { LayoutGrid, Camera, Target, FileText, Sparkles, Check, RefreshCw, Loader2, Star } from 'lucide-vue-next';
+import { gsap } from 'gsap';
 import { mapShotTypeLabelsToKeys } from '../../../utils/nodeSettings';
 import { DEFAULT_GRID_LAYOUT, DEFAULT_GRID_SHOT_TYPES } from '../../../utils/nodeDefaults';
 
@@ -35,8 +36,21 @@ const form = ref({
   compositionHint: '',
   beats: [] as string[],
   continuityRules: '',
+  additionalDetail: '',
   prompt: '',
+  promptKo: '',
+  promptEnFinal: '',
+  promptEnFinalOverride: '',
+  usePromptOverride: false,
+  promptLang: 'EN' as 'EN' | 'KO',
 });
+
+const detailSectionRef = ref<HTMLElement | null>(null);
+const detailTextareaRef = ref<HTMLTextAreaElement | null>(null);
+const isFinalEditing = ref(false);
+const timelineCutsSectionRef = ref<HTMLElement | null>(null);
+const isTimelineCutsEditorOpen = ref(false);
+let promptPreviewTimeout: ReturnType<typeof setTimeout> | null = null;
 
 const {
   isGeneratingPrompt,
@@ -44,6 +58,7 @@ const {
   clearError,
   generatePrompt,
   approvePrompt,
+  refreshPromptPreview,
   runGeneration: generateGrid,
 } = useNodeGeneration({
   nodeId: props.node.id,
@@ -53,7 +68,11 @@ const {
   getPromptPayload: () => ({
     nodeType: 'GRID',
     sceneOneLine: buildSceneOneLine(),
+    prompt: form.value.prompt,
+    additionalDetail: form.value.additionalDetail,
+    gridMode: form.value.gridMode,
     layout: form.value.layout,
+    timelineIntervalSeconds: TIMELINE_CUT_INTERVAL_SECONDS,
     ...(form.value.gridMode === 'SHOT_VARIATIONS'
       ? {
         shotTypes: form.value.shotTypes,
@@ -61,16 +80,24 @@ const {
       }
       : {}),
   }),
-  getPromptUpdate: (prompt) => ({
+  getPromptUpdate: (result) => ({
     gridMode: form.value.gridMode,
     layout: form.value.layout,
     shotTypes: form.value.shotTypes,
     compositionHint: form.value.compositionHint,
-    beats: form.value.beats,
+    beats: (form.value.gridMode === 'STORY_BEATS' && result.timelineCuts && result.timelineCuts.length > 0)
+      ? normalizeBeats(result.timelineCuts, form.value.layout)
+      : form.value.beats,
     continuityRules: form.value.continuityRules,
-    prompt,
+    prompt: result.promptEnBase,
+    promptKo: result.promptKo,
   }),
-  getApprovedUpdate: () => ({ prompt: form.value.prompt }),
+  getImproveInstruction: () => form.value.additionalDetail,
+  getApprovedUpdate: () => ({
+    prompt: form.value.prompt,
+    promptKo: form.value.promptKo,
+    promptEnFinalOverride: form.value.usePromptOverride ? form.value.promptEnFinalOverride : '',
+  }),
   getJobSettings: () => {
     if (form.value.gridMode === 'STORY_BEATS') {
       return {
@@ -78,6 +105,7 @@ const {
         layout: form.value.layout,
         beatsKo: form.value.beats,
         continuityRulesKo: form.value.continuityRules,
+        detailKo: form.value.additionalDetail,
       };
     }
     return {
@@ -85,8 +113,38 @@ const {
       layout: form.value.layout,
       shotTypes: mapShotTypeLabelsToKeys(form.value.shotTypes),
       compositionHintKo: form.value.compositionHint,
+      detailKo: form.value.additionalDetail,
     };
   },
+  getReferenceObjectIds: () =>
+    activeMasterObjectIds.value.length ? [...activeMasterObjectIds.value] : undefined,
+  getPromptOverride: () =>
+    form.value.usePromptOverride ? form.value.promptEnFinalOverride : '',
+  getPromptPreviewPayload: () => ({
+    prompt: form.value.prompt,
+    settings: (() => {
+      if (form.value.gridMode === 'STORY_BEATS') {
+        return {
+          gridMode: 'STORY_BEATS',
+          layout: form.value.layout,
+          beatsKo: form.value.beats,
+          continuityRulesKo: form.value.continuityRules,
+          detailKo: form.value.additionalDetail,
+        };
+      }
+      return {
+        gridMode: 'SHOT_VARIATIONS',
+        layout: form.value.layout,
+        shotTypes: mapShotTypeLabelsToKeys(form.value.shotTypes),
+        compositionHintKo: form.value.compositionHint,
+        detailKo: form.value.additionalDetail,
+      };
+    })(),
+    promptEnFinalOverride: form.value.usePromptOverride ? form.value.promptEnFinalOverride : '',
+  }),
+  onPromptPreview: (result) => ({
+    promptEnFinal: result.promptEnFinal,
+  }),
   getJobSuccessUpdate: ({ resultUrl, thumbnailUrl }) => ({
     imageUrl: resultUrl || null,
     thumbnailUrl: thumbnailUrl || resultUrl || null,
@@ -99,8 +157,9 @@ const {
 const layoutOptions: GridLayout[] = ['2x2', '2x3', '3x3'];
 const gridModeOptions = [
   { value: 'SHOT_VARIATIONS', label: '샷 변주' },
-  { value: 'STORY_BEATS', label: '스토리 비트' },
+  { value: 'STORY_BEATS', label: '타임라인 컷' },
 ] as const;
+const TIMELINE_CUT_INTERVAL_SECONDS = 2;
 const shotTypeHelpItems = [
   {
     label: '와이드샷',
@@ -130,12 +189,44 @@ const shotTypeHelpItems = [
 const shotTypeOptions = shotTypeHelpItems.map((item) => item.label);
 
 const data = computed(() => props.node.data as StoryboardGridNodeData | undefined);
-const isPromptGenerated = computed(() => data.value?.promptStatus !== PromptStatus.DRAFT);
+const hasPromptContent = computed(() => {
+  if (!data.value) return false;
+  return Boolean(
+    (data.value.prompt ?? '').trim() ||
+    (data.value.promptKo ?? '').trim() ||
+    (data.value.promptEnFinal ?? '').trim() ||
+    (data.value.promptEnFinalOverride ?? '').trim()
+  );
+});
+const isPromptGenerated = computed(
+  () => hasPromptContent.value || data.value?.promptStatus !== PromptStatus.DRAFT
+);
 const isPromptApproved = computed(() => data.value?.promptStatus === PromptStatus.APPROVED);
 const isStoryBeats = computed(() => form.value.gridMode === 'STORY_BEATS');
+const timelineCutsCount = computed(() => form.value.beats.filter((beat) => beat.trim().length > 0).length);
+const timelineCutsButtonLabel = computed(() => {
+  if (isTimelineCutsEditorOpen.value) return '접기';
+  if (timelineCutsCount.value > 0) return `컷 편집하기 (${timelineCutsCount.value}개 입력됨)`;
+  return '컷 편집하기';
+});
 const sceneHeaderData = computed(() =>
   nodeStore.nodes.find((node) => node.data?.type === NodeType.SCENE_HEADER)?.data
 );
+const activeMasterNode = computed(() =>
+  nodeStore.nodes.find((node) => node.data?.type === NodeType.MASTER_IMAGE && (node.data as MasterImageNodeData).isActive)
+    ?? nodeStore.nodes.find((node) => node.data?.type === NodeType.MASTER_IMAGE)
+);
+const activeMasterPrompt = computed(() => {
+  const masterData = activeMasterNode.value?.data as MasterImageNodeData | undefined;
+  return {
+    prompt: masterData?.prompt?.trim() ?? '',
+    promptKo: masterData?.promptKo ?? '',
+  };
+});
+const activeMasterObjectIds = computed(() => {
+  const masterData = activeMasterNode.value?.data as MasterImageNodeData | undefined;
+  return masterData?.objectIds ?? [];
+});
 const parentMasterData = computed(() =>
   nodeStore.nodes.find((node) => node.id === data.value?.parentNodeId)?.data
 );
@@ -155,10 +246,12 @@ function buildSceneOneLine(): string {
     if (form.value.shotTypes.length) parts.push(`shotTypes: ${form.value.shotTypes.join(', ')}`);
     if (form.value.compositionHint) parts.push(`composition: ${form.value.compositionHint}`);
   } else {
+    parts.push(`timelineInterval: ${TIMELINE_CUT_INTERVAL_SECONDS}s`);
     const beats = form.value.beats.filter((beat) => beat.trim().length > 0);
-    if (beats.length) parts.push(`beats: ${beats.join(' | ')}`);
+    if (beats.length) parts.push(`timelineCuts: ${beats.join(' | ')}`);
     if (form.value.continuityRules) parts.push(`continuityRules: ${form.value.continuityRules}`);
   }
+  if (form.value.additionalDetail) parts.push(`detail: ${form.value.additionalDetail}`);
   return parts.join(', ');
 }
 
@@ -169,6 +262,12 @@ function getPanelCount(layout: GridLayout): number {
   const cols = Number(parts[1]);
   if (!Number.isFinite(rows) || !Number.isFinite(cols)) return 0;
   return rows * cols;
+}
+
+function formatTimelineRange(index: number): string {
+  const start = index * TIMELINE_CUT_INTERVAL_SECONDS;
+  const end = start + TIMELINE_CUT_INTERVAL_SECONDS;
+  return `${start}-${end}s`;
 }
 
 function normalizeBeats(beats: string[], layout: GridLayout): string[] {
@@ -193,8 +292,17 @@ watch(() => props.node.id, () => {
     compositionHint: data.value.compositionHint || '',
     beats: normalizeBeats(data.value.beats || [], layout),
     continuityRules: data.value.continuityRules || '',
+    additionalDetail: data.value.additionalDetail || '',
     prompt: data.value.prompt || '',
+    promptKo: data.value.promptKo || '',
+    promptEnFinal: data.value.promptEnFinal || '',
+    promptEnFinalOverride: data.value.promptEnFinalOverride || '',
+    usePromptOverride: Boolean(data.value.promptEnFinalOverride),
+    promptLang: 'EN',
   };
+  isFinalEditing.value = false;
+  isTimelineCutsEditorOpen.value = false;
+  maybeAutofillPromptFromMaster();
   clearError();
 }, { immediate: true });
 
@@ -204,6 +312,47 @@ watch(
     const normalized = nextPrompt ?? '';
     if (normalized !== form.value.prompt) {
       form.value.prompt = normalized;
+    }
+  }
+);
+
+watch(
+  () => data.value?.promptKo,
+  (nextPromptKo) => {
+    const normalized = nextPromptKo ?? '';
+    if (normalized !== form.value.promptKo) {
+      form.value.promptKo = normalized;
+    }
+  }
+);
+
+watch(
+  () => data.value?.promptEnFinal,
+  (nextPromptEnFinal) => {
+    const normalized = nextPromptEnFinal ?? '';
+    if (normalized !== form.value.promptEnFinal) {
+      form.value.promptEnFinal = normalized;
+    }
+  }
+);
+
+watch(
+  () => data.value?.promptEnFinalOverride,
+  (nextPromptOverride) => {
+    const normalized = nextPromptOverride ?? '';
+    if (normalized !== form.value.promptEnFinalOverride) {
+      form.value.promptEnFinalOverride = normalized;
+    }
+    form.value.usePromptOverride = Boolean(normalized);
+  }
+);
+
+watch(
+  () => data.value?.additionalDetail,
+  (nextDetail) => {
+    const normalized = nextDetail ?? '';
+    if (normalized !== form.value.additionalDetail) {
+      form.value.additionalDetail = normalized;
     }
   }
 );
@@ -241,11 +390,72 @@ watch(
 watch(
   () => form.value.gridMode,
   (nextMode) => {
+    if (data.value?.gridMode !== nextMode) {
+      nodeStore.updateNodeLocal(props.node.id, { gridMode: nextMode });
+    }
     if (nextMode === 'STORY_BEATS') {
       form.value.beats = normalizeBeats(form.value.beats, form.value.layout);
+      maybeAutofillPromptFromMaster();
+    } else {
+      isTimelineCutsEditorOpen.value = false;
     }
   }
 );
+
+watch(
+  () => [
+    form.value.prompt,
+    form.value.promptKo,
+    form.value.promptEnFinalOverride,
+    form.value.usePromptOverride,
+    form.value.additionalDetail,
+  ],
+  () => {
+    if (!data.value) return;
+    const updates: Partial<StoryboardGridNodeData> = {};
+    if (form.value.prompt !== (data.value.prompt ?? '')) {
+      updates.prompt = form.value.prompt;
+    }
+    if (form.value.promptKo !== (data.value.promptKo ?? '')) {
+      updates.promptKo = form.value.promptKo;
+    }
+    if (form.value.additionalDetail !== (data.value.additionalDetail ?? '')) {
+      updates.additionalDetail = form.value.additionalDetail;
+    }
+    const nextOverride = form.value.usePromptOverride ? form.value.promptEnFinalOverride : '';
+    if (nextOverride !== (data.value.promptEnFinalOverride ?? '')) {
+      updates.promptEnFinalOverride = nextOverride;
+    }
+    if (Object.keys(updates).length > 0) {
+      nodeStore.updateNodeLocal(props.node.id, updates);
+    }
+  }
+);
+
+watch(
+  () => ({
+    prompt: form.value.prompt,
+    gridMode: form.value.gridMode,
+    layout: form.value.layout,
+    shotTypes: form.value.shotTypes.slice(),
+    compositionHint: form.value.compositionHint,
+    beats: form.value.beats.slice(),
+    continuityRules: form.value.continuityRules,
+    additionalDetail: form.value.additionalDetail,
+    usePromptOverride: form.value.usePromptOverride,
+  }),
+  () => {
+    queuePromptPreview();
+  },
+  { deep: true }
+);
+
+onUnmounted(() => {
+  if (promptPreviewTimeout) {
+    clearTimeout(promptPreviewTimeout);
+    promptPreviewTimeout = null;
+  }
+});
 
 function toggleShotType(type: string): void {
   const idx = form.value.shotTypes.indexOf(type);
@@ -254,6 +464,119 @@ function toggleShotType(type: string): void {
   } else {
     form.value.shotTypes.push(type);
   }
+}
+
+function maybeAutofillPromptFromMaster(): void {
+  if (form.value.gridMode !== 'STORY_BEATS') return;
+  if (form.value.prompt.trim()) return;
+  const masterPrompt = activeMasterPrompt.value.prompt;
+  if (!masterPrompt) return;
+  form.value.prompt = masterPrompt;
+  if (!form.value.promptKo && activeMasterPrompt.value.promptKo) {
+    form.value.promptKo = activeMasterPrompt.value.promptKo;
+  }
+}
+
+async function openTimelineCutsEditor(): Promise<void> {
+  isTimelineCutsEditorOpen.value = true;
+  await nextTick();
+  if (!timelineCutsSectionRef.value) return;
+  const container = timelineCutsSectionRef.value.closest('.base-panel__content') as HTMLElement | null;
+  if (container) {
+    const containerRect = container.getBoundingClientRect();
+    const sectionRect = timelineCutsSectionRef.value.getBoundingClientRect();
+    const currentScroll = container.scrollTop;
+    const offset = sectionRect.top - containerRect.top;
+    const centeredOffset = (container.clientHeight - sectionRect.height) / 2;
+    const rawTarget = currentScroll + offset - centeredOffset;
+    const maxScroll = Math.max(0, container.scrollHeight - container.clientHeight);
+    const targetScroll = Math.min(Math.max(0, rawTarget), maxScroll);
+    gsap.to(container, { scrollTop: targetScroll, duration: 0.45, ease: 'power2.out' });
+  } else {
+    timelineCutsSectionRef.value.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+  gsap.killTweensOf(timelineCutsSectionRef.value);
+  gsap.fromTo(
+    timelineCutsSectionRef.value,
+    { boxShadow: '0 0 0 0 rgba(255, 107, 138, 0)', backgroundColor: 'rgba(255, 250, 252, 0)' },
+    {
+      boxShadow: '0 0 0 12px rgba(255, 107, 138, 0.35)',
+      backgroundColor: 'rgba(255, 250, 252, 0.9)',
+      duration: 0.35,
+      yoyo: true,
+      repeat: 1,
+      ease: 'power2.out',
+      clearProps: 'boxShadow,backgroundColor',
+    }
+  );
+}
+
+function toggleTimelineCutsEditor(): void {
+  if (isTimelineCutsEditorOpen.value) {
+    isTimelineCutsEditorOpen.value = false;
+    return;
+  }
+  void openTimelineCutsEditor();
+}
+
+function toggleFinalEditing(): void {
+  if (!form.value.usePromptOverride) {
+    form.value.usePromptOverride = true;
+    form.value.promptEnFinalOverride = form.value.promptEnFinal || form.value.prompt;
+    isFinalEditing.value = true;
+    return;
+  }
+
+  if (isFinalEditing.value && !form.value.promptEnFinalOverride.trim()) {
+    form.value.promptEnFinalOverride = form.value.promptEnFinal || form.value.prompt;
+  }
+
+  isFinalEditing.value = !isFinalEditing.value;
+}
+
+function queuePromptPreview(): void {
+  if (!form.value.prompt.trim()) return;
+  if (form.value.usePromptOverride) return;
+  if (promptPreviewTimeout) clearTimeout(promptPreviewTimeout);
+  promptPreviewTimeout = setTimeout(() => {
+    promptPreviewTimeout = null;
+    refreshPromptPreview();
+  }, 600);
+}
+
+async function focusDetailEditor(): Promise<void> {
+  await nextTick();
+  if (detailSectionRef.value) {
+    const container = detailSectionRef.value.closest('.base-panel__content') as HTMLElement | null;
+    if (container) {
+      const containerRect = container.getBoundingClientRect();
+      const sectionRect = detailSectionRef.value.getBoundingClientRect();
+      const currentScroll = container.scrollTop;
+      const offset = sectionRect.top - containerRect.top;
+      const centeredOffset = (container.clientHeight - sectionRect.height) / 2;
+      const rawTarget = currentScroll + offset - centeredOffset;
+      const maxScroll = Math.max(0, container.scrollHeight - container.clientHeight);
+      const targetScroll = Math.min(Math.max(0, rawTarget), maxScroll);
+      gsap.to(container, { scrollTop: targetScroll, duration: 0.45, ease: 'power2.out' });
+    } else {
+      detailSectionRef.value.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+    gsap.killTweensOf(detailSectionRef.value);
+    gsap.fromTo(
+      detailSectionRef.value,
+      { boxShadow: '0 0 0 0 rgba(255, 107, 138, 0)', backgroundColor: 'rgba(255, 250, 252, 0)' },
+      {
+        boxShadow: '0 0 0 12px rgba(255, 107, 138, 0.35)',
+        backgroundColor: 'rgba(255, 250, 252, 0.9)',
+        duration: 0.35,
+        yoyo: true,
+        repeat: 1,
+        ease: 'power2.out',
+        clearProps: 'boxShadow,backgroundColor',
+      }
+    );
+  }
+  detailTextareaRef.value?.focus();
 }
 
 function notifyBlocked(title: string, message: string): void {
@@ -375,20 +698,28 @@ function handleGenerateGrid(): void {
         />
       </div>
 
-      <!-- Story Beats -->
-      <div v-if="isStoryBeats" class="panel-section">
-        <label class="panel-label">
-          <FileText class="panel-label-icon" />
-          비트 입력
-        </label>
-        <div class="panel-beats">
+      <!-- Timeline Cuts -->
+      <div v-if="isStoryBeats" class="panel-section" ref="timelineCutsSectionRef">
+        <div class="panel-label-row">
+          <label class="panel-label">
+            <FileText class="panel-label-icon" />
+            타임라인 컷
+          </label>
+          <button class="panel-btn panel-btn--text" type="button" @click="toggleTimelineCutsEditor">
+            {{ timelineCutsButtonLabel }}
+          </button>
+        </div>
+        <p class="panel-subtext">
+          AI로 다듬기를 누르면 2초 간격의 정지 프레임이 자동으로 채워집니다.
+        </p>
+        <div v-if="isTimelineCutsEditorOpen" class="panel-beats">
           <div v-for="(_, index) in form.beats" :key="`beat-${index}`" class="panel-beat-item">
-            <div class="panel-beat-label">비트 {{ index + 1 }}</div>
+            <div class="panel-beat-label">컷 {{ index + 1 }} · {{ formatTimelineRange(index) }}</div>
             <textarea
               v-model="form.beats[index]"
               class="panel-textarea panel-textarea--beat"
               rows="2"
-              placeholder="예: 0~4s: 사건 설명"
+              placeholder="예: 0-2s 구간 장면 설명"
             ></textarea>
           </div>
         </div>
@@ -407,6 +738,73 @@ function handleGenerateGrid(): void {
         />
       </div>
 
+      <!-- Detail Change -->
+      <div class="panel-section" ref="detailSectionRef">
+        <label class="panel-label">
+          <Star class="panel-label-icon" />
+          디테일 변경 (선택)
+        </label>
+        <textarea
+          ref="detailTextareaRef"
+          v-model="form.additionalDetail"
+          class="panel-textarea"
+          rows="2"
+          placeholder="예: 소품/질감/감정 톤 등 추가 지시사항"
+        ></textarea>
+      </div>
+
+      <!-- Narrative Prompt -->
+      <div class="panel-section">
+        <div class="panel-label-row">
+          <label class="panel-label">
+            <FileText class="panel-label-icon" />
+            서술 프롬프트
+          </label>
+          <div class="panel-segmented" role="tablist" aria-label="Prompt language">
+            <button
+              type="button"
+              class="panel-segmented__btn"
+              :class="{ 'is-active': form.promptLang === 'EN' }"
+              @click="form.promptLang = 'EN'"
+            >
+              EN
+            </button>
+            <button
+              type="button"
+              class="panel-segmented__btn"
+              :class="{ 'is-active': form.promptLang === 'KO' }"
+              @click="form.promptLang = 'KO'"
+            >
+              KO
+            </button>
+          </div>
+        </div>
+        <p
+          class="panel-subtext panel-tooltip"
+          data-tooltip="서술 프롬프트는 읽기 전용입니다. 한글 수정은 디테일 변경에서 가능합니다."
+        >
+          {{ form.promptLang === 'EN' ? '원본(읽기 전용)' : '번역(읽기 전용)' }}
+          <span class="panel-tooltip__icon">?</span>
+        </p>
+        <div v-if="form.promptLang === 'EN'">
+          <textarea
+            v-model="form.prompt"
+            class="panel-textarea panel-textarea--prompt"
+            rows="4"
+            placeholder="예: A sequence of frames showing the character's decision moment."
+            readonly
+          ></textarea>
+        </div>
+        <div v-else class="panel-translation-block">
+          <textarea
+            v-model="form.promptKo"
+            class="panel-textarea panel-textarea--prompt"
+            rows="4"
+            readonly
+          ></textarea>
+        </div>
+      </div>
+
       <!-- Generate Prompt -->
       <button
         class="panel-btn panel-btn--secondary panel-btn--full panel-btn--prompt-generate"
@@ -415,17 +813,45 @@ function handleGenerateGrid(): void {
       >
         <Loader2 v-if="isGeneratingPrompt" class="panel-btn-icon panel-btn-icon--spin" />
         <Sparkles v-else class="panel-btn-icon" />
-        {{ isGeneratingPrompt ? '생성 중...' : '프롬프트 생성' }}
+        {{ isGeneratingPrompt ? '생성 중...' : 'AI로 다듬기' }}
       </button>
 
       <!-- Generated Prompt -->
       <div v-if="isPromptGenerated" class="panel-section panel-section--prompt">
         <label class="panel-label">
           <FileText class="panel-label-icon" />
-          AI 프롬프트
-          <span class="panel-label-badge">생성됨</span>
+          최종 프롬프트 (영어)
         </label>
-        <textarea v-model="form.prompt" class="panel-textarea panel-textarea--prompt" rows="3"></textarea>
+        <textarea
+          v-if="form.usePromptOverride"
+          v-model="form.promptEnFinalOverride"
+          class="panel-textarea panel-textarea--prompt"
+          rows="3"
+          :readonly="!isFinalEditing"
+          placeholder="최종 영어 프롬프트를 직접 입력하세요."
+        ></textarea>
+        <textarea
+          v-else
+          :value="form.promptEnFinal"
+          class="panel-textarea panel-textarea--prompt"
+          rows="3"
+          readonly
+          placeholder="자동으로 갱신됩니다."
+        ></textarea>
+
+        <div class="panel-prompt-actions">
+          <button
+            class="panel-btn panel-btn--text"
+            :disabled="!form.promptEnFinal && !form.prompt"
+            @click="toggleFinalEditing"
+          >
+            {{ isFinalEditing ? '편집 완료' : '영문 직접 편집' }}
+          </button>
+          <button class="panel-btn panel-btn--text" @click="focusDetailEditor">
+            한글 편집
+          </button>
+        </div>
+
         <div class="panel-prompt-actions panel-prompt-actions--right">
           <button class="panel-btn panel-btn--text" :disabled="isGeneratingPrompt || isGeneratingGrid" @click="generatePrompt">
             <Loader2 v-if="isGeneratingPrompt" class="panel-btn-icon panel-btn-icon--spin" />
@@ -466,12 +892,59 @@ function handleGenerateGrid(): void {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 0.5rem;
-  margin-bottom: 0.5rem;
+  gap: 0.75rem;
+  margin-bottom: 0.35rem;
 }
 
 .panel-label-row .panel-label {
   margin-bottom: 0;
+}
+
+.panel-segmented {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0.15rem;
+  background: var(--gray-100, #F3F4F6);
+  border-radius: 999px;
+}
+
+.panel-segmented__btn {
+  border: 0;
+  background: transparent;
+  padding: 0.2rem 0.65rem;
+  font-size: 0.7rem;
+  color: var(--gray-600, #4B5563);
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.panel-segmented__btn.is-active {
+  background: var(--gray-900, #111827);
+  color: var(--gray-50, #F9FAFB);
+  box-shadow: 0 2px 6px rgba(17, 24, 39, 0.18);
+}
+
+.panel-subtext {
+  margin: 0 0 0.5rem;
+  font-size: 0.75rem;
+  color: var(--gray-500, #6B7280);
+}
+
+.panel-translation-block .panel-prompt-actions {
+  margin-top: 0.4rem;
+}
+
+.panel-btn--sync--muted {
+  background: var(--gray-100, #F3F4F6);
+  color: var(--gray-500, #6B7280);
+  border-color: var(--gray-200, #E5E7EB);
+}
+
+.panel-btn--sync--muted:hover {
+  background: var(--gray-100, #F3F4F6);
+  color: var(--gray-500, #6B7280);
+  border-color: var(--gray-200, #E5E7EB);
 }
 
 .panel-info {

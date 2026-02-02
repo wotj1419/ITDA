@@ -3,8 +3,6 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useCollabStore } from '../../stores/collab'
 import CollabPanel from '../collab/CollabPanel.vue'
-import CollabButton from './CollabButton.vue'
-import Button from './Button.vue'
 import { Mic, MicOff, MessageCircle, PhoneOff } from 'lucide-vue-next'
 
 const collabStore = useCollabStore()
@@ -15,16 +13,11 @@ const panelMaxHeight = ref<number | null>(null)
 const panelOffsetX = ref(0)
 const route = useRoute()
 const DEFAULT_BOTTOM_OFFSET = 60
-const TRIGGER_RIGHT_OFFSET = 24
 
 const isProjectPage = computed(() => {
   // Only show on project-related pages, never on dashboard
   return route.path.startsWith('/projects')
 })
-
-const isStartAllowedPage = computed(() =>
-  route.name === 'project-detail' || route.name === 'scene-edit' || route.name === 'timeline'
-)
 
 const isDashboardPage = computed(() => route.path === '/dashboard')
 
@@ -42,14 +35,6 @@ const statusColor = computed(() => {
   if (collabStore.status === 'connecting') return 'bg-yellow-500'
   return 'bg-gray-500'
 })
-
-const startFromTrigger = () => {
-  const projectId = Number(route.params.projectId ?? route.params.id)
-  if (Number.isFinite(projectId)) {
-    collabStore.joinRoom(projectId)
-  }
-  collabStore.showFloatingBar(true)
-}
 
 const STORAGE_KEY = 'collab:floatingPos'
 const position = ref({ x: 0, y: 0 })
@@ -89,7 +74,7 @@ function setDefaultPosition() {
   const width = collabStore.isFloatingBarVisible ? measuredWidth : defaultWidth
   const height = (rect?.height && rect.height > 0) ? rect.height : 64
   
-  const rightOffset = collabStore.isFloatingBarVisible ? 2 : 2 + TRIGGER_RIGHT_OFFSET
+  const rightOffset = 2
   const x = Math.max(8, window.innerWidth - width - rightOffset)
   const y = Math.max(8, window.innerHeight - height - DEFAULT_BOTTOM_OFFSET)
   position.value = { x, y }
@@ -273,13 +258,8 @@ onBeforeUnmount(() => {
     :style="{ left: `${position.x}px`, top: `${position.y}px` }"
     @pointerdown="onPointerDown"
   >
-    <!-- Start Button (Collapsed State) -->
-    <div v-if="!collabStore.isFloatingBarVisible && isStartAllowedPage" class="floating-trigger">
-      <CollabButton class="trigger-btn" @click="startFromTrigger" />
-    </div>
-
     <!-- Active Bar (Expanded State) -->
-    <div v-else-if="!isDashboardPage && collabStore.isFloatingBarVisible" class="bar-container">
+    <div v-if="!isDashboardPage && collabStore.isFloatingBarVisible && collabStore.isMediaConnected" class="bar-container">
     <div
       ref="panelWrapRef"
       class="panel-pop"
@@ -291,36 +271,8 @@ onBeforeUnmount(() => {
     >
       <CollabPanel v-show="collabStore.isPanelOpen" />
     </div>
-
-    <!-- Standby Mode (No Media) -->
-    <div v-if="!collabStore.isMediaConnected" class="floating-bar">
-         <!-- Status -->
-         <div class="status-indicator">
-            <div class="status-dot bg-yellow-500"></div>
-            <span class="status-text">Ready</span>
-         </div>
-         <div class="divider"></div>
-         
-         <Button 
-            class="go-live-btn"
-            @click="collabStore.enableMedia()"
-         >
-            <Mic class="icon-sm" />
-            <span>Go Live</span>
-         </Button>
-         
-         <div class="divider"></div>
-         <button
-            class="control-btn"
-            @click="collabStore.hideFloatingBar()"
-            title="Hide Control Bar"
-         >
-            <PhoneOff class="icon" />
-         </button>
-    </div>
-
     <!-- Live Mode (Media Connected) -->
-    <div v-else class="floating-bar" :class="{ hidden: collabStore.isPanelOpen }">
+    <div class="floating-bar" :class="{ hidden: collabStore.isPanelOpen }">
       <!-- Status Indicator -->
       <div class="status-indicator" :title="statusText">
         <div class="status-dot" :class="statusColor"></div>
@@ -352,7 +304,7 @@ onBeforeUnmount(() => {
 
       <button
         class="control-btn danger"
-        @click="collabStore.leaveRoom()"
+        @click="collabStore.disableMedia(); collabStore.hideFloatingBar()"
         :disabled="!isConnected"
         title="End Call"
       >
@@ -372,16 +324,6 @@ onBeforeUnmount(() => {
   width: max-content;
 }
 
-.floating-trigger {
-  background: transparent;
-  border-radius: 8px;
-  overflow: hidden;
-  cursor: grab;
-}
-
-.floating-wrap.dragging .floating-trigger {
-  cursor: grabbing;
-}
 
 .bar-container {
   position: relative;
@@ -438,9 +380,7 @@ onBeforeUnmount(() => {
 }
 
 .floating-bar button,
-.floating-bar .control-btn,
-.floating-bar .go-live-btn,
-.floating-trigger button {
+.floating-bar .control-btn {
   cursor: pointer;
 }
 
@@ -519,29 +459,12 @@ onBeforeUnmount(() => {
   height: 14px;
 }
 
-.go-live-btn {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.25rem 0.75rem;
-  background: var(--rose-500);
-  color: white;
-  border: none;
-  border-radius: 999px;
-  font-size: 0.75rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.2s;
-}
-
-.go-live-btn:hover {
-  background: var(--rose-600);
-}
 
 .icon-sm {
   width: 14px;
   height: 14px;
 }
+
 
 /* Tailwind-like utilities since we might not have full tailwind configured as classes yet */
 .bg-green-500 { background-color: #22c55e; }
