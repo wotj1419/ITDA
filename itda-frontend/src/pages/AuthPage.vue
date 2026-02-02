@@ -519,9 +519,9 @@ async function handleRegister() {
   content: "";
   position: absolute;
   inset: 0;
-  background-image: radial-gradient(circle, rgba(255, 133, 161, 0.35) 10%, transparent 10%);
-  background-size: 30px 30px;
-  animation: dot-move 10s linear infinite;
+  background-image: radial-gradient(circle, #FFD6E5 1.25px, transparent 1.5px);
+  background-size: 40px 40px;
+  animation: dot-move 5s linear infinite;
 }
 
 @keyframes dot-move {
@@ -529,7 +529,7 @@ async function handleRegister() {
     background-position: 0 0;
   }
   100% {
-    background-position: 30px 30px;
+    background-position: 40px 40px;
   }
 }
 
