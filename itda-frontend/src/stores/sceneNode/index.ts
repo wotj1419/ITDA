@@ -76,6 +76,7 @@ import {
 } from '../../utils/nodeDefaults';
 
 const MAX_POSITION_HISTORY = 20;
+const NODE_MEDIA_HYDRATION_CONCURRENCY = 6;
 
 // =============================================================================
 // Store
@@ -568,12 +569,8 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
             const nextNodes = apiNodes.map((node) =>
                 createSceneNodeFromApi(node, sceneIdParam, sceneInfo, sceneHeaderId)
             );
-            await hydrateNodeMedia(nextNodes);
             nodes.value = nextNodes;
-            await hydrateMissingShotThumbnails();
             syncVideoThumbnailsFromShots();
-            await hydrateVideoDurations();
-            await hydrateVideoDetailsForEdges();
 
             if (!nodes.value.find((n) => n.data?.type === NodeType.SCENE_HEADER)) {
                 ensureSceneHeaderNode(sceneInfo);
@@ -602,6 +599,31 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
                     selectNode(previousSelectedId);
                 }
             }
+
+            // Keep first render fast: hydrate media/details in background.
+            const loadedSceneId = sceneIdParam;
+            void (async () => {
+                try {
+                    await hydrateMissingShotThumbnails();
+                    if (sceneId.value !== loadedSceneId) return;
+
+                    syncVideoThumbnailsFromShots();
+                    if (sceneId.value !== loadedSceneId) return;
+
+                    await hydrateNodeMedia(nodes.value);
+                    if (sceneId.value !== loadedSceneId) return;
+
+                    await hydrateVideoDurations();
+                    if (sceneId.value !== loadedSceneId) return;
+
+                    await hydrateVideoDetailsForEdges();
+                    if (sceneId.value !== loadedSceneId) return;
+
+                    edges.value = deriveEdges(nodes.value);
+                } catch (error) {
+                    console.error('Background node hydration failed:', error);
+                }
+            })();
         } catch (error) {
             console.error('Failed to load scene nodes:', error);
         } finally {
@@ -680,51 +702,69 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
                 !!node.data &&
                 !!node.data.thumbnailUrl
         );
-        await Promise.all(
-            targets.map(async (node) => {
-                const current = node.data?.thumbnailUrl || node.data?.imageUrl || node.data?.videoUrl;
-                if (!current || current.startsWith('blob:')) return;
-                if (!isApiResourceUrl(current)) return;
-                const blobUrl = await fetchProtectedBlobUrl(current).catch(() => null);
-                if (!blobUrl || !node.data) {
-                    if (node.data && isApiResourceUrl(current)) {
-                        if (node.data.type === NodeType.VIDEO) {
-                            const video = node.data as VideoNodeData;
-                            video.videoUrl = null;
-                            video.thumbnailUrl = null;
-                        } else if (node.data.type === NodeType.MASTER_IMAGE) {
-                            const master = node.data as MasterImageNodeData;
-                            master.imageUrl = null;
-                            master.thumbnailUrl = null;
-                        } else if (node.data.type === NodeType.STORYBOARD_GRID) {
-                            const grid = node.data as StoryboardGridNodeData;
-                            grid.imageUrl = null;
-                            grid.thumbnailUrl = null;
-                        } else if (node.data.type === NodeType.SHOT) {
-                            const shot = node.data as ShotNodeData;
-                            shot.imageUrl = null;
-                            shot.thumbnailUrl = null;
-                        }
+        await processWithConcurrency(targets, NODE_MEDIA_HYDRATION_CONCURRENCY, async (node) => {
+            const current = node.data?.thumbnailUrl || node.data?.imageUrl || node.data?.videoUrl;
+            if (!current || current.startsWith('blob:')) return;
+            if (!isApiResourceUrl(current)) return;
+            const blobUrl = await fetchProtectedBlobUrl(current).catch(() => null);
+            if (!blobUrl || !node.data) {
+                if (node.data && isApiResourceUrl(current)) {
+                    if (node.data.type === NodeType.VIDEO) {
+                        const video = node.data as VideoNodeData;
+                        video.videoUrl = null;
+                        video.thumbnailUrl = null;
+                    } else if (node.data.type === NodeType.MASTER_IMAGE) {
+                        const master = node.data as MasterImageNodeData;
+                        master.imageUrl = null;
+                        master.thumbnailUrl = null;
+                    } else if (node.data.type === NodeType.STORYBOARD_GRID) {
+                        const grid = node.data as StoryboardGridNodeData;
+                        grid.imageUrl = null;
+                        grid.thumbnailUrl = null;
+                    } else if (node.data.type === NodeType.SHOT) {
+                        const shot = node.data as ShotNodeData;
+                        shot.imageUrl = null;
+                        shot.thumbnailUrl = null;
                     }
-                    return;
                 }
-                if (node.data.type === NodeType.VIDEO) {
-                    (node.data as VideoNodeData).videoUrl = blobUrl;
-                } else if (node.data.type === NodeType.MASTER_IMAGE) {
-                    const master = node.data as MasterImageNodeData;
-                    master.imageUrl = blobUrl;
-                    master.thumbnailUrl = blobUrl;
-                } else if (node.data.type === NodeType.STORYBOARD_GRID) {
-                    const grid = node.data as StoryboardGridNodeData;
-                    grid.imageUrl = blobUrl;
-                    grid.thumbnailUrl = blobUrl;
-                } else if (node.data.type === NodeType.SHOT) {
-                    const shot = node.data as ShotNodeData;
-                    shot.imageUrl = blobUrl;
-                    shot.thumbnailUrl = blobUrl;
-                }
-            })
-        );
+                return;
+            }
+            if (node.data.type === NodeType.VIDEO) {
+                (node.data as VideoNodeData).videoUrl = blobUrl;
+            } else if (node.data.type === NodeType.MASTER_IMAGE) {
+                const master = node.data as MasterImageNodeData;
+                master.imageUrl = blobUrl;
+                master.thumbnailUrl = blobUrl;
+            } else if (node.data.type === NodeType.STORYBOARD_GRID) {
+                const grid = node.data as StoryboardGridNodeData;
+                grid.imageUrl = blobUrl;
+                grid.thumbnailUrl = blobUrl;
+            } else if (node.data.type === NodeType.SHOT) {
+                const shot = node.data as ShotNodeData;
+                shot.imageUrl = blobUrl;
+                shot.thumbnailUrl = blobUrl;
+            }
+        });
+    }
+
+    async function processWithConcurrency<T>(
+        items: T[],
+        concurrency: number,
+        worker: (item: T) => Promise<void>
+    ): Promise<void> {
+        if (!items.length) return;
+
+        const limit = Math.max(1, Math.min(concurrency, items.length));
+        let cursor = 0;
+
+        const run = async () => {
+            while (cursor < items.length) {
+                const index = cursor++;
+                await worker(items[index] as T);
+            }
+        };
+
+        await Promise.all(Array.from({ length: limit }, () => run()));
     }
 
     // ==========================================================================
