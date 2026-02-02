@@ -59,7 +59,8 @@ public class SecurityConfig {
                         .requestMatchers("/test/**").permitAll()
 
                         .requestMatchers("/actuator/prometheus").permitAll()
-                        .requestMatchers("/actuator/**").hasRole("ADMIN")
+                        .requestMatchers("/actuator/health", "/actuator/info").permitAll()
+                        .requestMatchers("/actuator/**").denyAll()
                         // 그 외는 인증 필요
                         .anyRequest().authenticated()
                 )
