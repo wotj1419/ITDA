@@ -214,6 +214,7 @@ services:
       - "3000"
     networks:
       - internal
+      - public
     restart: unless-stopped
     profiles: ["observability"]
   node-exporter:
