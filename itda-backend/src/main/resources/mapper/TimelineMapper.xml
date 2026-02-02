@@ -10,6 +10,10 @@
         <result property="sceneId" column="scene_id"/>
         <result property="assetId" column="asset_id"/>
         <result property="fallbackUrl" column="fallback_url"/>
+        <result property="shotAssetId" column="shot_asset_id"/>
+        <result property="shotContentUrl" column="shot_content_url"/>
+        <result property="masterAssetId" column="master_asset_id"/>
+        <result property="masterContentUrl" column="master_content_url"/>
         <result property="duration" column="duration"/>
         <result property="orderIndex" column="order_index"/>
     </resultMap>
@@ -20,6 +24,8 @@
         <result property="sceneTitle" column="scene_title"/>
         <result property="assetId" column="asset_id"/>
         <result property="fallbackUrl" column="fallback_url"/>
+        <result property="masterAssetId" column="master_asset_id"/>
+        <result property="masterContentUrl" column="master_content_url"/>
         <result property="duration" column="duration"/>
         <result property="orderIndex" column="order_index"/>
     </resultMap>
@@ -29,10 +35,21 @@
                ti.scene_id,
                n.asset_id AS asset_id,
                n.content_url AS fallback_url,
+               shot.asset_id AS shot_asset_id,
+               shot.content_url AS shot_content_url,
+               master.asset_id AS master_asset_id,
+               master.content_url AS master_content_url,
                NULL AS duration,
                ti.order_index
         FROM timeline_items ti
         JOIN nodes n ON n.id = ti.video_node_id
+        JOIN scenes s ON s.id = ti.scene_id
+        LEFT JOIN nodes shot
+            ON shot.id = n.parent_node_id
+           AND shot.node_type = 'SHOT'
+        LEFT JOIN nodes master
+            ON master.id = s.active_master_node_id
+           AND master.node_type = 'MASTER'
         WHERE ti.scene_id = #{sceneId}
           AND n.node_type = 'VIDEO'
           AND n.is_confirmed = 1
@@ -45,11 +62,16 @@
                s.title AS scene_title,
                sv.asset_id AS asset_id,
                sv.thumbnail_url AS fallback_url,
+               master.asset_id AS master_asset_id,
+               master.content_url AS master_content_url,
                sv.duration_ms AS duration,
                ti.order_index
         FROM timeline_items ti
         JOIN scenes s ON s.id = ti.scene_id
         JOIN scene_videos sv ON sv.id = ti.scene_video_id
+        LEFT JOIN nodes master
+            ON master.id = s.active_master_node_id
+           AND master.node_type = 'MASTER'
         WHERE ti.project_id = #{projectId}
         ORDER BY ti.order_index ASC, ti.id ASC
     </select>
