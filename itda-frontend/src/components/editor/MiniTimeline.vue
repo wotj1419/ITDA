@@ -5,7 +5,7 @@
 import { ref } from 'vue';
 import type { TimelineClip } from '../../types/ui';
 import { Star, Play, X } from 'lucide-vue-next';
-import { useVideoPreview } from '../../composables/useVideoPreview';
+import LazyVideo from '../media/LazyVideo.vue';
 
 // =============================================================================
 // Props
@@ -23,8 +23,6 @@ const props = withDefaults(defineProps<Props>(), {
   maxDuration: 60,
 });
 
-const { isVideo, playVideoPreview, stopVideoPreview } = useVideoPreview();
-
 const emit = defineEmits<{
   (e: 'reorder', clipIds: string[]): void;
   (e: 'remove', clipId: string): void;
@@ -33,6 +31,31 @@ const emit = defineEmits<{
 
 const draggedId = ref<string | null>(null);
 const dragOverId = ref<string | null>(null);
+const thumbStates = ref<Record<string, 'idle' | 'loaded' | 'failed'>>({});
+
+const getThumbState = (clipId: string) => thumbStates.value[clipId] ?? 'idle';
+
+const isThumbReady = (clip: TimelineClip) =>
+  Boolean(clip.thumbnailUrl) && getThumbState(clip.clipId) === 'loaded';
+
+const handleThumbLoad = (clipId: string, event: Event) => {
+  const img = event.target as HTMLImageElement | null;
+  if (!img) return;
+  const width = img.naturalWidth || 0;
+  const height = img.naturalHeight || 0;
+  if (width < 2 || height < 2) {
+    thumbStates.value[clipId] = 'failed';
+    return;
+  }
+  thumbStates.value[clipId] = 'loaded';
+};
+
+const handleThumbError = (clipId: string) => {
+  thumbStates.value[clipId] = 'failed';
+};
+
+const getPoster = (clip: TimelineClip) =>
+  clip.thumbnailUrl || '/icon.png';
 
 function handleDragStart(clipId: string, event: DragEvent) {
   draggedId.value = clipId;
@@ -110,7 +133,11 @@ const progressPercent = Math.min(
         v-for="clip in clips"
         :key="clip.clipId"
         class="timeline-clip"
-        :class="{ 'drag-over': dragOverId === clip.clipId }"
+        :class="{
+          'drag-over': dragOverId === clip.clipId,
+          'has-video': Boolean(clip.videoUrl),
+          'thumb-ready': isThumbReady(clip),
+        }"
         :title="clip.label || '확정 클립'"
         draggable="true"
         @dragstart="handleDragStart(clip.clipId, $event)"
@@ -122,22 +149,30 @@ const progressPercent = Math.min(
         <button class="clip-remove" @click.stop="handleRemove(clip.clipId)">
           <X class="remove-icon" />
         </button>
-        <video
-          v-if="clip.videoUrl || isVideo(clip.thumbnailUrl)"
-          :src="clip.videoUrl || clip.thumbnailUrl"
-          class="clip-content clip-video"
-          preload="metadata"
-          muted
-          playsinline
-          @mouseenter="playVideoPreview"
-          @mouseleave="stopVideoPreview"
-        />
-        <img
-          v-else
-          :src="clip.thumbnailUrl"
-          :alt="clip.label || '확정 클립'"
-          class="clip-content clip-img"
-        />
+        <div class="clip-media">
+          <img
+            v-if="clip.thumbnailUrl"
+            :src="clip.thumbnailUrl"
+            :alt="clip.label || '??? ???'"
+            class="clip-img"
+            @load="handleThumbLoad(clip.clipId, $event)"
+            @error="handleThumbError(clip.clipId)"
+          />
+          <LazyVideo
+            v-if="clip.videoUrl"
+            :src="clip.videoUrl"
+            class="clip-video"
+            :poster="getPoster(clip)"
+            :play-on-hover="true"
+            :lazy="isThumbReady(clip)"
+          />
+          <img
+            v-else-if="!clip.thumbnailUrl"
+            src="/icon.png"
+            :alt="clip.label || '??? ???'"
+            class="clip-img"
+          />
+        </div>
         <span class="clip-duration">{{ clip.duration }}s</span>
       </div>
 
@@ -245,11 +280,48 @@ const progressPercent = Math.min(
   transform: scale(1.05);
 }
 
-.clip-content {
+.clip-media {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.clip-img,
+.clip-video {
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
   object-fit: cover;
   display: block;
+}
+
+.clip-img {
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.clip-video {
+  opacity: 1;
+  transition: opacity 0.2s ease;
+}
+
+.timeline-clip.thumb-ready .clip-img {
+  opacity: 1;
+}
+
+.timeline-clip.thumb-ready .clip-video {
+  opacity: 0;
+}
+
+.timeline-clip.has-video:hover .clip-video,
+.timeline-clip.has-video:focus-visible .clip-video {
+  opacity: 1;
+}
+
+.timeline-clip.has-video:hover .clip-img,
+.timeline-clip.has-video:focus-visible .clip-img {
+  opacity: 0;
 }
 
 .clip-duration {

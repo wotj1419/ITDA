@@ -8,6 +8,7 @@ import { useScenarioStore } from '../../../stores/scenario';
 import type { Scene, SceneStatus } from '../../../types/api/scenes';
 import type { ObjectSheet } from '../../../types/api/objects';
 import { fetchProtectedBlobUrl } from '../../../services/api/media';
+import { isApiResourceUrl } from '../../../services/api/urls';
 import { fetchProjectTimeline, type TimelineItem } from '../../../services/api/timeline';
 
 export type ProjectTab = 'story' | 'scenes' | 'objects' | 'timeline' | 'settings';
@@ -178,6 +179,10 @@ export function useProjectDetail() {
       previewContentMap.value = { ...previewContentMap.value, [key]: clip.contentUrl };
       return;
     }
+    if (!isApiResourceUrl(clip.contentUrl)) {
+      previewContentMap.value = { ...previewContentMap.value, [key]: clip.contentUrl };
+      return;
+    }
     const blobUrl = await fetchProtectedBlobUrl(clip.contentUrl).catch(() => null);
     if (blobUrl) {
       previewContentMap.value = { ...previewContentMap.value, [key]: blobUrl };
@@ -185,10 +190,8 @@ export function useProjectDetail() {
   };
 
   const buildScenePreviewFromTimeline = (sceneId: number, items: TimelineItem[]): ScenePreview => {
-    const resolveThumbnailUrl = (item: TimelineItem) =>
-      item.thumbnailUrl ?? (item.url && !item.videoUrl ? item.url : '');
-    const resolveVideoUrl = (item: TimelineItem) =>
-      item.videoUrl ?? item.url ?? '';
+    const resolveThumbnailUrl = (item: TimelineItem) => item.thumbnailUrl ?? '';
+    const resolveVideoUrl = (item: TimelineItem) => item.videoUrl ?? item.url ?? '';
     const clips = items
       .filter((item) => item.sceneId === sceneId)
       .sort((a, b) => a.order - b.order)

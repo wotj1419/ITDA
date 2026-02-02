@@ -13,7 +13,7 @@ import {
   reorderSceneTimeline,
 } from '../services/api/timeline'
 import { fetchProtectedBlobUrl } from '../services/api/media'
-import { resolveApiUrl } from '../services/api/urls'
+import { resolveApiUrl, isApiResourceUrl } from '../services/api/urls'
 import { unconfirmNode } from '../services/api/nodes'
 import {
   subscribeProjectEvents,
@@ -34,6 +34,9 @@ function toDurationSeconds(duration: number): number {
 
 async function resolveMediaUrl(url?: string | null): Promise<string | undefined> {
   if (!url) return undefined
+  if (!isApiResourceUrl(url)) {
+    return url
+  }
   const blobUrl = await fetchProtectedBlobUrl(url).catch(() => null)
   return blobUrl ?? url
 }
@@ -42,7 +45,9 @@ async function mapTimelineItemsToClips(items: TimelineItem[]): Promise<TimelineC
   return Promise.all(
     items.map(async (item) => {
       const clipKey = item.videoNodeId ?? item.sceneVideoId ?? `${item.sceneId}-${item.order}`
-      const resolvedUrl = await resolveMediaUrl(item.thumbnailUrl ?? item.url)
+      const resolvedThumbnail = await resolveMediaUrl(item.thumbnailUrl)
+      const videoCandidate = item.videoUrl ?? item.url
+      const resolvedVideo = await resolveMediaUrl(videoCandidate)
       const durationSeconds = toDurationSeconds(item.duration)
       const duration = durationSeconds > 0 ? durationSeconds : DEFAULT_CLIP_SECONDS
       const isVideoClip = Boolean(item.videoNodeId || item.sceneVideoId)
@@ -53,8 +58,8 @@ async function mapTimelineItemsToClips(items: TimelineItem[]): Promise<TimelineC
         videoNodeId: item.videoNodeId,
         sceneVideoId: item.sceneVideoId,
         sceneId: item.sceneId,
-        thumbnailUrl: resolvedUrl || '',
-        videoUrl: isVideoClip ? resolvedUrl || undefined : undefined,
+        thumbnailUrl: resolvedThumbnail || '',
+        videoUrl: isVideoClip ? resolvedVideo || undefined : undefined,
         duration,
         order: item.order,
         label: item.sceneTitle ? `${item.sceneTitle}` : `Clip ${item.order}`,

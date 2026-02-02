@@ -11,7 +11,7 @@ import { NodeResizer } from '@vue-flow/node-resizer';
 import { useSceneNodeStore } from '../../../stores/sceneNode';
 import { useCollabStore } from '../../../stores/collab';
 import { JobStatus } from '../../../types/ui/sceneNodes';
-import type { VideoNodeData } from '../../../types/ui/sceneNodes';
+import type { ShotNodeData, VideoNodeData } from '../../../types/ui/sceneNodes';
 import { useNodeStatus } from '../../../composables/useNodeStatus';
 import { useNodeThumbnail } from '../../../composables/useNodeThumbnail';
 import { getNodeMinSize, NODE_RESIZER_STYLE } from '../../../utils/nodeUi';
@@ -62,6 +62,24 @@ const { statusKey, statusIcon, isRunning, isGenerationRequested, hasGenerationFa
     () => props.data.jobStatus,
     () => props.data.generationState
   );
+
+const resolveShotThumbnail = (shotId?: string | null) => {
+  if (!shotId) return null;
+  const shotNode = store.nodes.find((node) => node.id === String(shotId));
+  if (!shotNode?.data) return null;
+  const shotData = shotNode.data as ShotNodeData;
+  return shotData.thumbnailUrl || shotData.imageUrl || null;
+};
+
+const fallbackThumbnail = computed(() => {
+  return (
+    props.data.thumbnailUrl ||
+    resolveShotThumbnail(props.data.startShotId) ||
+    resolveShotThumbnail(props.data.endShotId) ||
+    null
+  );
+});
+
 const {
   hasSource: hasThumbnailSource,
   isVisible: isThumbnailVisible,
@@ -71,7 +89,7 @@ const {
   handleLoad: handleThumbnailLoad,
   handleError: handleThumbnailError,
 } = useNodeThumbnail({
-  getThumbnailUrl: () => props.data.thumbnailUrl,
+  getThumbnailUrl: () => fallbackThumbnail.value,
   getPrimaryMediaUrl: () => props.data.videoUrl,
   isRunning: () => isRunning.value,
   isGenerationRequested: () => isGenerationRequested.value,
@@ -197,6 +215,7 @@ function handleRetry(event: Event): void {
           :src="data.videoUrl"
           ref="videoRef"
           class="node-glass__thumbnail-video"
+          :poster="fallbackThumbnail || undefined"
           preload="metadata"
           muted
           playsinline
@@ -204,7 +223,7 @@ function handleRetry(event: Event): void {
         <img
           v-else-if="hasThumbnailSource"
           v-show="isThumbnailVisible"
-          :src="data.thumbnailUrl || ''"
+          :src="fallbackThumbnail || ''"
           alt="영상 썸네일"
           class="node-glass__thumbnail-img"
           @load="handleThumbnailLoad"
