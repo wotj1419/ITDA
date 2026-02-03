@@ -269,7 +269,7 @@
 
 .node-glass__title {
     font-weight: 600;
-    font-size: 1.625rem;
+    font-size: 1.625rem !important;
     color: var(--gray-800, #1F2937);
     white-space: nowrap;
     overflow: hidden;
@@ -280,7 +280,7 @@
 }
 
 .node-glass__subtitle {
-    font-size: 1.375rem;
+    font-size: 1.375rem !important;
     color: var(--gray-500, #6B7280);
     margin-top: 0.125rem;
 }
