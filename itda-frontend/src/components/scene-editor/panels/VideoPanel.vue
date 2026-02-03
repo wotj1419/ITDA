@@ -264,7 +264,6 @@ const {
 });
 
 const isNodeGenerating = computed(() =>
-  data.value?.jobStatus === JobStatus.PENDING ||
   data.value?.jobStatus === JobStatus.RUNNING ||
   data.value?.generationState === GenerationState.REQUESTED
 );
