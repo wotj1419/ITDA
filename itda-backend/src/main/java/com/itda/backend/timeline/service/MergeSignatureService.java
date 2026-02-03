@@ -1,6 +1,7 @@
 package com.itda.backend.timeline.service;
 
 import com.itda.backend.timeline.repository.TimelineMapper;
+import com.itda.backend.node.repository.dto.TimelineNodeRow;
 import com.itda.backend.timeline.repository.dto.ProjectTimelineItem;
 import com.itda.backend.timeline.repository.dto.SceneTimelineItem;
 import com.itda.backend.global.exception.BusinessException;
@@ -38,13 +39,20 @@ public class MergeSignatureService {
     }
 
     public String computeProjectSignature(Long projectId, boolean includeMusic) {
-        List<ProjectTimelineItem> items = timelineMapper.findProjectTimelineItems(projectId);
-        return computeProjectSignature(projectId, includeMusic, items);
+        List<TimelineNodeRow> items = timelineMapper.findProjectTimelineVideoNodes(projectId);
+        return computeProjectSignatureFromVideoNodes(projectId, includeMusic, items);
     }
 
     public String computeProjectSignature(Long projectId, boolean includeMusic, List<ProjectTimelineItem> items) {
         validateProjectItems(items);
         return buildProjectSignature(projectId, includeMusic, items);
+    }
+
+    public String computeProjectSignatureFromVideoNodes(Long projectId,
+                                                        boolean includeMusic,
+                                                        List<TimelineNodeRow> items) {
+        validateProjectNodeRows(items);
+        return buildProjectSignatureFromVideoNodes(projectId, includeMusic, items);
     }
 
     private String buildSceneSignature(Long sceneId, boolean includeMusic, List<SceneTimelineItem> items) {
@@ -81,6 +89,25 @@ public class MergeSignatureService {
         return sha256Hex(builder.toString());
     }
 
+    private String buildProjectSignatureFromVideoNodes(Long projectId,
+                                                       boolean includeMusic,
+                                                       List<TimelineNodeRow> items) {
+        StringBuilder builder = new StringBuilder();
+        builder.append("project:").append(projectId).append('|')
+                .append("includeMusic=").append(includeMusic).append('|')
+                .append("items=");
+        for (int i = 0; i < items.size(); i++) {
+            TimelineNodeRow item = items.get(i);
+            if (i > 0) {
+                builder.append(',');
+            }
+            builder.append(item.getSceneId()).append(':')
+                    .append(item.getVideoNodeId()).append(':')
+                    .append(i + 1);
+        }
+        return sha256Hex(builder.toString());
+    }
+
     private void validateSceneItems(List<SceneTimelineItem> items) {
         if (items == null || items.isEmpty()) {
             throw new BusinessException(ErrorCode.INVALID_REQUEST);
@@ -98,6 +125,17 @@ public class MergeSignatureService {
         }
         for (ProjectTimelineItem item : items) {
             if (item.getOrderIndex() == null) {
+                throw new BusinessException(ErrorCode.INVALID_REQUEST);
+            }
+        }
+    }
+
+    private void validateProjectNodeRows(List<TimelineNodeRow> items) {
+        if (items == null || items.isEmpty()) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST);
+        }
+        for (TimelineNodeRow item : items) {
+            if (item.getSceneId() == null || item.getVideoNodeId() == null) {
                 throw new BusinessException(ErrorCode.INVALID_REQUEST);
             }
         }
