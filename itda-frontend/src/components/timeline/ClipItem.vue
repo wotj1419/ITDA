@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { TimelineClip } from '../../types/ui'
 import { X } from 'lucide-vue-next'
-import { useVideoPreview } from '../../composables/useVideoPreview'
+import LazyVideo from '../media/LazyVideo.vue'
 
 interface Props {
   clip: TimelineClip
@@ -16,25 +16,40 @@ const emit = defineEmits<{
   (e: 'remove'): void
 }>()
 
-const { isVideo, playVideoPreview, stopVideoPreview } = useVideoPreview()
 </script>
 
 <template>
   <div
+    class="clip-item"
     :draggable="draggable"
     :style="{ width: `${clip.duration * 20}px` }"
   >
-    <video
-      v-if="clip.videoUrl || isVideo(clip.thumbnailUrl)"
-      :src="clip.videoUrl || clip.thumbnailUrl"
-      class="clip-thumbnail"
-      preload="metadata"
-      muted
-      playsinline
-      @mouseenter="playVideoPreview"
-      @mouseleave="stopVideoPreview"
-    />
-    <img v-else :src="clip.thumbnailUrl" :alt="clip.label" class="clip-thumbnail" />
+    <div
+      class="clip-media"
+      :class="{ 'has-video': Boolean(clip.videoUrl), 'force-video': !clip.thumbnailUrl }"
+    >
+      <img
+        v-if="clip.thumbnailUrl"
+        :src="clip.thumbnailUrl"
+        :alt="clip.label"
+        class="clip-image"
+        loading="lazy"
+      />
+      <LazyVideo
+        v-if="clip.videoUrl"
+        :src="clip.videoUrl"
+        class="clip-video"
+        :poster="clip.thumbnailUrl || '/icon.png'"
+        :play-on-hover="true"
+      />
+      <img
+        v-else-if="!clip.thumbnailUrl"
+        src="/icon.png"
+        :alt="clip.label"
+        class="clip-image"
+        loading="lazy"
+      />
+    </div>
     <div class="clip-info">
       <div class="clip-label">{{ clip.label || '확정 클립' }}</div>
       <div class="clip-duration">{{ clip.duration }}초</div>
@@ -72,10 +87,43 @@ const { isVideo, playVideoPreview, stopVideoPreview } = useVideoPreview()
   transform: scale(1.02);
 }
 
-.clip-thumbnail {
+.clip-media {
+  position: relative;
   width: 100%;
   height: 48px;
+}
+
+.clip-image,
+.clip-video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
   object-fit: cover;
+  display: block;
+}
+
+.clip-video {
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.clip-item:hover .clip-video,
+.clip-item:focus-visible .clip-video {
+  opacity: 1;
+}
+
+.clip-item:hover .clip-image,
+.clip-item:focus-visible .clip-image {
+  opacity: 0;
+}
+
+.clip-media.force-video .clip-video {
+  opacity: 1;
+}
+
+.clip-media.force-video .clip-image {
+  opacity: 0;
 }
 
 .clip-info {

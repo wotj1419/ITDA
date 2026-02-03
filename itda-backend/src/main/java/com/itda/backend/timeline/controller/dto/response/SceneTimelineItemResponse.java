@@ -12,8 +12,14 @@ public record SceneTimelineItemResponse(
         @Schema(description = "Scene ID", example = "201")
         Long sceneId,
 
+        @Schema(description = "Legacy URL (video)", example = "/files/ai/videos/node-401.mp4")
+        String url,
+
         @Schema(description = "Thumbnail URL", example = "https://...")
         String thumbnailUrl,
+
+        @Schema(description = "Video URL", example = "/files/ai/videos/node-401.mp4")
+        String videoUrl,
 
         @Schema(description = "Duration", example = "5")
     Integer duration,
@@ -21,15 +27,13 @@ public record SceneTimelineItemResponse(
     @Schema(description = "Order index", example = "1")
     Integer order
 ) {
-    public static SceneTimelineItemResponse from(SceneTimelineItem item) {
-        return from(item, item.getFallbackUrl());
-    }
-
-    public static SceneTimelineItemResponse from(SceneTimelineItem item, String resolvedUrl) {
+    public static SceneTimelineItemResponse from(SceneTimelineItem item, String url, String thumbnailUrl, String videoUrl) {
         return new SceneTimelineItemResponse(
                 item.getVideoNodeId(),
                 item.getSceneId(),
-                resolvedUrl,
+                url,
+                thumbnailUrl,
+                videoUrl,
                 item.getDuration(),
                 item.getOrderIndex()
         );

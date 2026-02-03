@@ -18,6 +18,8 @@ import java.time.Duration;
 @RequiredArgsConstructor
 public class AssetUrlResolver {
 
+    private static final String FILES_PREFIX = "/files/";
+
     private final AssetMapper assetMapper;
     private final S3StorageProperties s3Properties;
     private final ObjectProvider<S3Presigner> s3PresignerProvider;
@@ -34,6 +36,20 @@ public class AssetUrlResolver {
     public String resolveUrl(Long assetId, String fallbackUrl) {
         String presignedUrl = resolveS3PresignedUrl(assetId);
         return presignedUrl != null ? presignedUrl : fallbackUrl;
+    }
+
+    public String resolvePublicUrl(Long assetId, String fallbackUrl) {
+        String presignedUrl = resolveS3PresignedUrl(assetId);
+        if (presignedUrl != null) {
+            return presignedUrl;
+        }
+
+        String localUrl = resolveLocalUrl(assetId);
+        if (localUrl != null) {
+            return localUrl;
+        }
+
+        return normalizePublicFallback(fallbackUrl);
     }
 
     private String resolveS3PresignedUrl(Long assetId) {
@@ -72,5 +88,50 @@ public class AssetUrlResolver {
                 .build();
 
         return presigner.presignGetObject(presignRequest).url().toString();
+    }
+
+    private String resolveLocalUrl(Long assetId) {
+        if (assetId == null) {
+            return null;
+        }
+        Asset asset = assetMapper.findById(assetId).orElse(null);
+        if (asset == null || asset.getStorageProvider() == StorageProvider.S3) {
+            return null;
+        }
+        String storageKey = asset.getStorageKey();
+        if (storageKey == null || storageKey.isBlank()) {
+            return null;
+        }
+        return normalizeFilesPath(storageKey);
+    }
+
+    private String normalizePublicFallback(String fallbackUrl) {
+        if (fallbackUrl == null) {
+            return null;
+        }
+        String trimmed = fallbackUrl.trim();
+        if (trimmed.isEmpty()) {
+            return null;
+        }
+        if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
+            return trimmed;
+        }
+        if (trimmed.startsWith("/api/")) {
+            return null;
+        }
+        return normalizeFilesPath(trimmed);
+    }
+
+    private String normalizeFilesPath(String path) {
+        if (path.startsWith(FILES_PREFIX)) {
+            return path;
+        }
+        if (path.startsWith("files/")) {
+            return "/" + path;
+        }
+        if (path.startsWith("/")) {
+            return FILES_PREFIX + path.substring(1);
+        }
+        return FILES_PREFIX + path;
     }
 }

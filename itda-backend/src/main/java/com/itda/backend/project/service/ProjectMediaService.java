@@ -35,7 +35,6 @@ import java.util.Set;
 @RequiredArgsConstructor
 public class ProjectMediaService {
 
-    private static final String FILES_PREFIX = "/files/";
     private static final String MERGE_REQUEST_PROJECT_ID_KEY = "projectId";
     private static final String MERGE_REQUEST_INCLUDE_MUSIC_KEY = "includeMusic";
     private static final int TIMELINE_START_ORDER = 1;
@@ -78,21 +77,21 @@ public class ProjectMediaService {
     }
 
     @Transactional
-    public void reorderTimeline(Long userId, Long projectId, List<Long> orderedSceneVideoIds) {
+    public void reorderTimeline(Long userId, Long projectId, List<Long> orderedVideoNodeIds) {
         projectAccessService.ensureProjectAccessible(projectId, userId);
-        validateOrderedIds(orderedSceneVideoIds);
+        validateOrderedIds(orderedVideoNodeIds);
 
         int total = timelineMapper.countProjectTimelineItems(projectId);
         if (total == 0) {
             throw new BusinessException(ErrorCode.INVALID_REQUEST);
         }
 
-        int matched = timelineMapper.countProjectTimelineItemsBySceneVideoIds(projectId, orderedSceneVideoIds);
-        if (matched != total || matched != orderedSceneVideoIds.size()) {
+        int matched = timelineMapper.countProjectTimelineItemsByVideoNodeIds(projectId, orderedVideoNodeIds);
+        if (matched != total || matched != orderedVideoNodeIds.size()) {
             throw new BusinessException(ErrorCode.INVALID_REQUEST);
         }
 
-        timelineMapper.reorderProjectTimelineItems(projectId, orderedSceneVideoIds);
+        timelineMapper.reorderProjectTimelineItemsByVideoNodeIds(projectId, orderedVideoNodeIds);
     }
 
     @Transactional(readOnly = true)
@@ -122,12 +121,9 @@ public class ProjectMediaService {
 
     private ProjectTimelineItem toTimelineItem(TimelineNodeRow row, int order) {
         String contentUrl = mediaUrlResolver.nodeContentUrl(row.getVideoNodeId(), row.getContentUrl());
-        String videoPublicUrl = resolvePublicContentUrl(row.getContentUrl());
-        String videoUrl = assetUrlResolver.resolveUrl(row.getAssetId(), videoPublicUrl);
-        String shotPublicUrl = resolvePublicContentUrl(row.getShotContentUrl());
-        String shotThumbnail = assetUrlResolver.resolveUrl(row.getShotAssetId(), shotPublicUrl);
-        String masterPublicUrl = resolvePublicContentUrl(row.getMasterContentUrl());
-        String masterThumbnail = assetUrlResolver.resolveUrl(row.getMasterAssetId(), masterPublicUrl);
+        String videoUrl = assetUrlResolver.resolvePublicUrl(row.getAssetId(), row.getContentUrl());
+        String shotThumbnail = assetUrlResolver.resolvePublicUrl(row.getShotAssetId(), row.getShotContentUrl());
+        String masterThumbnail = assetUrlResolver.resolvePublicUrl(row.getMasterAssetId(), row.getMasterContentUrl());
         String thumbnailUrl = firstImageUrl(shotThumbnail, masterThumbnail);
         return new ProjectTimelineItem(
                 row.getVideoNodeId(),
@@ -148,36 +144,6 @@ public class ProjectMediaService {
             }
         }
         return null;
-    }
-
-    private String resolvePublicContentUrl(String contentUrl) {
-        if (contentUrl == null) {
-            return null;
-        }
-        String trimmed = contentUrl.trim();
-        if (trimmed.isEmpty()) {
-            return null;
-        }
-        if (isAbsoluteUrl(trimmed)) {
-            return trimmed;
-        }
-        if (trimmed.startsWith("/api/")) {
-            return trimmed;
-        }
-        if (trimmed.startsWith(FILES_PREFIX)) {
-            return trimmed;
-        }
-        if (trimmed.startsWith("files/")) {
-            return "/" + trimmed;
-        }
-        if (trimmed.startsWith("/")) {
-            return FILES_PREFIX + trimmed.substring(1);
-        }
-        return FILES_PREFIX + trimmed;
-    }
-
-    private boolean isAbsoluteUrl(String url) {
-        return url.startsWith("http://") || url.startsWith("https://");
     }
 
     private boolean isImageUrl(String url) {
