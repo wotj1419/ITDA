@@ -1,5 +1,5 @@
 import apiClient from '../api/client'
-import { isApiResourceUrl, resolveApiUrl } from '../api/urls'
+import { resolveApiUrl, shouldUseApiClientForMedia } from '../api/urls'
 
 type CacheEntry = {
   blobUrl: string
@@ -32,6 +32,10 @@ function createBlobLease(key: string, blobUrl: string): MediaUrlLease {
 }
 
 async function fetchBlobUrl(cacheKey: string): Promise<string> {
+  if (!shouldUseApiClientForMedia(cacheKey)) {
+    throw new Error(`mediaCache can fetch blob only for protected api urls: ${cacheKey}`)
+  }
+
   const inflight = inflightRequests.get(cacheKey)
   if (inflight) {
     return inflight
@@ -56,7 +60,7 @@ export async function acquireMediaUrlLease(url?: string | null): Promise<MediaUr
     return createStaticLease(resolvedUrl)
   }
 
-  if (!isApiResourceUrl(resolvedUrl)) {
+  if (!shouldUseApiClientForMedia(resolvedUrl)) {
     return createStaticLease(resolvedUrl)
   }
 
@@ -111,4 +115,3 @@ export function clearMediaUrlLeaseCache(): void {
   blobCache.clear()
   inflightRequests.clear()
 }
-
