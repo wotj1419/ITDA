@@ -8,22 +8,15 @@ import { useScenarioStore } from '../../../stores/scenario';
 import type { Scene, SceneStatus } from '../../../types/api/scenes';
 import type { ObjectSheet } from '../../../types/api/objects';
 import { acquireMediaLease, releaseMediaLease, type MediaUrlLease } from '../../../services/api/media';
-import { fetchProjectTimeline, type TimelineItem } from '../../../services/api/timeline';
-import { normalizeDurationSeconds } from '../../../utils/duration';
+import { fetchProjectTimeline } from '../../../services/api/timeline';
+import {
+  buildScenePreviewFromTimeline,
+  type ScenePreview,
+} from './scenePreviewMapper';
+
+export type { ScenePreview, ScenePreviewClip } from './scenePreviewMapper';
 
 export type ProjectTab = 'story' | 'scenes' | 'objects' | 'timeline' | 'settings';
-
-export interface ScenePreviewClip {
-  thumbnailUrl: string;
-  duration: number;
-  label?: string;
-  contentUrl?: string;
-}
-
-export interface ScenePreview {
-  clips: ScenePreviewClip[];
-  totalDuration: number;
-}
 
 export function useProjectDetail() {
   const route = useRoute();
@@ -188,22 +181,6 @@ export function useProjectDetail() {
       ...previewLeaseMap.value,
       [key]: lease.releasable ? lease : null,
     };
-  };
-
-  const buildScenePreviewFromTimeline = (sceneId: number, items: TimelineItem[]): ScenePreview => {
-    const resolveThumbnailUrl = (item: TimelineItem) => item.thumbnailUrl ?? '';
-    const resolveVideoUrl = (item: TimelineItem) => item.videoUrl ?? item.url ?? '';
-    const clips = items
-      .filter((item) => item.sceneId === sceneId)
-      .sort((a, b) => a.order - b.order)
-      .map((item) => ({
-        thumbnailUrl: resolveThumbnailUrl(item),
-        duration: normalizeDurationSeconds(item.duration),
-        label: `Video ${item.order}`,
-        contentUrl: resolveVideoUrl(item),
-      }));
-    const totalDuration = clips.reduce((sum, clip) => sum + clip.duration, 0);
-    return { clips, totalDuration };
   };
 
   const buildScenePreview = async (sceneId: number): Promise<ScenePreview> => {
