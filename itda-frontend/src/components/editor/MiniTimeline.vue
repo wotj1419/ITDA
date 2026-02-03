@@ -31,6 +31,7 @@ const emit = defineEmits<{
 
 const draggedId = ref<string | null>(null);
 const dragOverId = ref<string | null>(null);
+const activePreviewClipId = ref<string | null>(null);
 const thumbStates = ref<Record<string, 'idle' | 'loaded' | 'failed'>>({});
 
 const getThumbState = (clipId: string) => thumbStates.value[clipId] ?? 'idle';
@@ -56,6 +57,21 @@ const handleThumbError = (clipId: string) => {
 
 const getPoster = (clip: TimelineClip) =>
   clip.thumbnailUrl || '/icon.png';
+
+const isPreviewing = (clipId: string) => activePreviewClipId.value === clipId;
+const shouldMountVideo = (clip: TimelineClip) =>
+  Boolean(clip.videoUrl) && isPreviewing(clip.clipId);
+
+function startPreview(clip: TimelineClip) {
+  if (!clip.videoUrl) return;
+  activePreviewClipId.value = clip.clipId;
+}
+
+function stopPreview(clipId: string) {
+  if (activePreviewClipId.value === clipId) {
+    activePreviewClipId.value = null;
+  }
+}
 
 function handleDragStart(clipId: string, event: DragEvent) {
   draggedId.value = clipId;
@@ -137,9 +153,12 @@ const progressPercent = Math.min(
           'drag-over': dragOverId === clip.clipId,
           'has-video': Boolean(clip.videoUrl),
           'thumb-ready': isThumbReady(clip),
+          previewing: isPreviewing(clip.clipId),
         }"
         :title="clip.label || '확정 클립'"
         draggable="true"
+        @mouseenter="startPreview(clip)"
+        @mouseleave="stopPreview(clip.clipId)"
         @dragstart="handleDragStart(clip.clipId, $event)"
         @dragend="handleDragEnd"
         @dragover="handleDragOver(clip.clipId, $event)"
@@ -159,12 +178,14 @@ const progressPercent = Math.min(
             @error="handleThumbError(clip.clipId)"
           />
           <LazyVideo
-            v-if="clip.videoUrl"
+            v-if="shouldMountVideo(clip)"
             :src="clip.videoUrl"
             class="clip-video"
             :poster="getPoster(clip)"
-            :play-on-hover="true"
-            :lazy="isThumbReady(clip)"
+            :play-on-hover="false"
+            :lazy="false"
+            :autoplay="true"
+            :loop="true"
           />
           <div
             v-else-if="!clip.thumbnailUrl"
@@ -326,13 +347,11 @@ const progressPercent = Math.min(
   opacity: 0;
 }
 
-.timeline-clip.has-video:hover .clip-video,
-.timeline-clip.has-video:focus-visible .clip-video {
+.timeline-clip.previewing .clip-video {
   opacity: 1;
 }
 
-.timeline-clip.has-video:hover .clip-img,
-.timeline-clip.has-video:focus-visible .clip-img {
+.timeline-clip.previewing .clip-img {
   opacity: 0;
 }
 

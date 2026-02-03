@@ -23,6 +23,9 @@ import {
 
 export type MergeStatus = 'idle' | 'merging' | 'done' | 'error'
 const DEFAULT_CLIP_SECONDS = 5
+type LoadClipsOptions = {
+  hydrateDurations?: boolean
+}
 
 function toDurationSeconds(duration: number): number {
   if (!Number.isFinite(duration)) return 0
@@ -303,11 +306,16 @@ export const useTimelineStore = defineStore('timeline', () => {
   }
 
   // Actions
-  async function loadClips(projectId: number, sceneId?: number): Promise<void> {
+  async function loadClips(
+    projectId: number,
+    sceneId?: number,
+    options?: LoadClipsOptions
+  ): Promise<void> {
     isLoading.value = true
     error.value = null
     currentProjectId.value = projectId
     currentSceneId.value = sceneId ?? null
+    const shouldHydrateDurations = options?.hydrateDurations ?? true
 
     try {
       ensureProjectSubscription(projectId)
@@ -315,13 +323,17 @@ export const useTimelineStore = defineStore('timeline', () => {
         const response = await fetchSceneTimeline(sceneId)
         const nextClips = await mapTimelineItemsToClips(response.items)
         clips.value = nextClips
-        void hydrateClipDurations(nextClips)
+        if (shouldHydrateDurations) {
+          void hydrateClipDurations(nextClips)
+        }
         return
       }
       const response = await fetchProjectTimeline(projectId)
       const nextClips = await mapTimelineItemsToClips(response.items)
       clips.value = nextClips
-      void hydrateClipDurations(nextClips)
+      if (shouldHydrateDurations) {
+        void hydrateClipDurations(nextClips)
+      }
     } catch (e) {
       error.value = 'Failed to load clips'
       console.error(e)

@@ -7,12 +7,14 @@ interface Props {
   poster?: string | null
   lazy?: boolean
   playOnHover?: boolean
+  autoplay?: boolean
   loop?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
   lazy: true,
   playOnHover: false,
+  autoplay: false,
   loop: false,
 })
 
@@ -69,6 +71,7 @@ const handleMouseLeave = (event: MouseEvent) => {
     muted
     playsinline
     preload="metadata"
+    :autoplay="autoplay"
     :loop="loop"
     @mouseenter="handleMouseEnter"
     @mouseleave="handleMouseLeave"

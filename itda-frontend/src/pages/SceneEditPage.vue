@@ -136,7 +136,9 @@ onMounted(async () => {
       projectStore.loadProject(projectId.value),
       sceneStore.loadScenes(projectId.value),
       objectStore.loadObjects(projectId.value),
-      timelineStore.loadClips(projectId.value, Number(sceneId.value)),
+      timelineStore.loadClips(projectId.value, Number(sceneId.value), {
+        hydrateDurations: false,
+      }),
     ]);
 
     // Vue Flow 노드 로드 (씬 정보 함께 전달)
@@ -187,7 +189,9 @@ watch([projectId, sceneId], async ([, newSceneId]) => {
         description: scene.description || '',
         order: scene.order,
       } : undefined),
-      timelineStore.loadClips(projectId.value, Number(newSceneId)),
+      timelineStore.loadClips(projectId.value, Number(newSceneId), {
+        hydrateDurations: false,
+      }),
     ]);
     collabStore.updateLocation('SCENE_EDIT', Number(newSceneId));
   }
