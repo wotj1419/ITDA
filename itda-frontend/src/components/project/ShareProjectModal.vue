@@ -217,21 +217,24 @@ const roleOptionsForMember = () => {
 }
 
 async function removeMember(userId: number) {
-  if (!confirm('정말로 이 멤버를 내보내시겠습니까?')) return
   if (!props.projectId) return
+  
+  // 멤버 이름 가져오기
+  const member = normalizedMembers.value.find(m => m.userId === userId)
+  const memberName = member?.name || '멤버'
 
   try {
     await projectStore.removeMember(props.projectId, userId)
     uiStore.showToast({
       type: 'success',
-      title: '멤버 제외',
-      message: '멤버를 프로젝트에서 내보냈습니다.',
+      title: '멤버 제외 완료',
+      message: `${memberName}님을 프로젝트에서 내보냈습니다.`,
     })
   } catch (err) {
     uiStore.showToast({
       type: 'error',
-      title: '실패',
-      message: '멤버를 내보내지 못했습니다.',
+      title: '멤버 제외 실패',
+      message: `${memberName}님을 내보내지 못했습니다. 다시 시도해주세요.`,
     })
   }
 }
@@ -362,7 +365,7 @@ async function removeMember(userId: number) {
   background: white;
   /* Add min-height to balance the list if it has few items */
   min-height: 200px;
-  /* Scroll support for many members */
+  /* 4명까지 보이고 그 이상은 스크롤 */
   max-height: 320px;
   overflow-y: auto;
   /* Custom Scrollbar for Webkit */
@@ -392,14 +395,14 @@ async function removeMember(userId: number) {
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  padding: 0.35rem 0.25rem;
+  padding: 0.5rem;
   border-radius: 10px;
   transition: background 0.2s ease;
 }
 
 .member-row--large {
-  padding: 0.5rem; /* Reduced padding */
-  gap: 0.75rem; /* Reduced gap */
+  padding: 0.5rem;
+  gap: 0.75rem;
 }
 
 .member-row:hover {
@@ -453,9 +456,11 @@ async function removeMember(userId: number) {
 }
 
 .member-role {
-  flex-shrink: 0;
   display: flex;
   align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  flex-wrap: wrap;
 }
 
 .role-select--large {

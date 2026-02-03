@@ -2,10 +2,12 @@
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useCollabStore } from '../../stores/collab'
+import { useSceneStore } from '../../stores/scene'
 import AvatarGroup from '../common/AvatarGroup.vue'
 import type { CollabParticipant } from '../../types/ui/collab'
 
 const collabStore = useCollabStore()
+const sceneStore = useSceneStore()
 const router = useRouter()
 const route = useRoute()
 
@@ -40,6 +42,18 @@ const avatars = computed(() =>
 
 const isConnected = computed(() => collabStore.isConnected)
 
+const sceneLabelById = computed(() => {
+  const map = new Map<number, string>()
+  sceneStore.scenes.forEach((scene) => {
+    const order = scene.order ?? scene.sceneId
+    const title = scene.title || ''
+    const label = title ? `씬 ${order}: ${title}` : `씬 ${order}`
+    map.set(scene.sceneId, label)
+  })
+  return map
+})
+
+
 const locationLabel = (member: CollabParticipant) => {
   const location = member.currentLocation
   switch (location) {
@@ -48,9 +62,17 @@ const locationLabel = (member: CollabParticipant) => {
     case 'SCENE_LIST':
       return '씬 목록'
     case 'SCENE_EDIT':
-      return member.sceneId ? `Scene ${member.sceneId} 편집 중` : '씬 편집 중'
+      if (member.sceneId) {
+        const label = sceneLabelById.value.get(member.sceneId)
+        return label ? `${label} 편집 중` : `Scene ${member.sceneId} 편집 중`
+      }
+      return '씬 편집 중'
     case 'TIMELINE':
-      return '타임라인'
+      if (member.sceneId) {
+        const label = sceneLabelById.value.get(member.sceneId)
+        return label ? `${label} 타임라인` : `Scene ${member.sceneId} 타임라인`
+      }
+      return '전체 타임라인'
     default:
       return 'Online'
   }
@@ -72,7 +94,11 @@ const followMember = (member: CollabParticipant) => {
       }
       break
     case 'TIMELINE':
-      router.push({ name: 'timeline', params: { id: pid } })
+      if (member.sceneId) {
+        router.push({ name: 'scene-timeline', params: { id: pid, sceneId: member.sceneId } })
+      } else {
+        router.push({ name: 'timeline', params: { id: pid } })
+      }
       break
     case 'SCENE_LIST':
     default:

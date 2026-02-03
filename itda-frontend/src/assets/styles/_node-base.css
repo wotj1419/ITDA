@@ -380,21 +380,26 @@
     align-items: flex-start;
     justify-content: flex-start;
     position: relative;
-    padding: 0.7rem 0.35rem 0.35rem;
+    padding: 0.35rem;
+    min-width: 0;
+    min-height: 0;
+    overflow: visible;
 }
 
 .node-glass__thumbnail-grid-number {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 1.4rem;
-    height: 1.4rem;
+    min-width: 1.2rem;
+    min-height: 1.2rem;
+    padding: 0.15rem 0.35rem;
     border-radius: 999px;
     background: rgba(253, 224, 232, 0.95);
     color: #ec4899;
-    font-size: 0.65rem;
+    font-size: 0.6rem;
     font-weight: 700;
     box-shadow: 0 2px 6px rgba(236, 72, 153, 0.25);
+    flex-shrink: 0;
 }
 
 .node-glass__thumbnail-video {

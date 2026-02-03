@@ -18,7 +18,7 @@ import CursorOverlay from './CursorOverlay.vue'
     width: 0;
     height: 0;
     overflow: visible;
-    z-index: 9999;
+    z-index: 100; /* 노드 패널(9999)보다 아래 */
 }
 
 </style>

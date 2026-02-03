@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, nextTick, computed } from 'vue';
+import { ref, nextTick, computed, watch, onMounted } from 'vue';
 import { storeToRefs } from 'pinia';
 import { useCollabStore } from '../../stores/collab';
 import ParticipantAvatar from './ParticipantAvatar.vue';
@@ -61,6 +61,30 @@ function formatDeviceLabel(label: string, fallback: string) {
 
 const remoteParticipants = computed(() =>
   collabStore.participants.filter((p) => p.odps !== collabStore.localParticipant.odps)
+);
+
+onMounted(() => {
+  if (collabStore.isPanelOpen) {
+    collabStore.markChatRead();
+  }
+});
+
+watch(
+  () => collabStore.isPanelOpen,
+  (open) => {
+    if (open) {
+      collabStore.markChatRead();
+    }
+  }
+);
+
+watch(
+  () => collabStore.messages.length,
+  () => {
+    if (collabStore.isPanelOpen) {
+      collabStore.markChatRead();
+    }
+  }
 );
 </script>
 <template>
