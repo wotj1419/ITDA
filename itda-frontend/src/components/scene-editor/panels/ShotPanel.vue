@@ -2,10 +2,10 @@
 /**
  * ShotPanel - 샷 생성/편집 패널
  */
-import { ref, computed, watch, nextTick, onUnmounted, provide } from 'vue';
+import { ref, computed, watch, nextTick, onUnmounted } from 'vue';
 import type { Node } from '@vue-flow/core';
 import type { MasterImageNodeData, ShotNodeData, StoryboardGridNodeData } from '../../../types/ui/sceneNodes';
-import { JobStatus, NodeType, PromptStatus } from '../../../types/ui/sceneNodes';
+import { GenerationState, JobStatus, NodeType, PromptStatus } from '../../../types/ui/sceneNodes';
 import BasePanel from './BasePanel.vue';
 import { useSceneNodeStore } from '../../../stores/sceneNode';
 import { useObjectStore } from '../../../stores/object';
@@ -229,10 +229,14 @@ const isParentReady = computed(() => {
   const hasImage = Boolean(parent?.thumbnailUrl || parent?.imageUrl);
   return parent?.jobStatus === JobStatus.SUCCEEDED && hasImage;
 });
-const isUiLocked = computed(
-  () => isGeneratingPrompt.value || isGeneratingFinalPrompt.value || isGeneratingShot.value
+const isNodeGenerating = computed(() =>
+  data.value?.jobStatus === JobStatus.PENDING ||
+  data.value?.jobStatus === JobStatus.RUNNING ||
+  data.value?.generationState === GenerationState.REQUESTED
 );
-provide('nodePanelBusy', isUiLocked);
+const isUiLocked = computed(
+  () => isNodeGenerating.value || isGeneratingPrompt.value || isGeneratingFinalPrompt.value || isGeneratingShot.value
+);
 const hasFinalPromptSnapshot = computed(() => finalPromptSignature.value.length > 0);
 const isFinalPromptDirty = computed(() => {
   if (!hasFinalPromptSnapshot.value) return true;
