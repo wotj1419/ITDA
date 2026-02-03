@@ -49,6 +49,7 @@ export interface GenerateNodeRequest {
   settings?: Record<string, unknown>;
   promptEnFinalOverride?: string;
   referenceObjectIds?: number[];
+  requeueIfExisting?: boolean;
 }
 
 export interface PromptPreviewRequest {

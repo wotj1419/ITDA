@@ -85,6 +85,7 @@ export async function generateNode(
     settings?: Record<string, unknown>;
     promptEnFinalOverride?: string;
     referenceObjectIds?: number[];
+    requeueIfExisting?: boolean;
   }
 ): Promise<number> {
   await delay(300)

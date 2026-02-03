@@ -130,6 +130,8 @@ export function useNodeGeneration(options: UseNodeGenerationOptions) {
         settings: options.getJobSettings(),
         promptEnFinalOverride: options.getPromptOverride?.(),
         referenceObjectIds: options.getReferenceObjectIds?.(),
+        // Idempotency key reuse로 기존 PENDING/FAILED Job이 반환되면 재큐잉하여 timeout 가능성을 줄인다.
+        requeueIfExisting: true,
       });
 
       const result = await aiService.pollJobUntilComplete(jobId, (status) => {
