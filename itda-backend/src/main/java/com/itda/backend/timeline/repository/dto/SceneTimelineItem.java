@@ -13,6 +13,10 @@ public class SceneTimelineItem {
     private Long sceneId;
     private Long assetId;
     private String fallbackUrl;
+    private Long shotAssetId;
+    private String shotContentUrl;
+    private Long masterAssetId;
+    private String masterContentUrl;
     private Integer duration;
     private Integer orderIndex;
 }

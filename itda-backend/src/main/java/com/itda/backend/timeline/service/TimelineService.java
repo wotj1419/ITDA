@@ -55,10 +55,7 @@ public class TimelineService {
         ensureMember(scene.getProjectId(), userId);
 
         List<SceneTimelineItemResponse> items = timelineMapper.findSceneTimelineItems(sceneId).stream()
-                .map(item -> SceneTimelineItemResponse.from(
-                        item,
-                        assetUrlResolver.resolveNodeUrl(item.getAssetId(), item.getVideoNodeId(),
-                                item.getFallbackUrl())))
+                .map(this::toSceneTimelineItemResponse)
                 .toList();
         int totalDuration = sumDuration(items);
 
@@ -71,9 +68,7 @@ public class TimelineService {
         ensureMember(projectId, userId);
 
         List<ProjectTimelineItemResponse> items = timelineMapper.findProjectTimelineItems(projectId).stream()
-                .map(item -> ProjectTimelineItemResponse.from(
-                        item,
-                        assetUrlResolver.resolveUrl(item.getAssetId(), item.getFallbackUrl())))
+                .map(this::toProjectTimelineItemResponse)
                 .toList();
         int totalDuration = sumProjectDuration(items);
 
@@ -214,5 +209,60 @@ public class TimelineService {
         if (uniqueIds.size() != orderedIds.size()) {
             throw new BusinessException(ErrorCode.INVALID_REQUEST);
         }
+    }
+
+    private SceneTimelineItemResponse toSceneTimelineItemResponse(SceneTimelineItem item) {
+        String videoUrl = assetUrlResolver.resolvePublicUrl(item.getAssetId(), item.getFallbackUrl());
+        String shotThumbnail = assetUrlResolver.resolvePublicUrl(item.getShotAssetId(), item.getShotContentUrl());
+        String masterThumbnail = assetUrlResolver.resolvePublicUrl(item.getMasterAssetId(), item.getMasterContentUrl());
+        String thumbnailUrl = firstImageUrl(shotThumbnail, masterThumbnail);
+        return SceneTimelineItemResponse.from(
+                item,
+                videoUrl,
+                thumbnailUrl,
+                videoUrl
+        );
+    }
+
+    private ProjectTimelineItemResponse toProjectTimelineItemResponse(ProjectTimelineItem item) {
+        String videoUrl = assetUrlResolver.resolvePublicUrl(item.getAssetId(), null);
+        String fallbackThumbnail = assetUrlResolver.resolvePublicUrl(null, item.getFallbackUrl());
+        String masterThumbnail = assetUrlResolver.resolvePublicUrl(item.getMasterAssetId(), item.getMasterContentUrl());
+        String thumbnailUrl = firstImageUrl(fallbackThumbnail, masterThumbnail);
+        return ProjectTimelineItemResponse.from(
+                item,
+                videoUrl,
+                thumbnailUrl,
+                videoUrl
+        );
+    }
+
+    private String firstImageUrl(String... candidates) {
+        if (candidates == null) {
+            return null;
+        }
+        for (String candidate : candidates) {
+            if (candidate != null && !candidate.isBlank() && isImageUrl(candidate)) {
+                return candidate;
+            }
+        }
+        return null;
+    }
+
+    private boolean isImageUrl(String url) {
+        if (url == null) {
+            return false;
+        }
+        String normalized = url;
+        int queryIndex = normalized.indexOf('?');
+        if (queryIndex >= 0) {
+            normalized = normalized.substring(0, queryIndex);
+        }
+        String lower = normalized.toLowerCase();
+        return lower.endsWith(".png")
+                || lower.endsWith(".jpg")
+                || lower.endsWith(".jpeg")
+                || lower.endsWith(".webp")
+                || lower.endsWith(".gif");
     }
 }

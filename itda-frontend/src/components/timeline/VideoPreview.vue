@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { Play, Pause } from 'lucide-vue-next'
-import { useVideoPreview } from '../../composables/useVideoPreview'
 
 interface Props {
   thumbnailUrl?: string
@@ -14,8 +13,8 @@ const props = defineProps<Props>()
 
 const isPlaying = ref(false)
 const videoRef = ref<HTMLVideoElement | null>(null)
-const { isVideo } = useVideoPreview()
-const sourceUrl = computed(() => props.videoUrl || props.thumbnailUrl)
+const hasVideo = computed(() => Boolean(props.videoUrl))
+const hasThumbnail = computed(() => Boolean(props.thumbnailUrl))
 
 function formatTime(seconds: number): string {
   const m = Math.floor(seconds / 60)
@@ -24,10 +23,7 @@ function formatTime(seconds: number): string {
 }
 
 function togglePlay() {
-  if (!videoRef.value) {
-    if (!sourceUrl.value) return
-    // If not video, just toggle state (though it won't play anything)
-    isPlaying.value = !isPlaying.value
+  if (!videoRef.value || !props.videoUrl) {
     return
   }
   
@@ -45,19 +41,27 @@ function togglePlay() {
   <div class="video-preview">
     <div
       class="preview-container"
-      :style="(!isVideo(sourceUrl) && sourceUrl) ? { backgroundImage: `url(${sourceUrl})` } : {}"
+      :style="props.thumbnailUrl ? { backgroundImage: `url(${props.thumbnailUrl})` } : {}"
     >
       <video
-        v-if="isVideo(sourceUrl)"
+        v-if="props.videoUrl"
         ref="videoRef"
-        :src="sourceUrl"
+        :src="props.videoUrl"
         class="preview-video"
         preload="metadata"
         playsinline
+        :poster="props.thumbnailUrl || undefined"
         @ended="isPlaying = false"
       />
+      <img
+        v-else-if="hasThumbnail"
+        :src="props.thumbnailUrl"
+        alt="preview"
+        class="preview-image"
+      />
+
       <!-- Play Overlay -->
-      <div class="play-overlay" @click="togglePlay">
+      <div v-if="hasVideo" class="play-overlay" @click="togglePlay">
         <div class="play-button">
           <Pause v-if="isPlaying" class="play-icon" />
           <Play v-else class="play-icon" />
@@ -65,7 +69,7 @@ function togglePlay() {
       </div>
 
       <!-- Timecode -->
-      <div class="timecode">
+      <div v-if="hasVideo" class="timecode">
         <span>{{ formatTime(currentTime) }}</span>
         <span> / </span>
         <span>{{ formatTime(totalTime) }}</span>
@@ -94,6 +98,12 @@ function togglePlay() {
   height: 100%;
   object-fit: contain;
   background: black;
+}
+
+.preview-image {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
 }
 
 .play-overlay {

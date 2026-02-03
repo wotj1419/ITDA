@@ -8,12 +8,12 @@ import { useRoute } from 'vue-router';
 import { useProjectStore } from '../stores/project';
 import { useSceneStore } from '../stores/scene';
 import { useSceneNodeStore } from '../stores/sceneNode';
+import { useTimelineStore } from '../stores/timeline';
 import { useObjectStore } from '../stores/object';
 import { useUIStore } from '../stores/ui';
 import { useCollabStore } from '../stores/collab';
 import { TIMELINE_PLAYBACK_MODAL_ID } from '../constants/ui';
 import type { ProjectDetail } from '../types/api/projects';
-import type { VideoNodeData } from '../types/ui/sceneNodes';
 
 import EditorLayout from '../layouts/EditorLayout.vue';
 import EditorHeader from '../components/editor/EditorHeader.vue';
@@ -35,6 +35,7 @@ const route = useRoute();
 const projectStore = useProjectStore();
 const sceneStore = useSceneStore();
 const nodeStore = useSceneNodeStore();
+const timelineStore = useTimelineStore();
 const objectStore = useObjectStore();
 const uiStore = useUIStore();
 const collabStore = useCollabStore();
@@ -74,28 +75,9 @@ const sceneTitle = computed(() => {
   return `씬 ${scene.order}: ${scene.title}`;
 });
 
-// Timeline clips from confirmed videos
-const timelineClips = computed(() => {
-  return nodeStore.confirmedVideos.map((n, index) => {
-    const data = n.data as VideoNodeData;
-    const order = data.timelineOrder ?? index + 1;
-    return {
-      clipId: n.id,
-      nodeId: n.id,
-      sceneId: Number(sceneId.value) || undefined,
-      sourceNodeId: n.id,
-      thumbnailUrl: data.thumbnailUrl || '',
-      videoUrl: data.videoUrl || undefined,
-      duration: data.duration || 4,
-      order,
-      label: `영상 ${data.version || 1}`,
-    };
-  });
-});
-
-const totalDuration = computed(() => {
-  return timelineClips.value.reduce((sum, clip) => sum + clip.duration, 0);
-});
+// Keep mini timeline in sync with /projects/:id/scenes/:sceneId/timeline data source.
+const timelineClips = computed(() => timelineStore.orderedClips);
+const totalDuration = computed(() => timelineStore.totalDuration);
 
 /**
  * 레이아웃 정렬 버튼의 동적 bottom 위치
@@ -154,6 +136,9 @@ onMounted(async () => {
       projectStore.loadProject(projectId.value),
       sceneStore.loadScenes(projectId.value),
       objectStore.loadObjects(projectId.value),
+      timelineStore.loadClips(projectId.value, Number(sceneId.value), {
+        hydrateDurations: false,
+      }),
     ]);
 
     // Vue Flow 노드 로드 (씬 정보 함께 전달)
@@ -180,6 +165,7 @@ onUnmounted(() => {
   window.removeEventListener('beforeunload', handleBeforeUnload);
   // 페이지 이탈 시 협업 방 퇴장
   nodeStore.clearNodes();
+  timelineStore.clearTimeline();
 });
 
 // Route 변경 시 노드 다시 로드
@@ -197,11 +183,16 @@ watch([projectId, sceneId], async ([, newSceneId]) => {
       return;
     }
     const scene = sceneStore.scenes.find((s) => s.sceneId === Number(newSceneId));
-    await nodeStore.loadSceneNodes(newSceneId as string, scene ? {
-      title: scene.title,
-      description: scene.description || '',
-      order: scene.order,
-    } : undefined);
+    await Promise.all([
+      nodeStore.loadSceneNodes(newSceneId as string, scene ? {
+        title: scene.title,
+        description: scene.description || '',
+        order: scene.order,
+      } : undefined),
+      timelineStore.loadClips(projectId.value, Number(newSceneId), {
+        hydrateDurations: false,
+      }),
+    ]);
     collabStore.updateLocation('SCENE_EDIT', Number(newSceneId));
   }
 });
@@ -250,12 +241,31 @@ function handleDeleteCancel(): void {
   pendingDeleteHasChildren.value = false;
 }
 
-function handleTimelineReorder(clipIds: string[]): void {
-  nodeStore.updateTimelineOrder(clipIds);
+async function handleTimelineReorder(clipIds: string[]): Promise<void> {
+  const success = await timelineStore.reorderClips(clipIds);
+  if (!success) return;
+
+  clipIds.forEach((clipId, index) => {
+    const clip = timelineStore.clips.find((item) => item.clipId === clipId);
+    if (!clip || typeof clip.nodeId !== 'number') return;
+    nodeStore.updateNodeLocal(String(clip.nodeId), {
+      timelineOrder: index + 1,
+      isConfirmed: true,
+    });
+  });
 }
 
-function handleTimelineRemove(clipId: string): void {
-  nodeStore.toggleVideoConfirm(clipId);
+async function handleTimelineRemove(clipId: string): Promise<void> {
+  const target = timelineStore.clips.find((clip) => clip.clipId === clipId);
+  const success = await timelineStore.removeClip(clipId);
+  if (!success) return;
+
+  if (target && typeof target.nodeId === 'number') {
+    nodeStore.updateNodeLocal(String(target.nodeId), {
+      isConfirmed: false,
+      timelineOrder: undefined,
+    });
+  }
 }
 
 function handleTimelinePlay(): void {
