@@ -10,6 +10,7 @@ import type { Edge } from '@vue-flow/core';
 import {
     NodeType,
     JobStatus,
+    GenerationState,
     type AnyNodeData,
     type SceneHeaderNodeData,
     type MasterImageNodeData,
@@ -291,7 +292,8 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
         !video.thumbnailUrl || video.thumbnailUrl === SHOT_FALLBACK_THUMBNAIL;
 
     const canUseShotThumbnail = (video: VideoNodeData): boolean =>
-        video.jobStatus === JobStatus.SUCCEEDED || Boolean(video.videoUrl);
+        video.jobStatus === JobStatus.SUCCEEDED &&
+        video.generationState !== GenerationState.REQUESTED;
 
     const getShotThumbnail = (shotNode: SceneNode | undefined): string | null => {
         if (!shotNode?.data || shotNode.data.type !== NodeType.SHOT) return null;
@@ -385,6 +387,11 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
                 : JobStatus.SUCCEEDED;
 
         targetNode.data.jobStatus = nextStatus;
+        if (nextStatus === JobStatus.SUCCEEDED) {
+            targetNode.data.generationState = null;
+        } else if (nextStatus === JobStatus.FAILED) {
+            targetNode.data.generationState = GenerationState.FAILED;
+        }
 
         if (nextStatus === JobStatus.FAILED && targetNode.data.type === NodeType.SHOT) {
             const hasUrl = Boolean(

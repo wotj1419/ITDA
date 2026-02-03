@@ -5,7 +5,7 @@
  * 
  * 설계 문서: docs/vue-flow-node-workflow-design.md Section 3.7
  */
-import { computed, ref } from 'vue';
+import { computed, nextTick, ref, watch } from 'vue';
 import { Handle, Position } from '@vue-flow/core';
 import { NodeResizer } from '@vue-flow/node-resizer';
 import { useSceneNodeStore } from '../../../stores/sceneNode';
@@ -31,6 +31,7 @@ const props = defineProps<Props>();
 const store = useSceneNodeStore();
 const collabStore = useCollabStore();
 const videoRef = ref<HTMLVideoElement | null>(null);
+const shouldLoadVideo = ref(false);
 
 const nodeStyle = NODE_RESIZER_STYLE;
 const { minWidth, minHeight } = getNodeMinSize(props.data.type);
@@ -72,8 +73,13 @@ const resolveShotThumbnail = (shotId?: string | null) => {
 };
 
 const canUseShotThumbnail = computed(
-  () => props.data.jobStatus === JobStatus.SUCCEEDED || Boolean(props.data.videoUrl)
+  () => props.data.jobStatus === JobStatus.SUCCEEDED && props.data.generationState !== 'requested'
 );
+
+const canPlayVideo = computed(
+  () => props.data.jobStatus === JobStatus.SUCCEEDED && Boolean(props.data.videoUrl)
+);
+const shouldRenderVideo = computed(() => canPlayVideo.value && shouldLoadVideo.value);
 
 const fallbackThumbnail = computed(() => {
   if (!canUseShotThumbnail.value) {
@@ -97,12 +103,12 @@ const {
   handleError: handleThumbnailError,
 } = useNodeThumbnail({
   getThumbnailUrl: () => fallbackThumbnail.value,
-  getPrimaryMediaUrl: () => props.data.videoUrl,
+  getPrimaryMediaUrl: () => (shouldRenderVideo.value ? props.data.videoUrl : null),
   isRunning: () => isRunning.value,
   isGenerationRequested: () => isGenerationRequested.value,
   hasGenerationFailure: () => hasGenerationFailure.value,
 });
-const hasPreview = computed(() => Boolean(props.data.videoUrl || isThumbnailVisible.value));
+const hasPreview = computed(() => Boolean(canPlayVideo.value || isThumbnailVisible.value));
 
 /** Camera motion labels in Korean */
 const cameraMotionLabel = computed(() => {
@@ -139,8 +145,18 @@ function handleConfirm(event: Event): void {
 }
 
 function handleThumbnailClick(event: MouseEvent): void {
-  if (!props.data.videoUrl || !videoRef.value) return;
+  if (!canPlayVideo.value) return;
   event.stopPropagation();
+  if (!shouldRenderVideo.value) {
+    shouldLoadVideo.value = true;
+    nextTick(() => {
+      const current = videoRef.value;
+      if (!current) return;
+      void current.play().catch(() => {});
+    });
+    return;
+  }
+  if (!videoRef.value) return;
   if (videoRef.value.paused) {
     void videoRef.value.play().catch(() => {});
   } else {
@@ -153,6 +169,26 @@ function handleRetry(event: Event): void {
   store.updateNodeLocal(props.id, { generationState: null });
   store.selectNode(props.id);
 }
+
+watch(
+  () => [props.data.videoUrl, props.data.jobStatus, props.data.generationState] as const,
+  (next, prev) => {
+    const nextVideoUrl = next[0];
+    const nextJobStatus = next[1];
+    const nextGenerationState = next[2];
+    const prevVideoUrl = prev?.[0];
+    if (nextVideoUrl !== prevVideoUrl) {
+      shouldLoadVideo.value = false;
+    }
+    if (!nextVideoUrl || nextJobStatus !== JobStatus.SUCCEEDED || nextGenerationState === 'requested') {
+      shouldLoadVideo.value = false;
+      if (videoRef.value && !videoRef.value.paused) {
+        videoRef.value.pause();
+      }
+    }
+  },
+  { immediate: true }
+);
 </script>
 
 <template>
@@ -214,12 +250,12 @@ function handleRetry(event: Event): void {
     <div class="node-glass__body">
       <div
         class="node-glass__thumbnail node-glass__thumbnail--video"
-        :class="{ 'node-glass__thumbnail--loading': isThumbnailLoading && !isThumbnailVisible && !data.videoUrl }"
+        :class="{ 'node-glass__thumbnail--loading': isThumbnailLoading && !isThumbnailVisible && !shouldRenderVideo }"
         @click="handleThumbnailClick"
       >
         <video
-          v-if="data.videoUrl"
-          :src="data.videoUrl"
+          v-if="shouldRenderVideo"
+          :src="data.videoUrl || undefined"
           ref="videoRef"
           class="node-glass__thumbnail-video"
           :poster="fallbackThumbnail || undefined"
@@ -237,7 +273,7 @@ function handleRetry(event: Event): void {
           @error="handleThumbnailError"
         />
         <div
-          v-if="isThumbnailLoading && !isThumbnailVisible && !data.videoUrl"
+          v-if="isThumbnailLoading && !isThumbnailVisible && !shouldRenderVideo"
           class="node-glass__thumbnail-loader"
         >
           <span class="node-glass__thumbnail-spinner" />
@@ -253,7 +289,7 @@ function handleRetry(event: Event): void {
           </button>
         </div>
         <div
-          v-if="!data.videoUrl && (!hasThumbnailSource || isThumbnailBlocked) && !isThumbnailLoading"
+          v-if="!shouldRenderVideo && (!hasThumbnailSource || isThumbnailBlocked) && !isThumbnailLoading"
           class="node-glass__thumbnail-placeholder node-glass__thumbnail-placeholder--video"
         >
           <Video class="node-glass__thumbnail-placeholder-icon" />

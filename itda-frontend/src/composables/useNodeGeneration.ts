@@ -134,10 +134,15 @@ export function useNodeGeneration(options: UseNodeGenerationOptions) {
     const toastId = startGenerationToast(options.toastType);
 
     try {
-      nodeStore.updateNodeLocal(options.nodeId, {
+      const runningPatch: Partial<AnyNodeData> = {
         jobStatus: JobStatus.RUNNING,
         generationState: 'requested',
-      });
+      };
+      if (options.nodeType === 'VIDEO') {
+        runningPatch.videoUrl = null;
+        runningPatch.thumbnailUrl = null;
+      }
+      nodeStore.updateNodeLocal(options.nodeId, runningPatch);
 
       const jobId = await aiService.generateNode(options.nodeId, prompt, {
         nodeType: options.nodeType,
