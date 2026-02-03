@@ -1154,12 +1154,8 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
             }
             const promptEnFinalOverride = settings.promptEnFinalOverride as string | undefined;
             if (typeof promptEnFinalOverride === 'string') {
-                const current = targetNode.data.promptEnFinalOverride ?? '';
-                const shouldOverwrite =
-                    promptEnFinalOverride.trim().length > 0 || current.trim().length === 0;
-                if (shouldOverwrite) {
-                    targetNode.data.promptEnFinalOverride = promptEnFinalOverride;
-                }
+                // Empty string is a valid explicit clear signal for override.
+                targetNode.data.promptEnFinalOverride = promptEnFinalOverride;
             }
         }
 
