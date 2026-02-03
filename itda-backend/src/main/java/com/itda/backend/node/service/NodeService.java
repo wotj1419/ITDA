@@ -11,7 +11,7 @@ import com.itda.backend.job.domain.JobType;
 import com.itda.backend.job.event.NodePositionPayload;
 import com.itda.backend.job.event.ProjectEventWebSocketPublisher;
 import com.itda.backend.job.service.JobService;
-import com.itda.backend.asset.service.AssetUrlResolver;
+import com.itda.backend.media.MediaUrlResolver;
 import com.itda.backend.node.controller.dto.request.CreateNodeRequest;
 import com.itda.backend.node.controller.dto.request.GenerateNodeRequest;
 import com.itda.backend.node.controller.dto.request.NodePosition;
@@ -63,19 +63,12 @@ public class NodeService {
     private final com.itda.backend.object.repository.ObjectMapper objectSheetMapper;
     private final JobService jobService;
     private final ProjectEventWebSocketPublisher projectEventPublisher;
-    private final AssetUrlResolver assetUrlResolver;
+    private final MediaUrlResolver mediaUrlResolver;
     private final PromptRenderer promptRenderer;
     private final PromptTranslationService promptTranslationService;
     private final GenerationSettingsResolver generationSettingsResolver;
 
     private record VideoShotIds(Long startShotNodeId, Long endShotNodeId) {}
-
-    private String resolveNodeContentUrl(Node node) {
-        if (node == null) {
-            return null;
-        }
-        return assetUrlResolver.resolvePublicUrl(node.getAssetId(), node.getContentUrl());
-    }
 
     /**
      * 노드 생성
@@ -129,7 +122,7 @@ public class NodeService {
                 }
                 continue;
             }
-            String contentUrl = resolveNodeContentUrl(node);
+            String contentUrl = mediaUrlResolver.nodeContentUrl(node);
             responses.add(NodeSummaryResponse.from(node, contentUrl));
         }
 
@@ -145,7 +138,7 @@ public class NodeService {
         Scene scene = getSceneAndEnsureMember(node.getSceneId(), userId);
 
         Map<String, Object> settings = deserializeSettings(node.getDataJson());
-        String contentUrl = resolveNodeContentUrl(node);
+        String contentUrl = mediaUrlResolver.nodeContentUrl(node);
         return NodeDetailResponse.from(node, settings, contentUrl);
     }
 

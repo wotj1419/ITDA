@@ -14,8 +14,6 @@ public class ProjectTimelineItem {
     private String sceneTitle;
     private Long assetId;
     private String fallbackUrl;
-    private Long masterAssetId;
-    private String masterContentUrl;
     private Integer duration;
     private Integer orderIndex;
 }

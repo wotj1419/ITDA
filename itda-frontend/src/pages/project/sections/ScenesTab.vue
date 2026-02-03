@@ -1,13 +1,11 @@
 <script setup lang="ts">
 import { RouterLink, useRouter, type RouteLocationRaw } from 'vue-router';
-import { ref } from 'vue';
 import type { Scene } from '../../../types/api/scenes';
 import type { ScenePreview, ScenePreviewClip } from '../composables/useProjectDetail';
 import Card from '../../../components/common/Card.vue';
 import Button from '../../../components/common/Button.vue';
 import Badge from '../../../components/common/Badge.vue';
 import AvatarGroup from '../../../components/common/AvatarGroup.vue';
-import LazyVideo from '../../../components/media/LazyVideo.vue';
 import { useCollabStore } from '../../../stores/collab';
 import type { CollabParticipant } from '../../../types/ui/collab';
 import { Play, ChevronLeft, ChevronRight, X } from 'lucide-vue-next';
@@ -38,24 +36,6 @@ interface Props {
 const props = defineProps<Props>();
 const collabStore = useCollabStore();
 const router = useRouter();
-const failedThumbs = ref<Record<string, boolean>>({});
-
-const buildThumbKey = (sceneId: number, clipIndex: number) =>
-  `${sceneId}-${clipIndex}`;
-
-const getClipThumbnail = (
-  scene: Scene,
-  clip: ScenePreviewClip,
-  clipIndex: number
-) => {
-  const key = buildThumbKey(scene.sceneId, clipIndex);
-  if (failedThumbs.value[key]) return '';
-  return clip.thumbnailUrl || scene.thumbnailUrl || '';
-};
-
-const handleThumbError = (sceneId: number, clipIndex: number) => {
-  failedThumbs.value[buildThumbKey(sceneId, clipIndex)] = true;
-};
 
 const getScenePresence = (sceneId: number) => {
   const list: (CollabParticipant & { isMe?: boolean })[] = [];
@@ -163,36 +143,32 @@ const getScenePresenceAvatars = (sceneId: number) =>
                   v-for="(clip, index) in getScenePreview(scene.sceneId).clips"
                   :key="`${scene.sceneId}-clip-${index}`"
                   class="preview-thumb"
-                  :class="{
-                    'has-video': Boolean(clip.contentUrl),
-                    'force-video': !getClipThumbnail(scene, clip, index),
-                  }"
                   type="button"
                   :aria-label="clip.label || scene.title"
                   :style="{ width: `${getClipWidth(clip.duration)}px` }"
                   @click="openPreview(scene.sceneId, index)"
                 >
                   <img
-                    v-if="getClipThumbnail(scene, clip, index)"
-                    class="preview-image"
-                    :src="getClipThumbnail(scene, clip, index)"
+                    v-if="clip.thumbnailUrl"
+                    :src="clip.thumbnailUrl"
                     :alt="clip.label || scene.title"
-                    loading="lazy"
-                    @error="handleThumbError(scene.sceneId, index)"
                   />
-                  <LazyVideo
-                    v-if="clip.contentUrl"
-                    class="preview-video"
+                  <video
+                    v-else-if="clip.contentUrl"
                     :src="clip.contentUrl"
-                    :poster="getClipThumbnail(scene, clip, index) || '/icon.png'"
-                    :play-on-hover="true"
+                    muted
+                    playsinline
+                    preload="metadata"
                   />
                   <img
-                    v-else-if="!getClipThumbnail(scene, clip, index)"
-                    class="preview-image"
+                    v-else-if="scene.thumbnailUrl"
+                    :src="scene.thumbnailUrl"
+                    :alt="clip.label || scene.title"
+                  />
+                  <img
+                    v-else
                     src="/icon.png"
                     alt="No Preview"
-                    loading="lazy"
                   />
                   <span class="preview-duration">{{ clip.duration }}s</span>
                   <span class="preview-play">

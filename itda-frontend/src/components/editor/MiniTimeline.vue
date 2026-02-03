@@ -5,7 +5,7 @@
 import { ref } from 'vue';
 import type { TimelineClip } from '../../types/ui';
 import { Star, Play, X } from 'lucide-vue-next';
-import LazyVideo from '../media/LazyVideo.vue';
+import { useVideoPreview } from '../../composables/useVideoPreview';
 
 // =============================================================================
 // Props
@@ -23,6 +23,8 @@ const props = withDefaults(defineProps<Props>(), {
   maxDuration: 60,
 });
 
+const { isVideo, playVideoPreview, stopVideoPreview } = useVideoPreview();
+
 const emit = defineEmits<{
   (e: 'reorder', clipIds: string[]): void;
   (e: 'remove', clipId: string): void;
@@ -31,47 +33,6 @@ const emit = defineEmits<{
 
 const draggedId = ref<string | null>(null);
 const dragOverId = ref<string | null>(null);
-const activePreviewClipId = ref<string | null>(null);
-const thumbStates = ref<Record<string, 'idle' | 'loaded' | 'failed'>>({});
-
-const getThumbState = (clipId: string) => thumbStates.value[clipId] ?? 'idle';
-
-const isThumbReady = (clip: TimelineClip) =>
-  Boolean(clip.thumbnailUrl) && getThumbState(clip.clipId) === 'loaded';
-
-const handleThumbLoad = (clipId: string, event: Event) => {
-  const img = event.target as HTMLImageElement | null;
-  if (!img) return;
-  const width = img.naturalWidth || 0;
-  const height = img.naturalHeight || 0;
-  if (width < 2 || height < 2) {
-    thumbStates.value[clipId] = 'failed';
-    return;
-  }
-  thumbStates.value[clipId] = 'loaded';
-};
-
-const handleThumbError = (clipId: string) => {
-  thumbStates.value[clipId] = 'failed';
-};
-
-const getPoster = (clip: TimelineClip) =>
-  clip.thumbnailUrl || '/icon.png';
-
-const isPreviewing = (clipId: string) => activePreviewClipId.value === clipId;
-const shouldMountVideo = (clip: TimelineClip) =>
-  Boolean(clip.videoUrl) && isPreviewing(clip.clipId);
-
-function startPreview(clip: TimelineClip) {
-  if (!clip.videoUrl) return;
-  activePreviewClipId.value = clip.clipId;
-}
-
-function stopPreview(clipId: string) {
-  if (activePreviewClipId.value === clipId) {
-    activePreviewClipId.value = null;
-  }
-}
 
 function handleDragStart(clipId: string, event: DragEvent) {
   draggedId.value = clipId;
@@ -149,16 +110,9 @@ const progressPercent = Math.min(
         v-for="clip in clips"
         :key="clip.clipId"
         class="timeline-clip"
-        :class="{
-          'drag-over': dragOverId === clip.clipId,
-          'has-video': Boolean(clip.videoUrl),
-          'thumb-ready': isThumbReady(clip),
-          previewing: isPreviewing(clip.clipId),
-        }"
+        :class="{ 'drag-over': dragOverId === clip.clipId }"
         :title="clip.label || '확정 클립'"
         draggable="true"
-        @mouseenter="startPreview(clip)"
-        @mouseleave="stopPreview(clip.clipId)"
         @dragstart="handleDragStart(clip.clipId, $event)"
         @dragend="handleDragEnd"
         @dragover="handleDragOver(clip.clipId, $event)"
@@ -168,32 +122,22 @@ const progressPercent = Math.min(
         <button class="clip-remove" @click.stop="handleRemove(clip.clipId)">
           <X class="remove-icon" />
         </button>
-        <div class="clip-media">
-          <img
-            v-if="clip.thumbnailUrl"
-            :src="clip.thumbnailUrl"
-            :alt="clip.label || '??? ???'"
-            class="clip-img"
-            @load="handleThumbLoad(clip.clipId, $event)"
-            @error="handleThumbError(clip.clipId)"
-          />
-          <LazyVideo
-            v-if="shouldMountVideo(clip)"
-            :src="clip.videoUrl"
-            class="clip-video"
-            :poster="getPoster(clip)"
-            :play-on-hover="false"
-            :lazy="false"
-            :autoplay="true"
-            :loop="true"
-          />
-          <div
-            v-else-if="!clip.thumbnailUrl"
-            class="clip-placeholder"
-          >
-            ?앹꽦 ???
-          </div>
-        </div>
+        <video
+          v-if="clip.videoUrl || isVideo(clip.thumbnailUrl)"
+          :src="clip.videoUrl || clip.thumbnailUrl"
+          class="clip-content clip-video"
+          preload="metadata"
+          muted
+          playsinline
+          @mouseenter="playVideoPreview"
+          @mouseleave="stopVideoPreview"
+        />
+        <img
+          v-else
+          :src="clip.thumbnailUrl"
+          :alt="clip.label || '확정 클립'"
+          class="clip-content clip-img"
+        />
         <span class="clip-duration">{{ clip.duration }}s</span>
       </div>
 
@@ -301,58 +245,11 @@ const progressPercent = Math.min(
   transform: scale(1.05);
 }
 
-.clip-media {
-  position: relative;
-  width: 100%;
-  height: 100%;
-}
-
-.clip-img,
-.clip-video {
-  position: absolute;
-  inset: 0;
+.clip-content {
   width: 100%;
   height: 100%;
   object-fit: cover;
   display: block;
-}
-
-.clip-placeholder {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 0.65rem;
-  font-weight: 600;
-  color: var(--gray-400);
-  background: var(--gray-50);
-}
-
-.clip-img {
-  opacity: 0;
-  transition: opacity 0.2s ease;
-}
-
-.clip-video {
-  opacity: 1;
-  transition: opacity 0.2s ease;
-}
-
-.timeline-clip.thumb-ready .clip-img {
-  opacity: 1;
-}
-
-.timeline-clip.thumb-ready .clip-video {
-  opacity: 0;
-}
-
-.timeline-clip.previewing .clip-video {
-  opacity: 1;
-}
-
-.timeline-clip.previewing .clip-img {
-  opacity: 0;
 }
 
 .clip-duration {

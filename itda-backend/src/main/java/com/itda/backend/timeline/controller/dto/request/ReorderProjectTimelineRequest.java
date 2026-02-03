@@ -8,8 +8,8 @@ import java.util.List;
 
 @Schema(description = "Project timeline reorder request")
 public record ReorderProjectTimelineRequest(
-        @Schema(description = "Ordered video node IDs", example = "[301, 302, 303]")
-        @NotEmpty(message = "orderedVideoNodeIds is required")
-        List<@NotNull Long> orderedVideoNodeIds
+        @Schema(description = "Ordered scene video IDs", example = "[101, 102, 103]")
+        @NotEmpty(message = "orderedSceneVideoIds is required")
+        List<@NotNull Long> orderedSceneVideoIds
 ) {
 }

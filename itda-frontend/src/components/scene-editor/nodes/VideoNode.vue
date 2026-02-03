@@ -5,13 +5,13 @@
  * 
  * 설계 문서: docs/vue-flow-node-workflow-design.md Section 3.7
  */
-import { computed, nextTick, ref, watch } from 'vue';
+import { computed, ref } from 'vue';
 import { Handle, Position } from '@vue-flow/core';
 import { NodeResizer } from '@vue-flow/node-resizer';
 import { useSceneNodeStore } from '../../../stores/sceneNode';
 import { useCollabStore } from '../../../stores/collab';
 import { JobStatus } from '../../../types/ui/sceneNodes';
-import type { ShotNodeData, VideoNodeData } from '../../../types/ui/sceneNodes';
+import type { VideoNodeData } from '../../../types/ui/sceneNodes';
 import { useNodeStatus } from '../../../composables/useNodeStatus';
 import { useNodeThumbnail } from '../../../composables/useNodeThumbnail';
 import { getNodeMinSize, NODE_RESIZER_STYLE } from '../../../utils/nodeUi';
@@ -31,7 +31,6 @@ const props = defineProps<Props>();
 const store = useSceneNodeStore();
 const collabStore = useCollabStore();
 const videoRef = ref<HTMLVideoElement | null>(null);
-const shouldLoadVideo = ref(false);
 
 const nodeStyle = NODE_RESIZER_STYLE;
 const { minWidth, minHeight } = getNodeMinSize(props.data.type);
@@ -74,36 +73,6 @@ const { statusKey, statusIcon, isRunning, isGenerationRequested, hasGenerationFa
     () => props.data.jobStatus,
     () => props.data.generationState
   );
-
-const resolveShotThumbnail = (shotId?: string | null) => {
-  if (!shotId) return null;
-  const shotNode = store.nodes.find((node) => node.id === String(shotId));
-  if (!shotNode?.data) return null;
-  const shotData = shotNode.data as ShotNodeData;
-  return shotData.thumbnailUrl || shotData.imageUrl || null;
-};
-
-const canUseShotThumbnail = computed(
-  () => props.data.jobStatus === JobStatus.SUCCEEDED && props.data.generationState !== 'requested'
-);
-
-const canPlayVideo = computed(
-  () => props.data.jobStatus === JobStatus.SUCCEEDED && Boolean(props.data.videoUrl)
-);
-const shouldRenderVideo = computed(() => canPlayVideo.value && shouldLoadVideo.value);
-
-const fallbackThumbnail = computed(() => {
-  if (!canUseShotThumbnail.value) {
-    return null;
-  }
-  return (
-    props.data.thumbnailUrl ||
-    resolveShotThumbnail(props.data.startShotId) ||
-    resolveShotThumbnail(props.data.endShotId) ||
-    null
-  );
-});
-
 const {
   hasSource: hasThumbnailSource,
   isVisible: isThumbnailVisible,
@@ -113,13 +82,13 @@ const {
   handleLoad: handleThumbnailLoad,
   handleError: handleThumbnailError,
 } = useNodeThumbnail({
-  getThumbnailUrl: () => fallbackThumbnail.value,
-  getPrimaryMediaUrl: () => (shouldRenderVideo.value ? props.data.videoUrl : null),
+  getThumbnailUrl: () => props.data.thumbnailUrl,
+  getPrimaryMediaUrl: () => props.data.videoUrl,
   isRunning: () => isRunning.value,
   isGenerationRequested: () => isGenerationRequested.value,
   hasGenerationFailure: () => hasGenerationFailure.value,
 });
-const hasPreview = computed(() => Boolean(canPlayVideo.value || isThumbnailVisible.value));
+const hasPreview = computed(() => Boolean(props.data.videoUrl || isThumbnailVisible.value));
 
 /** Camera motion labels in Korean */
 const cameraMotionLabel = computed(() => {
@@ -156,18 +125,8 @@ function handleConfirm(event: Event): void {
 }
 
 function handleThumbnailClick(event: MouseEvent): void {
-  if (!canPlayVideo.value) return;
+  if (!props.data.videoUrl || !videoRef.value) return;
   event.stopPropagation();
-  if (!shouldRenderVideo.value) {
-    shouldLoadVideo.value = true;
-    nextTick(() => {
-      const current = videoRef.value;
-      if (!current) return;
-      void current.play().catch(() => {});
-    });
-    return;
-  }
-  if (!videoRef.value) return;
   if (videoRef.value.paused) {
     void videoRef.value.play().catch(() => {});
   } else {
@@ -180,26 +139,6 @@ function handleRetry(event: Event): void {
   store.updateNodeLocal(props.id, { generationState: null });
   store.selectNode(props.id);
 }
-
-watch(
-  () => [props.data.videoUrl, props.data.jobStatus, props.data.generationState] as const,
-  (next, prev) => {
-    const nextVideoUrl = next[0];
-    const nextJobStatus = next[1];
-    const nextGenerationState = next[2];
-    const prevVideoUrl = prev?.[0];
-    if (nextVideoUrl !== prevVideoUrl) {
-      shouldLoadVideo.value = false;
-    }
-    if (!nextVideoUrl || nextJobStatus !== JobStatus.SUCCEEDED || nextGenerationState === 'requested') {
-      shouldLoadVideo.value = false;
-      if (videoRef.value && !videoRef.value.paused) {
-        videoRef.value.pause();
-      }
-    }
-  },
-  { immediate: true }
-);
 </script>
 
 <template>
@@ -261,15 +200,14 @@ watch(
     <div class="node-glass__body">
       <div
         class="node-glass__thumbnail node-glass__thumbnail--video"
-        :class="{ 'node-glass__thumbnail--loading': isThumbnailLoading && !isThumbnailVisible && !shouldRenderVideo }"
+        :class="{ 'node-glass__thumbnail--loading': isThumbnailLoading && !isThumbnailVisible && !data.videoUrl }"
         @click="handleThumbnailClick"
       >
         <video
-          v-if="shouldRenderVideo"
-          :src="data.videoUrl || undefined"
+          v-if="data.videoUrl"
+          :src="data.videoUrl"
           ref="videoRef"
           class="node-glass__thumbnail-video"
-          :poster="fallbackThumbnail || undefined"
           preload="metadata"
           muted
           playsinline
@@ -277,14 +215,14 @@ watch(
         <img
           v-else-if="hasThumbnailSource"
           v-show="isThumbnailVisible"
-          :src="fallbackThumbnail || ''"
+          :src="data.thumbnailUrl || ''"
           alt="영상 썸네일"
           class="node-glass__thumbnail-img"
           @load="handleThumbnailLoad"
           @error="handleThumbnailError"
         />
         <div
-          v-if="isThumbnailLoading && !isThumbnailVisible && !shouldRenderVideo"
+          v-if="isThumbnailLoading && !isThumbnailVisible && !data.videoUrl"
           class="node-glass__thumbnail-loader"
         >
           <span class="node-glass__thumbnail-spinner" />
@@ -300,7 +238,7 @@ watch(
           </button>
         </div>
         <div
-          v-if="!shouldRenderVideo && (!hasThumbnailSource || isThumbnailBlocked) && !isThumbnailLoading"
+          v-if="!data.videoUrl && (!hasThumbnailSource || isThumbnailBlocked) && !isThumbnailLoading"
           class="node-glass__thumbnail-placeholder node-glass__thumbnail-placeholder--video"
         >
           <Video class="node-glass__thumbnail-placeholder-icon" />

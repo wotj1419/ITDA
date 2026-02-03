@@ -7,7 +7,6 @@ import SceneCard from '../../../components/project/SceneCard.vue';
 import Card from '../../../components/common/Card.vue';
 import Button from '../../../components/common/Button.vue';
 import ConfirmModal from '../../../components/common/ConfirmModal.vue';
-import LazyVideo from '../../../components/media/LazyVideo.vue';
 import { Plus, PlusCircle, Play, Sparkles, X } from 'lucide-vue-next';
 import { computed, ref, watch } from 'vue';
 import { useProjectStore } from '../../../stores/project';
@@ -34,6 +33,33 @@ interface Props {
   handleDeleteScene: (scene: Scene) => void | Promise<boolean>;
   onOpenScenario: () => void;
 }
+
+
+const previewVideoRefs = ref<Record<string, HTMLVideoElement | null>>({});
+
+const getPreviewKey = (sceneId: number, index: number) => `${sceneId}-${index}`;
+
+const setPreviewVideoRef = (
+  sceneId: number,
+  index: number,
+  el: HTMLVideoElement | null
+): void => {
+  previewVideoRefs.value[getPreviewKey(sceneId, index)] = el;
+};
+
+const playPreviewVideo = (sceneId: number, index: number): void => {
+  const video = previewVideoRefs.value[getPreviewKey(sceneId, index)];
+  if (!video) return;
+  video.currentTime = 0;
+  void video.play().catch(() => {});
+};
+
+const pausePreviewVideo = (sceneId: number, index: number): void => {
+  const video = previewVideoRefs.value[getPreviewKey(sceneId, index)];
+  if (!video) return;
+  video.pause();
+  video.currentTime = 0;
+};
 
 const props = defineProps<Props>();
 const projectStore = useProjectStore();
@@ -270,27 +296,27 @@ const handleOpenScenario = async () => {
                     :key="`${scene.sceneId}-storyboard-${index}`"
                     type="button"
                     class="storyboard-item"
-                    @click="openPreview(scene.sceneId, index)"
+                    @mouseenter="playPreviewVideo(scene.sceneId, index)"
+                    @mouseleave="pausePreviewVideo(scene.sceneId, index)"
+                    @focus="playPreviewVideo(scene.sceneId, index)"
+                    @blur="pausePreviewVideo(scene.sceneId, index)"
+                    @click="pausePreviewVideo(scene.sceneId, index); openPreview(scene.sceneId, index)"
                   >
                     <div class="storyboard-media">
-                      <template v-if="clip.contentUrl">
-                        <img
-                          class="storyboard-thumb"
-                          :src="clip.thumbnailUrl || scene.thumbnailUrl || '/icon.png'"
-                          :alt="clip.label || scene.title"
-                        />
-                        <LazyVideo
-                          class="storyboard-video"
-                          :src="clip.contentUrl"
-                          :poster="clip.thumbnailUrl || scene.thumbnailUrl || '/icon.png'"
-                          :play-on-hover="true"
-                        />
-                      </template>
                       <img
-                        v-else
                         class="storyboard-thumb"
-                        :src="clip.thumbnailUrl || scene.thumbnailUrl || '/icon.png'"
+                        :src="clip.thumbnailUrl || scene.thumbnailUrl"
                         :alt="clip.label || scene.title"
+                      />
+                      <video
+                        v-if="clip.contentUrl"
+                        class="storyboard-video"
+                        :src="clip.contentUrl"
+                        muted
+                        playsinline
+                        loop
+                        preload="metadata"
+                        :ref="(el) => setPreviewVideoRef(scene.sceneId, index, el as HTMLVideoElement | null)"
                       />
                     </div>
                     <span class="storyboard-label">{{ clip.label || scene.title }}</span>
@@ -492,6 +518,7 @@ const handleOpenScenario = async () => {
   object-fit: cover;
   display: block;
   opacity: 0;
+  pointer-events: none;
   transition: opacity 0.2s ease;
 }
 

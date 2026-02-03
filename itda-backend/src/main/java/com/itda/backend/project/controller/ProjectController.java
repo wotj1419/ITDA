@@ -146,7 +146,7 @@ public class ProjectController {
                         @AuthenticationPrincipal CustomUserDetails userDetails,
                         @Parameter(description = "Project ID") @PathVariable Long projectId,
                         @Valid @RequestBody ReorderProjectTimelineRequest request) {
-                projectMediaService.reorderTimeline(userDetails.getUserId(), projectId, request.orderedVideoNodeIds());
+                projectMediaService.reorderTimeline(userDetails.getUserId(), projectId, request.orderedSceneVideoIds());
                 return ApiResponse.success();
         }
 
