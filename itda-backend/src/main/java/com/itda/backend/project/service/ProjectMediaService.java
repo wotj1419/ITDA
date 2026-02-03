@@ -13,7 +13,6 @@ import com.itda.backend.job.service.JobService;
 import com.itda.backend.media.MediaUrlResolver;
 import com.itda.backend.timeline.domain.ProjectMerge;
 import com.itda.backend.timeline.repository.ProjectMergeMapper;
-import com.itda.backend.node.repository.NodeMapper;
 import com.itda.backend.node.repository.dto.TimelineNodeRow;
 import com.itda.backend.project.controller.dto.response.ProjectExportResponse;
 import com.itda.backend.project.controller.dto.response.ProjectTimelineItem;
@@ -40,7 +39,6 @@ public class ProjectMediaService {
     private static final int TIMELINE_START_ORDER = 1;
 
     private final ProjectAccessService projectAccessService;
-    private final NodeMapper nodeMapper;
     private final TimelineMapper timelineMapper;
     private final MergeSignatureService mergeSignatureService;
     private final JobService jobService;
@@ -52,20 +50,22 @@ public class ProjectMediaService {
     @Transactional(readOnly = true)
     public ProjectTimelineResponse getTimeline(Long userId, Long projectId) {
         projectAccessService.ensureProjectAccessible(projectId, userId);
-        List<TimelineNodeRow> rows = nodeMapper.findConfirmedVideoNodesByProjectId(projectId);
+        List<TimelineNodeRow> rows = timelineMapper.findProjectTimelineVideoNodes(projectId);
         return new ProjectTimelineResponse(buildTimelineItems(rows));
     }
 
     @Transactional
     public MergeResponse requestMerge(Long userId, Long projectId) {
         projectAccessService.ensureProjectAccessible(projectId, userId);
-        List<com.itda.backend.timeline.repository.dto.ProjectTimelineItem> timelineItems = timelineMapper
-                .findProjectTimelineItems(projectId);
+        List<TimelineNodeRow> timelineItems = timelineMapper.findProjectTimelineVideoNodes(projectId);
         if (timelineItems.isEmpty()) {
             throw new BusinessException(ErrorCode.INVALID_REQUEST);
         }
         boolean includeMusic = false;
-        String mergeSignature = mergeSignatureService.computeProjectSignature(projectId, includeMusic, timelineItems);
+        String mergeSignature = mergeSignatureService.computeProjectSignatureFromVideoNodes(
+                projectId,
+                includeMusic,
+                timelineItems);
         // 캐시 체크: 동일 signature의 active 결과 존재 확인
         if (projectMergeMapper.findActiveByProjectIdAndSignature(projectId, mergeSignature).isPresent()) {
             return MergeResponse.cacheHit();
