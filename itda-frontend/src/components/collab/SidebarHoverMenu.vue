@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, type ComponentPublicInstance } from 'vue'
 import { useCollabStore } from '../../stores/collab'
 import { ChevronDown, ChevronUp, MessageCircle, Phone, Search, Send, X } from 'lucide-vue-next'
 
@@ -216,7 +216,7 @@ function clampPanelPosition(nextX: number, nextY: number) {
 function positionPanelFromButton() {
   const anchor = chatButtonRef.value?.getBoundingClientRect()
   if (!anchor) return
-  const { width, height } = getPanelSize()
+  const { height } = getPanelSize()
   const nextX = anchor.right + PANEL_OFFSET
   const nextY = anchor.top - height - PANEL_OFFSET + 40
   panelPosition.value = clampPanelPosition(nextX, nextY)
@@ -284,7 +284,7 @@ onBeforeUnmount(() => {
   window.removeEventListener('pointerup', endDrag)
 })
 
-function setMessageRef(el: Element | null, id: string) {
+function setMessageRef(el: Element | ComponentPublicInstance | null, id: string) {
   if (!el) {
     messageRefs.delete(id)
     return
