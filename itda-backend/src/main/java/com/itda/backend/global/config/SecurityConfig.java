@@ -57,6 +57,10 @@ public class SecurityConfig {
                         .requestMatchers("/ws/**", "/ws").permitAll()
 
                         .requestMatchers("/test/**").permitAll()
+
+                        .requestMatchers("/actuator/prometheus").permitAll()
+                        .requestMatchers("/actuator/health", "/actuator/info").permitAll()
+                        .requestMatchers("/actuator/**").denyAll()
                         // 그 외는 인증 필요
                         .anyRequest().authenticated()
                 )
