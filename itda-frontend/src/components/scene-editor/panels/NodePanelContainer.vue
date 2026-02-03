@@ -8,7 +8,7 @@ import { computed, inject, nextTick, provide, ref, watch } from 'vue';
 import { panelRegistry } from './index';
 import { useSceneNodeStore } from '../../../stores/sceneNode';
 import { useCollabStore } from '../../../stores/collab';
-import { NodeType } from '../../../types/ui/sceneNodes';
+import { JobStatus, NodeType } from '../../../types/ui/sceneNodes';
 import type { AnyNodeData } from '../../../types/ui/sceneNodes';
 
 // =============================================================================
@@ -48,6 +48,17 @@ const canDeleteSelected = computed(() => {
   if (!nodeType) return false;
   return nodeType !== NodeType.SCENE_HEADER;
 });
+const isSelectedNodeGenerating = computed(() => {
+  const node = selectedNode.value;
+  if (!node) return false;
+  const data = node.data as AnyNodeData | undefined;
+  if (!data) return false;
+  return (
+    data.jobStatus === JobStatus.PENDING ||
+    data.jobStatus === JobStatus.RUNNING ||
+    data.generationState === 'requested'
+  );
+});
 
 // =============================================================================
 // Methods
@@ -71,6 +82,7 @@ provide('nodePanelClose', handleClose);
 provide('nodePanelDelete', handleDelete);
 provide('nodePanelCanDelete', canDeleteSelected);
 provide('nodePanelLock', lockInfo);
+provide('nodePanelBusy', isSelectedNodeGenerating);
 
 // Scroll panel content to top when switching nodes (all node types)
 watch(

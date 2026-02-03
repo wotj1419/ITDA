@@ -1,10 +1,10 @@
 <script setup lang="ts">
 /**
  * MasterImagePanel - 마스터 이미지 생성/편집 패널
- * 
+ *
  * 설계 문서: docs/vue-flow-node-workflow-design.md Section 6.2
  */
-import { ref, computed, watch, nextTick, onUnmounted } from 'vue';
+import { ref, computed, watch, nextTick, onUnmounted, provide } from 'vue';
 import type { Node } from '@vue-flow/core';
 import type { MasterImageNodeData, SceneHeaderNodeData } from '../../../types/ui/sceneNodes';
 import { NodeType, PromptStatus } from '../../../types/ui/sceneNodes';
@@ -12,7 +12,7 @@ import BasePanel from './BasePanel.vue';
 import { useSceneNodeStore } from '../../../stores/sceneNode';
 import { useObjectStore } from '../../../stores/object';
 import { useNodeGeneration } from '../../../composables/useNodeGeneration';
-import { Film, Palette, Sun, Smile, Sparkles, FileText, Image, Check, RefreshCw, Star, Users, Loader2 } from 'lucide-vue-next';
+import { Film, Palette, Sun, Smile, Sparkles, FileText, Image, Check, Star, Users, Loader2 } from 'lucide-vue-next';
 import { gsap } from 'gsap';
 import { resolveMoodKey, resolveStyleKey, resolveTimeOfDayKey } from '../../../utils/nodeSettings';
 import {
@@ -30,9 +30,12 @@ const nodeStore = useSceneNodeStore();
 const objectStore = useObjectStore();
 const autoFilledNodes = new Set<string>();
 let promptPreviewTimeout: ReturnType<typeof setTimeout> | null = null;
-const detailSectionRef = ref<HTMLElement | null>(null);
-const detailTextareaRef = ref<HTMLTextAreaElement | null>(null);
+const isPromptEditing = ref(false);
 const isFinalEditing = ref(false);
+const isGeneratingFinalPrompt = ref(false);
+const finalPromptSignature = ref('');
+const finalPromptSourcePromptSnapshot = ref('');
+const approvedFinalPromptSnapshot = ref('');
 // 폼 상태 - objectIds는 배열로 관리 (다중 선택)
 const form = ref({
   style: DEFAULT_MASTER_STYLE,
@@ -45,13 +48,11 @@ const form = ref({
   promptEnFinal: '',
   promptEnFinalOverride: '',
   usePromptOverride: false,
-  promptLang: 'EN' as 'EN' | 'KO',
 });
 
 const {
   isGeneratingPrompt,
   isGeneratingJob: isGeneratingImage,
-  errorMessage,
   clearError,
   generatePrompt,
   approvePrompt,
@@ -76,13 +77,13 @@ const {
     timeOfDay: form.value.timeOfDay,
     mood: form.value.mood,
     objectIds: form.value.objectIds,
-    prompt: result.promptEnBase,
-    promptKo: result.promptKo,
+    prompt: result.promptKo || result.promptEnBase,
+    promptKo: result.promptKo || result.promptEnBase,
   }),
   getImproveInstruction: () => form.value.additionalDetail,
   getApprovedUpdate: () => ({
     prompt: form.value.prompt,
-    promptKo: form.value.promptKo,
+    promptKo: form.value.prompt,
     promptEnFinalOverride: form.value.usePromptOverride ? form.value.promptEnFinalOverride : '',
   }),
   getJobSettings: () => ({
@@ -160,11 +161,34 @@ const isPromptGenerated = computed(
   () => hasPromptContent.value || data.value?.promptStatus !== PromptStatus.DRAFT
 );
 const isPromptApproved = computed(() => data.value?.promptStatus === PromptStatus.APPROVED);
-const canGenerate = computed(() =>
-  isPromptApproved.value &&
-  !isGeneratingImage.value &&
-  !isGeneratingPrompt.value
+const isUiLocked = computed(
+  () => isGeneratingPrompt.value || isGeneratingFinalPrompt.value || isGeneratingImage.value
 );
+provide('nodePanelBusy', isUiLocked);
+const hasFinalPromptSnapshot = computed(() => finalPromptSignature.value.length > 0);
+const isFinalPromptDirty = computed(() => {
+  if (!hasFinalPromptSnapshot.value) return true;
+  return finalPromptSignature.value !== buildFinalPromptSignature();
+});
+const isNarrativePromptDirtyForFinal = computed(() => {
+  if (!finalPromptSourcePromptSnapshot.value) return true;
+  return form.value.prompt.trim() !== finalPromptSourcePromptSnapshot.value;
+});
+const effectiveFinalPrompt = computed(() => {
+  const override = form.value.usePromptOverride ? form.value.promptEnFinalOverride.trim() : '';
+  return override || form.value.promptEnFinal.trim();
+});
+const aiPromptActionLabel = computed(() =>
+  data.value?.promptStatus === PromptStatus.DRAFT ? 'AI로 생성' : 'AI로 재생성'
+);
+const finalPromptActionLabel = computed(() =>
+  form.value.promptEnFinal.trim().length > 0 ? '최종 프롬프트 재생성' : '최종 프롬프트 생성'
+);
+const canGenerate = computed(() => {
+  // 동일 최종 프롬프트로도 재생성을 허용하므로 dirty 여부는 활성 조건에서 제외한다.
+  void isFinalPromptDirty.value;
+  return isPromptApproved.value && !isUiLocked.value;
+});
 
 function buildSceneOneLine(): string {
   const parts: string[] = [];
@@ -181,6 +205,19 @@ function buildSceneOneLine(): string {
     parts.push(`detail: ${form.value.additionalDetail}`);
   }
   return parts.join(', ');
+}
+
+function buildFinalPromptSignature(): string {
+  return JSON.stringify({
+    style: form.value.style,
+    timeOfDay: form.value.timeOfDay,
+    mood: form.value.mood,
+    objectIds: [...form.value.objectIds],
+    additionalDetail: form.value.additionalDetail.trim(),
+    prompt: form.value.prompt.trim(),
+    usePromptOverride: form.value.usePromptOverride,
+    promptEnFinalOverride: form.value.promptEnFinalOverride.trim(),
+  });
 }
 const generateButtonRef = ref<HTMLButtonElement | null>(null);
 let generateButtonTween: gsap.core.Tween | null = null;
@@ -213,6 +250,23 @@ function queuePersistLook(): void {
   }, 300);
 }
 
+function syncFinalPromptSourceSnapshot(): void {
+  if (finalPromptSourcePromptSnapshot.value.trim().length > 0) return;
+  if (!form.value.promptEnFinal.trim()) return;
+  if (!form.value.prompt.trim()) return;
+  finalPromptSourcePromptSnapshot.value = form.value.prompt.trim();
+}
+
+function syncApprovedFinalPromptSnapshot(): void {
+  if (data.value?.promptStatus !== PromptStatus.APPROVED) {
+    approvedFinalPromptSnapshot.value = '';
+    return;
+  }
+  if (approvedFinalPromptSnapshot.value.trim().length > 0) return;
+  if (!effectiveFinalPrompt.value) return;
+  approvedFinalPromptSnapshot.value = effectiveFinalPrompt.value;
+}
+
 // 노드 변경 시 폼 동기화
 watch(() => props.node.id, () => {
   if (!data.value) return;
@@ -222,15 +276,20 @@ watch(() => props.node.id, () => {
     mood: data.value.mood || DEFAULT_MASTER_MOOD,
     objectIds: data.value.objectIds || [],
     additionalDetail: data.value.additionalDetail || '',
-    prompt: data.value.prompt || '',
-    promptKo: data.value.promptKo || '',
+    prompt: data.value.promptKo || data.value.prompt || '',
+    promptKo: data.value.promptKo || data.value.prompt || '',
     promptEnFinal: data.value.promptEnFinal || '',
     promptEnFinalOverride: data.value.promptEnFinalOverride || '',
     usePromptOverride: Boolean(data.value.promptEnFinalOverride),
-    promptLang: 'EN',
   };
+  isPromptEditing.value = false;
   isFinalEditing.value = false;
   maybeAutofillPrompt();
+  finalPromptSignature.value = form.value.promptEnFinal.trim() ? buildFinalPromptSignature() : '';
+  finalPromptSourcePromptSnapshot.value = form.value.promptEnFinal.trim() ? form.value.prompt.trim() : '';
+  approvedFinalPromptSnapshot.value = '';
+  syncFinalPromptSourceSnapshot();
+  syncApprovedFinalPromptSnapshot();
   clearError();
 }, { immediate: true });
 
@@ -268,10 +327,12 @@ watch(
 watch(
   () => data.value?.prompt,
   (nextPrompt) => {
+    if ((data.value?.promptKo ?? '').trim().length > 0) return;
     const normalized = nextPrompt ?? '';
     if (normalized !== form.value.prompt) {
       form.value.prompt = normalized;
     }
+    syncFinalPromptSourceSnapshot();
   }
 );
 
@@ -279,9 +340,13 @@ watch(
   () => data.value?.promptKo,
   (nextPromptKo) => {
     const normalized = nextPromptKo ?? '';
+    if (normalized && normalized !== form.value.prompt) {
+      form.value.prompt = normalized;
+    }
     if (normalized !== form.value.promptKo) {
       form.value.promptKo = normalized;
     }
+    syncFinalPromptSourceSnapshot();
   }
 );
 
@@ -292,6 +357,8 @@ watch(
     if (normalized !== form.value.promptEnFinal) {
       form.value.promptEnFinal = normalized;
     }
+    syncFinalPromptSourceSnapshot();
+    syncApprovedFinalPromptSnapshot();
   }
 );
 
@@ -303,6 +370,30 @@ watch(
       form.value.promptEnFinalOverride = normalized;
     }
     form.value.usePromptOverride = Boolean(normalized);
+    syncApprovedFinalPromptSnapshot();
+  }
+);
+
+watch(
+  () => data.value?.promptStatus,
+  () => {
+    syncApprovedFinalPromptSnapshot();
+  }
+);
+
+watch(
+  effectiveFinalPrompt,
+  (nextFinalPrompt, prevFinalPrompt) => {
+    if (prevFinalPrompt === undefined) return;
+    if (nextFinalPrompt === prevFinalPrompt) return;
+    if (data.value?.promptStatus !== PromptStatus.APPROVED) return;
+    if (!approvedFinalPromptSnapshot.value.trim()) {
+      syncApprovedFinalPromptSnapshot();
+      return;
+    }
+    if (nextFinalPrompt === approvedFinalPromptSnapshot.value) return;
+    approvedFinalPromptSnapshot.value = '';
+    nodeStore.updateNodeLocal(props.node.id, { promptStatus: PromptStatus.GENERATED });
   }
 );
 
@@ -340,9 +431,17 @@ watch(
 );
 
 watch(
+  () => form.value.prompt,
+  (nextPrompt) => {
+    if (nextPrompt !== form.value.promptKo) {
+      form.value.promptKo = nextPrompt;
+    }
+  }
+);
+
+watch(
   () => [
     form.value.prompt,
-    form.value.promptKo,
     form.value.promptEnFinalOverride,
     form.value.usePromptOverride,
     form.value.additionalDetail,
@@ -353,8 +452,8 @@ watch(
     if (form.value.prompt !== (data.value.prompt ?? '')) {
       updates.prompt = form.value.prompt;
     }
-    if (form.value.promptKo !== (data.value.promptKo ?? '')) {
-      updates.promptKo = form.value.promptKo;
+    if (form.value.prompt !== (data.value.promptKo ?? '')) {
+      updates.promptKo = form.value.prompt;
     }
     if (form.value.additionalDetail !== (data.value.additionalDetail ?? '')) {
       updates.additionalDetail = form.value.additionalDetail;
@@ -459,48 +558,48 @@ function maybeAutofillPrompt(): void {
   if (!description) return;
   const hasHangul = /[ㄱ-ㅎㅏ-ㅣ가-힣]/.test(description);
   if (hasHangul) {
-    if (!form.value.promptKo.trim()) {
-      form.value.promptKo = description;
-    }
-    form.value.promptLang = 'KO';
+    form.value.promptKo = description;
   }
   form.value.prompt = description;
   autoFilledNodes.add(nodeId);
 }
 
-async function focusDetailEditor(): Promise<void> {
-  await nextTick();
-  if (detailSectionRef.value) {
-    const container = detailSectionRef.value.closest('.base-panel__content') as HTMLElement | null;
-    if (container) {
-      const containerRect = container.getBoundingClientRect();
-      const sectionRect = detailSectionRef.value.getBoundingClientRect();
-      const currentScroll = container.scrollTop;
-      const offset = sectionRect.top - containerRect.top;
-      const centeredOffset = (container.clientHeight - sectionRect.height) / 2;
-      const rawTarget = currentScroll + offset - centeredOffset;
-      const maxScroll = Math.max(0, container.scrollHeight - container.clientHeight);
-      const targetScroll = Math.min(Math.max(0, rawTarget), maxScroll);
-      gsap.to(container, { scrollTop: targetScroll, duration: 0.45, ease: 'power2.out' });
-    } else {
-      detailSectionRef.value.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }
-    gsap.killTweensOf(detailSectionRef.value);
-    gsap.fromTo(
-      detailSectionRef.value,
-      { boxShadow: '0 0 0 0 rgba(255, 107, 138, 0)', backgroundColor: 'rgba(255, 250, 252, 0)' },
-      {
-        boxShadow: '0 0 0 12px rgba(255, 107, 138, 0.35)',
-        backgroundColor: 'rgba(255, 250, 252, 0.9)',
-        duration: 0.35,
-        yoyo: true,
-        repeat: 1,
-        ease: 'power2.out',
-        clearProps: 'boxShadow,backgroundColor',
-      }
-    );
+function togglePromptEditing(): void {
+  isPromptEditing.value = !isPromptEditing.value;
+}
+
+async function generateFinalPrompt(force = false): Promise<void> {
+  if (isGeneratingFinalPrompt.value || isGeneratingPrompt.value || isGeneratingImage.value) return;
+  if (!form.value.prompt.trim()) return;
+  if (!force && !isNarrativePromptDirtyForFinal.value) return;
+  isGeneratingFinalPrompt.value = true;
+  try {
+    // "최종 프롬프트 생성"은 항상 한글 서술 기준으로 재생성되도록 override를 해제한다.
+    form.value.usePromptOverride = false;
+    form.value.promptEnFinalOverride = '';
+    isFinalEditing.value = false;
+    await refreshPromptPreview(true);
+    await nextTick();
+    await nodeStore.updateNode(props.node.id, {
+      prompt: form.value.prompt,
+      promptKo: form.value.promptKo,
+      promptEnFinal: form.value.promptEnFinal,
+      promptEnFinalOverride: '',
+    });
+    finalPromptSignature.value = buildFinalPromptSignature();
+    finalPromptSourcePromptSnapshot.value = form.value.prompt.trim();
+  } catch (error) {
+    console.error('Failed to generate final prompt:', error);
+  } finally {
+    isGeneratingFinalPrompt.value = false;
   }
-  detailTextareaRef.value?.focus();
+}
+
+function handlePromptWheel(event: WheelEvent): void {
+  const target = event.currentTarget as HTMLTextAreaElement | null;
+  if (!target || target.scrollHeight <= target.clientHeight) return;
+  event.preventDefault();
+  target.scrollTop += event.deltaY * 0.35;
 }
 
 function queuePromptPreview(): void {
@@ -527,6 +626,7 @@ function setActive(): void {
       <button
         class="panel-btn master-panel__header-action"
         :class="data.isActive ? 'panel-btn--confirmed' : 'panel-btn--secondary'"
+        :disabled="isUiLocked"
         @click="setActive"
         :title="data.isActive ? '현재 Active' : 'Active로 설정'"
       >
@@ -535,6 +635,7 @@ function setActive(): void {
       </button>
     </template>
     <template v-if="data">
+      <fieldset class="panel-lock-fieldset" :disabled="isUiLocked">
       <div v-if="!data.isActive" class="master-panel__inactive-hint">
         <span class="master-panel__inactive-title">안내</span>
         <p class="master-panel__inactive-text">
@@ -607,13 +708,12 @@ function setActive(): void {
       </div>
 
       <!-- Detail Change -->
-      <div class="panel-section" ref="detailSectionRef">
+      <div class="panel-section">
         <label class="panel-label">
           <Star class="panel-label-icon" />
           디테일 변경 (선택)
         </label>
         <textarea
-          ref="detailTextareaRef"
           v-model="form.additionalDetail"
           class="panel-textarea"
           rows="2"
@@ -626,68 +726,45 @@ function setActive(): void {
         <div class="panel-label-row">
           <label class="panel-label">
             <FileText class="panel-label-icon" />
-            서술 프롬프트
+            서술 프롬프트 (한국어)
           </label>
-          <div class="panel-segmented" role="tablist" aria-label="Prompt language">
-            <button
-              type="button"
-              class="panel-segmented__btn"
-              :class="{ 'is-active': form.promptLang === 'EN' }"
-              @click="form.promptLang = 'EN'"
-            >
-              EN
-            </button>
-            <button
-              type="button"
-              class="panel-segmented__btn"
-              :class="{ 'is-active': form.promptLang === 'KO' }"
-              @click="form.promptLang = 'KO'"
-            >
-              KO
-            </button>
-          </div>
+          <button
+            :class="['panel-btn', isPromptEditing ? 'panel-btn--success' : 'panel-btn--text']"
+            @click="togglePromptEditing"
+          >
+            {{ isPromptEditing ? '편집 완료' : '직접 편집' }}
+          </button>
         </div>
-        <p
-          class="panel-subtext panel-tooltip"
-          data-tooltip="서술 프롬프트는 읽기 전용입니다. 한글 수정은 디테일 변경에서 가능합니다."
-        >
-          {{ form.promptLang === 'EN' ? '원본(읽기 전용)' : '번역(읽기 전용)' }}
-          <span class="panel-tooltip__icon">?</span>
-        </p>
-        <div v-if="form.promptLang === 'EN'">
-          <textarea
-            v-model="form.prompt"
-            class="panel-textarea panel-textarea--prompt"
-            rows="4"
-            placeholder="예: A lone traveler stands at the edge of a foggy cliff, wind lifting their coat."
-            readonly
-          ></textarea>
-        </div>
-        <div v-else class="panel-translation-block">
-          <textarea
-            v-model="form.promptKo"
-            class="panel-textarea panel-textarea--prompt"
-            rows="4"
-            readonly
-          ></textarea>
-        </div>
-      </div>
-
-      <!-- Error Message -->
-      <div v-if="errorMessage" class="panel-error">
-        {{ errorMessage }}
+        <textarea
+          v-model="form.prompt"
+          :class="['panel-textarea', 'panel-textarea--prompt', { 'panel-textarea--editing': isPromptEditing }]"
+          rows="5"
+          placeholder="예: 안개 낀 절벽 끝에 홀로 선 여행자, 바람에 코트가 흔들린다."
+          :readonly="!isPromptEditing"
+          @wheel="handlePromptWheel"
+        ></textarea>
       </div>
 
       <!-- Generate Prompt -->
-      <button 
-        class="panel-btn panel-btn--secondary panel-btn--full panel-btn--prompt-generate" 
-        :disabled="isGeneratingPrompt || isGeneratingImage"
-        @click="generatePrompt"
-      >
-        <Loader2 v-if="isGeneratingPrompt" class="panel-btn-icon animate-spin" />
-        <Sparkles v-else class="panel-btn-icon" />
-        {{ isGeneratingPrompt ? '생성 중...' : 'AI로 다듬기' }}
-      </button>
+      <div class="panel-generate-row">
+        <button
+          class="panel-btn panel-btn--secondary panel-btn--full panel-btn--prompt-generate"
+          :disabled="isGeneratingPrompt || isGeneratingImage"
+          @click="generatePrompt"
+        >
+          <Loader2 v-if="isGeneratingPrompt" class="panel-btn-icon animate-spin" />
+          <Sparkles v-else class="panel-btn-icon" />
+          {{ isGeneratingPrompt ? '생성 중...' : aiPromptActionLabel }}
+        </button>
+        <button
+          class="panel-btn panel-btn--secondary panel-btn--full"
+          :disabled="isUiLocked"
+          @click="generateFinalPrompt(true)"
+        >
+          <Loader2 v-if="isGeneratingFinalPrompt" class="panel-btn-icon animate-spin" />
+          {{ isGeneratingFinalPrompt ? '생성 중...' : finalPromptActionLabel }}
+        </button>
+      </div>
 
       <!-- Generated Prompt -->
       <div v-if="isPromptGenerated" class="panel-section panel-section--prompt">
@@ -698,39 +775,33 @@ function setActive(): void {
         <textarea
           v-if="form.usePromptOverride"
           v-model="form.promptEnFinalOverride"
-          class="panel-textarea panel-textarea--prompt"
-          rows="4"
+          :class="['panel-textarea', 'panel-textarea--prompt', { 'panel-textarea--editing': isFinalEditing }]"
+          rows="5"
           :readonly="!isFinalEditing"
           placeholder="최종 영어 프롬프트를 직접 입력하세요."
+          @wheel="handlePromptWheel"
         ></textarea>
         <textarea
           v-else
           :value="form.promptEnFinal"
           class="panel-textarea panel-textarea--prompt"
-          rows="4"
+          rows="5"
           readonly
           placeholder="자동으로 갱신됩니다."
+          @wheel="handlePromptWheel"
         ></textarea>
 
         <div class="panel-prompt-actions">
           <button
-            class="panel-btn panel-btn--text"
+            :class="['panel-btn', isFinalEditing ? 'panel-btn--success' : 'panel-btn--text']"
             :disabled="!form.promptEnFinal && !form.prompt"
             @click="toggleFinalEditing"
           >
             {{ isFinalEditing ? '편집 완료' : '영문 직접 편집' }}
           </button>
-          <button class="panel-btn panel-btn--text" @click="focusDetailEditor">
-            한글 편집
-          </button>
         </div>
 
         <div class="panel-prompt-actions panel-prompt-actions--right">
-          <button class="panel-btn panel-btn--text" :disabled="isGeneratingPrompt || isGeneratingImage" @click="generatePrompt">
-            <Loader2 v-if="isGeneratingPrompt" class="panel-btn-icon panel-btn-icon--spin" />
-            <RefreshCw v-else class="panel-btn-icon" />
-            재생성
-          </button>
           <button
             v-if="!isPromptApproved"
             class="panel-btn panel-btn--success"
@@ -745,6 +816,7 @@ function setActive(): void {
           </span>
         </div>
       </div>
+      </fieldset>
     </template>
 
     <template #footer>

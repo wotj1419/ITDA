@@ -24,7 +24,10 @@ const panelClose = inject<(() => void) | null>('nodePanelClose', null);
 const panelDelete = inject<(() => void) | null>('nodePanelDelete', null);
 const panelCanDelete = inject<ComputedRef<boolean> | null>('nodePanelCanDelete', null);
 const panelLock = inject<ComputedRef<{ name: string } | null> | null>('nodePanelLock', null);
+const panelBusy = inject<ComputedRef<boolean> | null>('nodePanelBusy', null);
 const isLocked = computed(() => Boolean(panelLock?.value));
+const isBusy = computed(() => Boolean(panelBusy?.value));
+const isDeleteDisabled = computed(() => isLocked.value || isBusy.value);
 const canDelete = computed(() => Boolean(panelCanDelete && panelCanDelete.value));
 </script>
 
@@ -44,7 +47,7 @@ const canDelete = computed(() => Boolean(panelCanDelete && panelCanDelete.value)
           v-if="canDelete && panelDelete"
           type="button"
           class="base-panel__delete"
-          :disabled="isLocked"
+          :disabled="isDeleteDisabled"
           title="노드 삭제"
           aria-label="노드 삭제"
           @click="panelDelete"
