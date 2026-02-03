@@ -86,6 +86,7 @@ services:
       GCP_LOCATION: ${GCP_LOCATION}
     networks:
       - internal
+      - public
     restart: unless-stopped
     volumes:
       - /opt/itda/data/secrets/gcp-sa.json:/secrets/gcp-sa.json:ro
@@ -115,6 +116,7 @@ services:
       GCP_LOCATION: ${GCP_LOCATION}
     networks:
       - internal
+      - public
     restart: unless-stopped
     volumes:
       - /opt/itda/data/secrets/gcp-sa.json:/secrets/gcp-sa.json:ro
@@ -144,6 +146,7 @@ services:
       GCP_LOCATION: ${GCP_LOCATION}
     networks:
       - internal
+      - public
     restart: unless-stopped
     volumes:
       - /opt/itda/data/secrets/gcp-sa.json:/secrets/gcp-sa.json:ro
