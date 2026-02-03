@@ -1,5 +1,6 @@
 package com.itda.backend.timeline.repository;
 
+import com.itda.backend.node.repository.dto.TimelineNodeRow;
 import com.itda.backend.timeline.repository.dto.ProjectTimelineItem;
 import com.itda.backend.timeline.repository.dto.SceneTimelineItem;
 import org.apache.ibatis.annotations.Mapper;
@@ -11,6 +12,8 @@ import java.util.List;
 public interface TimelineMapper {
 
     List<SceneTimelineItem> findSceneTimelineItems(@Param("sceneId") Long sceneId);
+
+    List<TimelineNodeRow> findProjectTimelineVideoNodes(@Param("projectId") Long projectId);
 
     List<ProjectTimelineItem> findProjectTimelineItems(@Param("projectId") Long projectId);
 

@@ -206,39 +206,13 @@
         WHERE id = #{nodeId}
     </update>
 
-    <!-- Timeline: confirmed VIDEO nodes by project -->
-    <select id="findConfirmedVideoNodesByProjectId"
-            resultType="com.itda.backend.node.repository.dto.TimelineNodeRow">
-        SELECT n.id AS video_node_id,
-               n.scene_id AS scene_id,
-               s.order_index AS scene_order,
-               n.asset_id AS asset_id,
-               n.content_url AS content_url,
-               shot.asset_id AS shot_asset_id,
-               shot.content_url AS shot_content_url,
-               master.asset_id AS master_asset_id,
-               master.content_url AS master_content_url
-        FROM timeline_items ti
-        INNER JOIN nodes n ON n.id = ti.video_node_id
-        INNER JOIN scenes s ON s.id = ti.scene_id
-        LEFT JOIN nodes shot
-            ON shot.id = n.parent_node_id
-           AND shot.node_type = 'SHOT'
-        LEFT JOIN nodes master
-            ON master.id = s.active_master_node_id
-           AND master.node_type = 'MASTER'
-        WHERE ti.project_id = #{projectId}
-          AND n.node_type = 'VIDEO'
-          AND n.is_confirmed = true
-        ORDER BY ti.order_index ASC, ti.id ASC
-    </select>
-
     <!-- Timeline: confirmed VIDEO nodes by scene -->
     <select id="findConfirmedVideoNodesBySceneId"
             resultType="com.itda.backend.node.repository.dto.TimelineNodeRow">
         SELECT n.id AS video_node_id,
                n.scene_id AS scene_id,
                NULL AS scene_order,
+               CAST(JSON_UNQUOTE(JSON_EXTRACT(n.data_json, '$.duration')) AS UNSIGNED) AS duration,
                n.asset_id AS asset_id,
                n.content_url AS content_url,
                shot.asset_id AS shot_asset_id,

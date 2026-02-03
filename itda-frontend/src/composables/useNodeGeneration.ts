@@ -3,8 +3,7 @@ import type { AnyNodeData } from '../types/ui/sceneNodes';
 import type { GeneratePromptRequest, GeneratePromptResponse, PromptPreviewRequest, PromptPreviewResponse } from '../types/api/ai';
 import { JobStatus, PromptStatus } from '../types/ui/sceneNodes';
 import { useSceneNodeStore } from '../stores/sceneNode';
-import { resolveApiUrl, isApiResourceUrl } from '../services/api/urls';
-import { fetchProtectedBlobUrl } from '../services/api/media';
+import { resolveApiUrl } from '../services/api/urls';
 import { SHOT_FALLBACK_THUMBNAIL } from '../utils/fallbacks';
 import { useGenerationToast } from './useGenerationToast';
 import { aiService } from '../services';
@@ -163,13 +162,17 @@ export function useNodeGeneration(options: UseNodeGenerationOptions) {
         let resolvedResultUrl: string | null = null;
         if (rawResultUrl) {
           if (options.nodeType === 'VIDEO') {
-            resolvedResultUrl = isApiResourceUrl(rawResultUrl)
-              ? null
-              : (resolveApiUrl(rawResultUrl) ?? null);
+            resolvedResultUrl = await nodeStore.resolveNodeMediaUrl(
+              options.nodeId,
+              'videoUrl',
+              rawResultUrl
+            );
           } else {
-            const blobUrl = await fetchProtectedBlobUrl(rawResultUrl).catch(() => null);
-            resolvedResultUrl =
-              blobUrl ?? (isApiResourceUrl(rawResultUrl) ? null : (resolveApiUrl(rawResultUrl) ?? null));
+            resolvedResultUrl = await nodeStore.resolveNodeMediaUrl(
+              options.nodeId,
+              'imageUrl',
+              rawResultUrl
+            );
           }
         }
 
@@ -179,15 +182,19 @@ export function useNodeGeneration(options: UseNodeGenerationOptions) {
           if (rawThumbnailUrl) {
             const normalizedThumbnailUrl = resolveApiUrl(rawThumbnailUrl) ?? rawThumbnailUrl;
             if (!isLikelyVideoUrl(normalizedThumbnailUrl)) {
-              resolvedThumbnailUrl = isApiResourceUrl(rawThumbnailUrl)
-                ? await fetchProtectedBlobUrl(rawThumbnailUrl).catch(() => null)
-                : normalizedThumbnailUrl;
+              resolvedThumbnailUrl = await nodeStore.resolveNodeMediaUrl(
+                options.nodeId,
+                'thumbnailUrl',
+                rawThumbnailUrl
+              );
             }
           }
         } else if (rawThumbnailUrl) {
-          const blobThumbnailUrl = await fetchProtectedBlobUrl(rawThumbnailUrl).catch(() => null);
-          resolvedThumbnailUrl =
-            blobThumbnailUrl ?? (isApiResourceUrl(rawThumbnailUrl) ? null : (resolveApiUrl(rawThumbnailUrl) ?? null));
+          resolvedThumbnailUrl = await nodeStore.resolveNodeMediaUrl(
+            options.nodeId,
+            'thumbnailUrl',
+            rawThumbnailUrl
+          );
         } else {
           resolvedThumbnailUrl = resolvedResultUrl;
         }

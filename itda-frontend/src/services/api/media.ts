@@ -1,5 +1,5 @@
 import apiClient from './client';
-import { resolveApiUrl } from './urls';
+import { resolveApiUrl, shouldUseApiClientForMedia } from './urls';
 import {
   acquireMediaUrlLease,
   releaseMediaUrlLease,
@@ -11,6 +11,11 @@ export async function fetchProtectedBlobUrl(url?: string | null): Promise<string
   const resolved = resolveApiUrl(url);
   if (!resolved) return null;
   if (resolved.startsWith('blob:') || resolved.startsWith('data:')) {
+    return resolved;
+  }
+  if (!shouldUseApiClientForMedia(resolved)) {
+    // Presigned/external URL should be requested directly by the browser
+    // to avoid unnecessary axios CORS preflight.
     return resolved;
   }
   const response = await apiClient.get(resolved, { responseType: 'blob' });

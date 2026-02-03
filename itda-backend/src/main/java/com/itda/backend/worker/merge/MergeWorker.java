@@ -5,8 +5,8 @@ import com.itda.backend.asset.domain.StorageProvider;
 import com.itda.backend.asset.repository.AssetMapper;
 import com.itda.backend.global.config.FileStorageProperties;
 import com.itda.backend.job.domain.Job;
+import com.itda.backend.node.repository.dto.TimelineNodeRow;
 import com.itda.backend.timeline.repository.TimelineMapper;
-import com.itda.backend.timeline.repository.dto.ProjectTimelineItem;
 import com.itda.backend.timeline.repository.dto.SceneTimelineItem;
 import com.itda.backend.worker.ExecutionResult;
 import com.itda.backend.worker.video.VideoContentLoader;
@@ -71,7 +71,7 @@ public class MergeWorker {
             throw new IllegalStateException("Project merge job missing projectId");
         }
 
-        List<ProjectTimelineItem> items = timelineMapper.findProjectTimelineItems(projectId);
+        List<TimelineNodeRow> items = timelineMapper.findProjectTimelineVideoNodes(projectId);
         if (items.isEmpty()) {
             throw new IllegalStateException("No project timeline items to merge");
         }
@@ -144,12 +144,12 @@ public class MergeWorker {
         }
     }
 
-    private List<VideoInput> resolveProjectInputPaths(List<ProjectTimelineItem> items) {
+    private List<VideoInput> resolveProjectInputPaths(List<TimelineNodeRow> items) {
         List<VideoInput> inputs = new ArrayList<>();
         try {
-            for (ProjectTimelineItem item : items) {
-                String context = "sceneId=" + item.getSceneId() + ", sceneVideoId=" + item.getSceneVideoId();
-                VideoInput input = resolveVideoInput(item.getAssetId(), null, context);
+            for (TimelineNodeRow item : items) {
+                String context = "sceneId=" + item.getSceneId() + ", videoNodeId=" + item.getVideoNodeId();
+                VideoInput input = resolveVideoInput(item.getAssetId(), item.getContentUrl(), context);
                 inputs.add(input);
             }
             return inputs;

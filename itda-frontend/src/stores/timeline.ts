@@ -14,6 +14,7 @@ import {
 } from '../services/api/timeline'
 import { acquireMediaLease, releaseMediaLease, type MediaUrlLease } from '../services/api/media'
 import { resolveApiUrl, isApiResourceUrl } from '../services/api/urls'
+import { normalizeDurationSeconds } from '../utils/duration'
 import { unconfirmNode } from '../services/api/nodes'
 import {
   subscribeProjectEvents,
@@ -22,7 +23,6 @@ import {
 } from '../services/ws/projectEvents'
 
 export type MergeStatus = 'idle' | 'merging' | 'done' | 'error'
-const DEFAULT_CLIP_SECONDS = 5
 type LoadClipsOptions = {
   hydrateDurations?: boolean
 }
@@ -30,14 +30,6 @@ type LoadClipsOptions = {
 type ResolvedMedia = {
   url?: string
   lease?: MediaUrlLease
-}
-
-function toDurationSeconds(duration: number): number {
-  if (!Number.isFinite(duration)) return 0
-  if (duration >= 1000) {
-    return Math.max(0, Math.round(duration / 1000))
-  }
-  return Math.max(0, duration)
 }
 
 async function resolveMediaWithLease(url?: string | null): Promise<ResolvedMedia> {
@@ -62,8 +54,7 @@ async function mapTimelineItemsToClips(
       const resolvedThumbnail = await resolveMediaWithLease(item.thumbnailUrl)
       const videoCandidate = item.videoUrl ?? item.url
       const resolvedVideo = await resolveMediaWithLease(videoCandidate)
-      const durationSeconds = toDurationSeconds(item.duration)
-      const duration = durationSeconds > 0 ? durationSeconds : DEFAULT_CLIP_SECONDS
+      const duration = normalizeDurationSeconds(item.duration)
       const isVideoClip = Boolean(item.videoNodeId || item.sceneVideoId)
       const clipId = `clip-${clipKey}`
       const clipLeases = [resolvedThumbnail.lease, resolvedVideo.lease].filter(
@@ -106,6 +97,7 @@ export const useTimelineStore = defineStore('timeline', () => {
   const mergeJobId = ref<number | null>(null)
   let mergePollTimer: ReturnType<typeof setInterval> | null = null
   const durationCache = new Map<string, number>()
+  const durationInflight = new Map<string, Promise<number | null>>()
   const clipMediaLeaseMap = new Map<string, MediaUrlLease[]>()
 
   let unsubscribeProjectEvents: (() => void) | null = null
@@ -176,30 +168,43 @@ export const useTimelineStore = defineStore('timeline', () => {
   const fetchVideoDuration = async (url: string): Promise<number | null> => {
     const cached = durationCache.get(url)
     if (cached) return Promise.resolve(cached)
-    const resolved = resolveApiUrl(url) ?? url
-    if (resolved.startsWith('blob:') || resolved.startsWith('data:')) {
-      const duration = await readDurationFromUrl(resolved)
+
+    const inflight = durationInflight.get(url)
+    if (inflight) return inflight
+
+    const task = (async (): Promise<number | null> => {
+      const resolved = resolveApiUrl(url) ?? url
+      if (resolved.startsWith('blob:') || resolved.startsWith('data:')) {
+        const duration = await readDurationFromUrl(resolved)
+        if (duration && duration > 0) {
+          durationCache.set(url, duration)
+        }
+        return duration
+      }
+      let duration = await readDurationFromUrl(resolved)
+
+      if (!duration && isApiResourceUrl(url)) {
+        const lease = await acquireMediaLease(url).catch(() => null)
+        if (lease) {
+          duration = await readDurationFromUrl(lease.url)
+          releaseMediaLease(lease)
+        }
+      }
+
       if (duration && duration > 0) {
         durationCache.set(url, duration)
+        return duration
       }
-      return duration
-    }
-    let duration = await readDurationFromUrl(resolved)
 
-    if (!duration && isApiResourceUrl(url)) {
-      const lease = await acquireMediaLease(url).catch(() => null)
-      if (lease) {
-        duration = await readDurationFromUrl(lease.url)
-        releaseMediaLease(lease)
-      }
-    }
+      return null
+    })()
 
-    if (duration && duration > 0) {
-      durationCache.set(url, duration)
-      return duration
+    durationInflight.set(url, task)
+    try {
+      return await task
+    } finally {
+      durationInflight.delete(url)
     }
-
-    return null
   }
 
   const hydrateClipDurations = async (targets: TimelineClip[]): Promise<void> => {
@@ -492,6 +497,7 @@ export const useTimelineStore = defineStore('timeline', () => {
 
   function clearTimeline(): void {
     releaseClipMediaLeases()
+    durationInflight.clear()
     clips.value = []
     currentProjectId.value = null
     currentSceneId.value = null
