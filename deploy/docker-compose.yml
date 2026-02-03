@@ -66,6 +66,7 @@ services:
     image: ${WORKER_IMAGE}
     container_name: itda-worker-image
     environment:
+      SPRING_PROFILES_ACTIVE: prod
       REDIS_HOST: redis
       REDIS_PORT: 16379
       STORAGE_PROVIDER: S3
@@ -96,6 +97,7 @@ services:
     image: ${WORKER_VIDEO_IMAGE}
     container_name: itda-worker-video
     environment:
+      SPRING_PROFILES_ACTIVE: prod
       REDIS_HOST: redis
       REDIS_PORT: 16379
       STORAGE_PROVIDER: S3
@@ -126,6 +128,7 @@ services:
     image: ${WORKER_MERGE_IMAGE}
     container_name: itda-worker-merge
     environment:
+      SPRING_PROFILES_ACTIVE: prod
       REDIS_HOST: redis
       REDIS_PORT: 16379
       STORAGE_PROVIDER: S3
