@@ -276,7 +276,7 @@ public class NodeService {
             throw new BusinessException(ErrorCode.INVALID_REQUEST);
         }
         Node node = getNodeOrThrow(nodeId);
-        Scene scene = getSceneAndEnsureMemberForUpdate(node.getSceneId(), userId);
+        Scene scene = getSceneAndEnsureMember(node.getSceneId(), userId);
         assertNotSceneHeader(node.getNodeType());
 
         String promptEnBase = requirePromptEnBase(request.prompt());
