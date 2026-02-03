@@ -12,7 +12,7 @@ import {
   reorderProjectTimeline,
   reorderSceneTimeline,
 } from '../services/api/timeline'
-import { fetchProtectedBlobUrl } from '../services/api/media'
+import { acquireMediaLease, releaseMediaLease, type MediaUrlLease } from '../services/api/media'
 import { resolveApiUrl, isApiResourceUrl } from '../services/api/urls'
 import { unconfirmNode } from '../services/api/nodes'
 import {
@@ -27,6 +27,11 @@ type LoadClipsOptions = {
   hydrateDurations?: boolean
 }
 
+type ResolvedMedia = {
+  url?: string
+  lease?: MediaUrlLease
+}
+
 function toDurationSeconds(duration: number): number {
   if (!Number.isFinite(duration)) return 0
   if (duration >= 1000) {
@@ -35,40 +40,54 @@ function toDurationSeconds(duration: number): number {
   return Math.max(0, duration)
 }
 
-async function resolveMediaUrl(url?: string | null): Promise<string | undefined> {
-  if (!url) return undefined
-  if (!isApiResourceUrl(url)) {
-    return url
+async function resolveMediaWithLease(url?: string | null): Promise<ResolvedMedia> {
+  if (!url) return {}
+  const lease = await acquireMediaLease(url).catch(() => null)
+  if (!lease) {
+    return { url: resolveApiUrl(url) ?? undefined }
   }
-  const blobUrl = await fetchProtectedBlobUrl(url).catch(() => null)
-  return blobUrl ?? url
+  return {
+    url: lease.url,
+    lease: lease.releasable ? lease : undefined,
+  }
 }
 
-async function mapTimelineItemsToClips(items: TimelineItem[]): Promise<TimelineClip[]> {
-  return Promise.all(
+async function mapTimelineItemsToClips(
+  items: TimelineItem[]
+): Promise<{ clips: TimelineClip[]; leaseMap: Map<string, MediaUrlLease[]> }> {
+  const leaseMap = new Map<string, MediaUrlLease[]>()
+  const clips = await Promise.all(
     items.map(async (item) => {
       const clipKey = item.videoNodeId ?? item.sceneVideoId ?? `${item.sceneId}-${item.order}`
-      const resolvedThumbnail = await resolveMediaUrl(item.thumbnailUrl)
+      const resolvedThumbnail = await resolveMediaWithLease(item.thumbnailUrl)
       const videoCandidate = item.videoUrl ?? item.url
-      const resolvedVideo = await resolveMediaUrl(videoCandidate)
+      const resolvedVideo = await resolveMediaWithLease(videoCandidate)
       const durationSeconds = toDurationSeconds(item.duration)
       const duration = durationSeconds > 0 ? durationSeconds : DEFAULT_CLIP_SECONDS
       const isVideoClip = Boolean(item.videoNodeId || item.sceneVideoId)
+      const clipId = `clip-${clipKey}`
+      const clipLeases = [resolvedThumbnail.lease, resolvedVideo.lease].filter(
+        (lease): lease is MediaUrlLease => Boolean(lease)
+      )
+      if (clipLeases.length) {
+        leaseMap.set(clipId, clipLeases)
+      }
 
       return {
-        clipId: `clip-${clipKey}`,
+        clipId,
         nodeId: item.videoNodeId ?? `scene-video-${item.sceneVideoId ?? item.order}`,
         videoNodeId: item.videoNodeId,
         sceneVideoId: item.sceneVideoId,
         sceneId: item.sceneId,
-        thumbnailUrl: resolvedThumbnail || '',
-        videoUrl: isVideoClip ? resolvedVideo || undefined : undefined,
+        thumbnailUrl: resolvedThumbnail.url || '',
+        videoUrl: isVideoClip ? resolvedVideo.url || undefined : undefined,
         duration,
         order: item.order,
         label: item.sceneTitle ? `${item.sceneTitle}` : `Clip ${item.order}`,
       }
     })
   )
+  return { clips, leaseMap }
 }
 
 export const useTimelineStore = defineStore('timeline', () => {
@@ -87,8 +106,30 @@ export const useTimelineStore = defineStore('timeline', () => {
   const mergeJobId = ref<number | null>(null)
   let mergePollTimer: ReturnType<typeof setInterval> | null = null
   const durationCache = new Map<string, number>()
+  const clipMediaLeaseMap = new Map<string, MediaUrlLease[]>()
 
   let unsubscribeProjectEvents: (() => void) | null = null
+
+  const releaseClipMediaLeases = () => {
+    clipMediaLeaseMap.forEach((leases) => {
+      leases.forEach((lease) => releaseMediaLease(lease))
+    })
+    clipMediaLeaseMap.clear()
+  }
+
+  const replaceClipMediaLeases = (nextLeaseMap: Map<string, MediaUrlLease[]>) => {
+    releaseClipMediaLeases()
+    nextLeaseMap.forEach((leases, clipId) => {
+      clipMediaLeaseMap.set(clipId, leases)
+    })
+  }
+
+  const releaseClipMediaLeaseById = (clipId: string) => {
+    const leases = clipMediaLeaseMap.get(clipId)
+    if (!leases) return
+    leases.forEach((lease) => releaseMediaLease(lease))
+    clipMediaLeaseMap.delete(clipId)
+  }
 
   // Getters
   const orderedClips = computed(() => [...clips.value].sort((a, b) => a.order - b.order))
@@ -146,12 +187,10 @@ export const useTimelineStore = defineStore('timeline', () => {
     let duration = await readDurationFromUrl(resolved)
 
     if (!duration && isApiResourceUrl(url)) {
-      const blobUrl = await fetchProtectedBlobUrl(url).catch(() => null)
-      if (blobUrl) {
-        duration = await readDurationFromUrl(blobUrl)
-        if (blobUrl.startsWith('blob:')) {
-          URL.revokeObjectURL(blobUrl)
-        }
+      const lease = await acquireMediaLease(url).catch(() => null)
+      if (lease) {
+        duration = await readDurationFromUrl(lease.url)
+        releaseMediaLease(lease)
       }
     }
 
@@ -321,7 +360,8 @@ export const useTimelineStore = defineStore('timeline', () => {
       ensureProjectSubscription(projectId)
       if (sceneId) {
         const response = await fetchSceneTimeline(sceneId)
-        const nextClips = await mapTimelineItemsToClips(response.items)
+        const { clips: nextClips, leaseMap } = await mapTimelineItemsToClips(response.items)
+        replaceClipMediaLeases(leaseMap)
         clips.value = nextClips
         if (shouldHydrateDurations) {
           void hydrateClipDurations(nextClips)
@@ -329,7 +369,8 @@ export const useTimelineStore = defineStore('timeline', () => {
         return
       }
       const response = await fetchProjectTimeline(projectId)
-      const nextClips = await mapTimelineItemsToClips(response.items)
+      const { clips: nextClips, leaseMap } = await mapTimelineItemsToClips(response.items)
+      replaceClipMediaLeases(leaseMap)
       clips.value = nextClips
       if (shouldHydrateDurations) {
         void hydrateClipDurations(nextClips)
@@ -364,15 +405,15 @@ export const useTimelineStore = defineStore('timeline', () => {
 
         await reorderSceneTimeline(currentSceneId.value, orderedVideoNodeIds)
       } else {
-        const orderedSceneVideoIds = orderedClips
-          .map((clip) => clip.sceneVideoId)
+        const orderedVideoNodeIds = orderedClips
+          .map((clip) => clip.videoNodeId)
           .filter((id): id is number => typeof id === 'number')
 
-        if (orderedSceneVideoIds.length !== orderedClips.length) {
+        if (orderedVideoNodeIds.length !== orderedClips.length) {
           return false
         }
 
-        await reorderProjectTimeline(currentProjectId.value, orderedSceneVideoIds)
+        await reorderProjectTimeline(currentProjectId.value, orderedVideoNodeIds)
       }
 
       const orderMap = new Map(clipIds.map((id, index) => [id, index + 1]))
@@ -395,6 +436,7 @@ export const useTimelineStore = defineStore('timeline', () => {
       if (target && typeof target.nodeId === 'number') {
         await unconfirmNode(target.nodeId)
       }
+      releaseClipMediaLeaseById(clipId)
       clips.value = clips.value.filter((c) => c.clipId !== clipId)
       clips.value.forEach((c, i) => (c.order = i + 1))
       return true
@@ -449,6 +491,7 @@ export const useTimelineStore = defineStore('timeline', () => {
   }
 
   function clearTimeline(): void {
+    releaseClipMediaLeases()
     clips.value = []
     currentProjectId.value = null
     currentSceneId.value = null

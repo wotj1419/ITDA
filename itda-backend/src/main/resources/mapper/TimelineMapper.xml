@@ -110,32 +110,38 @@
 
     <select id="countProjectTimelineItems" resultType="int">
         SELECT COUNT(*)
-        FROM timeline_items
-        WHERE project_id = #{projectId}
-          AND scene_video_id IS NOT NULL
+        FROM timeline_items ti
+        JOIN nodes n ON n.id = ti.video_node_id
+        WHERE ti.project_id = #{projectId}
+          AND ti.video_node_id IS NOT NULL
+          AND n.node_type = 'VIDEO'
+          AND n.is_confirmed = 1
     </select>
 
-    <select id="countProjectTimelineItemsBySceneVideoIds" resultType="int">
+    <select id="countProjectTimelineItemsByVideoNodeIds" resultType="int">
         SELECT COUNT(*)
-        FROM timeline_items
-        WHERE project_id = #{projectId}
-          AND scene_video_id IN
-        <foreach collection="sceneVideoIds" item="id" open="(" separator="," close=")">
+        FROM timeline_items ti
+        JOIN nodes n ON n.id = ti.video_node_id
+        WHERE ti.project_id = #{projectId}
+          AND ti.video_node_id IN
+        <foreach collection="videoNodeIds" item="id" open="(" separator="," close=")">
             #{id}
         </foreach>
+          AND n.node_type = 'VIDEO'
+          AND n.is_confirmed = 1
     </select>
 
-    <update id="reorderProjectTimelineItems">
+    <update id="reorderProjectTimelineItemsByVideoNodeIds">
         UPDATE timeline_items
-        SET order_index = CASE scene_video_id
-        <foreach collection="orderedSceneVideoIds" item="id" index="idx">
+        SET order_index = CASE video_node_id
+        <foreach collection="orderedVideoNodeIds" item="id" index="idx">
             WHEN #{id} THEN #{idx} + 1
         </foreach>
         ELSE order_index
         END
         WHERE project_id = #{projectId}
-          AND scene_video_id IN
-        <foreach collection="orderedSceneVideoIds" item="id" open="(" separator="," close=")">
+          AND video_node_id IN
+        <foreach collection="orderedVideoNodeIds" item="id" open="(" separator="," close=")">
             #{id}
         </foreach>
     </update>

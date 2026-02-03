@@ -36,6 +36,7 @@ import {
 } from '../../services/ws/projectEvents';
 import { useSceneStore } from '../scene';
 import { useAuthStore } from '../auth';
+import { useTimelineStore } from '../timeline';
 import type { SceneNode, NodePositionSnapshot } from './types';
 import { buildPositionSnapshot, snapshotsEqual } from './history';
 import { buildEdge, deriveEdges, canConnect, syncEdgeMeta } from './edges';
@@ -59,7 +60,11 @@ import {
     resolveStyleLabel,
     resolveTimeOfDayLabel,
 } from '../../utils/nodeSettings';
-import { fetchProtectedBlobUrl } from '../../services/api/media';
+import {
+    acquireMediaLease,
+    releaseMediaLease,
+    type MediaUrlLease,
+} from '../../services/api/media';
 import { resolveApiUrl, isApiResourceUrl } from '../../services/api/urls';
 import { SHOT_FALLBACK_THUMBNAIL } from '../../utils/fallbacks';
 import {
@@ -77,6 +82,7 @@ import {
 
 const MAX_POSITION_HISTORY = 20;
 const NODE_MEDIA_HYDRATION_CONCURRENCY = 6;
+type NodeMediaLeaseField = 'videoUrl' | 'thumbnailUrl' | 'imageUrl';
 
 // =============================================================================
 // Store
@@ -89,6 +95,7 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
 
     const sceneStore = useSceneStore();
     const authStore = useAuthStore();
+    const timelineStore = useTimelineStore();
 
     const nodes = ref<SceneNode[]>([]);
     const edges = ref<Edge[]>([]);
@@ -101,6 +108,7 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
     const positionHistory = ref<NodePositionSnapshot[]>([]);
     const hydratedNodeIds = ref<Set<string>>(new Set());
     const hydrationRequests = new Map<string, Promise<void>>();
+    const nodeMediaLeaseMap = new Map<string, MediaUrlLease>();
 
     // end shot 선택 모드 (트랜지션 영상용)
     const selectionMode = ref<'none' | 'selectEndShot'>('none');
@@ -115,6 +123,49 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
 
     let unsubscribeProjectEvents: (() => void) | null = null;
     let nodeSyncTimeout: ReturnType<typeof setTimeout> | null = null;
+
+    const getNodeMediaLeaseKey = (nodeId: string, field: NodeMediaLeaseField) =>
+        `${nodeId}:${field}`;
+
+    const releaseNodeMediaLease = (nodeId: string, field: NodeMediaLeaseField): void => {
+        const key = getNodeMediaLeaseKey(nodeId, field);
+        const lease = nodeMediaLeaseMap.get(key);
+        if (!lease) return;
+        releaseMediaLease(lease);
+        nodeMediaLeaseMap.delete(key);
+    };
+
+    const setNodeMediaLease = (
+        nodeId: string,
+        field: NodeMediaLeaseField,
+        lease: MediaUrlLease | null
+    ): void => {
+        releaseNodeMediaLease(nodeId, field);
+        if (!lease || !lease.releasable) return;
+        nodeMediaLeaseMap.set(getNodeMediaLeaseKey(nodeId, field), lease);
+    };
+
+    const releaseNodeLeases = (nodeId: string): void => {
+        releaseNodeMediaLease(nodeId, 'videoUrl');
+        releaseNodeMediaLease(nodeId, 'thumbnailUrl');
+        releaseNodeMediaLease(nodeId, 'imageUrl');
+    };
+
+    const releaseAllNodeMediaLeases = (): void => {
+        nodeMediaLeaseMap.forEach((lease) => {
+            releaseMediaLease(lease);
+        });
+        nodeMediaLeaseMap.clear();
+    };
+
+    const refreshCurrentSceneTimeline = async (): Promise<void> => {
+        const projectId = sceneStore.currentProjectId;
+        const currentSceneId = sceneId.value ? toFiniteNumber(sceneId.value) : null;
+        if (!projectId || currentSceneId === null) return;
+        await timelineStore.loadClips(projectId, currentSceneId, {
+            hydrateDurations: false,
+        });
+    };
 
     // ==========================================================================
     // Getters
@@ -203,13 +254,10 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
         let duration = await readDurationFromUrl(resolved);
 
         if (!duration && isApiResourceUrl(url)) {
-            const blobUrl = await fetchProtectedBlobUrl(url).catch(() => null);
-            if (blobUrl) {
-                duration = await readDurationFromUrl(blobUrl);
-                // blobUrl is created by fetchProtectedBlobUrl here, safe to revoke
-                if (blobUrl.startsWith('blob:')) {
-                    URL.revokeObjectURL(blobUrl);
-                }
+            const lease = await acquireMediaLease(url).catch(() => null);
+            if (lease) {
+                duration = await readDurationFromUrl(lease.url);
+                releaseMediaLease(lease);
             }
         }
 
@@ -345,6 +393,7 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
             );
             if (!hasUrl) {
                 const shotData = targetNode.data as ShotNodeData;
+                setNodeMediaLease(targetNode.id, 'imageUrl', null);
                 shotData.imageUrl = SHOT_FALLBACK_THUMBNAIL;
                 shotData.thumbnailUrl = SHOT_FALLBACK_THUMBNAIL;
             }
@@ -353,15 +402,26 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
         if (message.event === 'job.done' || payload.status === 'SUCCEEDED') {
             void (async () => {
                 let resolvedUrl: string | null = null;
+                let resolvedLease: MediaUrlLease | null = null;
                 if (payload.resultUrl) {
-                    if (isApiResourceUrl(payload.resultUrl)) {
-                        resolvedUrl = await fetchProtectedBlobUrl(payload.resultUrl).catch(() => null);
-                    }
-                    if (!resolvedUrl) {
+                    const lease = await acquireMediaLease(payload.resultUrl).catch(() => null);
+                    if (lease) {
+                        resolvedUrl = lease.url;
+                        resolvedLease = lease.releasable ? lease : null;
+                    } else {
                         resolvedUrl = resolveApiUrl(payload.resultUrl);
                     }
                 }
                 applyNodeResultUrl(targetNode, resolvedUrl ?? '');
+                if (targetNode.data?.type === NodeType.VIDEO) {
+                    setNodeMediaLease(targetNode.id, 'videoUrl', resolvedLease);
+                } else if (
+                    targetNode.data?.type === NodeType.MASTER_IMAGE ||
+                    targetNode.data?.type === NodeType.STORYBOARD_GRID ||
+                    targetNode.data?.type === NodeType.SHOT
+                ) {
+                    setNodeMediaLease(targetNode.id, 'imageUrl', resolvedLease);
+                }
                 await updateVideoDurationForNode(targetNode);
                 if (targetNode.data?.type === NodeType.SHOT) {
                     syncVideoThumbnailsFromShots(new Set([targetNode.id]));
@@ -550,6 +610,7 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
     function resetHydrationState(): void {
         hydratedNodeIds.value.clear();
         hydrationRequests.clear();
+        releaseAllNodeMediaLeases();
     }
 
     async function loadSceneNodes(
@@ -738,23 +799,27 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
             const current = node.data?.thumbnailUrl || node.data?.imageUrl || node.data?.videoUrl;
             if (!current || current.startsWith('blob:')) return;
             if (!isApiResourceUrl(current)) return;
-            const blobUrl = await fetchProtectedBlobUrl(current).catch(() => null);
-            if (!blobUrl || !node.data) {
+            const lease = await acquireMediaLease(current).catch(() => null);
+            if (!lease || !node.data) {
                 if (node.data && isApiResourceUrl(current)) {
                     if (node.data.type === NodeType.VIDEO) {
                         const video = node.data as VideoNodeData;
+                        setNodeMediaLease(node.id, 'videoUrl', null);
                         video.videoUrl = null;
                         video.thumbnailUrl = null;
                     } else if (node.data.type === NodeType.MASTER_IMAGE) {
                         const master = node.data as MasterImageNodeData;
+                        setNodeMediaLease(node.id, 'imageUrl', null);
                         master.imageUrl = null;
                         master.thumbnailUrl = null;
                     } else if (node.data.type === NodeType.STORYBOARD_GRID) {
                         const grid = node.data as StoryboardGridNodeData;
+                        setNodeMediaLease(node.id, 'imageUrl', null);
                         grid.imageUrl = null;
                         grid.thumbnailUrl = null;
                     } else if (node.data.type === NodeType.SHOT) {
                         const shot = node.data as ShotNodeData;
+                        setNodeMediaLease(node.id, 'imageUrl', null);
                         shot.imageUrl = null;
                         shot.thumbnailUrl = null;
                     }
@@ -762,19 +827,23 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
                 return;
             }
             if (node.data.type === NodeType.VIDEO) {
-                (node.data as VideoNodeData).videoUrl = blobUrl;
+                setNodeMediaLease(node.id, 'videoUrl', lease.releasable ? lease : null);
+                (node.data as VideoNodeData).videoUrl = lease.url;
             } else if (node.data.type === NodeType.MASTER_IMAGE) {
                 const master = node.data as MasterImageNodeData;
-                master.imageUrl = blobUrl;
-                master.thumbnailUrl = blobUrl;
+                setNodeMediaLease(node.id, 'imageUrl', lease.releasable ? lease : null);
+                master.imageUrl = lease.url;
+                master.thumbnailUrl = lease.url;
             } else if (node.data.type === NodeType.STORYBOARD_GRID) {
                 const grid = node.data as StoryboardGridNodeData;
-                grid.imageUrl = blobUrl;
-                grid.thumbnailUrl = blobUrl;
+                setNodeMediaLease(node.id, 'imageUrl', lease.releasable ? lease : null);
+                grid.imageUrl = lease.url;
+                grid.thumbnailUrl = lease.url;
             } else if (node.data.type === NodeType.SHOT) {
                 const shot = node.data as ShotNodeData;
-                shot.imageUrl = blobUrl;
-                shot.thumbnailUrl = blobUrl;
+                setNodeMediaLease(node.id, 'imageUrl', lease.releasable ? lease : null);
+                shot.imageUrl = lease.url;
+                shot.thumbnailUrl = lease.url;
             }
         });
     }
@@ -1070,6 +1139,7 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
         // 하위 노드 재귀 삭제
         const descendants = getDescendantIds(nodeId);
         const toDelete = [nodeId, ...descendants];
+        toDelete.forEach((id) => releaseNodeLeases(id));
 
         nodes.value = nodes.value.filter((n) => !toDelete.includes(n.id));
         edges.value = edges.value.filter(
@@ -1416,9 +1486,12 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
 
                 let resolvedDetailUrl: string | null = null;
                 const hasApiDetailUrl = isApiResourceUrl(detail.contentUrl);
+                let detailLease: MediaUrlLease | null = null;
                 if (detail.contentUrl) {
-                    if (hasApiDetailUrl) {
-                        resolvedDetailUrl = await fetchProtectedBlobUrl(detail.contentUrl).catch(() => null);
+                    const lease = await acquireMediaLease(detail.contentUrl).catch(() => null);
+                    if (lease) {
+                        resolvedDetailUrl = lease.url;
+                        detailLease = lease.releasable ? lease : null;
                     } else {
                         resolvedDetailUrl = resolveApiUrl(detail.contentUrl);
                     }
@@ -1426,17 +1499,21 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
                 if (resolvedDetailUrl && targetNode.data) {
                     if (targetNode.data.type === NodeType.VIDEO) {
                         const videoData = targetNode.data as VideoNodeData;
+                        setNodeMediaLease(targetNode.id, 'videoUrl', detailLease);
                         videoData.videoUrl = resolvedDetailUrl;
                     } else if (targetNode.data.type === NodeType.MASTER_IMAGE) {
                         const masterData = targetNode.data as MasterImageNodeData;
+                        setNodeMediaLease(targetNode.id, 'imageUrl', detailLease);
                         masterData.imageUrl = resolvedDetailUrl;
                         masterData.thumbnailUrl = resolvedDetailUrl;
                     } else if (targetNode.data.type === NodeType.STORYBOARD_GRID) {
                         const gridData = targetNode.data as StoryboardGridNodeData;
+                        setNodeMediaLease(targetNode.id, 'imageUrl', detailLease);
                         gridData.imageUrl = resolvedDetailUrl;
                         gridData.thumbnailUrl = resolvedDetailUrl;
                     } else if (targetNode.data.type === NodeType.SHOT) {
                         const shotData = targetNode.data as ShotNodeData;
+                        setNodeMediaLease(targetNode.id, 'imageUrl', detailLease);
                         shotData.imageUrl = resolvedDetailUrl;
                         shotData.thumbnailUrl = resolvedDetailUrl;
                     }
@@ -1444,14 +1521,17 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
                     if (targetNode.data.type === NodeType.VIDEO) {
                         const videoData = targetNode.data as VideoNodeData;
                         if (videoData.videoUrl && isApiResourceUrl(videoData.videoUrl)) {
+                            setNodeMediaLease(targetNode.id, 'videoUrl', null);
                             videoData.videoUrl = null;
                         }
                         if (videoData.thumbnailUrl && isApiResourceUrl(videoData.thumbnailUrl)) {
+                            setNodeMediaLease(targetNode.id, 'thumbnailUrl', null);
                             videoData.thumbnailUrl = null;
                         }
                     } else if (targetNode.data.type === NodeType.MASTER_IMAGE) {
                         const masterData = targetNode.data as MasterImageNodeData;
                         if (masterData.imageUrl && isApiResourceUrl(masterData.imageUrl)) {
+                            setNodeMediaLease(targetNode.id, 'imageUrl', null);
                             masterData.imageUrl = null;
                         }
                         if (masterData.thumbnailUrl && isApiResourceUrl(masterData.thumbnailUrl)) {
@@ -1460,6 +1540,7 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
                     } else if (targetNode.data.type === NodeType.STORYBOARD_GRID) {
                         const gridData = targetNode.data as StoryboardGridNodeData;
                         if (gridData.imageUrl && isApiResourceUrl(gridData.imageUrl)) {
+                            setNodeMediaLease(targetNode.id, 'imageUrl', null);
                             gridData.imageUrl = null;
                         }
                         if (gridData.thumbnailUrl && isApiResourceUrl(gridData.thumbnailUrl)) {
@@ -1468,6 +1549,7 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
                     } else if (targetNode.data.type === NodeType.SHOT) {
                         const shotData = targetNode.data as ShotNodeData;
                         if (shotData.imageUrl && isApiResourceUrl(shotData.imageUrl)) {
+                            setNodeMediaLease(targetNode.id, 'imageUrl', null);
                             shotData.imageUrl = null;
                         }
                         if (shotData.thumbnailUrl && isApiResourceUrl(shotData.thumbnailUrl)) {
@@ -1535,6 +1617,7 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
     // ==========================================================================
 
     async function toggleVideoConfirm(videoId: string): Promise<void> {
+        let changed = false;
         const node = nodes.value.find((n) => n.id === videoId);
         if (
             node?.data &&
@@ -1552,6 +1635,7 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
                 ) {
                     const videoData = n.data as VideoNodeData;
                     if (n.id === videoId) {
+                        changed = true;
                         videoData.isConfirmed = shouldConfirm;
                         videoData.timelineOrder = shouldConfirm ? nextOrder : undefined;
                         videoData.updatedAt = new Date().toISOString();
@@ -1568,6 +1652,7 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
                             }
                         }
                     } else {
+                        changed = true;
                         videoData.isConfirmed = false;
                         videoData.timelineOrder = undefined;
                         videoData.updatedAt = new Date().toISOString();
@@ -1584,6 +1669,13 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
             }
         }
         edges.value = syncEdgeMeta(nodes.value, edges.value);
+        if (changed) {
+            try {
+                await refreshCurrentSceneTimeline();
+            } catch (error) {
+                console.error('Failed to refresh scene timeline after confirm toggle:', error);
+            }
+        }
     }
 
     function getNextTimelineOrder(): number {

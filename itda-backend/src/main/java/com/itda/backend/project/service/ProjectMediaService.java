@@ -77,21 +77,21 @@ public class ProjectMediaService {
     }
 
     @Transactional
-    public void reorderTimeline(Long userId, Long projectId, List<Long> orderedSceneVideoIds) {
+    public void reorderTimeline(Long userId, Long projectId, List<Long> orderedVideoNodeIds) {
         projectAccessService.ensureProjectAccessible(projectId, userId);
-        validateOrderedIds(orderedSceneVideoIds);
+        validateOrderedIds(orderedVideoNodeIds);
 
         int total = timelineMapper.countProjectTimelineItems(projectId);
         if (total == 0) {
             throw new BusinessException(ErrorCode.INVALID_REQUEST);
         }
 
-        int matched = timelineMapper.countProjectTimelineItemsBySceneVideoIds(projectId, orderedSceneVideoIds);
-        if (matched != total || matched != orderedSceneVideoIds.size()) {
+        int matched = timelineMapper.countProjectTimelineItemsByVideoNodeIds(projectId, orderedVideoNodeIds);
+        if (matched != total || matched != orderedVideoNodeIds.size()) {
             throw new BusinessException(ErrorCode.INVALID_REQUEST);
         }
 
-        timelineMapper.reorderProjectTimelineItems(projectId, orderedSceneVideoIds);
+        timelineMapper.reorderProjectTimelineItemsByVideoNodeIds(projectId, orderedVideoNodeIds);
     }
 
     @Transactional(readOnly = true)

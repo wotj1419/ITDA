@@ -7,8 +7,7 @@ import { useUIStore } from '../../../stores/ui';
 import { useScenarioStore } from '../../../stores/scenario';
 import type { Scene, SceneStatus } from '../../../types/api/scenes';
 import type { ObjectSheet } from '../../../types/api/objects';
-import { fetchProtectedBlobUrl } from '../../../services/api/media';
-import { isApiResourceUrl } from '../../../services/api/urls';
+import { acquireMediaLease, releaseMediaLease, type MediaUrlLease } from '../../../services/api/media';
 import { fetchProjectTimeline, type TimelineItem } from '../../../services/api/timeline';
 
 export type ProjectTab = 'story' | 'scenes' | 'objects' | 'timeline' | 'settings';
@@ -39,6 +38,7 @@ export function useProjectDetail() {
   const previewLoadingMap = ref<Record<number, boolean>>({});
   const activePreview = ref<{ sceneId: number; clipIndex: number } | null>(null);
   const previewContentMap = ref<Record<string, string>>({});
+  const previewLeaseMap = ref<Record<string, MediaUrlLease | null>>({});
   const previewTracks = ref<Record<number, HTMLDivElement | null>>({});
   const storyboardOpenMap = ref<Record<number, boolean>>({});
 
@@ -161,12 +161,13 @@ export function useProjectDetail() {
   const buildPreviewKey = (sceneId: number, clipIndex: number) => `${sceneId}-${clipIndex}`;
 
   function revokePreviewContentUrls() {
-    Object.values(previewContentMap.value).forEach((url) => {
-      if (url.startsWith('blob:')) {
-        URL.revokeObjectURL(url);
+    Object.values(previewLeaseMap.value).forEach((lease) => {
+      if (lease) {
+        releaseMediaLease(lease);
       }
     });
     previewContentMap.value = {};
+    previewLeaseMap.value = {};
   }
 
   const ensurePreviewContentUrl = async (sceneId: number, clipIndex: number) => {
@@ -175,18 +176,17 @@ export function useProjectDetail() {
     if (!clip?.contentUrl) return;
     const key = buildPreviewKey(sceneId, clipIndex);
     if (previewContentMap.value[key]) return;
-    if (clip.contentUrl.startsWith('blob:')) {
+    const lease = await acquireMediaLease(clip.contentUrl).catch(() => null);
+    if (!lease) {
       previewContentMap.value = { ...previewContentMap.value, [key]: clip.contentUrl };
+      previewLeaseMap.value = { ...previewLeaseMap.value, [key]: null };
       return;
     }
-    if (!isApiResourceUrl(clip.contentUrl)) {
-      previewContentMap.value = { ...previewContentMap.value, [key]: clip.contentUrl };
-      return;
-    }
-    const blobUrl = await fetchProtectedBlobUrl(clip.contentUrl).catch(() => null);
-    if (blobUrl) {
-      previewContentMap.value = { ...previewContentMap.value, [key]: blobUrl };
-    }
+    previewContentMap.value = { ...previewContentMap.value, [key]: lease.url };
+    previewLeaseMap.value = {
+      ...previewLeaseMap.value,
+      [key]: lease.releasable ? lease : null,
+    };
   };
 
   const buildScenePreviewFromTimeline = (sceneId: number, items: TimelineItem[]): ScenePreview => {
