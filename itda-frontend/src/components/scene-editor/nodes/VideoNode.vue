@@ -71,7 +71,14 @@ const resolveShotThumbnail = (shotId?: string | null) => {
   return shotData.thumbnailUrl || shotData.imageUrl || null;
 };
 
+const canUseShotThumbnail = computed(
+  () => props.data.jobStatus === JobStatus.SUCCEEDED || Boolean(props.data.videoUrl)
+);
+
 const fallbackThumbnail = computed(() => {
+  if (!canUseShotThumbnail.value) {
+    return null;
+  }
   return (
     props.data.thumbnailUrl ||
     resolveShotThumbnail(props.data.startShotId) ||

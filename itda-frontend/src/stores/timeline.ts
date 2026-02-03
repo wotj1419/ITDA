@@ -142,7 +142,7 @@ export const useTimelineStore = defineStore('timeline', () => {
     }
     let duration = await readDurationFromUrl(resolved)
 
-    if (!duration) {
+    if (!duration && isApiResourceUrl(url)) {
       const blobUrl = await fetchProtectedBlobUrl(url).catch(() => null)
       if (blobUrl) {
         duration = await readDurationFromUrl(blobUrl)

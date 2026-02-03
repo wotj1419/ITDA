@@ -242,6 +242,9 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
     const isMissingVideoThumbnail = (video: VideoNodeData): boolean =>
         !video.thumbnailUrl || video.thumbnailUrl === SHOT_FALLBACK_THUMBNAIL;
 
+    const canUseShotThumbnail = (video: VideoNodeData): boolean =>
+        video.jobStatus === JobStatus.SUCCEEDED || Boolean(video.videoUrl);
+
     const getShotThumbnail = (shotNode: SceneNode | undefined): string | null => {
         if (!shotNode?.data || shotNode.data.type !== NodeType.SHOT) return null;
         const shot = shotNode.data as ShotNodeData;
@@ -257,6 +260,7 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
         nodes.value.forEach((node) => {
             if (!node.data || node.data.type !== NodeType.VIDEO) return;
             const video = node.data as VideoNodeData;
+            if (!canUseShotThumbnail(video)) return;
             if (!isMissingVideoThumbnail(video)) return;
 
             const shotId = video.startShotId || video.parentNodeId;
@@ -361,6 +365,12 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
                 await updateVideoDurationForNode(targetNode);
                 if (targetNode.data?.type === NodeType.SHOT) {
                     syncVideoThumbnailsFromShots(new Set([targetNode.id]));
+                } else if (targetNode.data?.type === NodeType.VIDEO) {
+                    const videoData = targetNode.data as VideoNodeData;
+                    const shotId = videoData.startShotId || videoData.parentNodeId;
+                    if (shotId) {
+                        syncVideoThumbnailsFromShots(new Set([String(shotId)]));
+                    }
                 }
             })();
         }
@@ -549,6 +559,7 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
     ): Promise<void> {
         const preserveSelection = Boolean(options?.preserveSelection);
         const previousSelectedId = preserveSelection ? selectedNodeId.value : null;
+        const previousNodes = nodes.value;
         isLoading.value = true;
         try {
             sceneId.value = sceneIdParam;
@@ -569,6 +580,27 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
             const nextNodes = apiNodes.map((node) =>
                 createSceneNodeFromApi(node, sceneIdParam, sceneInfo, sceneHeaderId)
             );
+            if (previousNodes.length) {
+                const previousLookup = new Map(
+                    previousNodes.map((node) => [String(node.id), node])
+                );
+                nextNodes.forEach((node) => {
+                    if (!node.data || node.data.type !== NodeType.VIDEO) return;
+                    const previous = previousLookup.get(String(node.id));
+                    if (!previous?.data || previous.data.type !== NodeType.VIDEO) return;
+                    const nextData = node.data as VideoNodeData;
+                    const prevData = previous.data as VideoNodeData;
+                    const nextHasMedia = Boolean(nextData.videoUrl || nextData.thumbnailUrl);
+                    const prevHasMedia = Boolean(prevData.videoUrl || prevData.thumbnailUrl);
+                    if (!nextHasMedia && prevHasMedia && prevData.jobStatus === JobStatus.SUCCEEDED) {
+                        nextData.videoUrl = nextData.videoUrl ?? prevData.videoUrl;
+                        nextData.thumbnailUrl = nextData.thumbnailUrl ?? prevData.thumbnailUrl;
+                        if (!nextData.jobStatus) {
+                            nextData.jobStatus = prevData.jobStatus;
+                        }
+                    }
+                });
+            }
             nodes.value = nextNodes;
             syncVideoThumbnailsFromShots();
 
@@ -1446,6 +1478,12 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
 
                 if (targetNode.data?.type === NodeType.SHOT) {
                     syncVideoThumbnailsFromShots(new Set([targetNode.id]));
+                } else if (targetNode.data?.type === NodeType.VIDEO) {
+                    const videoData = targetNode.data as VideoNodeData;
+                    const shotId = videoData.startShotId || videoData.parentNodeId;
+                    if (shotId) {
+                        syncVideoThumbnailsFromShots(new Set([String(shotId)]));
+                    }
                 }
 
                 hydratedNodeIds.value.add(nodeId);

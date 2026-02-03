@@ -166,12 +166,12 @@ const progressPercent = Math.min(
             :play-on-hover="true"
             :lazy="isThumbReady(clip)"
           />
-          <img
+          <div
             v-else-if="!clip.thumbnailUrl"
-            src="/icon.png"
-            :alt="clip.label || '??? ???'"
-            class="clip-img"
-          />
+            class="clip-placeholder"
+          >
+            ?앹꽦 ???
+          </div>
         </div>
         <span class="clip-duration">{{ clip.duration }}s</span>
       </div>
@@ -294,6 +294,18 @@ const progressPercent = Math.min(
   height: 100%;
   object-fit: cover;
   display: block;
+}
+
+.clip-placeholder {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.65rem;
+  font-weight: 600;
+  color: var(--gray-400);
+  background: var(--gray-50);
 }
 
 .clip-img {

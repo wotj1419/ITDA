@@ -21,8 +21,10 @@ const isVisible = ref(!props.lazy)
 
 useIntersectionObserver(
   videoRef,
-  ([entry]) => {
+  (entries) => {
     if (!props.lazy) return
+    const entry = entries[0]
+    if (!entry) return
     isVisible.value = entry.isIntersecting
   },
   { rootMargin: '150px' }

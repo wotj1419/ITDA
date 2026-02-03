@@ -1,5 +1,6 @@
 import { computed } from 'vue';
 import type { Ref } from 'vue';
+import { JobStatus } from '../types/ui/sceneNodes';
 import type { ShotNodeData, VideoNodeData } from '../types/ui/sceneNodes';
 import { useSceneNodeStore } from '../stores/sceneNode';
 
@@ -18,12 +19,13 @@ export function useSceneEditorTimeline(sceneId: Ref<string>, nodeStore = useScen
       const primaryShotId = data.startShotId || data.parentNodeId || null;
       const shotThumbnail =
         resolveShotThumbnail(primaryShotId) || resolveShotThumbnail(data.endShotId);
+      const isGenerated = data.jobStatus === JobStatus.SUCCEEDED || Boolean(data.videoUrl);
       return {
         clipId: n.id,
         nodeId: n.id,
         sceneId: Number(sceneId.value) || undefined,
         sourceNodeId: n.id,
-        thumbnailUrl: data.thumbnailUrl || shotThumbnail || '',
+        thumbnailUrl: isGenerated ? data.thumbnailUrl || shotThumbnail || '' : '',
         videoUrl: data.videoUrl || undefined,
         duration: data.duration || 5,
         order,
