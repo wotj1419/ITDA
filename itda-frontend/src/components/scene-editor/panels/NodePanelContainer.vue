@@ -8,7 +8,7 @@ import { computed, inject, nextTick, provide, ref, watch } from 'vue';
 import { panelRegistry } from './index';
 import { useSceneNodeStore } from '../../../stores/sceneNode';
 import { useCollabStore } from '../../../stores/collab';
-import { JobStatus, NodeType } from '../../../types/ui/sceneNodes';
+import { GenerationState, JobStatus, NodeType } from '../../../types/ui/sceneNodes';
 import type { AnyNodeData } from '../../../types/ui/sceneNodes';
 
 // =============================================================================
@@ -56,7 +56,7 @@ const isSelectedNodeGenerating = computed(() => {
   return (
     data.jobStatus === JobStatus.PENDING ||
     data.jobStatus === JobStatus.RUNNING ||
-    data.generationState === 'requested'
+    data.generationState === GenerationState.REQUESTED
   );
 });
 

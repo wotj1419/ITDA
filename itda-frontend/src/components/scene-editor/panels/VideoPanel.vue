@@ -3,10 +3,10 @@
  * VideoPanel - 영상 생성/편집 패널
  * 트랜지션 영상 + 확정 기능 지원
  */
-import { ref, computed, watch, nextTick, onUnmounted, provide } from 'vue';
+import { ref, computed, watch, nextTick, onUnmounted } from 'vue';
 import type { Node as VueFlowNode } from '@vue-flow/core';
 import type { VideoNodeData, CameraMotion, ShotNodeData } from '../../../types/ui/sceneNodes';
-import { PromptStatus, JobStatus, NodeType } from '../../../types/ui/sceneNodes';
+import { GenerationState, JobStatus, NodeType, PromptStatus } from '../../../types/ui/sceneNodes';
 import BasePanel from './BasePanel.vue';
 import { useSceneNodeStore } from '../../../stores/sceneNode';
 import { useUIStore } from '../../../stores/ui';
@@ -263,10 +263,14 @@ const {
   },
 });
 
-const isUiLocked = computed(
-  () => isGeneratingPrompt.value || isGeneratingFinalPrompt.value || isGeneratingVideo.value
+const isNodeGenerating = computed(() =>
+  data.value?.jobStatus === JobStatus.PENDING ||
+  data.value?.jobStatus === JobStatus.RUNNING ||
+  data.value?.generationState === GenerationState.REQUESTED
 );
-provide('nodePanelBusy', isUiLocked);
+const isUiLocked = computed(
+  () => isNodeGenerating.value || isGeneratingPrompt.value || isGeneratingFinalPrompt.value || isGeneratingVideo.value
+);
 const hasFinalPromptSnapshot = computed(() => finalPromptSignature.value.length > 0);
 const isFinalPromptDirty = computed(() => {
   if (!hasFinalPromptSnapshot.value) return true;

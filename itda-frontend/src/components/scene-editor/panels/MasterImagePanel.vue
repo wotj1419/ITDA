@@ -4,10 +4,10 @@
  *
  * 설계 문서: docs/vue-flow-node-workflow-design.md Section 6.2
  */
-import { ref, computed, watch, nextTick, onUnmounted, provide } from 'vue';
+import { ref, computed, watch, nextTick, onUnmounted } from 'vue';
 import type { Node } from '@vue-flow/core';
 import type { MasterImageNodeData, SceneHeaderNodeData } from '../../../types/ui/sceneNodes';
-import { NodeType, PromptStatus } from '../../../types/ui/sceneNodes';
+import { GenerationState, JobStatus, NodeType, PromptStatus } from '../../../types/ui/sceneNodes';
 import BasePanel from './BasePanel.vue';
 import { useSceneNodeStore } from '../../../stores/sceneNode';
 import { useObjectStore } from '../../../stores/object';
@@ -161,10 +161,14 @@ const isPromptGenerated = computed(
   () => hasPromptContent.value || data.value?.promptStatus !== PromptStatus.DRAFT
 );
 const isPromptApproved = computed(() => data.value?.promptStatus === PromptStatus.APPROVED);
-const isUiLocked = computed(
-  () => isGeneratingPrompt.value || isGeneratingFinalPrompt.value || isGeneratingImage.value
+const isNodeGenerating = computed(() =>
+  data.value?.jobStatus === JobStatus.PENDING ||
+  data.value?.jobStatus === JobStatus.RUNNING ||
+  data.value?.generationState === GenerationState.REQUESTED
 );
-provide('nodePanelBusy', isUiLocked);
+const isUiLocked = computed(
+  () => isNodeGenerating.value || isGeneratingPrompt.value || isGeneratingFinalPrompt.value || isGeneratingImage.value
+);
 const hasFinalPromptSnapshot = computed(() => finalPromptSignature.value.length > 0);
 const isFinalPromptDirty = computed(() => {
   if (!hasFinalPromptSnapshot.value) return true;
