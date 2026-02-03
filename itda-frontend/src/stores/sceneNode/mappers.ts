@@ -314,7 +314,7 @@ export function createSceneNodeFromApi(
         startShotId: base.parentNodeId || '',
         endShotId: null,
         videoUrl: resolvedContentUrl,
-        thumbnailUrl: null,
+        thumbnailUrl: resolvedContentUrl,
         duration: DEFAULT_VIDEO_DURATION,
         aspectRatio: DEFAULT_VIDEO_ASPECT_RATIO,
         isConfirmed: !!node.isConfirmed,

@@ -11,20 +11,6 @@ import { aiService } from '../services';
 
 export type GenerationToastType = 'image' | 'video' | 'shot' | 'grid';
 
-const VIDEO_FILE_EXTENSIONS = ['.mp4', '.mov', '.m4v', '.webm', '.ogv', '.avi', '.mkv'];
-
-function isLikelyVideoUrl(url: string): boolean {
-  const resolved = resolveApiUrl(url) ?? url;
-  try {
-    const parsed = new URL(resolved, window.location.origin);
-    const pathname = parsed.pathname.toLowerCase();
-    return VIDEO_FILE_EXTENSIONS.some((ext) => pathname.endsWith(ext));
-  } catch {
-    const lowered = resolved.toLowerCase();
-    return VIDEO_FILE_EXTENSIONS.some((ext) => lowered.includes(ext));
-  }
-}
-
 interface UseNodeGenerationOptions {
   nodeId: string;
   nodeType: 'MASTER' | 'GRID' | 'SHOT' | 'VIDEO';
@@ -134,15 +120,10 @@ export function useNodeGeneration(options: UseNodeGenerationOptions) {
     const toastId = startGenerationToast(options.toastType);
 
     try {
-      const runningPatch: Partial<AnyNodeData> = {
+      nodeStore.updateNodeLocal(options.nodeId, {
         jobStatus: JobStatus.RUNNING,
         generationState: 'requested',
-      };
-      if (options.nodeType === 'VIDEO') {
-        runningPatch.videoUrl = null;
-        runningPatch.thumbnailUrl = null;
-      }
-      nodeStore.updateNodeLocal(options.nodeId, runningPatch);
+      });
 
       const jobId = await aiService.generateNode(options.nodeId, prompt, {
         nodeType: options.nodeType,
@@ -158,40 +139,14 @@ export function useNodeGeneration(options: UseNodeGenerationOptions) {
       });
 
       if (result.status === 'SUCCEEDED') {
-        const rawResultUrl = result.resultUrl ?? null;
-
-        let resolvedResultUrl: string | null = null;
-        if (rawResultUrl) {
-          if (options.nodeType === 'VIDEO') {
-            resolvedResultUrl = isApiResourceUrl(rawResultUrl)
-              ? null
-              : (resolveApiUrl(rawResultUrl) ?? null);
-          } else {
-            const blobUrl = await fetchProtectedBlobUrl(rawResultUrl).catch(() => null);
-            resolvedResultUrl =
-              blobUrl ?? (isApiResourceUrl(rawResultUrl) ? null : (resolveApiUrl(rawResultUrl) ?? null));
-          }
-        }
-
-        let resolvedThumbnailUrl: string | null = null;
-        const rawThumbnailUrl = result.thumbnailUrl ?? null;
-        if (options.nodeType === 'VIDEO') {
-          if (rawThumbnailUrl) {
-            const normalizedThumbnailUrl = resolveApiUrl(rawThumbnailUrl) ?? rawThumbnailUrl;
-            if (!isLikelyVideoUrl(normalizedThumbnailUrl)) {
-              resolvedThumbnailUrl = isApiResourceUrl(rawThumbnailUrl)
-                ? await fetchProtectedBlobUrl(rawThumbnailUrl).catch(() => null)
-                : normalizedThumbnailUrl;
-            }
-          }
-        } else if (rawThumbnailUrl) {
-          const blobThumbnailUrl = await fetchProtectedBlobUrl(rawThumbnailUrl).catch(() => null);
-          resolvedThumbnailUrl =
-            blobThumbnailUrl ?? (isApiResourceUrl(rawThumbnailUrl) ? null : (resolveApiUrl(rawThumbnailUrl) ?? null));
-        } else {
-          resolvedThumbnailUrl = resolvedResultUrl;
-        }
-
+        const blobUrl = await fetchProtectedBlobUrl(result.resultUrl).catch(() => null);
+        const resolvedResultUrl =
+          blobUrl ?? (isApiResourceUrl(result.resultUrl) ? null : resolveApiUrl(result.resultUrl));
+        const thumbnailCandidate = result.thumbnailUrl ?? result.resultUrl ?? null;
+        const resolvedThumbnailUrl =
+          options.nodeType === 'VIDEO'
+            ? (isApiResourceUrl(thumbnailCandidate) ? null : resolveApiUrl(thumbnailCandidate))
+            : blobUrl ?? (isApiResourceUrl(thumbnailCandidate) ? null : resolveApiUrl(thumbnailCandidate));
         nodeStore.updateNodeLocal(options.nodeId, {
           jobStatus: JobStatus.SUCCEEDED,
           generationState: null,

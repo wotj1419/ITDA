@@ -18,9 +18,9 @@ export async function reorderSceneTimeline(sceneId: number, orderedVideoNodeIds:
     })
 }
 
-export async function reorderProjectTimeline(projectId: number, orderedVideoNodeIds: number[]): Promise<void> {
+export async function reorderProjectTimeline(projectId: number, orderedSceneVideoIds: number[]): Promise<void> {
     await apiClient.put<ApiResponse<void>>(`/projects/${projectId}/timeline/order`, {
-        orderedVideoNodeIds,
+        orderedSceneVideoIds,
     })
 }
 
