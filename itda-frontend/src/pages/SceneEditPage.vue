@@ -296,7 +296,6 @@ const { handleBeforeUnload, handleEditorKeydown } = useSceneEditorEvents({
       <EditorHeader
         :project-title="project?.title || 'Project'"
         :scene-title="sceneTitle"
-        :zoom-level="'100%'"
         :project-id="projectId"
         :scene-id="Number(sceneId)"
       />

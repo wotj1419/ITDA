@@ -53,8 +53,8 @@ export function useGenerationToast() {
         ? `원인: ${reason}\n권고: ${advice}`
         : `${label} 생성이 완료되었습니다.`,
       position: resolvePosition(kind),
-      autoClose: !isError,
-      duration: isError ? 0 : undefined,
+      autoClose: true,
+      duration: isError ? 6000 : 4000,
     })
   }
 
