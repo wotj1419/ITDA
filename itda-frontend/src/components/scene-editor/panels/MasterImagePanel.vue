@@ -4,7 +4,7 @@
  *
  * 설계 문서: docs/vue-flow-node-workflow-design.md Section 6.2
  */
-import { ref, computed, watch, nextTick, onUnmounted } from 'vue';
+import { ref, computed, watch, nextTick, onUnmounted, provide } from 'vue';
 import type { Node } from '@vue-flow/core';
 import type { MasterImageNodeData, SceneHeaderNodeData } from '../../../types/ui/sceneNodes';
 import { NodeType, PromptStatus } from '../../../types/ui/sceneNodes';
@@ -12,7 +12,7 @@ import BasePanel from './BasePanel.vue';
 import { useSceneNodeStore } from '../../../stores/sceneNode';
 import { useObjectStore } from '../../../stores/object';
 import { useNodeGeneration } from '../../../composables/useNodeGeneration';
-import { Film, Palette, Sun, Smile, Sparkles, FileText, Image, Check, RefreshCw, Star, Users, Loader2 } from 'lucide-vue-next';
+import { Film, Palette, Sun, Smile, Sparkles, FileText, Image, Check, Star, Users, Loader2 } from 'lucide-vue-next';
 import { gsap } from 'gsap';
 import { resolveMoodKey, resolveStyleKey, resolveTimeOfDayKey } from '../../../utils/nodeSettings';
 import {
@@ -164,6 +164,7 @@ const isPromptApproved = computed(() => data.value?.promptStatus === PromptStatu
 const isUiLocked = computed(
   () => isGeneratingPrompt.value || isGeneratingFinalPrompt.value || isGeneratingImage.value
 );
+provide('nodePanelBusy', isUiLocked);
 const hasFinalPromptSnapshot = computed(() => finalPromptSignature.value.length > 0);
 const isFinalPromptDirty = computed(() => {
   if (!hasFinalPromptSnapshot.value) return true;
@@ -177,18 +178,17 @@ const effectiveFinalPrompt = computed(() => {
   const override = form.value.usePromptOverride ? form.value.promptEnFinalOverride.trim() : '';
   return override || form.value.promptEnFinal.trim();
 });
-const canGenerate = computed(() =>
-  isPromptApproved.value &&
-  isFinalPromptDirty.value &&
-  !isGeneratingImage.value &&
-  !isGeneratingPrompt.value &&
-  !isGeneratingFinalPrompt.value
+const aiPromptActionLabel = computed(() =>
+  data.value?.promptStatus === PromptStatus.DRAFT ? 'AI로 생성' : 'AI로 재생성'
 );
-const canGenerateFinalPrompt = computed(() =>
-  form.value.prompt.trim().length > 0 &&
-  isNarrativePromptDirtyForFinal.value &&
-  !isUiLocked.value
+const finalPromptActionLabel = computed(() =>
+  form.value.promptEnFinal.trim().length > 0 ? '최종 프롬프트 재생성' : '최종 프롬프트 생성'
 );
+const canGenerate = computed(() => {
+  // 동일 최종 프롬프트로도 재생성을 허용하므로 dirty 여부는 활성 조건에서 제외한다.
+  void isFinalPromptDirty.value;
+  return isPromptApproved.value && !isUiLocked.value;
+});
 
 function buildSceneOneLine(): string {
   const parts: string[] = [];
@@ -568,10 +568,10 @@ function togglePromptEditing(): void {
   isPromptEditing.value = !isPromptEditing.value;
 }
 
-async function generateFinalPrompt(): Promise<void> {
+async function generateFinalPrompt(force = false): Promise<void> {
   if (isGeneratingFinalPrompt.value || isGeneratingPrompt.value || isGeneratingImage.value) return;
   if (!form.value.prompt.trim()) return;
-  if (!isNarrativePromptDirtyForFinal.value) return;
+  if (!force && !isNarrativePromptDirtyForFinal.value) return;
   isGeneratingFinalPrompt.value = true;
   try {
     // "최종 프롬프트 생성"은 항상 한글 서술 기준으로 재생성되도록 override를 해제한다.
@@ -754,15 +754,15 @@ function setActive(): void {
         >
           <Loader2 v-if="isGeneratingPrompt" class="panel-btn-icon animate-spin" />
           <Sparkles v-else class="panel-btn-icon" />
-          {{ isGeneratingPrompt ? '생성 중...' : 'AI로 재생성' }}
+          {{ isGeneratingPrompt ? '생성 중...' : aiPromptActionLabel }}
         </button>
         <button
           class="panel-btn panel-btn--secondary panel-btn--full"
-          :disabled="!canGenerateFinalPrompt"
-          @click="generateFinalPrompt"
+          :disabled="isUiLocked"
+          @click="generateFinalPrompt(true)"
         >
           <Loader2 v-if="isGeneratingFinalPrompt" class="panel-btn-icon animate-spin" />
-          {{ isGeneratingFinalPrompt ? '생성 중...' : '최종 프롬프트 생성' }}
+          {{ isGeneratingFinalPrompt ? '생성 중...' : finalPromptActionLabel }}
         </button>
       </div>
 
@@ -802,11 +802,6 @@ function setActive(): void {
         </div>
 
         <div class="panel-prompt-actions panel-prompt-actions--right">
-          <button class="panel-btn panel-btn--text" :disabled="isGeneratingPrompt || isGeneratingImage" @click="generatePrompt">
-            <Loader2 v-if="isGeneratingPrompt" class="panel-btn-icon panel-btn-icon--spin" />
-            <RefreshCw v-else class="panel-btn-icon" />
-            재생성
-          </button>
           <button
             v-if="!isPromptApproved"
             class="panel-btn panel-btn--success"

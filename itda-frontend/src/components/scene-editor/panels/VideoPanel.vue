@@ -3,7 +3,7 @@
  * VideoPanel - 영상 생성/편집 패널
  * 트랜지션 영상 + 확정 기능 지원
  */
-import { ref, computed, watch, nextTick, onUnmounted } from 'vue';
+import { ref, computed, watch, nextTick, onUnmounted, provide } from 'vue';
 import type { Node as VueFlowNode } from '@vue-flow/core';
 import type { VideoNodeData, CameraMotion, ShotNodeData } from '../../../types/ui/sceneNodes';
 import { PromptStatus, JobStatus, NodeType } from '../../../types/ui/sceneNodes';
@@ -12,7 +12,7 @@ import { useSceneNodeStore } from '../../../stores/sceneNode';
 import { useUIStore } from '../../../stores/ui';
 import { useNodeGeneration } from '../../../composables/useNodeGeneration';
 import { useHelpPopover } from '../../../composables/useHelpPopover';
-import { Video, Repeat, Move, Timer, FileText, Sparkles, Check, RefreshCw, Target, ZoomIn, ZoomOut, ArrowRight, ArrowUp, Circle, Loader2, Star } from 'lucide-vue-next';
+import { Video, Repeat, Move, Timer, FileText, Sparkles, Check, Target, ZoomIn, ZoomOut, ArrowRight, ArrowUp, Circle, Loader2, Star } from 'lucide-vue-next';
 import { resolveCameraMotionKey } from '../../../utils/nodeSettings';
 import {
   DEFAULT_VIDEO_CAMERA_MOTION,
@@ -266,6 +266,7 @@ const {
 const isUiLocked = computed(
   () => isGeneratingPrompt.value || isGeneratingFinalPrompt.value || isGeneratingVideo.value
 );
+provide('nodePanelBusy', isUiLocked);
 const hasFinalPromptSnapshot = computed(() => finalPromptSignature.value.length > 0);
 const isFinalPromptDirty = computed(() => {
   if (!hasFinalPromptSnapshot.value) return true;
@@ -279,14 +280,17 @@ const effectiveFinalPrompt = computed(() => {
   const override = form.value.usePromptOverride ? form.value.promptEnFinalOverride.trim() : '';
   return override || form.value.promptEnFinal.trim();
 });
-const canGenerateFinalPrompt = computed(() =>
-  form.value.prompt.trim().length > 0 &&
-  isNarrativePromptDirtyForFinal.value &&
-  !isUiLocked.value
+const aiPromptActionLabel = computed(() =>
+  data.value?.promptStatus === PromptStatus.DRAFT ? 'AI로 생성' : 'AI로 재생성'
 );
-const canGenerateVideoResult = computed(
-  () => !isUiLocked.value && isFinalPromptDirty.value
+const finalPromptActionLabel = computed(() =>
+  form.value.promptEnFinal.trim().length > 0 ? '최종 프롬프트 재생성' : '최종 프롬프트 생성'
 );
+const canGenerateVideoResult = computed(() => {
+  // 동일 최종 프롬프트로도 재생성을 허용하므로 dirty 여부는 활성 조건에서 제외한다.
+  void isFinalPromptDirty.value;
+  return !isUiLocked.value && isPromptApproved.value;
+});
 
 
 function normalizeCameraMotion(value?: CameraMotion | string | null): CameraMotion {
@@ -546,10 +550,10 @@ function togglePromptEditing(): void {
   isPromptEditing.value = !isPromptEditing.value;
 }
 
-async function generateFinalPrompt(): Promise<void> {
+async function generateFinalPrompt(force = false): Promise<void> {
   if (isGeneratingFinalPrompt.value || isGeneratingPrompt.value || isGeneratingVideo.value) return;
   if (!form.value.prompt.trim()) return;
-  if (!isNarrativePromptDirtyForFinal.value) return;
+  if (!force && !isNarrativePromptDirtyForFinal.value) return;
   isGeneratingFinalPrompt.value = true;
   try {
     form.value.usePromptOverride = false;
@@ -621,7 +625,6 @@ function notifyBlocked(title: string, message: string): void {
 
 function handleGenerateVideo(): void {
   if (isGeneratingVideo.value || isGeneratingPrompt.value) return;
-  if (!isFinalPromptDirty.value) return;
   if (!isStartShotReady.value) {
     notifyBlocked('영상 생성 불가', '시작 SHOT 이미지가 준비되어야 영상을 생성할 수 있습니다.');
     return;
@@ -794,16 +797,16 @@ function handleGenerateVideo(): void {
         >
           <Loader2 v-if="isGeneratingPrompt" class="panel-btn-icon panel-btn-icon--spin" />
           <Sparkles v-else class="panel-btn-icon" />
-          {{ isGeneratingPrompt ? '생성 중...' : 'AI로 재생성' }}
+          {{ isGeneratingPrompt ? '생성 중...' : aiPromptActionLabel }}
         </button>
         <button
           class="panel-btn panel-btn--secondary panel-btn--full"
-          :disabled="!canGenerateFinalPrompt"
-          @click="generateFinalPrompt"
+          :disabled="isUiLocked"
+          @click="generateFinalPrompt(true)"
         >
           <Loader2 v-if="isGeneratingFinalPrompt" class="panel-btn-icon panel-btn-icon--spin" />
           <FileText v-else class="panel-btn-icon" />
-          {{ isGeneratingFinalPrompt ? '생성 중...' : '최종 프롬프트 생성' }}
+          {{ isGeneratingFinalPrompt ? '생성 중...' : finalPromptActionLabel }}
         </button>
       </div>
 
@@ -843,11 +846,6 @@ function handleGenerateVideo(): void {
         </div>
 
         <div class="panel-prompt-actions panel-prompt-actions--right">
-          <button class="panel-btn panel-btn--text" :disabled="isGeneratingPrompt || isGeneratingVideo" @click="generatePrompt">
-            <Loader2 v-if="isGeneratingPrompt" class="panel-btn-icon panel-btn-icon--spin" />
-            <RefreshCw v-else class="panel-btn-icon" />
-            재생성
-          </button>
           <button
             v-if="!isPromptApproved"
             class="panel-btn panel-btn--success"
