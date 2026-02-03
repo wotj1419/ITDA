@@ -3,7 +3,7 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import type { ObjectSheet } from '../../types/api/objects'
 import { OBJECT_TYPE_LABELS } from '../../constants/objects'
 import { resolveApiUrl } from '../../services/api/urls'
-import { fetchProtectedBlobUrl } from '../../services/api/media'
+import { acquireMediaLease, releaseMediaLease, type MediaUrlLease } from '../../services/api/media'
 import Button from '../common/Button.vue'
 import Card from '../common/Card.vue'
 import { Download, MoreVertical, Pencil, Trash2 } from 'lucide-vue-next'
@@ -23,32 +23,29 @@ const emit = defineEmits<{
 const typeLabelMap = OBJECT_TYPE_LABELS
 const resolvedSheetImageUrl = computed(() => resolveApiUrl(props.object.sheetImageUrl) ?? null)
 const objectImageUrl = ref<string | null>(null)
+let objectImageLease: MediaUrlLease | null = null
 let imageRequestId = 0
 
-const isDirectUrl = (url: string) => url.startsWith('data:') || url.startsWith('blob:')
-
-const revokeObjectUrl = (url: string | null) => {
-  if (url && url.startsWith('blob:')) {
-    URL.revokeObjectURL(url)
-  }
+const releaseObjectImageLease = () => {
+  if (!objectImageLease) return
+  releaseMediaLease(objectImageLease)
+  objectImageLease = null
 }
 
 const loadObjectImage = async (url: string | null) => {
   const requestId = ++imageRequestId
-  revokeObjectUrl(objectImageUrl.value)
+  releaseObjectImageLease()
   objectImageUrl.value = null
   if (!url) return
-  if (isDirectUrl(url)) {
-    objectImageUrl.value = url
-    return
-  }
   try {
-    const blobUrl = await fetchProtectedBlobUrl(url)
+    const lease = await acquireMediaLease(url)
+    if (!lease) return
     if (requestId !== imageRequestId) {
-      revokeObjectUrl(blobUrl)
+      releaseMediaLease(lease)
       return
     }
-    objectImageUrl.value = blobUrl
+    objectImageUrl.value = lease.url
+    objectImageLease = lease.releasable ? lease : null
   } catch (error) {
     console.error('Failed to load object image:', error)
   }
@@ -92,7 +89,7 @@ watch(resolvedSheetImageUrl, (nextUrl) => {
 
 onUnmounted(() => {
   document.removeEventListener('click', closeMenu)
-  revokeObjectUrl(objectImageUrl.value)
+  releaseObjectImageLease()
 })
 </script>
 

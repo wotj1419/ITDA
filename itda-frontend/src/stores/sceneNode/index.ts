@@ -159,6 +159,20 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
         nodeMediaLeaseMap.clear();
     };
 
+    const resolveNodeMediaUrl = async (
+        nodeId: string,
+        field: NodeMediaLeaseField,
+        url?: string | null
+    ): Promise<string | null> => {
+        releaseNodeMediaLease(nodeId, field);
+        const resolvedUrl = resolveApiUrl(url);
+        if (!resolvedUrl) return null;
+        const lease = await acquireMediaLease(resolvedUrl).catch(() => null);
+        if (!lease) return null;
+        setNodeMediaLease(nodeId, field, lease.releasable ? lease : null);
+        return lease.url;
+    };
+
     const refreshCurrentSceneTimeline = async (): Promise<void> => {
         const projectId = sceneStore.currentProjectId;
         const currentSceneId = sceneId.value ? toFiniteNumber(sceneId.value) : null;
@@ -205,6 +219,7 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
     });
 
     const videoDurationCache = new Map<string, number>();
+    const videoDurationInflight = new Map<string, Promise<number | null>>();
 
     const readDurationFromUrl = (url: string): Promise<number | null> =>
         new Promise((resolve) => {
@@ -244,30 +259,44 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
     const fetchVideoDuration = async (url: string): Promise<number | null> => {
         const cached = videoDurationCache.get(url);
         if (cached) return Promise.resolve(cached);
-        const resolved = resolveApiUrl(url) ?? url;
-        if (resolved.startsWith('blob:') || resolved.startsWith('data:')) {
-            const duration = await readDurationFromUrl(resolved);
+
+        const inflight = videoDurationInflight.get(url);
+        if (inflight) return inflight;
+
+        const task = (async (): Promise<number | null> => {
+            const resolved = resolveApiUrl(url) ?? url;
+            if (resolved.startsWith('blob:') || resolved.startsWith('data:')) {
+                const duration = await readDurationFromUrl(resolved);
+                if (duration && duration > 0) {
+                    videoDurationCache.set(url, duration);
+                }
+                return duration;
+            }
+
+            let duration = await readDurationFromUrl(resolved);
+
+            if (!duration && isApiResourceUrl(url)) {
+                const lease = await acquireMediaLease(url).catch(() => null);
+                if (lease) {
+                    duration = await readDurationFromUrl(lease.url);
+                    releaseMediaLease(lease);
+                }
+            }
+
             if (duration && duration > 0) {
                 videoDurationCache.set(url, duration);
+                return duration;
             }
-            return duration;
-        }
-        let duration = await readDurationFromUrl(resolved);
 
-        if (!duration && isApiResourceUrl(url)) {
-            const lease = await acquireMediaLease(url).catch(() => null);
-            if (lease) {
-                duration = await readDurationFromUrl(lease.url);
-                releaseMediaLease(lease);
-            }
-        }
+            return null;
+        })();
 
-        if (duration && duration > 0) {
-            videoDurationCache.set(url, duration);
-            return duration;
+        videoDurationInflight.set(url, task);
+        try {
+            return await task;
+        } finally {
+            videoDurationInflight.delete(url);
         }
-
-        return null;
     };
 
     const updateVideoDurationForNode = async (node: SceneNode): Promise<void> => {
@@ -1894,6 +1923,8 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
     function clearNodes(): void {
         flushSave();
         flushPersistNodePositions();
+        videoDurationCache.clear();
+        videoDurationInflight.clear();
         nodes.value = [];
         edges.value = [];
         positionHistory.value = [];
@@ -1971,6 +2002,7 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
         // Actions - Video
         toggleVideoConfirm,
         updateTimelineOrder,
+        resolveNodeMediaUrl,
 
         // Actions - Collapse
         toggleCollapse,
