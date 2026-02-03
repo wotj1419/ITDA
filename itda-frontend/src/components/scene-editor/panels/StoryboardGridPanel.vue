@@ -238,7 +238,6 @@ const isParentReady = computed(() => {
   return parent?.jobStatus === JobStatus.SUCCEEDED && hasImage;
 });
 const isNodeGenerating = computed(() =>
-  data.value?.jobStatus === JobStatus.PENDING ||
   data.value?.jobStatus === JobStatus.RUNNING ||
   data.value?.generationState === GenerationState.REQUESTED
 );

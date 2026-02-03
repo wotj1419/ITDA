@@ -54,7 +54,6 @@ const isSelectedNodeGenerating = computed(() => {
   const data = node.data as AnyNodeData | undefined;
   if (!data) return false;
   return (
-    data.jobStatus === JobStatus.PENDING ||
     data.jobStatus === JobStatus.RUNNING ||
     data.generationState === GenerationState.REQUESTED
   );
