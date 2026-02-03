@@ -6,8 +6,15 @@ scrape_configs:
     static_configs:
       - targets: ["prometheus:9090"]
 
-  # Enable if /actuator/prometheus is available
   - job_name: "api"
     metrics_path: /actuator/prometheus
     static_configs:
-      - targets: ["api:18080"]
+      - targets: ["itda-api:18080"]
+
+  - job_name: "node-exporter"
+    static_configs:
+      - targets: ["itda-node-exporter:9100"]
+
+  - job_name: "cadvisor"
+    static_configs:
+      - targets: ["itda-cadvisor:8080"]

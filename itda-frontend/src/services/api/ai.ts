@@ -155,6 +155,7 @@ export async function generateNode(
         settings?: Record<string, unknown>;
         promptEnFinalOverride?: string;
         referenceObjectIds?: number[];
+        requeueIfExisting?: boolean;
     }
 ): Promise<number> {
     const response = await apiClient.post<ApiResponse<GenerateJobResponse>>(
@@ -165,6 +166,7 @@ export async function generateNode(
             settings: options?.settings,
             promptEnFinalOverride: options?.promptEnFinalOverride,
             referenceObjectIds: options?.referenceObjectIds,
+            requeueIfExisting: options?.requeueIfExisting,
         }
     );
     if (!response.data.data?.jobId) {

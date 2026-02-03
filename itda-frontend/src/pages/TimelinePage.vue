@@ -2,6 +2,7 @@
 import { computed, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useProjectStore } from '../stores/project'
+import { useSceneStore } from '../stores/scene'
 import { useTimelineStore } from '../stores/timeline'
 import { useUIStore } from '../stores/ui'
 import { useCollabStore } from '../stores/collab'
@@ -18,6 +19,7 @@ import { GitMerge, RefreshCw, Play } from 'lucide-vue-next'
 
 const route = useRoute()
 const projectStore = useProjectStore()
+const sceneStore = useSceneStore()
 const timelineStore = useTimelineStore()
 const uiStore = useUIStore()
 const collabStore = useCollabStore()
@@ -31,14 +33,21 @@ const sceneId = computed(() => {
   return Number.isFinite(parsed) ? parsed : null
 })
 
+const sceneTitle = computed(() => {
+  if (sceneId.value === null) return ''
+  const scene = sceneStore.scenes.find(s => s.sceneId === sceneId.value)
+  return scene ? `씬 ${scene.order}: ${scene.title}` : ''
+})
+
 onMounted(async () => {
   if (projectId.value) {
-    // ?? ? ?? (??? ??? ??, ?? ?? ???)
+    // 협업 방 입장
     collabStore.joinRoom(projectId.value)
     collabStore.updateLocation('TIMELINE', sceneId.value ?? undefined)
 
     await Promise.all([
       projectStore.loadProject(projectId.value),
+      sceneStore.loadScenes(projectId.value),
       timelineStore.loadClips(projectId.value, sceneId.value ?? undefined),
     ])
   }
@@ -121,6 +130,9 @@ function handleWheel(e: WheelEvent) {
     :project-title="project?.title || 'Project'"
     :clip-count="timelineStore.clipCount"
     :total-duration="timelineStore.totalDuration"
+    :is-scene-timeline="sceneId !== null"
+    :scene-title="sceneTitle"
+    :scene-id="sceneId"
   >
     <template #actions>
       <div class="header-buttons">

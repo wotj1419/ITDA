@@ -58,6 +58,17 @@ const nodeClasses = computed(() => [
   },
 ]);
 
+// 노드 잠금 사용자의 커서 색상으로 테두리 스타일 적용
+const lockStyle = computed(() => {
+  const lockColor = collabStore.getNodeLockColor(props.id);
+  if (!lockColor) return {};
+  return {
+    '--node-lock-color': lockColor,
+    borderColor: lockColor,
+    boxShadow: `0 0 0 3px ${lockColor}33`,
+  };
+});
+
 const { statusKey, statusIcon, isRunning, isGenerationRequested, hasGenerationFailure } =
   useNodeStatus(
     () => props.data.jobStatus,
@@ -192,7 +203,7 @@ watch(
 </script>
 
 <template>
-  <div :class="nodeClasses" :style="nodeStyle">
+  <div :class="nodeClasses" :style="{ ...nodeStyle, ...lockStyle }">
     <NodeResizer
       :min-width="minWidth"
       :min-height="minHeight"

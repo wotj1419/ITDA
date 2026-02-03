@@ -65,9 +65,13 @@ dependencies {
     implementation("software.amazon.awssdk:s3")
     implementation("software.amazon.awssdk:auth")
 
+    implementation ("org.springframework.boot:spring-boot-starter-actuator")
+    runtimeOnly ("io.micrometer:micrometer-registry-prometheus")
     // Test
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation("org.springframework.security:spring-security-test")
+
+
 }
 
 tasks.withType<Test> {

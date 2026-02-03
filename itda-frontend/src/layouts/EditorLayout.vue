@@ -6,16 +6,14 @@
 import { computed } from 'vue';
 import { RouterLink, useRoute } from 'vue-router';
 import { useUIStore } from '../stores/ui';
-import { useCollabStore } from '../stores/collab';
 import { useSidebarShortcut } from '../composables/useSidebarShortcut';
 import Badge from '../components/common/Badge.vue';
-import Button from '../components/common/Button.vue';
 import PresencePanel from '../components/collab/PresencePanel.vue';
+import SidebarHoverMenu from '../components/collab/SidebarHoverMenu.vue';
 import {
   BookOpen,
   Clapperboard,
   Layers,
-  Phone,
 } from 'lucide-vue-next';
 
 // =============================================================================
@@ -40,7 +38,6 @@ const props = withDefaults(defineProps<Props>(), {
 
 const route = useRoute();
 const uiStore = useUIStore();
-const collabStore = useCollabStore();
 
 // Keyboard shortcut (Ctrl+B)
 useSidebarShortcut();
@@ -80,12 +77,6 @@ const sidebarClasses = computed(() => [
   { 'sidebar-collapsed': !uiStore.sidebarExpanded },
 ]);
 
-const handleStartCall = () => {
-  const pid = Number(projectId.value);
-  if (Number.isFinite(pid)) {
-    collabStore.startCall(pid);
-  }
-};
 </script>
 
 <template>
@@ -138,17 +129,11 @@ const handleStartCall = () => {
       </nav>
 
       <!-- Presence -->
-      <div class="sidebar-section border-top">
-        <div class="sidebar-text">
+      <div class="sidebar-section border-top collab-section">
+        <div class="sidebar-text presence-block">
           <PresencePanel />
         </div>
-        <div class="call-cta">
-          <div class="call-hint">빠른 통화</div>
-          <Button variant="secondary" class="start-call-btn" @click="handleStartCall">
-            <Phone class="icon-sm" />
-            <span class="nav-label call-label">통화 시작</span>
-          </Button>
-        </div>
+        <SidebarHoverMenu :project-id="projectId" :expanded="uiStore.sidebarExpanded" />
       </div>
 
 
@@ -240,6 +225,37 @@ const handleStartCall = () => {
 .border-top {
   border-top: 1px solid var(--rose-100, #FFF0F5);
   margin-top: auto;
+}
+
+.collab-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  transition: border-color 0.2s ease;
+}
+
+.sidebar-collapsed .collab-section {
+  justify-content: flex-end;
+  padding-bottom: 0.5rem;
+  border-top-color: transparent;
+}
+
+.presence-block {
+  max-height: 320px;
+  opacity: 1;
+  overflow: hidden;
+  transform: translateY(0);
+  transition:
+    max-height 0.25s ease,
+    opacity 0.15s ease 0.2s,
+    transform 0.2s ease;
+}
+
+.sidebar-collapsed .presence-block {
+  max-height: 0;
+  opacity: 0;
+  transform: translateY(6px);
+  pointer-events: none;
 }
 
 .project-title {

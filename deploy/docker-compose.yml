@@ -195,7 +195,7 @@ services:
     volumes:
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
     expose:
-      - "19090"
+      - "9090"
     networks:
       - internal
     restart: unless-stopped
@@ -206,12 +206,46 @@ services:
     container_name: itda-grafana
     environment:
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_DATE_FORMATS_DEFAULT_TIMEZONE: Asia/Seoul
+      GF_SERVER_ROOT_URL: "https://itdas.duckdns.org/grafana/"
+      GF_SERVER_SERVE_FROM_SUB_PATH: "true"
     expose:
-      - "13000"
+      - "3000"
+    networks:
+      - internal
+      - public
+    restart: unless-stopped
+    profiles: ["observability"]
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: itda-node-exporter
+    pid: host
+    command:
+      - "--path.rootfs=/host"
+    volumes:
+      - /:/host:ro,rslave
     networks:
       - internal
     restart: unless-stopped
-    profiles: ["observability"]
+    profiles: [ "observability" ]
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:latest
+    container_name: itda-cadvisor
+    privileged: true
+    devices:
+      - /dev/kmsg:/dev/kmsg
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    networks:
+      - internal
+    restart: unless-stopped
+    profiles: [ "observability" ]
 
 networks:
   public:

@@ -128,15 +128,17 @@ watch(
    Panel Styles
    ========================================================================== */
 .node-panel {
+  position: fixed;
+  top: 64px; /* 헤더 높이 */
+  right: 0;
   width: 380px;
-  height: 100%;
+  height: calc(100vh - 64px);
   background: white;
   border-left: 1px solid #F3F4F6;
   display: flex;
   flex-direction: column;
-  position: relative;
   min-height: 0;
-  z-index: 10;
+  z-index: 9999;
   box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
   overflow: hidden;
 }
