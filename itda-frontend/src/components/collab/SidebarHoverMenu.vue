@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, type ComponentPublicInstance } from 'vue'
 import { useCollabStore } from '../../stores/collab'
-import { ChevronDown, ChevronUp, MessageCircle, Phone, Search, Send, X } from 'lucide-vue-next'
+import type { CollabParticipant } from '../../types/ui/collab'
+import { ChevronDown, ChevronUp, MessageCircle, Mic, MicOff, Phone, PhoneOff, Search, Send, X } from 'lucide-vue-next'
 
 interface Props {
   projectId?: number | null
@@ -19,11 +20,17 @@ const chatMessagesRef = ref<HTMLElement | null>(null)
 const menuRef = ref<HTMLElement | null>(null)
 const chatButtonRef = ref<HTMLElement | null>(null)
 const panelRef = ref<HTMLElement | null>(null)
+const callPanelRef = ref<HTMLElement | null>(null)
 const searchInputRef = ref<HTMLInputElement | null>(null)
 const isChatOpen = ref(false)
+const isChatDimmed = ref(false)
 const panelPosition = ref({ x: 0, y: 0 })
 const dragOffset = ref({ x: 0, y: 0 })
 const isDragging = ref(false)
+const callDragOffset = ref({ x: 0, y: 0 })
+const isCallDragging = ref(false)
+const callPanelObserver = ref<ResizeObserver | null>(null)
+let observedCallPanel: HTMLElement | null = null
 const lastDragEndAt = ref(0)
 const hasCustomPosition = ref(false)
 const isSearchOpen = ref(false)
@@ -36,6 +43,15 @@ const isSearchActive = ref(false)
 
 const PANEL_PADDING = 8
 const PANEL_OFFSET = 12
+const CALL_PANEL_PADDING = 8
+const CALL_PANEL_OFFSET = 8
+const SIDEBAR_GUTTER = 12
+const SIDEBAR_EXPANDED_WIDTH = 260
+const SIDEBAR_COLLAPSED_WIDTH = 72
+
+const isSidebarShifting = ref(false)
+const sidebarShiftMs = ref(300)
+let sidebarShiftTimer: number | null = null
 
 const isConnected = computed(() => collabStore.isConnected)
 const statusText = computed(() => {
@@ -43,6 +59,42 @@ const statusText = computed(() => {
   if (collabStore.status === 'connected') return '온라인'
   if (collabStore.status === 'error') return '오류'
   return '오프라인'
+})
+
+const isCallConnecting = computed(() => collabStore.isCallConnecting && !collabStore.isMediaConnected)
+const isCallOpen = computed(() => collabStore.isCallPanelOpen)
+const isCallCollapsed = computed(() => collabStore.isCallPanelCollapsed)
+const canEndCall = computed(() => collabStore.isMediaConnected || collabStore.isCallConnecting)
+const chatDisplayPosition = computed(() => {
+  void props.expanded
+  return clampPanelPosition(panelPosition.value.x, panelPosition.value.y)
+})
+const callDisplayPosition = computed(() => {
+  void props.expanded
+  return clampCallPanelPosition(collabStore.callPanelPosition.x, collabStore.callPanelPosition.y)
+})
+
+type CallParticipant = CollabParticipant & { isMe?: boolean }
+
+const callParticipants = computed<CallParticipant[]>(() => {
+  if (!collabStore.isMediaConnected && !collabStore.isCallConnecting) return []
+  const ids = new Set(collabStore.rtcPeerIds)
+  const list: CallParticipant[] = []
+  const local = collabStore.localParticipant
+  if (local?.odps) {
+    list.push({ ...local, isMe: true })
+  }
+  collabStore.participants.forEach((p) => {
+    if (ids.has(p.odps)) {
+      list.push({ ...p, isMe: false })
+    }
+  })
+  ids.forEach((peerId) => {
+    if (!list.some((p) => p.odps === peerId)) {
+      list.push({ odps: peerId, name: 'Guest', isMe: false })
+    }
+  })
+  return list
 })
 
 function ensureJoined() {
@@ -53,11 +105,27 @@ function ensureJoined() {
   }
 }
 
-function handleStartCall() {
+function toggleCallList() {
+  if (collabStore.isCallPanelOpen) {
+    return
+  }
   const pid = Number(props.projectId)
   if (!Number.isFinite(pid)) return
-  isChatOpen.value = false
-  collabStore.startCall(pid)
+  if (!collabStore.isMediaConnected && !collabStore.isCallConnecting) {
+    collabStore.startCall(pid)
+  }
+  collabStore.hasCallPanelCustomPosition = false
+  collabStore.isCallPanelCollapsed = false
+  collabStore.isCallPanelDimmed = false
+  positionCallPanelFromButton()
+  collabStore.isCallPanelOpen = true
+  void nextTick().then(() => {
+    positionCallPanelFromButton()
+  })
+}
+
+function toggleCallCollapse() {
+  collabStore.isCallPanelCollapsed = !collabStore.isCallPanelCollapsed
 }
 
 async function toggleChat() {
@@ -66,6 +134,7 @@ async function toggleChat() {
   }
   isChatOpen.value = !isChatOpen.value
   if (isChatOpen.value) {
+    isChatDimmed.value = false
     await nextTick()
     positionPanelFromButton()
     collabStore.markChatRead()
@@ -77,6 +146,7 @@ async function toggleChat() {
 
 function closeChat() {
   isChatOpen.value = false
+  isChatDimmed.value = false
   clearSearch()
   if (isDragging.value) {
     endDrag()
@@ -166,6 +236,67 @@ function getSenderInitial(name: string | undefined) {
   return name.trim().slice(0, 1).toUpperCase();
 }
 
+function isParticipantSpeaking(id: string | undefined) {
+  if (!id) return false
+  return collabStore.isSpeaking(id)
+}
+
+function getSidebarRight(): number {
+  const sidebar = document.querySelector<HTMLElement>('.sidebar')
+  if (!sidebar) return 0
+  const rect = sidebar.getBoundingClientRect()
+  const isCollapsed = sidebar.classList.contains('sidebar-collapsed')
+  const width = isCollapsed ? SIDEBAR_COLLAPSED_WIDTH : SIDEBAR_EXPANDED_WIDTH
+  return rect.left + width
+}
+
+function getHeaderBottom(): number {
+  const header =
+    document.querySelector<HTMLElement>('.header') ||
+    document.querySelector<HTMLElement>('.editor-header')
+  if (!header) return 16
+  return header.getBoundingClientRect().bottom
+}
+
+function parseDurationMs(value: string): number {
+  const trimmed = value.trim()
+  if (!trimmed) return 0
+  if (trimmed.endsWith('ms')) {
+    const ms = Number(trimmed.replace('ms', '').trim())
+    return Number.isFinite(ms) ? ms : 0
+  }
+  if (trimmed.endsWith('s')) {
+    const seconds = Number(trimmed.replace('s', '').trim())
+    return Number.isFinite(seconds) ? seconds * 1000 : 0
+  }
+  const raw = Number(trimmed)
+  return Number.isFinite(raw) ? raw : 0
+}
+
+function getSidebarTransitionMs(): number {
+  const sidebar = document.querySelector<HTMLElement>('.sidebar')
+  if (!sidebar) return 300
+  const durations = getComputedStyle(sidebar).transitionDuration
+    .split(',')
+    .map((part) => parseDurationMs(part))
+    .filter((value) => value > 0)
+  if (!durations.length) return 300
+  return Math.max(...durations)
+}
+
+function startSidebarShift() {
+  if (sidebarShiftTimer) {
+    window.clearTimeout(sidebarShiftTimer)
+    sidebarShiftTimer = null
+  }
+  sidebarShiftMs.value = getSidebarTransitionMs()
+  isSidebarShifting.value = true
+  sidebarShiftTimer = window.setTimeout(() => {
+    isSidebarShifting.value = false
+    sidebarShiftTimer = null
+  }, sidebarShiftMs.value)
+}
+
 watch(
   () => collabStore.messages.length,
   async () => {
@@ -186,12 +317,66 @@ watch(
   () => props.expanded,
   async () => {
     if (!isChatOpen.value) return
-    if (hasCustomPosition.value) {
-      panelPosition.value = clampPanelPosition(panelPosition.value.x, panelPosition.value.y)
+    startSidebarShift()
+    await nextTick()
+    panelPosition.value = clampPanelPosition(panelPosition.value.x, panelPosition.value.y, false)
+  }
+)
+
+watch(
+  () => props.expanded,
+  async () => {
+    if (!isCallOpen.value) return
+    startSidebarShift()
+    if (collabStore.hasCallPanelCustomPosition) {
+      clampCallPanelToViewport()
       return
     }
     await nextTick()
-    positionPanelFromButton()
+    positionCallPanelFromButton()
+  }
+)
+
+watch(
+  [() => collabStore.isMediaConnected, () => collabStore.isCallConnecting],
+  ([mediaConnected, callConnecting]) => {
+    if (!mediaConnected && !callConnecting) {
+      collabStore.isCallPanelOpen = false
+    }
+  }
+)
+
+watch(
+  () => isCallOpen.value,
+  async (open) => {
+    if (!open) return
+    await nextTick()
+    if (collabStore.hasCallPanelCustomPosition) {
+      clampCallPanelToViewport()
+      return
+    }
+    positionCallPanelFromButton()
+  }
+  ,
+  { immediate: true }
+)
+
+watch(
+  () => callPanelRef.value,
+  async () => {
+    observeCallPanel()
+    if (!isCallOpen.value) return
+    await nextTick()
+    clampCallPanelToViewport()
+  }
+)
+
+watch(
+  () => [callParticipants.value.length, isCallCollapsed.value, isCallConnecting.value],
+  async () => {
+    if (!isCallOpen.value) return
+    await nextTick()
+    clampCallPanelToViewport()
   }
 )
 
@@ -203,12 +388,15 @@ function getPanelSize() {
   }
 }
 
-function clampPanelPosition(nextX: number, nextY: number) {
+function clampPanelPosition(nextX: number, nextY: number, respectSidebar = true) {
   const { width, height } = getPanelSize()
+  const sidebarRight = getSidebarRight()
+  const rawMinX = Math.max(PANEL_PADDING, sidebarRight + SIDEBAR_GUTTER)
   const maxX = Math.max(PANEL_PADDING, window.innerWidth - width - PANEL_PADDING)
+  const minX = respectSidebar ? Math.min(rawMinX, maxX) : Math.min(PANEL_PADDING, maxX)
   const maxY = Math.max(PANEL_PADDING, window.innerHeight - height - PANEL_PADDING)
   return {
-    x: Math.min(Math.max(PANEL_PADDING, nextX), maxX),
+    x: Math.min(Math.max(minX, nextX), maxX),
     y: Math.min(Math.max(PANEL_PADDING, nextY), maxY),
   }
 }
@@ -219,8 +407,103 @@ function positionPanelFromButton() {
   const { height } = getPanelSize()
   const nextX = anchor.right + PANEL_OFFSET
   const nextY = anchor.top - height - PANEL_OFFSET + 40
-  panelPosition.value = clampPanelPosition(nextX, nextY)
+  panelPosition.value = clampPanelPosition(nextX, nextY, false)
   hasCustomPosition.value = false
+}
+
+function getCallPanelSize() {
+  const rect = callPanelRef.value?.getBoundingClientRect()
+  return {
+    width: rect?.width ?? 240,
+    height: rect?.height ?? 200,
+  }
+}
+
+function clampCallPanelPosition(nextX: number, nextY: number, respectSidebar = true) {
+  const { width, height } = getCallPanelSize()
+  const sidebarRight = getSidebarRight()
+  const rawMinX = Math.max(CALL_PANEL_PADDING, sidebarRight + SIDEBAR_GUTTER)
+  const maxX = Math.max(CALL_PANEL_PADDING, window.innerWidth - width - CALL_PANEL_PADDING)
+  const minX = respectSidebar ? Math.min(rawMinX, maxX) : Math.min(CALL_PANEL_PADDING, maxX)
+  const maxY = Math.max(CALL_PANEL_PADDING, window.innerHeight - height - CALL_PANEL_PADDING)
+  return {
+    x: Math.min(Math.max(minX, nextX), maxX),
+    y: Math.min(Math.max(CALL_PANEL_PADDING, nextY), maxY),
+  }
+}
+
+function clampCallPanelToViewport() {
+  collabStore.callPanelPosition = clampCallPanelPosition(
+    collabStore.callPanelPosition.x,
+    collabStore.callPanelPosition.y,
+    false
+  )
+}
+
+function observeCallPanel() {
+  const observer = callPanelObserver.value
+  if (!observer) return
+  if (observedCallPanel && observedCallPanel !== callPanelRef.value) {
+    observer.unobserve(observedCallPanel)
+  }
+  if (callPanelRef.value && observedCallPanel !== callPanelRef.value) {
+    observer.observe(callPanelRef.value)
+    observedCallPanel = callPanelRef.value
+  }
+}
+
+function positionCallPanelFromButton() {
+  const sidebarRight = getSidebarRight()
+  const headerBottom = getHeaderBottom()
+  const nextX = sidebarRight + SIDEBAR_GUTTER
+  const nextY = headerBottom + CALL_PANEL_OFFSET
+  collabStore.callPanelPosition = clampCallPanelPosition(nextX, nextY, false)
+}
+
+function startCallDrag(event: PointerEvent) {
+  if (!callPanelRef.value) return
+  if (event.button !== 0) return
+  const target = event.target as HTMLElement | null
+  collabStore.isCallPanelDimmed = false
+  if (target?.closest('button') || target?.closest('input') || target?.closest('textarea')) return
+  isCallDragging.value = true
+  collabStore.hasCallPanelCustomPosition = true
+  const rect = callPanelRef.value.getBoundingClientRect()
+  callDragOffset.value = {
+    x: event.clientX - rect.left,
+    y: event.clientY - rect.top,
+  }
+  event.preventDefault()
+  window.addEventListener('pointermove', handleCallDragMove)
+  window.addEventListener('pointerup', endCallDrag)
+}
+
+function handleCallDragMove(event: PointerEvent) {
+  if (!isCallDragging.value) return
+  const nextX = event.clientX - callDragOffset.value.x
+  const nextY = event.clientY - callDragOffset.value.y
+  collabStore.callPanelPosition = clampCallPanelPosition(nextX, nextY, false)
+}
+
+function endCallDrag() {
+  if (!isCallDragging.value) return
+  isCallDragging.value = false
+  lastDragEndAt.value = Date.now()
+  window.removeEventListener('pointermove', handleCallDragMove)
+  window.removeEventListener('pointerup', endCallDrag)
+}
+
+function handleCallMuteToggle() {
+  if (!collabStore.isMediaConnected) return
+  collabStore.isCallPanelDimmed = false
+  collabStore.toggleMute()
+}
+
+function handleCallEnd() {
+  if (!canEndCall.value) return
+  collabStore.isCallPanelDimmed = false
+  collabStore.disableMedia()
+  collabStore.isCallPanelOpen = false
 }
 
 function startDrag(event: PointerEvent) {
@@ -241,7 +524,7 @@ function handleDragMove(event: PointerEvent) {
   if (!isDragging.value) return
   const nextX = event.clientX - dragOffset.value.x
   const nextY = event.clientY - dragOffset.value.y
-  panelPosition.value = clampPanelPosition(nextX, nextY)
+  panelPosition.value = clampPanelPosition(nextX, nextY, false)
 }
 
 function endDrag() {
@@ -255,33 +538,70 @@ function endDrag() {
 function handleResize() {
   if (!isChatOpen.value) return
   if (hasCustomPosition.value) {
-    panelPosition.value = clampPanelPosition(panelPosition.value.x, panelPosition.value.y)
+    panelPosition.value = clampPanelPosition(panelPosition.value.x, panelPosition.value.y, false)
     return
   }
   positionPanelFromButton()
 }
 
-function handleOutsideClick(event: MouseEvent) {
-  if (isDragging.value) return
-  if (Date.now() - lastDragEndAt.value < 200) return
+function handleCallResize() {
+  if (!isCallOpen.value) return
+  if (collabStore.hasCallPanelCustomPosition) {
+    collabStore.callPanelPosition = clampCallPanelPosition(
+      collabStore.callPanelPosition.x,
+      collabStore.callPanelPosition.y,
+      false
+    )
+    return
+  }
+  positionCallPanelFromButton()
+}
+
+function handleOutsidePointerDown(event: PointerEvent) {
+  if (isDragging.value || isCallDragging.value) return
   const target = event.target as Node | null
   if (!menuRef.value || !target) return
   if (!menuRef.value.contains(target)) {
-    isChatOpen.value = false
-    clearSearch()
+    if (collabStore.isCallPanelOpen) {
+      collabStore.isCallPanelDimmed = true
+    }
+    if (isChatOpen.value) {
+      isChatDimmed.value = true
+    }
+    return
   }
+  collabStore.isCallPanelDimmed = false
+  isChatDimmed.value = false
 }
 
 onMounted(() => {
-  window.addEventListener('click', handleOutsideClick)
+  window.addEventListener('pointerdown', handleOutsidePointerDown, true)
   window.addEventListener('resize', handleResize)
+  window.addEventListener('resize', handleCallResize)
+  if (typeof ResizeObserver !== 'undefined') {
+    callPanelObserver.value = new ResizeObserver(() => {
+      if (!isCallOpen.value) return
+      clampCallPanelToViewport()
+    })
+  }
 })
 
 onBeforeUnmount(() => {
-  window.removeEventListener('click', handleOutsideClick)
+  window.removeEventListener('pointerdown', handleOutsidePointerDown, true)
   window.removeEventListener('resize', handleResize)
+  window.removeEventListener('resize', handleCallResize)
   window.removeEventListener('pointermove', handleDragMove)
   window.removeEventListener('pointerup', endDrag)
+  window.removeEventListener('pointermove', handleCallDragMove)
+  window.removeEventListener('pointerup', endCallDrag)
+  if (sidebarShiftTimer) {
+    window.clearTimeout(sidebarShiftTimer)
+    sidebarShiftTimer = null
+  }
+  if (observedCallPanel && callPanelObserver.value) {
+    callPanelObserver.value.unobserve(observedCallPanel)
+  }
+  callPanelObserver.value?.disconnect()
 })
 
 function setMessageRef(el: Element | ComponentPublicInstance | null, id: string) {
@@ -336,7 +656,7 @@ async function toggleSearch() {
     if (rect && deltaHeight > 0) {
       const overflowBottom = rect.bottom - (window.innerHeight - PANEL_PADDING)
       if (overflowBottom > 0) {
-        panelPosition.value = clampPanelPosition(panelPosition.value.x, panelPosition.value.y - overflowBottom)
+        panelPosition.value = clampPanelPosition(panelPosition.value.x, panelPosition.value.y - overflowBottom, false)
         searchShifted.value = true
       }
     }
@@ -379,7 +699,7 @@ function closeSearch() {
   if (!isSearchOpen.value) return
   isSearchOpen.value = false
   if (searchShifted.value && searchBasePosition.value && !hasCustomPosition.value) {
-    panelPosition.value = clampPanelPosition(searchBasePosition.value.x, searchBasePosition.value.y)
+    panelPosition.value = clampPanelPosition(searchBasePosition.value.x, searchBasePosition.value.y, false)
   }
   searchBasePosition.value = null
   searchShifted.value = false
@@ -418,12 +738,14 @@ watch(
       <div class="collab-expanded">
         <div class="collab-expanded__title">협업 시작</div>
         <div class="collab-expanded__actions">
-          <button class="collab-action" type="button" @click.stop="handleStartCall">
-            <span class="action-icon action-icon--call">
-              <Phone class="icon" />
-            </span>
-            <span class="collab-action__label">통화</span>
-          </button>
+          <div class="action-popover-wrap">
+            <button class="collab-action" type="button" @click.stop="toggleCallList">
+              <span class="action-icon action-icon--call">
+                <Phone class="icon" />
+              </span>
+              <span class="collab-action__label">통화</span>
+            </button>
+          </div>
 
           <div class="action-popover-wrap">
             <button
@@ -444,17 +766,19 @@ watch(
     </div>
 
     <div class="collab-collapsed-shell" :class="{ open: !props.expanded }">
-      <button
-        class="action-button"
-        type="button"
-        title="통화"
-        aria-label="통화"
-        @click.stop="handleStartCall"
-      >
-        <span class="action-icon action-icon--call">
-          <Phone class="icon" />
-        </span>
-      </button>
+      <div class="action-popover-wrap">
+        <button
+          class="action-button"
+          type="button"
+          title="통화"
+          aria-label="통화"
+          @click.stop="toggleCallList"
+        >
+          <span class="action-icon action-icon--call">
+            <Phone class="icon" />
+          </span>
+        </button>
+      </div>
 
       <div class="action-popover-wrap">
         <button
@@ -474,11 +798,96 @@ watch(
     </div>
 
     <div
+      v-if="isCallOpen"
+      ref="callPanelRef"
+      class="call-popover"
+      :class="{
+        dragging: isCallDragging,
+        dimmed: collabStore.isCallPanelDimmed,
+        shifting: isSidebarShifting,
+      }"
+      :style="{
+        left: `${callDisplayPosition.x}px`,
+        top: `${callDisplayPosition.y}px`,
+        '--sidebar-shift-ms': `${sidebarShiftMs}ms`,
+      }"
+      @pointerdown="startCallDrag"
+    >
+      <div class="call-panel">
+        <div class="call-panel__header">
+          <div class="call-panel__title">
+            <Phone class="icon-sm" />
+            <span>통화 참여자</span>
+          </div>
+          <button
+            class="call-panel__collapse"
+            type="button"
+            @click.stop="toggleCallCollapse"
+            aria-label="접기/펼치기"
+          >
+            <ChevronUp v-if="!isCallCollapsed" class="icon-xs" />
+            <ChevronDown v-else class="icon-xs" />
+          </button>
+        </div>
+        <template v-if="!isCallCollapsed">
+          <div v-if="isCallConnecting" class="call-panel__status">통화 연결 중…</div>
+          <ul v-else class="call-panel__list">
+            <li v-for="member in callParticipants" :key="member.odps" class="call-panel__item">
+              <span
+                class="call-avatar"
+                :class="{ speaking: isParticipantSpeaking(member.odps) }"
+                :style="member.avatarUrl ? { backgroundImage: `url(${member.avatarUrl})` } : {}"
+              >
+                <span v-if="!member.avatarUrl" class="call-avatar__text">
+                  {{ getSenderInitial(member.name) }}
+                </span>
+                <span v-if="member.isMuted" class="call-avatar__mute">
+                  <MicOff class="icon-xs" />
+                </span>
+              </span>
+              <span class="call-name">
+                {{ member.name || 'Guest' }}
+                <span v-if="member.isMe" class="call-me">(me)</span>
+              </span>
+            </li>
+          </ul>
+          <div class="call-panel__controls">
+            <button
+              class="call-control-btn"
+              :class="{ active: collabStore.isMuted }"
+              type="button"
+              :disabled="!collabStore.isMediaConnected"
+              @click.stop="handleCallMuteToggle"
+            >
+              <MicOff v-if="collabStore.isMuted" class="icon-xs" />
+              <Mic v-else class="icon-xs" />
+              <span>{{ collabStore.isMuted ? '음소거 해제' : '음소거' }}</span>
+            </button>
+            <button
+              class="call-control-btn danger"
+              type="button"
+              :disabled="!canEndCall"
+              @click.stop="handleCallEnd"
+            >
+              <PhoneOff class="icon-xs" />
+              <span>통화 종료</span>
+            </button>
+          </div>
+        </template>
+      </div>
+    </div>
+
+    <div
       v-if="isChatOpen"
       ref="panelRef"
       class="action-popover"
-      :class="{ dragging: isDragging }"
-      :style="{ left: `${panelPosition.x}px`, top: `${panelPosition.y}px` }"
+      :class="{ dragging: isDragging, dimmed: isChatDimmed, shifting: isSidebarShifting }"
+      :style="{
+        left: `${chatDisplayPosition.x}px`,
+        top: `${chatDisplayPosition.y}px`,
+        '--sidebar-shift-ms': `${sidebarShiftMs}ms`,
+      }"
+      @pointerdown="isChatDimmed = false"
     >
       <div class="chat-panel">
         <div class="chat-panel__header drag-handle" @pointerdown="startDrag">
@@ -765,6 +1174,223 @@ watch(
   z-index: 40;
   padding: 0.75rem;
   animation: pop-in 0.18s ease-out;
+  transition: opacity 0.2s ease;
+}
+
+.action-popover.dimmed {
+  opacity: 0.4;
+}
+
+.action-popover.shifting,
+.call-popover.shifting {
+  transition:
+    left var(--sidebar-shift-ms, 300ms) cubic-bezier(0.4, 0, 0.2, 1),
+    top var(--sidebar-shift-ms, 300ms) cubic-bezier(0.4, 0, 0.2, 1),
+    opacity 0.2s ease;
+}
+
+.call-popover {
+  position: fixed;
+  width: min(240px, 70vw);
+  background: white;
+  border: 1px solid var(--rose-100);
+  border-radius: 12px;
+  box-shadow: 0 16px 32px rgba(15, 23, 42, 0.14);
+  padding: 0.6rem;
+  z-index: 45;
+  animation: pop-in 0.18s ease-out;
+  cursor: grab;
+  transition: opacity 0.2s ease;
+}
+
+.call-popover.dragging {
+  cursor: grabbing;
+  transition: none;
+}
+
+.call-popover.dimmed {
+  opacity: 0.4;
+}
+
+.call-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.call-panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--gray-700);
+}
+
+.call-panel__title {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.call-panel__collapse {
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  border: 1px solid var(--rose-100);
+  background: var(--rose-50);
+  color: var(--gray-500);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+}
+
+.call-panel__collapse:hover {
+  background: var(--rose-100);
+  color: var(--rose-500);
+  border-color: var(--rose-200);
+}
+
+
+.call-panel__status {
+  font-size: 0.75rem;
+  color: var(--gray-500);
+  padding: 0.2rem 0.1rem;
+}
+
+.call-panel__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.call-panel__controls {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding-top: 0.1rem;
+}
+
+.call-control-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  border: 1px solid var(--rose-200);
+  background: var(--rose-50);
+  color: var(--gray-700);
+  border-radius: 8px;
+  padding: 0.25rem 0.4rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+  white-space: nowrap;
+}
+
+.call-control-btn:hover:enabled {
+  border-color: var(--rose-300);
+  background: var(--rose-100);
+  color: var(--gray-800);
+}
+
+.call-control-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.call-control-btn.active {
+  border-color: var(--rose-400);
+  background: var(--rose-500);
+  color: white;
+}
+
+.call-control-btn.active:hover:enabled {
+  border-color: var(--rose-400);
+  background: var(--rose-500);
+  color: white;
+}
+
+.call-control-btn.danger {
+  border-color: var(--error-bg);
+  background: var(--error-bg);
+  color: var(--error);
+  margin-left: auto;
+}
+
+.call-control-btn.danger:hover:enabled {
+  background: var(--error-soft);
+  border-color: var(--error-soft);
+}
+
+.call-panel__item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.call-avatar {
+  position: relative;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background: var(--rose-100);
+  color: var(--rose-600);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.65rem;
+  font-weight: 600;
+  background-position: center;
+  background-size: cover;
+  flex-shrink: 0;
+}
+
+.call-avatar.speaking {
+  border-color: #22c55e;
+  box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.18);
+}
+
+.call-avatar__text {
+  line-height: 1;
+}
+
+.call-avatar__mute {
+  position: absolute;
+  bottom: -2px;
+  right: -2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  background: white;
+  border: 1px solid var(--rose-200);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--rose-500);
+  box-shadow: 0 2px 4px rgba(255, 133, 161, 0.15);
+}
+
+.call-name {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--gray-700);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.call-me {
+  font-size: 0.7rem;
+  color: var(--rose-500);
+  margin-left: 0.25rem;
 }
 
 @keyframes pop-in {
@@ -781,6 +1407,7 @@ watch(
 .action-popover.dragging {
   cursor: grabbing;
   user-select: none;
+  transition: none;
 }
 
 .drag-handle {
@@ -1122,6 +1749,11 @@ watch(
 .icon-sm {
   width: 16px;
   height: 16px;
+}
+
+.icon-xs {
+  width: 10px;
+  height: 10px;
 }
 
 .icon {

@@ -30,6 +30,31 @@ const navItems = [
 const showProfileMenu = ref(false)
 const profileMenuRef = ref<HTMLElement | null>(null)
 
+// 귀여운 동물 이모지 목록
+const AVATAR_EMOJIS = [
+  '🐱', '🐶', '🐰', '🦊', '🐻', '🐼', '🐨', '🦁',
+  '🐯', '🐮', '🐷', '🐸', '🐵', '🐔', '🐧', '🦄',
+  '🐹', '🐝', '🦋', '🐢', '🐙', '🦀', '🐳', '🦩',
+]
+
+// userId 기반으로 이모지 선택
+function getEmoji(userId?: number, name?: string): string {
+  if (userId !== undefined && userId > 0) {
+    const index = (userId - 1) % AVATAR_EMOJIS.length
+    return AVATAR_EMOJIS[index] ?? '🐱'
+  }
+  if (!name) return AVATAR_EMOJIS[0] ?? '🐱'
+  let hash = 0
+  for (let i = 0; i < name.length; i++) {
+    hash = ((hash << 5) - hash) + name.charCodeAt(i)
+    hash = hash & hash
+  }
+  const index = Math.abs(hash) % AVATAR_EMOJIS.length
+  return AVATAR_EMOJIS[index] ?? '🐱'
+}
+
+const userEmoji = computed(() => getEmoji(authStore.user?.id, authStore.user?.name))
+
 const toggleProfileMenu = () => {
   showProfileMenu.value = !showProfileMenu.value
 }
@@ -109,9 +134,7 @@ const sidebarClasses = computed(() => [
               : undefined,
           }"
         >
-          <span v-if="!authStore.user?.profileImageUrl">{{
-            authStore.user?.name?.[0] || 'U'
-          }}</span>
+          <span v-if="!authStore.user?.profileImageUrl" class="avatar-emoji">{{ userEmoji }}</span>
         </div>
         <div class="user-info-text">
           <div class="user-name">{{ authStore.user?.name || 'Guest' }}</div>
@@ -132,9 +155,7 @@ const sidebarClasses = computed(() => [
                     : undefined,
                 }"
               >
-                <span v-if="!authStore.user?.profileImageUrl">{{
-                  authStore.user?.name?.[0] || 'U'
-                }}</span>
+                <span v-if="!authStore.user?.profileImageUrl" class="avatar-emoji">{{ userEmoji }}</span>
               </div>
               <div class="user-info-text">
                 <div class="user-name">{{ authStore.user?.name || 'Guest' }}</div>
@@ -434,6 +455,11 @@ const sidebarClasses = computed(() => [
   font-weight: 600;
   color: var(--rose-600);
   flex-shrink: 0;
+}
+
+.avatar-emoji {
+  font-size: 1.2rem;
+  line-height: 1;
 }
 
 .user-info-text {

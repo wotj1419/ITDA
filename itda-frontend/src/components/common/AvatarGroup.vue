@@ -5,6 +5,7 @@ interface AvatarItem {
   alt?: string
   fallback?: string
   title?: string
+  userId?: number // 사용자 고유 ID
   onClick?: () => void
 }
 
@@ -12,15 +13,43 @@ interface Props {
   avatars: AvatarItem[]
   max?: number
   size?: 'sm' | 'md' | 'lg'
+  useEmoji?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
   max: 3,
   size: 'sm',
+  useEmoji: true,
 })
+
+// 귀여운 동물 이모지 목록
+const AVATAR_EMOJIS = [
+  '🐱', '🐶', '🐰', '🦊', '🐻', '🐼', '🐨', '🦁',
+  '🐯', '🐮', '🐷', '🐸', '🐵', '🐔', '🐧', '🦄',
+  '🐹', '🐝', '🦋', '🐢', '🐙', '🦀', '🐳', '🦩',
+]
+
+// userId 기반으로 이모지 선택 (userId가 없으면 이름 해시 사용)
+function getEmoji(userId?: number, name?: string): string {
+  if (userId !== undefined && userId > 0) {
+    const index = (userId - 1) % AVATAR_EMOJIS.length
+    return AVATAR_EMOJIS[index] ?? '🐱'
+  }
+  if (!name) return AVATAR_EMOJIS[0] ?? '🐱'
+  let hash = 0
+  for (let i = 0; i < name.length; i++) {
+    hash = ((hash << 5) - hash) + name.charCodeAt(i)
+    hash = hash & hash
+  }
+  const index = Math.abs(hash) % AVATAR_EMOJIS.length
+  return AVATAR_EMOJIS[index] ?? '🐱'
+}
 
 const visibleAvatars = computed(() => props.avatars.slice(0, props.max))
 const remaining = computed(() => props.avatars.length - props.max)
+
+const getAvatarEmoji = (avatar: AvatarItem) => getEmoji(avatar.userId, avatar.alt || avatar.fallback || '')
+const shouldShowEmoji = (avatar: AvatarItem) => props.useEmoji && !avatar.src
 </script>
 
 <template>
@@ -41,6 +70,9 @@ const remaining = computed(() => props.avatars.length - props.max)
         :alt="avatar.alt || 'Avatar'"
         class="avatar-image"
       />
+      <span v-else-if="shouldShowEmoji(avatar)" class="avatar-emoji">
+        {{ getAvatarEmoji(avatar) }}
+      </span>
       <span v-else class="avatar-fallback">
         {{ avatar.fallback || (avatar.alt?.[0] || '?').toUpperCase() }}
       </span>
@@ -123,5 +155,22 @@ const remaining = computed(() => props.avatars.length - props.max)
   background: var(--gray-100);
   color: var(--gray-500);
   font-size: 0.625rem;
+}
+
+.avatar-emoji {
+  font-size: 0.9rem;
+  line-height: 1;
+}
+
+.avatar-sm .avatar-emoji {
+  font-size: 0.9rem;
+}
+
+.avatar-md .avatar-emoji {
+  font-size: 1.1rem;
+}
+
+.avatar-lg .avatar-emoji {
+  font-size: 1.5rem;
 }
 </style>

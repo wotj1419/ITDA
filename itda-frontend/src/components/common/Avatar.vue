@@ -7,17 +7,47 @@ interface Props {
   size?: 'sm' | 'md' | 'lg'
   fallback?: string
   showMore?: number
+  useEmoji?: boolean
+  userId?: number // 사용자 고유 ID로 이모지 결정
 }
 
 const props = withDefaults(defineProps<Props>(), {
   size: 'md',
   alt: 'Avatar',
+  useEmoji: true,
 })
+
+// 귀여운 동물 이모지 목록
+const AVATAR_EMOJIS = [
+  '🐱', '🐶', '🐰', '🦊', '🐻', '🐼', '🐨', '🦁',
+  '🐯', '🐮', '🐷', '🐸', '🐵', '🐔', '🐧', '🦄',
+  '🐹', '🐝', '🦋', '🐢', '🐙', '🦀', '🐳', '🦩',
+]
+
+// userId 기반으로 이모지 선택 (userId가 없으면 이름 해시 사용)
+function getEmoji(userId?: number, name?: string): string {
+  // userId가 있으면 userId로 선택 (1~24번 유저는 각각 다른 이모지)
+  if (userId !== undefined && userId > 0) {
+    const index = (userId - 1) % AVATAR_EMOJIS.length
+    return AVATAR_EMOJIS[index] ?? '🐱'
+  }
+  // userId 없으면 이름 해시로 폴백
+  if (!name) return AVATAR_EMOJIS[0] ?? '🐱'
+  let hash = 0
+  for (let i = 0; i < name.length; i++) {
+    hash = ((hash << 5) - hash) + name.charCodeAt(i)
+    hash = hash & hash
+  }
+  const index = Math.abs(hash) % AVATAR_EMOJIS.length
+  return AVATAR_EMOJIS[index] ?? '🐱'
+}
 
 const classes = computed(() => [
   'avatar',
   `avatar-${props.size}`,
 ])
+
+const emoji = computed(() => getEmoji(props.userId, props.alt || ''))
 
 const initials = computed(() => {
   if (props.fallback) return props.fallback
@@ -31,6 +61,8 @@ const initials = computed(() => {
   }
   return '?'
 })
+
+const showEmoji = computed(() => props.useEmoji && !props.src && !props.showMore)
 </script>
 
 <template>
@@ -42,6 +74,7 @@ const initials = computed(() => {
       class="avatar-image"
     />
     <span v-else-if="showMore" class="avatar-more">+{{ showMore }}</span>
+    <span v-else-if="showEmoji" class="avatar-emoji">{{ emoji }}</span>
     <span v-else class="avatar-fallback">{{ initials }}</span>
   </div>
 </template>
@@ -87,6 +120,23 @@ const initials = computed(() => {
 
 .avatar-fallback {
   text-transform: uppercase;
+}
+
+.avatar-emoji {
+  font-size: 1em;
+  line-height: 1;
+}
+
+.avatar-sm .avatar-emoji {
+  font-size: 0.9rem;
+}
+
+.avatar-md .avatar-emoji {
+  font-size: 1.1rem;
+}
+
+.avatar-lg .avatar-emoji {
+  font-size: 1.5rem;
 }
 
 .avatar-more {

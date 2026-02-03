@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue'
 import { useUIStore } from '../../stores/ui'
 import { useProjectStore } from '../../stores/project'
+import { useInviteStore } from '../../stores/invites'
 import ModalBase from '../common/ModalBase.vue'
 import Button from '../common/Button.vue'
 import CustomSelect from '../common/CustomSelect.vue'
@@ -17,6 +18,7 @@ import { useAuthStore } from '../../stores/auth'
 const props = defineProps<Props>()
 const uiStore = useUIStore()
 const projectStore = useProjectStore()
+const inviteStore = useInviteStore()
 const authStore = useAuthStore()
 
 const inviteEmail = ref('')
@@ -62,40 +64,40 @@ async function handleInvite() {
 
   isSending.value = true
   try {
-    // API integration
-    // role value needs to be uppercase for backend 'ADMIN' | 'EDITOR' | 'VIEWER'
     const roleUpper = inviteRole.value.toUpperCase() as 'ADMIN' | 'EDITOR' | 'VIEWER'
-    await projectStore.inviteMember(props.projectId, inviteEmail.value.trim(), roleUpper)
-    
+    await inviteStore.sendInvite({
+      projectId: props.projectId,
+      email: inviteEmail.value.trim(),
+      role: roleUpper,
+    })
+
     uiStore.showToast({
       type: 'success',
-      title: '초대 완료',
-      message: '멤버를 성공적으로 초대했습니다.',
+      title: '초대 요청 전송',
+      message: '상대의 알림에서 수락해야만 프로젝트에 추가됩니다.',
     })
     inviteEmail.value = ''
   } catch (err: any) {
     console.error(err)
-    // 2. Specific Error Handling
     const status = err.response?.status
     const code = err.response?.data?.code
-    
     if (status === 404 || code === 'USER_NOT_FOUND') {
       uiStore.showToast({ 
         type: 'error', 
         title: '사용자 없음', 
         message: '가입되지 않은 이메일입니다.' 
       })
-    } else if (status === 409 || code === 'MEMBER_ALREADY_EXISTS') {
+    } else if (status === 409 || code === 'INVITE_ALREADY_EXISTS') {
       uiStore.showToast({ 
         type: 'warning', 
-        title: '이미 참여 중', 
-        message: '이미 프로젝트에 참여 중인 멤버입니다.' 
+        title: '이미 초대함', 
+        message: '해당 이메일로 보낸 초대가 이미 존재합니다.' 
       })
     } else {
-      uiStore.showToast({ 
-        type: 'error', 
-        title: '초대 실패', 
-        message: '멤버를 초대하지 못했습니다.' 
+      uiStore.showToast({
+        type: 'error',
+        title: '초대 요청 실패',
+        message: '초대 요청을 전송하지 못했습니다.',
       })
     }
   } finally {
@@ -238,6 +240,30 @@ async function removeMember(userId: number) {
     })
   }
 }
+// 귀여운 동물 이모지 목록
+const AVATAR_EMOJIS = [
+  '🐱', '🐶', '🐰', '🦊', '🐻', '🐼', '🐨', '🦁',
+  '🐯', '🐮', '🐷', '🐸', '🐵', '🐔', '🐧', '🦄',
+  '🐹', '🐝', '🦋', '🐢', '🐙', '🦀', '🐳', '🦩',
+]
+
+// userId 기반으로 이모지 선택
+function getEmoji(userId?: number, name?: string): string {
+  if (userId !== undefined && userId > 0) {
+    const index = (userId - 1) % AVATAR_EMOJIS.length
+    return AVATAR_EMOJIS[index] ?? '🐱'
+  }
+  if (!name) return AVATAR_EMOJIS[0] ?? '🐱'
+  let hash = 0
+  for (let i = 0; i < name.length; i++) {
+    hash = ((hash << 5) - hash) + name.charCodeAt(i)
+    hash = hash & hash
+  }
+  const index = Math.abs(hash) % AVATAR_EMOJIS.length
+  return AVATAR_EMOJIS[index] ?? '🐱'
+}
+
+const getMemberEmoji = (userId: number, name?: string) => getEmoji(userId, name)
 </script>
 
 <template>
@@ -251,7 +277,7 @@ async function removeMember(userId: number) {
           </div>
           <div v-for="member in normalizedMembers" :key="member.userId" class="member-row member-row--large">
             <div class="member-avatar member-avatar--large">
-              {{ member.name[0] }}
+              <span class="avatar-emoji">{{ getMemberEmoji(member.userId, member.name) }}</span>
             </div>
             <div class="member-info">
               <div class="member-name member-name--large">{{ member.name }}</div>
@@ -426,6 +452,11 @@ async function removeMember(userId: number) {
   width: 40px; /* Reduced from 44px */
   height: 40px;
   font-size: 0.95rem; /* Slightly smaller font */
+}
+
+.avatar-emoji {
+  font-size: 1.2rem;
+  line-height: 1;
 }
 
 .member-info {

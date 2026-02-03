@@ -36,6 +36,7 @@ const avatars = computed(() =>
     fallback: p.name?.[0]?.toUpperCase() || '?',
     alt: p.name,
     title: `${p.name || 'Guest'}: ${locationLabel(p)}`,
+    userId: parseInt(p.odps, 10) || 0, // userId 추가
     onClick: p.isMe ? undefined : () => followMember(p),
   }))
 )
