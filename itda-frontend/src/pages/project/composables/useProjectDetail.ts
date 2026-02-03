@@ -9,6 +9,7 @@ import type { Scene, SceneStatus } from '../../../types/api/scenes';
 import type { ObjectSheet } from '../../../types/api/objects';
 import { acquireMediaLease, releaseMediaLease, type MediaUrlLease } from '../../../services/api/media';
 import { fetchProjectTimeline, type TimelineItem } from '../../../services/api/timeline';
+import { normalizeDurationSeconds } from '../../../utils/duration';
 
 export type ProjectTab = 'story' | 'scenes' | 'objects' | 'timeline' | 'settings';
 
@@ -197,7 +198,7 @@ export function useProjectDetail() {
       .sort((a, b) => a.order - b.order)
       .map((item) => ({
         thumbnailUrl: resolveThumbnailUrl(item),
-        duration: 4,
+        duration: normalizeDurationSeconds(item.duration),
         label: `Video ${item.order}`,
         contentUrl: resolveVideoUrl(item),
       }));

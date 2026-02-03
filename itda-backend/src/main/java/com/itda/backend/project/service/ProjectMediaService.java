@@ -131,7 +131,8 @@ public class ProjectMediaService {
                 order,
                 contentUrl,
                 thumbnailUrl,
-                videoUrl);
+                videoUrl,
+                row.getDuration());
     }
 
     private String firstImageUrl(String... candidates) {

@@ -212,6 +212,7 @@
         SELECT n.id AS video_node_id,
                n.scene_id AS scene_id,
                NULL AS scene_order,
+               CAST(JSON_UNQUOTE(JSON_EXTRACT(n.data_json, '$.duration')) AS UNSIGNED) AS duration,
                n.asset_id AS asset_id,
                n.content_url AS content_url,
                shot.asset_id AS shot_asset_id,

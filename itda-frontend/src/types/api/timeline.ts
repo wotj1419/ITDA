@@ -6,7 +6,7 @@ export interface TimelineItem {
   thumbnailUrl?: string;
   videoUrl?: string;
   url?: string;
-  duration: number;
+  duration?: number | null;
   order: number;
 }
 

@@ -14,6 +14,7 @@ import {
 } from '../services/api/timeline'
 import { acquireMediaLease, releaseMediaLease, type MediaUrlLease } from '../services/api/media'
 import { resolveApiUrl, isApiResourceUrl } from '../services/api/urls'
+import { normalizeDurationSeconds } from '../utils/duration'
 import { unconfirmNode } from '../services/api/nodes'
 import {
   subscribeProjectEvents,
@@ -22,7 +23,6 @@ import {
 } from '../services/ws/projectEvents'
 
 export type MergeStatus = 'idle' | 'merging' | 'done' | 'error'
-const DEFAULT_CLIP_SECONDS = 5
 type LoadClipsOptions = {
   hydrateDurations?: boolean
 }
@@ -30,14 +30,6 @@ type LoadClipsOptions = {
 type ResolvedMedia = {
   url?: string
   lease?: MediaUrlLease
-}
-
-function toDurationSeconds(duration: number): number {
-  if (!Number.isFinite(duration)) return 0
-  if (duration >= 1000) {
-    return Math.max(0, Math.round(duration / 1000))
-  }
-  return Math.max(0, duration)
 }
 
 async function resolveMediaWithLease(url?: string | null): Promise<ResolvedMedia> {
@@ -62,8 +54,7 @@ async function mapTimelineItemsToClips(
       const resolvedThumbnail = await resolveMediaWithLease(item.thumbnailUrl)
       const videoCandidate = item.videoUrl ?? item.url
       const resolvedVideo = await resolveMediaWithLease(videoCandidate)
-      const durationSeconds = toDurationSeconds(item.duration)
-      const duration = durationSeconds > 0 ? durationSeconds : DEFAULT_CLIP_SECONDS
+      const duration = normalizeDurationSeconds(item.duration)
       const isVideoClip = Boolean(item.videoNodeId || item.sceneVideoId)
       const clipId = `clip-${clipKey}`
       const clipLeases = [resolvedThumbnail.lease, resolvedVideo.lease].filter(

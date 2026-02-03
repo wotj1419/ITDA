@@ -39,7 +39,7 @@
                shot.content_url AS shot_content_url,
                master.asset_id AS master_asset_id,
                master.content_url AS master_content_url,
-               NULL AS duration,
+               CAST(JSON_UNQUOTE(JSON_EXTRACT(n.data_json, '$.duration')) AS UNSIGNED) AS duration,
                ti.order_index
         FROM timeline_items ti
         JOIN nodes n ON n.id = ti.video_node_id
@@ -61,6 +61,7 @@
         SELECT n.id AS video_node_id,
                n.scene_id AS scene_id,
                s.order_index AS scene_order,
+               CAST(JSON_UNQUOTE(JSON_EXTRACT(n.data_json, '$.duration')) AS UNSIGNED) AS duration,
                n.asset_id AS asset_id,
                n.content_url AS content_url,
                shot.asset_id AS shot_asset_id,
