@@ -1,11 +1,14 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { Plus } from 'lucide-vue-next'
 import { useProjectStore } from '../stores/project'
+import { useInviteStore } from '../stores/invites'
+import type { ProjectInvite } from '../types/api/invites'
 import { useUIStore } from '../stores/ui'
 import { useCollabStore } from '../stores/collab'
 import { useAuthStore } from '../stores/auth'
+import type { Project } from '../types/api/projects'
 import DefaultLayout from '../layouts/DefaultLayout.vue'
 import ProjectCard from '../components/project/ProjectCard.vue'
 import NewProjectModal from '../components/project/NewProjectModal.vue'
@@ -15,20 +18,23 @@ import UserWelcomeTitle from '../components/common/UserWelcomeTitle.vue'
 
 const router = useRouter()
 const projectStore = useProjectStore()
+const inviteStore = useInviteStore()
 const uiStore = useUIStore()
 const collabStore = useCollabStore()
 const authStore = useAuthStore()
 const isCreatingProject = ref(false)
 const viewMode = ref<'grid' | 'list'>('grid')
-const unreadNotifications = ref(0)
+const unreadNotifications = computed(() => inviteStore.unreadCount)
 const isNotificationOpen = ref(false)
 const notificationRef = ref<HTMLElement | null>(null)
+const isProjectsLoaded = ref(false)
 const notificationTitle = '\uc54c\ub9bc'
 const notificationFilterLabel = '\uc77d\uc9c0 \uc54a\uc740 \ud56d\ubaa9\ub9cc \ud45c\uc2dc'
 const notificationEmptyTitle = '\uc54c\ub9bc\uc774 \uc5c6\uc2b5\ub2c8\ub2e4'
 const notificationEmptyMeta = '\uc0c8 \uc54c\ub9bc\uc774 \uc624\uba74 \uc5ec\uae30\uc5d0 \ud45c\uc2dc\ub429\ub2c8\ub2e4.'
 const notificationAvatar = '\ud83d\ude42'
 const notificationCloseSymbol = '\u00d7'
+const pendingInvites = computed(() => inviteStore.pendingInvites)
 
 // Delete Confirmation State
 const showDeleteModal = ref(false)
@@ -37,12 +43,24 @@ const projectToDelete = ref<{ projectId: number; title: string } | null>(null)
 // Load projects on mount
 onMounted(async () => {
   await projectStore.loadProjects()
+  isProjectsLoaded.value = true
+  await inviteStore.loadInvites()
+  mergeAcceptedInvites()
   document.addEventListener('click', handleNotificationClickOutside)
 })
 
 onUnmounted(() => {
   document.removeEventListener('click', handleNotificationClickOutside)
 })
+
+watch(
+  () => authStore.user?.email,
+  async (email) => {
+    if (!email || !isProjectsLoaded.value) return
+    await inviteStore.loadInvites()
+    mergeAcceptedInvites()
+  }
+)
 
 // Quick access projects removed
 
@@ -90,6 +108,55 @@ const handleNotificationClickOutside = (e: MouseEvent) => {
   if (notificationRef.value && !notificationRef.value.contains(e.target as Node)) {
     closeNotifications()
   }
+}
+
+const buildProjectFromInvite = (invite: ProjectInvite): Project => ({
+  projectId: invite.projectId,
+  title: invite.projectTitle,
+  description: '',
+  genre: invite.projectGenre,
+  thumbnailUrl: invite.projectThumbnailUrl,
+  role: 'VIEWER',
+  memberCount: 0,
+  sceneCount: 0,
+  updatedAt: new Date().toISOString(),
+  createdAt: invite.createdAt,
+})
+
+const mergeAcceptedInvites = () => {
+  inviteStore.acceptedInvites.forEach((invite) => {
+    const exists = projectStore.projects.some((project) => project.projectId === invite.projectId)
+    if (!exists) {
+      projectStore.projects.push(buildProjectFromInvite(invite))
+    }
+  })
+}
+
+const getInviteAvatar = (invite: ProjectInvite) => {
+  const source = invite.senderName || invite.senderEmail || ''
+  return source ? source.trim()[0]?.toUpperCase() : notificationAvatar
+}
+
+const acceptInvite = async (invite: ProjectInvite) => {
+  await inviteStore.acceptInvite(invite.inviteId)
+  const exists = projectStore.projects.some((project) => project.projectId === invite.projectId)
+  if (!exists) {
+    projectStore.projects.unshift(buildProjectFromInvite(invite))
+  }
+  uiStore.showToast({
+    type: 'success',
+    title: '?? ??',
+    message: '????? ??? ???????.',
+  })
+}
+
+const declineInvite = async (invite: ProjectInvite) => {
+  await inviteStore.declineInvite(invite.inviteId)
+  uiStore.showToast({
+    type: 'info',
+    title: '?? ??',
+    message: '??? ??????.',
+  })
 }
 
 const openStartCollabModal = () => {
@@ -158,11 +225,43 @@ const cancelDelete = () => {
               <span class="filter-pill">OFF</span>
             </div>
             <div class="notification-panel__list">
-              <div class="notification-item">
+              <div v-if="pendingInvites.length === 0" class="notification-item notification-item--empty">
                 <div class="notification-avatar">{{ notificationAvatar }}</div>
                 <div class="notification-content">
                   <div class="notification-title">{{ notificationEmptyTitle }}</div>
                   <div class="notification-meta">{{ notificationEmptyMeta }}</div>
+                </div>
+                <span class="notification-dot"></span>
+              </div>
+              <div
+                v-for="invite in pendingInvites"
+                :key="invite.inviteId"
+                class="notification-item"
+              >
+                <div class="notification-avatar">{{ getInviteAvatar(invite) }}</div>
+                <div class="notification-content">
+                  <div class="notification-title">
+                    {{ invite.projectTitle }} 프로젝트 초대
+                  </div>
+                  <div class="notification-meta">
+                    {{ invite.senderName || invite.senderEmail || '알 수 없음' }} 님이 초대했습니다.
+                  </div>
+                  <div class="notification-actions">
+                    <button
+                      class="notif-btn notif-btn--accept"
+                      type="button"
+                      @click.stop="acceptInvite(invite)"
+                    >
+                      수락
+                    </button>
+                    <button
+                      class="notif-btn notif-btn--decline"
+                      type="button"
+                      @click.stop="declineInvite(invite)"
+                    >
+                      거절
+                    </button>
+                  </div>
                 </div>
                 <span class="notification-dot"></span>
               </div>
@@ -1025,6 +1124,42 @@ const cancelDelete = () => {
   border-radius: 50%;
   background: var(--rose-400);
   margin-top: 0.35rem;
+}
+
+.notification-actions {
+  display: flex;
+  gap: 0.4rem;
+  margin-top: 0.5rem;
+}
+
+.notif-btn {
+  border: 1px solid transparent;
+  padding: 0.3rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.notif-btn--accept {
+  background: var(--success-soft);
+  color: var(--success-700);
+  border-color: var(--success-soft);
+}
+
+.notif-btn--accept:hover {
+  background: var(--success-muted);
+}
+
+.notif-btn--decline {
+  background: var(--gray-100);
+  color: var(--gray-600);
+  border-color: var(--gray-200);
+}
+
+.notif-btn--decline:hover {
+  background: var(--gray-200);
 }
 
 @keyframes bell-animation {

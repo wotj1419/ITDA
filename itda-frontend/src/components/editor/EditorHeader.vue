@@ -34,7 +34,7 @@ defineProps<Props>();
 
       <nav class="breadcrumb" aria-label="Breadcrumb">
         <RouterLink to="/dashboard" class="breadcrumb-link">
-          내 프로젝트
+          홈
         </RouterLink>
         <span class="separator">/</span>
         <RouterLink

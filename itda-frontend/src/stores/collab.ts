@@ -38,6 +38,11 @@ export const useCollabStore = defineStore('collab', () => {
     const isMediaConnected = ref(false);
     const isAutoStarting = ref(false);
     const floatingBarResetToken = ref(0);
+    const isCallPanelOpen = ref(false);
+    const isCallPanelCollapsed = ref(false);
+    const callPanelPosition = ref({ x: 0, y: 0 });
+    const hasCallPanelCustomPosition = ref(false);
+    const isCallPanelDimmed = ref(false);
     const speakingMap = reactive(new Map<string, boolean>());
     const localStream = ref<MediaStream | null>(null);
     const audioInputDevices = ref<MediaDeviceInfo[]>([]);
@@ -84,6 +89,8 @@ export const useCollabStore = defineStore('collab', () => {
     // ================================
     const isConnected = computed(() => status.value === 'connected');
     const participantCount = computed(() => participants.value.length);
+    const rtcPeerIds = computed(() => Array.from(rtcPeers));
+    const isCallConnecting = computed(() => isAutoStarting.value || rtcJoinPending.value);
     const getStoredLastReadAt = () => {
         if (currentProjectId.value === null) return 0;
         const stored = localStorage.getItem(getReadStorageKey(currentProjectId.value));
@@ -418,6 +425,10 @@ export const useCollabStore = defineStore('collab', () => {
         isMuted.value = false;
         localStream.value = null;
         isPanelOpen.value = false;
+        isCallPanelOpen.value = false;
+        isCallPanelCollapsed.value = false;
+        isCallPanelDimmed.value = false;
+        hasCallPanelCustomPosition.value = false;
         rtcJoinPending.value = false;
         rtcJoined.value = false;
         rtcPeers.clear();
@@ -471,6 +482,10 @@ export const useCollabStore = defineStore('collab', () => {
         nodeLockUpdatedAt.clear();
         localLockedNodeId = null;
         isPanelOpen.value = false;
+        isCallPanelOpen.value = false;
+        isCallPanelCollapsed.value = false;
+        isCallPanelDimmed.value = false;
+        hasCallPanelCustomPosition.value = false;
         localStorage.removeItem(STORAGE_KEY);
     }
 
@@ -1271,6 +1286,10 @@ export const useCollabStore = defineStore('collab', () => {
         rtcJoinPending.value = false;
         rtcJoined.value = false;
         isPanelOpen.value = false;
+        isCallPanelOpen.value = false;
+        isCallPanelCollapsed.value = false;
+        isCallPanelDimmed.value = false;
+        hasCallPanelCustomPosition.value = false;
         stopSpeakingMonitor(localUserId.value);
     }
 
@@ -1422,6 +1441,11 @@ export const useCollabStore = defineStore('collab', () => {
         isMediaConnected,     // Exported
         isAutoStarting,
         floatingBarResetToken,
+        isCallPanelOpen,
+        isCallPanelCollapsed,
+        callPanelPosition,
+        hasCallPanelCustomPosition,
+        isCallPanelDimmed,
         isMuted,
         isVideoOff,
         isScreenSharing,
@@ -1432,6 +1456,8 @@ export const useCollabStore = defineStore('collab', () => {
         isConnected,
         hasUnreadMessages,
         participantCount,
+        rtcPeerIds,
+        isCallConnecting,
         isSpeaking,
         getRemoteVolume,
         markChatRead,

@@ -121,7 +121,7 @@ function formatDuration(seconds: number): string {
           </button>
           
           <div class="breadcrumb">
-            <RouterLink to="/dashboard">대신보드</RouterLink>
+            <RouterLink to="/dashboard">홈</RouterLink>
             <span class="separator">/</span>
             <RouterLink :to="{ name: 'project-detail', params: { id: projectId } }">
               {{ projectTitle }}
@@ -142,10 +142,6 @@ function formatDuration(seconds: number): string {
 
         <div class="header-actions">
           <slot name="actions" />
-          <div class="duration-badge">
-            <Clock class="badge-icon" />
-            <span>{{ formatDuration(totalDuration) }}</span>
-          </div>
         </div>
       </header>
 

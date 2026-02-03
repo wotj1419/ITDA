@@ -77,8 +77,9 @@ export function useProjectDetail() {
 
   onMounted(async () => {
     if (projectId.value) {
+      await projectStore.loadProject(projectId.value);
+      await projectStore.loadProjectMembers(projectId.value);
       await Promise.all([
-        projectStore.loadProject(projectId.value),
         sceneStore.loadScenes(projectId.value),
         objectStore.loadObjects(projectId.value),
       ]);
@@ -115,10 +116,11 @@ export function useProjectDetail() {
 
         scenarioStore.switchProject(id);
 
+        await projectStore.loadProject(id);
+        await projectStore.loadProjectMembers(id);
         await Promise.all([
-          projectStore.loadProject(id),
           sceneStore.loadScenes(id),
-        objectStore.loadObjects(id),
+          objectStore.loadObjects(id),
         ]);
       }
     }
