@@ -13,17 +13,23 @@ import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignRequest;
 
 import java.time.Duration;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 @Component
 @RequiredArgsConstructor
 public class AssetUrlResolver {
 
     private static final String FILES_PREFIX = "/files/";
+    private static final int PRESIGNED_URL_CACHE_MAX_SIZE = 5000;
+    private static final long PRESIGNED_URL_CACHE_FALLBACK_TTL_MILLIS = 5 * 60 * 1000L;
+    private static final long PRESIGNED_URL_CACHE_SAFETY_WINDOW_MILLIS = 30 * 1000L;
 
     private final AssetMapper assetMapper;
     private final S3StorageProperties s3Properties;
     private final ObjectProvider<S3Presigner> s3PresignerProvider;
     private final MediaUrlResolver mediaUrlResolver;
+    private final Map<Long, CachedPresignedUrl> presignedUrlCache = new ConcurrentHashMap<>();
 
     public String resolveNodeUrl(Long assetId, Long nodeId, String fallbackUrl) {
         String presignedUrl = resolveS3PresignedUrl(assetId);
@@ -56,6 +62,13 @@ public class AssetUrlResolver {
         if (assetId == null) {
             return null;
         }
+
+        long now = System.currentTimeMillis();
+        CachedPresignedUrl cached = presignedUrlCache.get(assetId);
+        if (cached != null && cached.isValid(now)) {
+            return cached.url();
+        }
+
         Asset asset = assetMapper.findById(assetId).orElse(null);
         if (asset == null || asset.getStorageProvider() != StorageProvider.S3) {
             return null;
@@ -87,7 +100,28 @@ public class AssetUrlResolver {
                 .getObjectRequest(getRequest)
                 .build();
 
-        return presigner.presignGetObject(presignRequest).url().toString();
+        String url = presigner.presignGetObject(presignRequest).url().toString();
+        cachePresignedUrl(assetId, url, now, expires);
+        return url;
+    }
+
+    private void cachePresignedUrl(Long assetId, String url, long nowMillis, long expiresSeconds) {
+        if (assetId == null || url == null || url.isBlank()) {
+            return;
+        }
+        if (presignedUrlCache.size() > PRESIGNED_URL_CACHE_MAX_SIZE) {
+            cleanupExpiredCacheEntries(nowMillis);
+        }
+
+        long ttlMillis = expiresSeconds > 0
+                ? Math.max(1000L, (expiresSeconds * 1000L) - PRESIGNED_URL_CACHE_SAFETY_WINDOW_MILLIS)
+                : PRESIGNED_URL_CACHE_FALLBACK_TTL_MILLIS;
+        long expiresAtMillis = nowMillis + ttlMillis;
+        presignedUrlCache.put(assetId, new CachedPresignedUrl(url, expiresAtMillis));
+    }
+
+    private void cleanupExpiredCacheEntries(long nowMillis) {
+        presignedUrlCache.entrySet().removeIf(entry -> !entry.getValue().isValid(nowMillis));
     }
 
     private String resolveLocalUrl(Long assetId) {
@@ -133,5 +167,11 @@ public class AssetUrlResolver {
             return FILES_PREFIX + path.substring(1);
         }
         return FILES_PREFIX + path;
+    }
+
+    private record CachedPresignedUrl(String url, long expiresAtMillis) {
+        private boolean isValid(long nowMillis) {
+            return nowMillis < expiresAtMillis;
+        }
     }
 }

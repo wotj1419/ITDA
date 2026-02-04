@@ -48,6 +48,7 @@ const showPlaceholder = computed(() => !previewImageUrl.value && !hasPreviewVide
 
 const previewVideoRef = ref<HTMLVideoElement | null>(null)
 const isPreviewPlaying = ref(false)
+const PREVIEW_MAX_SECONDS = 6
 
 const playPreview = async () => {
   if (!hasPreviewVideo.value) return
@@ -69,6 +70,14 @@ const stopPreview = () => {
   videoEl.pause()
   videoEl.currentTime = 0
   isPreviewPlaying.value = false
+}
+
+const handlePreviewTimeUpdate = () => {
+  const videoEl = previewVideoRef.value
+  if (!videoEl) return
+  if (videoEl.currentTime >= PREVIEW_MAX_SECONDS) {
+    stopPreview()
+  }
 }
 
 
@@ -209,9 +218,9 @@ const handleDeleteRequest = (e: Event) => {
         :src="previewVideoUrl"
         :poster="previewImageUrl || undefined"
         muted
-        loop
         playsinline
         preload="none"
+        @timeupdate="handlePreviewTimeUpdate"
       />
       <img
         v-if="previewImageUrl"
