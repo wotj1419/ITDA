@@ -1,7 +1,7 @@
 /**
  * Node Types for Vue Flow based Scene Editor
  * @module types/ui/sceneNodes
- * 
+ *
  * 설계 문서: docs/vue-flow-node-workflow-design.md Section 3
  */
 
@@ -228,8 +228,8 @@ export const VALID_CONNECTIONS: Record<NodeType, NodeType[]> = {
 
 /** 노드 타입별 너비 */
 export const NODE_WIDTHS: Record<NodeType, number> = {
-    [NodeType.SCENE_HEADER]: 420,
-    [NodeType.MASTER_IMAGE]: 420,
+    [NodeType.SCENE_HEADER]: 580,
+    [NodeType.MASTER_IMAGE]: 580,
     [NodeType.STORYBOARD_GRID]: 520,
     [NodeType.SHOT]: 420,
     [NodeType.VIDEO]: 360,

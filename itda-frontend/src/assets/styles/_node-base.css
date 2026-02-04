@@ -569,7 +569,7 @@
     align-items: center;
     gap: 0.6rem;
     padding: 10px 22px;
-    font-size: 19px;
+    font-size: 25px;
     font-weight: 900;
     letter-spacing: 0.02em;
     border-radius: var(--radius-full, 9999px);
