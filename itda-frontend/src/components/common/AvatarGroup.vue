@@ -61,7 +61,8 @@ const shouldShowEmoji = (avatar: AvatarItem) => props.useEmoji && !avatar.src
       :type="avatar.onClick ? 'button' : undefined"
       :class="['avatar', `avatar-${size}`, { 'avatar-clickable': !!avatar.onClick }]"
       :style="{ zIndex: visibleAvatars.length - index }"
-      :title="avatar.title"
+      :data-tooltip="avatar.title"
+      :aria-label="avatar.title"
       @click="avatar.onClick && avatar.onClick()"
     >
       <img
@@ -90,6 +91,7 @@ const shouldShowEmoji = (avatar: AvatarItem) => props.useEmoji && !avatar.src
 .avatar-group {
   display: flex;
   align-items: center;
+  overflow: visible;
 }
 
 .avatar-group .avatar {
@@ -110,10 +112,11 @@ const shouldShowEmoji = (avatar: AvatarItem) => props.useEmoji && !avatar.src
   background: var(--rose-100);
   color: var(--rose-600);
   font-weight: 600;
-  overflow: hidden;
+  overflow: visible;
   flex-shrink: 0;
   border: none;
   padding: 0;
+  position: relative;
 }
 
 .avatar-clickable {
@@ -124,6 +127,52 @@ const shouldShowEmoji = (avatar: AvatarItem) => props.useEmoji && !avatar.src
 .avatar-clickable:hover {
   transform: translateY(-1px);
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+}
+
+.avatar[data-tooltip]::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 10px);
+  transform: translate(-50%, 6px);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(255, 245, 249, 0.95));
+  color: var(--gray-800);
+  font-size: 0.68rem;
+  font-weight: 600;
+  padding: 0.35rem 0.6rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 133, 161, 0.25);
+  box-shadow: 0 8px 18px rgba(255, 133, 161, 0.22);
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.18s ease, transform 0.18s ease;
+  z-index: 20;
+}
+
+.avatar[data-tooltip]::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 4px);
+  transform: translateX(-50%);
+  border-width: 6px;
+  border-style: solid;
+  border-color: rgba(255, 255, 255, 0.95) transparent transparent transparent;
+  opacity: 0;
+  transition: opacity 0.18s ease;
+  z-index: 19;
+}
+
+.avatar[data-tooltip]:hover::after,
+.avatar[data-tooltip]:focus-visible::after {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+.avatar[data-tooltip]:hover::before,
+.avatar[data-tooltip]:focus-visible::before {
+  opacity: 1;
 }
 
 /* Sizes */
@@ -149,6 +198,7 @@ const shouldShowEmoji = (avatar: AvatarItem) => props.useEmoji && !avatar.src
   width: 100%;
   height: 100%;
   object-fit: cover;
+  border-radius: 50%;
 }
 
 .avatar-more {

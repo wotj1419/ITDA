@@ -82,7 +82,7 @@ const memberAvatars = computed(() =>
     src: member.profileImageUrl || '',
     fallback: member.name?.[0]?.toUpperCase() || '?',
     alt: member.name,
-    title: member.name,
+    title: undefined,
     userId: member.userId, // userId 추가
   }))
 )
@@ -188,7 +188,6 @@ onBeforeUnmount(() => {
           class="menu-btn"
           :class="{ 'menu-btn--open': uiStore.sidebarExpanded }"
           @click="uiStore.toggleSidebar"
-          :title="uiStore.sidebarExpanded ? 'Collapse' : 'Expand'"
         >
           <span class="toggle" aria-hidden="true">
             <span class="bars bar1"></span>
@@ -246,7 +245,7 @@ onBeforeUnmount(() => {
       <!-- Header -->
       <header class="header">
         <div class="header-left">
-          <button class="btn-icon-back" @click="router.push('/dashboard')" title="Go to Dashboard">
+          <button class="btn-icon-back" @click="router.push('/dashboard')">
             <ArrowLeft class="icon-md" />
           </button>
           

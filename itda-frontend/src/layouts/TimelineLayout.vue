@@ -65,7 +65,6 @@ function formatDuration(seconds: number): string {
           class="menu-btn"
           :class="{ 'menu-btn--open': uiStore.sidebarExpanded }"
           @click="uiStore.toggleSidebar"
-          :title="uiStore.sidebarExpanded ? 'Collapse' : 'Expand'"
         >
           <span class="toggle" aria-hidden="true">
             <span class="bars bar1"></span>
@@ -116,7 +115,7 @@ function formatDuration(seconds: number): string {
       <!-- Header -->
       <header class="header">
         <div class="header-left">
-          <button class="btn-icon-back" @click="router.back()" title="Go Back">
+          <button class="btn-icon-back" @click="router.back()">
             <ArrowLeft class="icon-md" />
           </button>
           
