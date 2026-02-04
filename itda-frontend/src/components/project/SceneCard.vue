@@ -103,6 +103,7 @@ const editLink = computed(() => ({
             <Loader2 v-if="statusConfig.showIcon && scene.status === 'IN_PROGRESS'" class="status-icon spin" />
             {{ statusConfig.label }}
           </Badge>
+          <slot name="header-right" />
         </div>
         <p v-if="scene.description" class="scene-description">{{ scene.description }}</p>
       </div>

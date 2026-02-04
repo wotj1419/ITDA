@@ -104,8 +104,7 @@ public class AuthService {
         String accessToken = jwtTokenProvider.createAccessToken(
                 user.getId(),
                 user.getEmail(),
-                user.getRole().name()
-        );
+                user.getRole().name());
         String refreshToken = jwtTokenProvider.createRefreshToken(user.getId(), user.getEmail());
         long refreshTokenTtlMillis = jwtTokenProvider.getRefreshTokenExpiration();
 
@@ -114,7 +113,7 @@ public class AuthService {
         return new LoginResponse(
                 accessToken,
                 refreshToken,
-                jwtTokenProvider.getAccessTokenExpiration() / 1000  // 초 단위
+                jwtTokenProvider.getAccessTokenExpiration() / 1000 // 초 단위
         );
     }
 
@@ -137,7 +136,7 @@ public class AuthService {
 
     private User getUserByEmailOrThrow(String email) {
         return userMapper.findByEmail(email)
-                .orElseThrow(() -> new UnauthorizedException(ErrorCode.INVALID_PASSWORD));
+                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
     }
 
     private void validatePasswordOrThrow(String rawPassword, String passwordHash) {
@@ -164,8 +163,7 @@ public class AuthService {
             Long userId,
             String previousRefreshToken,
             String newRefreshToken,
-            long refreshTokenTtlMillis
-    ) {
+            long refreshTokenTtlMillis) {
         if (previousRefreshToken == null) {
             refreshTokenRepository.save(userId, newRefreshToken, refreshTokenTtlMillis);
             return;
@@ -174,8 +172,7 @@ public class AuthService {
                 userId,
                 previousRefreshToken,
                 newRefreshToken,
-                refreshTokenTtlMillis
-        );
+                refreshTokenTtlMillis);
         if (!rotated) {
             throw new UnauthorizedException(ErrorCode.INVALID_TOKEN);
         }

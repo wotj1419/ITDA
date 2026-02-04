@@ -2,17 +2,21 @@
 import type { Scene } from '../../../types/api/scenes';
 import type { ProjectDetail } from '../../../types/api/projects';
 import type { ScenePreview, ScenePreviewClip } from '../composables/useProjectDetail';
+import type { CollabParticipant } from '../../../types/ui/collab';
 import ScenarioDrawer from '../../../components/scenario/ScenarioDrawer.vue';
 import SceneCard from '../../../components/project/SceneCard.vue';
 import Card from '../../../components/common/Card.vue';
 import Button from '../../../components/common/Button.vue';
 import ConfirmModal from '../../../components/common/ConfirmModal.vue';
 import LazyVideo from '../../../components/media/LazyVideo.vue';
+import AvatarGroup from '../../../components/common/AvatarGroup.vue';
 import { Plus, PlusCircle, Play, Sparkles, X } from 'lucide-vue-next';
 import { computed, ref, watch } from 'vue';
+import { useRouter } from 'vue-router';
 import { useProjectStore } from '../../../stores/project';
 import { useUIStore } from '../../../stores/ui';
 import { useScenarioStore } from '../../../stores/scenario';
+import { useCollabStore } from '../../../stores/collab';
 
 interface Props {
   scenes: Scene[];
@@ -39,6 +43,34 @@ const props = defineProps<Props>();
 const projectStore = useProjectStore();
 const uiStore = useUIStore();
 const scenarioStore = useScenarioStore();
+const collabStore = useCollabStore();
+const router = useRouter();
+
+// 특정 씬을 편집 중인 참여자 목록 반환
+const getScenePresence = (sceneId: number) => {
+  const list: (CollabParticipant & { isMe?: boolean })[] = [];
+  const local = collabStore.localParticipant;
+  if (local.currentLocation === 'SCENE_EDIT' && local.sceneId === sceneId) {
+    list.push({ ...local, isMe: true });
+  }
+  collabStore.participants.forEach((p) => {
+    if (p.currentLocation === 'SCENE_EDIT' && p.sceneId === sceneId) {
+      list.push({ ...p, isMe: false });
+    }
+  });
+  return list;
+};
+
+// AvatarGroup용 데이터 포맷 변환
+const getScenePresenceAvatars = (sceneId: number) =>
+  getScenePresence(sceneId).map((p) => ({
+    src: p.avatarUrl || '',
+    fallback: p.name?.[0]?.toUpperCase() || '?',
+    alt: p.name,
+    title: p.name || 'Guest',
+    userId: parseInt(p.odps, 10) || 0,
+    onClick: p.isMe ? undefined : () => router.push({ name: 'scene-edit', params: { projectId: props.projectId, sceneId } }),
+  }));
 
 const localTitle = ref('');
 const localDescription = ref('');
@@ -237,6 +269,16 @@ const handleOpenScenario = async () => {
           :show-thumbnail="false"
           @delete="openDeleteSceneModal"
         >
+          <template #header-right>
+            <AvatarGroup
+              v-if="getScenePresence(scene.sceneId).length > 0"
+              :avatars="getScenePresenceAvatars(scene.sceneId)"
+              :max="3"
+              size="sm"
+              class="scene-presence"
+            />
+          </template>
+
           <template #actions-left>
             <Button
               variant="secondary"
@@ -552,6 +594,10 @@ const handleOpenScenario = async () => {
   border-color: var(--rose-300);
   background: var(--rose-50);
   transform: translateY(-2px);
+}
+
+.scene-presence {
+  margin-right: 0.5rem;
 }
 
 @media (max-width: 960px) {
