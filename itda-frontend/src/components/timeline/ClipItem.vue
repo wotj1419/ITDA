@@ -54,7 +54,7 @@ const emit = defineEmits<{
       <div class="clip-label">{{ clip.label || '확정 클립' }}</div>
       <div class="clip-duration">{{ clip.duration }}초</div>
     </div>
-    <span class="clip-badge">OK</span>
+
     <button class="clip-remove" @click.stop="emit('remove')">
       <X class="remove-icon" />
     </button>
@@ -144,17 +144,7 @@ const emit = defineEmits<{
   color: var(--gray-500);
 }
 
-.clip-badge {
-  position: absolute;
-  top: 4px;
-  right: 4px;
-  background: var(--success);
-  color: white;
-  font-size: 0.5rem;
-  font-weight: 700;
-  padding: 1px 4px;
-  border-radius: 2px;
-}
+
 
 .clip-remove {
   position: absolute;

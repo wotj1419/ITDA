@@ -6,16 +6,14 @@ import { useSceneStore } from '../stores/scene'
 import { useTimelineStore } from '../stores/timeline'
 import { useUIStore } from '../stores/ui'
 import { useCollabStore } from '../stores/collab'
-import { TIMELINE_PLAYBACK_MODAL_ID } from '../constants/ui'
 
 import TimelineLayout from '../layouts/TimelineLayout.vue'
 import VideoPreview from '../components/timeline/VideoPreview.vue'
 import VideoTrack from '../components/timeline/VideoTrack.vue'
 import TimeRuler from '../components/timeline/TimeRuler.vue'
 import MergeProgress from '../components/timeline/MergeProgress.vue'
-import TimelinePlaybackModal from '../components/timeline/TimelinePlaybackModal.vue'
 import Button from '../components/common/Button.vue'
-import { GitMerge, RefreshCw, Play } from 'lucide-vue-next'
+import { GitMerge, RefreshCw } from 'lucide-vue-next'
 
 const route = useRoute()
 const projectStore = useProjectStore()
@@ -106,9 +104,6 @@ function handleReset() {
   timelineStore.resetMerge()
 }
 
-function handlePlay() {
-  uiStore.openModal(TIMELINE_PLAYBACK_MODAL_ID)
-}
 
 const timelineMaxTime = computed(() => {
   // Base 10 mins (600s), or total duration + 5 mins buffer (300s)
@@ -167,22 +162,9 @@ function handleWheel(e: WheelEvent) {
         <section>
           <div class="section-header">
             <h3 class="section-title">미리보기</h3>
-            <Button
-              variant="ghost"
-              :disabled="timelineStore.orderedClips.length === 0"
-              @click="handlePlay"
-            >
-              <Play class="icon-md" />
-              재생
-            </Button>
           </div>
           <Card class="preview-card">
-            <VideoPreview
-              :thumbnail-url="timelineStore.orderedClips[0]?.thumbnailUrl"
-              :video-url="timelineStore.orderedClips[0]?.videoUrl"
-              :current-time="0"
-              :total-time="timelineStore.totalDuration"
-            />
+            <VideoPreview :clips="timelineStore.orderedClips" />
           </Card>
         </section>
 
@@ -235,7 +217,6 @@ function handleWheel(e: WheelEvent) {
     </div>
   </TimelineLayout>
 
-  <TimelinePlaybackModal :clips="timelineStore.orderedClips" />
 </template>
 
 <style scoped>
