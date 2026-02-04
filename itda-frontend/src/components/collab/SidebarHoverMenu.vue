@@ -380,7 +380,7 @@ function getPanelSize() {
   const rect = panelRef.value?.getBoundingClientRect()
   return {
     width: rect?.width ?? 340,
-    height: rect?.height ?? 360,
+    height: rect?.height ?? 420,
   }
 }
 
@@ -1164,6 +1164,8 @@ watch(
   left: 0;
   top: 0;
   width: min(340px, 72vw);
+  height: min(420px, calc(100vh - 16px));
+  max-height: calc(100vh - 16px);
   background: white;
   border: 1px solid var(--rose-100);
   border-radius: 14px;
@@ -1171,6 +1173,8 @@ watch(
   z-index: 40;
   padding: 0.75rem;
   animation: pop-in 0.18s ease-out;
+  display: flex;
+  overflow: hidden;
   transition: opacity 0.2s ease;
 }
 
@@ -1411,6 +1415,9 @@ watch(
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .chat-panel__header {
@@ -1568,7 +1575,9 @@ watch(
   list-style: none;
   margin: 0;
   padding: 0;
-  max-height: 240px;
+  max-height: none;
+  flex: 1 1 auto;
+  min-height: 0;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
