@@ -20,7 +20,7 @@ spring:
 
 ai:
   vertex:
-    project-id: ${GCP_PROJECT_ID:project-c9b5454b-ea72-433a-be6}
+    project-id: ${GCP_PROJECT_ID:project-71f3a50b-8a90-4a47-adb}
     location: ${GCP_LOCATION:us-central1}
     api-version: ${AI_VERTEX_API_VERSION:v1}
   gemini:
