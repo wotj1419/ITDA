@@ -1,14 +1,18 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { Play, Pause, Maximize2 } from 'lucide-vue-next'
 import { useTimelinePlayback } from '../../composables/useTimelinePlayback'
 import type { TimelineClip } from '../../types/ui/timeline'
 
 interface Props {
   clips: TimelineClip[]
+  selectedClipId?: string | null
 }
 
 const props = defineProps<Props>()
+const emit = defineEmits<{
+  (e: 'update:selectedClipId', clipId: string | null): void
+}>()
 
 const containerRef = ref<HTMLElement | null>(null)
 
@@ -21,6 +25,9 @@ const {
   isPlaying,
   canPlayCurrent,
   togglePlay,
+  playPrev,
+  playNext,
+  selectClip,
   onEnded,
   onTimeUpdate,
 } = useTimelinePlayback({ clips: clipsRef })
@@ -28,6 +35,23 @@ void videoRef
 
 const hasClips = computed(() => props.clips.length > 0)
 const hasVideo = computed(() => Boolean(currentClip.value?.videoUrl))
+
+watch(
+  () => props.selectedClipId,
+  (clipId) => {
+    if (!clipId || clipId === currentClip.value?.clipId) return
+    void selectClip(clipId, true)
+  },
+  { immediate: true }
+)
+
+watch(
+  () => currentClip.value?.clipId ?? null,
+  (clipId) => {
+    emit('update:selectedClipId', clipId)
+  },
+  { immediate: true }
+)
 
 function formatTime(seconds: number): string {
   const safeSeconds = Number.isFinite(seconds) ? Math.max(0, Math.floor(seconds)) : 0
@@ -50,6 +74,16 @@ function handleKeydown(event: KeyboardEvent): void {
   if (event.code === 'Space') {
     event.preventDefault()
     void togglePlay()
+    return
+  }
+  if (event.code === 'ArrowLeft') {
+    event.preventDefault()
+    void playPrev()
+    return
+  }
+  if (event.code === 'ArrowRight') {
+    event.preventDefault()
+    void playNext()
   }
 }
 </script>

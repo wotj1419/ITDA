@@ -6,6 +6,7 @@ import LazyVideo from '../media/LazyVideo.vue'
 interface Props {
   clip: TimelineClip
   draggable?: boolean
+  active?: boolean
 }
 
 withDefaults(defineProps<Props>(), {
@@ -14,6 +15,7 @@ withDefaults(defineProps<Props>(), {
 
 const emit = defineEmits<{
   (e: 'remove'): void
+  (e: 'select'): void
 }>()
 
 </script>
@@ -21,8 +23,13 @@ const emit = defineEmits<{
 <template>
   <div
     class="clip-item"
+    :class="{ 'is-active': active }"
     :draggable="draggable"
     :style="{ width: `${clip.duration * 20}px` }"
+    tabindex="0"
+    @click="emit('select')"
+    @keydown.enter.prevent="emit('select')"
+    @keydown.space.prevent="emit('select')"
   >
     <div
       class="clip-media"
@@ -85,6 +92,11 @@ const emit = defineEmits<{
 .clip-item.dragging {
   opacity: 0.6;
   transform: scale(1.02);
+}
+
+.clip-item.is-active {
+  border-color: var(--rose-500);
+  box-shadow: 0 0 0 2px var(--rose-200);
 }
 
 .clip-media {
