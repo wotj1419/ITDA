@@ -1,12 +1,13 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import type { Project, ProjectDetail, CreateProjectRequest } from '../types/api/projects'
+import type { Project, ProjectDetail, CreateProjectRequest, ProjectRole } from '../types/api/projects'
 import {
   fetchProjects,
   fetchProjectById,
   fetchProjectMembers,
   createProject,
   deleteProject,
+  leaveProject,
   updateProject as updateProjectApi,
 } from '../services/api/projects'
 import { useAsyncAction } from './helpers/useAsyncAction'
@@ -191,15 +192,34 @@ export const useProjectStore = defineStore('project', () => {
     return newProject
   }
 
+  function resolveProjectRole(project: Project | ProjectDetail | null): ProjectRole | null {
+    if (!project) return null
+    if ('myRole' in project && project.myRole) {
+      return project.myRole
+    }
+    return project.role ?? null
+  }
+
   async function moveToTrash(projectId: number): Promise<boolean> {
+    const project =
+      projects.value.find((item) => item.projectId === projectId) ??
+      (currentProject.value?.projectId === projectId ? currentProject.value : null)
+    const role = resolveProjectRole(project)
+    const shouldLeave = role !== null && role !== 'OWNER'
+    const errorMessage = shouldLeave ? 'Failed to leave project' : 'Failed to move project to trash'
+
     const result = await run(async () => {
-      await deleteProject(projectId)
+      if (shouldLeave) {
+        await leaveProject(projectId)
+      } else {
+        await deleteProject(projectId)
+      }
       projects.value = projects.value.filter((p) => p.projectId !== projectId)
       if (currentProject.value?.projectId === projectId) {
         currentProject.value = null
       }
       return true
-    }, { errorMessage: 'Failed to move project to trash' })
+    }, { errorMessage })
     return Boolean(result)
   }
 

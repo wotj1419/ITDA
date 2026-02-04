@@ -1,10 +1,7 @@
 package com.itda.backend.project.service;
 
-import com.itda.backend.auth.domain.User;
-import com.itda.backend.auth.repository.UserMapper;
 import com.itda.backend.global.exception.BusinessException;
 import com.itda.backend.global.response.ErrorCode;
-import com.itda.backend.project.controller.dto.request.MemberInviteRequest;
 import com.itda.backend.project.controller.dto.request.MemberRoleUpdateRequest;
 import com.itda.backend.project.controller.dto.response.ProjectMemberResponse;
 import com.itda.backend.project.controller.dto.response.RoleChangeResponse;
@@ -30,44 +27,13 @@ public class MemberService {
     private static final Set<String> ALL_ROLES = Set.of(
             ROLE_OWNER, ROLE_ADMIN, ROLE_EDITOR, ROLE_VIEWER
     );
-    private static final Set<String> INVITE_ROLES = Set.of(
-            ROLE_ADMIN, ROLE_EDITOR, ROLE_VIEWER
-    );
-
     private final ProjectAccessService projectAccessService;
     private final ProjectMemberMapper projectMemberMapper;
-    private final UserMapper userMapper;
 
     @Transactional(readOnly = true)
     public List<ProjectMemberResponse> getMembers(Long userId, Long projectId) {
         projectAccessService.ensureProjectAccessible(projectId, userId);
         return projectMemberMapper.findAllMembers(projectId);
-    }
-
-    @Transactional
-    public ProjectMemberResponse inviteMember(Long userId, Long projectId, MemberInviteRequest request) {
-        projectAccessService.ensureProjectAccessible(projectId, userId);
-
-        String actorRole = requireMemberRole(projectId, userId);
-        String inviteRole = normalizeRole(request.role());
-        validateInviteRole(inviteRole);
-        validateInvitePermission(actorRole, inviteRole);
-
-        User user = userMapper.findByEmail(request.email())
-                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
-
-        if (projectMemberMapper.existsMember(projectId, user.getId())) {
-            throw new BusinessException(ErrorCode.MEMBER_ALREADY_EXISTS);
-        }
-
-        projectMemberMapper.insertMember(projectId, user.getId(), inviteRole);
-        return new ProjectMemberResponse(
-                user.getId(),
-                user.getEmail(),
-                user.getName(),
-                user.getProfileImageUrl(),
-                inviteRole
-        );
     }
 
     @Transactional
@@ -135,26 +101,10 @@ public class MemberService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.FORBIDDEN));
     }
 
-    private void validateInviteRole(String role) {
-        if (!INVITE_ROLES.contains(role)) {
-            throw new BusinessException(ErrorCode.INVALID_REQUEST);
-        }
-    }
-
     private void validateUpdateRole(String role) {
         if (!ALL_ROLES.contains(role)) {
             throw new BusinessException(ErrorCode.INVALID_REQUEST);
         }
-    }
-
-    private void validateInvitePermission(String actorRole, String inviteRole) {
-        if (ROLE_OWNER.equals(actorRole)) {
-            return;
-        }
-        if (ROLE_ADMIN.equals(actorRole) && !ROLE_ADMIN.equals(inviteRole)) {
-            return;
-        }
-        throw new BusinessException(ErrorCode.FORBIDDEN);
     }
 
     private void validateRoleChangePermission(String actorRole,
