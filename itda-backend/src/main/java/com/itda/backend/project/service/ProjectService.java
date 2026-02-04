@@ -1,5 +1,6 @@
 package com.itda.backend.project.service;
 
+import com.itda.backend.asset.service.AssetUrlResolver;
 import com.itda.backend.global.exception.BusinessException;
 import com.itda.backend.global.response.ErrorCode;
 import com.itda.backend.project.controller.dto.request.CreateProjectRequest;
@@ -11,12 +12,15 @@ import com.itda.backend.project.controller.dto.response.ProjectSummaryResponse;
 import com.itda.backend.project.domain.Project;
 import com.itda.backend.project.repository.ProjectMapper;
 import com.itda.backend.project.repository.ProjectMemberMapper;
+import com.itda.backend.project.repository.dto.ProjectPreviewCandidate;
+import com.itda.backend.project.repository.dto.ProjectSummary;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
@@ -25,9 +29,14 @@ public class ProjectService {
     private static final String ROLE_OWNER = "OWNER";
     private static final String STATUS_ACTIVE = "ACTIVE";
     private static final int MAX_PAGE_SIZE = 100;
+    private static final String PREVIEW_TYPE_PROJECT_MERGE = "PROJECT_MERGE";
+    private static final String PREVIEW_TYPE_SCENE_MERGE = "SCENE_MERGE";
+    private static final String PREVIEW_TYPE_CLIP = "CLIP";
+    private static final PreviewPayload EMPTY_PREVIEW = new PreviewPayload(null, null, null);
 
     private final ProjectMapper projectMapper;
     private final ProjectMemberMapper projectMemberMapper;
+    private final AssetUrlResolver assetUrlResolver;
 
     @Transactional
     public ProjectCreateResponse createProject(Long userId, CreateProjectRequest request) {
@@ -128,8 +137,49 @@ public class ProjectService {
 
     private List<ProjectSummaryResponse> fetchProjectSummaries(Long userId, int size, int offset) {
         return projectMapper.findAllByUserId(userId, size, offset).stream()
-                .map(ProjectSummaryResponse::from)
+                .map(this::toProjectSummaryResponse)
                 .toList();
+    }
+
+    private ProjectSummaryResponse toProjectSummaryResponse(ProjectSummary summary) {
+        PreviewPayload preview = resolvePreview(summary.getProjectId());
+        return ProjectSummaryResponse.from(
+                summary,
+                preview.type(),
+                preview.thumbnailUrl(),
+                preview.videoUrl()
+        );
+    }
+
+    private PreviewPayload resolvePreview(Long projectId) {
+        return resolvePreviewCandidate(projectMapper.findProjectMergePreview(projectId), PREVIEW_TYPE_PROJECT_MERGE)
+                .or(() -> resolvePreviewCandidate(projectMapper.findSceneMergePreview(projectId), PREVIEW_TYPE_SCENE_MERGE))
+                .or(() -> resolvePreviewCandidate(projectMapper.findClipPreview(projectId), PREVIEW_TYPE_CLIP))
+                .orElse(EMPTY_PREVIEW);
+    }
+
+    private Optional<PreviewPayload> resolvePreviewCandidate(
+            Optional<ProjectPreviewCandidate> candidate,
+            String type
+    ) {
+        if (candidate.isEmpty()) {
+            return Optional.empty();
+        }
+
+        ProjectPreviewCandidate value = candidate.get();
+        String thumbnailUrl = assetUrlResolver.resolvePublicUrl(
+                value.getThumbnailAssetId(),
+                value.getThumbnailFallbackUrl()
+        );
+        String videoUrl = assetUrlResolver.resolvePublicUrl(
+                value.getVideoAssetId(),
+                value.getVideoFallbackUrl()
+        );
+
+        if (thumbnailUrl == null && videoUrl == null) {
+            return Optional.empty();
+        }
+        return Optional.of(new PreviewPayload(type, thumbnailUrl, videoUrl));
     }
 
     private ProjectListResponse emptyProjectList(int page, int size, int total) {
@@ -171,5 +221,7 @@ public class ProjectService {
         }
         return (int) offset;
     }
-}
 
+    private record PreviewPayload(String type, String thumbnailUrl, String videoUrl) {
+    }
+}

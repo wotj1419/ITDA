@@ -17,6 +17,15 @@ public record ProjectSummaryResponse(
         @Schema(description = "Thumbnail URL", example = "https://...")
         String thumbnailUrl,
 
+        @Schema(description = "Preview source type", example = "PROJECT_MERGE")
+        String previewType,
+
+        @Schema(description = "Preview thumbnail URL", example = "https://...")
+        String previewThumbnailUrl,
+
+        @Schema(description = "Preview video URL", example = "https://...")
+        String previewVideoUrl,
+
         @Schema(description = "My role in project", example = "OWNER")
         String role,
 
@@ -29,11 +38,18 @@ public record ProjectSummaryResponse(
         @Schema(description = "Updated at", example = "2026-01-15T12:00:00")
         LocalDateTime updatedAt
 ) {
-    public static ProjectSummaryResponse from(ProjectSummary summary) {
+    public static ProjectSummaryResponse from(
+            ProjectSummary summary,
+            String previewType,
+            String previewThumbnailUrl,
+            String previewVideoUrl) {
         return new ProjectSummaryResponse(
                 summary.getProjectId(),
                 summary.getTitle(),
-                null,
+                previewThumbnailUrl,
+                previewType,
+                previewThumbnailUrl,
+                previewVideoUrl,
                 summary.getMyRole(),
                 summary.getMemberCount(),
                 summary.getSceneCount(),

@@ -1,6 +1,7 @@
 package com.itda.backend.project.repository;
 
 import com.itda.backend.project.domain.Project;
+import com.itda.backend.project.repository.dto.ProjectPreviewCandidate;
 import com.itda.backend.project.repository.dto.ProjectSummary;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
@@ -20,6 +21,12 @@ public interface ProjectMapper {
     List<ProjectSummary> findAllByUserId(@Param("userId") Long userId,
                                          @Param("limit") int limit,
                                          @Param("offset") int offset);
+
+    Optional<ProjectPreviewCandidate> findProjectMergePreview(@Param("projectId") Long projectId);
+
+    Optional<ProjectPreviewCandidate> findSceneMergePreview(@Param("projectId") Long projectId);
+
+    Optional<ProjectPreviewCandidate> findClipPreview(@Param("projectId") Long projectId);
 
     int updateProject(@Param("id") Long id,
                       @Param("title") String title,
