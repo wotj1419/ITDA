@@ -8,12 +8,21 @@ import { useProjectStore } from '../stores/project'
 import { useUIStore } from '../stores/ui'
 import ProjectCard from '../components/project/ProjectCard.vue'
 import UserWelcomeTitle from '../components/common/UserWelcomeTitle.vue'
+import ConfirmModal from '../components/common/ConfirmModal.vue'
 
 const router = useRouter()
 const authStore = useAuthStore()
 const projectStore = useProjectStore()
 const uiStore = useUIStore()
 const isCreatingProject = ref(false)
+const showLeaveModal = ref(false)
+const projectToLeave = ref<{ projectId: number; title: string } | null>(null)
+const leaveProjectModalTitle = '\ud504\ub85c\uc81d\ud2b8\uc5d0\uc11c \ub098\uac08\uae4c\uc694?'
+const leaveProjectConfirmText = '\ub098\uac00\uae30'
+const leaveProjectModalMessage = computed(() => {
+  if (!projectToLeave.value) return ''
+  return `'${projectToLeave.value.title}' \ud504\ub85c\uc81d\ud2b8\uc5d0\uc11c \ub098\uac00\uba74 \uacf5\uc720\uac00 \ucde8\uc18c\ub418\uace0 \ub354 \uc774\uc0c1 \uc811\uadfc\ud560 \uc218 \uc5c6\uc2b5\ub2c8\ub2e4.`
+})
 
 onMounted(async () => {
   if (projectStore.projects.length === 0) {
@@ -51,6 +60,24 @@ const createEmptyProject = async () => {
     title: '프로젝트 생성 실패',
     message: '잠시 후 다시 시도해주세요.',
   })
+}
+const handleRequestLeave = (projectId: number) => {
+  const project = projectStore.projects.find((item) => item.projectId === projectId)
+  if (!project) return
+  projectToLeave.value = { projectId, title: project.title }
+  showLeaveModal.value = true
+}
+
+const confirmLeave = async () => {
+  if (!projectToLeave.value) return
+  await projectStore.moveToTrash(projectToLeave.value.projectId)
+  showLeaveModal.value = false
+  projectToLeave.value = null
+}
+
+const cancelLeave = () => {
+  showLeaveModal.value = false
+  projectToLeave.value = null
 }
 </script>
 
@@ -94,6 +121,7 @@ const createEmptyProject = async () => {
           :project="project"
           :is-favorite="isFavorite(project.projectId)"
           @toggle-favorite="handleToggleFavorite"
+          @delete="handleRequestLeave"
         />
       </div>
       <div v-else class="empty-state">
@@ -104,6 +132,16 @@ const createEmptyProject = async () => {
         <p class="empty-description">공유받은 프로젝트가 이곳에 표시됩니다.</p>
       </div>
     </div>
+
+    <ConfirmModal
+      :is-open="showLeaveModal"
+      :title="leaveProjectModalTitle"
+      :message="leaveProjectModalMessage"
+      :confirm-text="leaveProjectConfirmText"
+      :is-dangerous="false"
+      @confirm="confirmLeave"
+      @cancel="cancelLeave"
+    />
   </DefaultLayout>
 </template>
 

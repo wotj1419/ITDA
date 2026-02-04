@@ -5,8 +5,10 @@ import com.itda.backend.global.security.CustomUserDetails;
 import com.itda.backend.project.controller.dto.request.MemberInviteRequest;
 import com.itda.backend.project.controller.dto.request.MemberRoleUpdateRequest;
 import com.itda.backend.project.controller.dto.response.ProjectMemberResponse;
+import com.itda.backend.project.controller.dto.response.ProjectInviteResponse;
 import com.itda.backend.project.controller.dto.response.RoleChangeResponse;
 import com.itda.backend.project.service.MemberService;
+import com.itda.backend.project.service.ProjectInviteService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -35,6 +37,7 @@ import java.util.List;
 public class MemberController {
 
     private final MemberService memberService;
+    private final ProjectInviteService projectInviteService;
 
     @Operation(summary = "멤버 목록 조회", description = "프로젝트에 참여 중인 멤버 목록을 조회합니다.")
     @ApiResponses({
@@ -59,9 +62,9 @@ public class MemberController {
     @Operation(summary = "멤버 초대", description = "이메일로 사용자를 검색하여 멤버로 초대합니다.")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(
-                    responseCode = "200",
+                    responseCode = "201",
                     description = "초대 성공",
-                    content = @Content(schema = @Schema(implementation = ProjectMemberResponse.class))
+                    content = @Content(schema = @Schema(implementation = ProjectInviteResponse.class))
             ),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "요청 값 오류"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증 필요"),
@@ -70,13 +73,17 @@ public class MemberController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "이미 멤버")
     })
     @PostMapping("/{projectId}/members")
-    public ResponseEntity<ApiResponse<ProjectMemberResponse>> inviteMember(
+    public ResponseEntity<ApiResponse<ProjectInviteResponse>> inviteMember(
             @AuthenticationPrincipal CustomUserDetails userDetails,
             @Parameter(description = "프로젝트 ID") @PathVariable Long projectId,
             @Valid @RequestBody MemberInviteRequest request
     ) {
-        ProjectMemberResponse response = memberService.inviteMember(userDetails.getUserId(), projectId, request);
-        return ApiResponse.success(response);
+        ProjectInviteResponse response = projectInviteService.createInvite(
+                userDetails.getUserId(),
+                projectId,
+                request
+        );
+        return ApiResponse.created(response);
     }
 
     @Operation(summary = "멤버 권한 변경", description = "프로젝트 멤버의 권한을 변경합니다.")

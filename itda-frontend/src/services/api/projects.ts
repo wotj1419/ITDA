@@ -40,6 +40,10 @@ export async function deleteProject(projectId: number): Promise<void> {
     await apiClient.delete(`/projects/${projectId}`)
 }
 
+export async function leaveProject(projectId: number): Promise<void> {
+    await apiClient.delete(`/projects/${projectId}/members/me`)
+}
+
 // 프로젝트 수정
 export async function updateProject(projectId: number, data: Partial<Project>): Promise<Project | null> {
     const response = await apiClient.put<ApiResponse<Project>>(`/projects/${projectId}`, data)
