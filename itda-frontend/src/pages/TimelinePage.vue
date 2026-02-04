@@ -176,12 +176,12 @@ function handleWheel(e: WheelEvent) {
           </div>
 
           <Card class="track-card">
-            <div 
-              class="timeline-scroll-container" 
+            <div
+              class="timeline-scroll-container"
               :style="{ overflowX: timelineStore.clipCount === 0 ? 'hidden' : 'auto' }"
               @wheel="handleWheel"
             >
-              <div 
+              <div
                 class="timeline-inner-wrapper"
                 :style="{ width: timelineStore.clipCount === 0 ? '100%' : `${timelineMaxTime * 20}px` }"
               >
@@ -278,10 +278,7 @@ function handleWheel(e: WheelEvent) {
   color: var(--gray-400);
 }
 
-.preview-card,
-.track-card {
-  padding: 1.5rem;
-}
+
 
 .track-info {
   display: flex;

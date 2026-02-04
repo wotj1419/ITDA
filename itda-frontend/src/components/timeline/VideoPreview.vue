@@ -117,10 +117,11 @@ function handleKeydown(event: KeyboardEvent): void {
   aspect-ratio: 16 / 9;
   max-width: 700px;
   margin: 0 auto;
-  background: var(--gray-950);
+  background: white;
   border-radius: 16px;
   position: relative;
   overflow: hidden;
+
 }
 
 .preview-video,
@@ -128,6 +129,8 @@ function handleKeydown(event: KeyboardEvent): void {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  transform: scale(1.26);
+  transform-origin: center;
 }
 
 .preview-empty {
