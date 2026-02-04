@@ -175,6 +175,9 @@ defineProps<Props>();
 }
 
 .export-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
   box-shadow: var(--shadow-lg);
 }
 

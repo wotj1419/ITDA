@@ -3,6 +3,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, type Compon
 import { useCollabStore } from '../../stores/collab'
 import type { CollabParticipant } from '../../types/ui/collab'
 import { ChevronDown, ChevronUp, MessageCircle, Mic, MicOff, Phone, PhoneOff, Search, Send, X } from 'lucide-vue-next'
+import Avatar from '../common/Avatar.vue'
 
 interface Props {
   projectId?: number | null
@@ -229,11 +230,6 @@ function getAvatarUrl(senderId: string | undefined) {
   if (!senderId) return '';
   const participant = collabStore.participants.find((p) => p.odps === senderId);
   return participant?.avatarUrl ?? '';
-}
-
-function getSenderInitial(name: string | undefined) {
-  if (!name) return '?';
-  return name.trim().slice(0, 1).toUpperCase();
 }
 
 function isParticipantSpeaking(id: string | undefined) {
@@ -836,11 +832,14 @@ watch(
               <span
                 class="call-avatar"
                 :class="{ speaking: isParticipantSpeaking(member.odps) }"
-                :style="member.avatarUrl ? { backgroundImage: `url(${member.avatarUrl})` } : {}"
               >
-                <span v-if="!member.avatarUrl" class="call-avatar__text">
-                  {{ getSenderInitial(member.name) }}
-                </span>
+                <Avatar
+                  class="call-avatar__image"
+                  :src="member.avatarUrl || ''"
+                  :alt="member.name || 'Guest'"
+                  :user-id="parseInt(member.odps, 10) || 0"
+                  size="sm"
+                />
                 <span v-if="member.isMuted" class="call-avatar__mute">
                   <MicOff class="icon-xs" />
                 </span>
@@ -961,15 +960,13 @@ watch(
             :ref="(el) => setMessageRef(el, msg.messageId)"
           >
             <div v-if="msg.senderId !== collabStore.localParticipant.odps" class="chat-panel__row">
-              <span
+              <Avatar
                 class="chat-panel__avatar"
-                :class="{ 'chat-panel__avatar--image': !!getAvatarUrl(msg.senderId) }"
-                :style="getAvatarUrl(msg.senderId) ? { backgroundImage: `url(${getAvatarUrl(msg.senderId)})` } : {}"
-              >
-                <span v-if="!getAvatarUrl(msg.senderId)" class="chat-panel__avatar-text">
-                  {{ getSenderInitial(msg.senderName) }}
-                </span>
-              </span>
+                :src="getAvatarUrl(msg.senderId) || ''"
+                :alt="msg.senderName || 'Guest'"
+                :user-id="parseInt(msg.senderId, 10) || 0"
+                size="sm"
+              />
               <div class="chat-panel__body">
                 <div class="chat-panel__name">{{ msg.senderName }}</div>
                 <div class="chat-panel__bubble-row">
@@ -1341,25 +1338,21 @@ watch(
   height: 28px;
   border-radius: 999px;
   border: 2px solid transparent;
-  background: var(--rose-100);
-  color: var(--rose-600);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.65rem;
-  font-weight: 600;
-  background-position: center;
-  background-size: cover;
+  box-sizing: border-box;
   flex-shrink: 0;
+}
+
+.call-avatar :deep(.avatar) {
+  width: 100%;
+  height: 100%;
 }
 
 .call-avatar.speaking {
   border-color: #22c55e;
-  box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.18);
-}
-
-.call-avatar__text {
-  line-height: 1;
+  box-shadow: none;
 }
 
 .call-avatar__mute {
@@ -1633,27 +1626,10 @@ watch(
 }
 
 .chat-panel__avatar {
-  width: 26px;
-  height: 26px;
-  border-radius: 999px;
-  background: var(--gray-200);
-  color: var(--gray-700);
   display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 0.6rem;
-  font-weight: 600;
-  overflow: hidden;
-  background-position: center;
-  background-size: cover;
-}
-
-.chat-panel__avatar--image {
-  background-color: transparent;
-}
-
-.chat-panel__avatar-text {
-  line-height: 1;
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
 }
 
 .chat-panel__body {

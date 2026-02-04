@@ -76,7 +76,7 @@ const getScenePresenceAvatars = (sceneId: number) =>
     src: p.avatarUrl || '',
     fallback: p.name?.[0]?.toUpperCase() || '?',
     alt: p.name,
-    title: `${p.name || 'Guest'}: Scene ${sceneId} 편집 중`,
+    title: p.name || 'Guest',
     userId: parseInt(p.odps, 10) || 0, // userId 추가
     onClick: p.isMe ? undefined : () => router.push({ name: 'scene-edit', params: { projectId: props.projectId, sceneId } }),
   }));

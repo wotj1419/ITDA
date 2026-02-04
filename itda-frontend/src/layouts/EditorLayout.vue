@@ -89,7 +89,6 @@ const sidebarClasses = computed(() => [
           class="menu-btn"
           :class="{ 'menu-btn--open': uiStore.sidebarExpanded }"
           @click="uiStore.toggleSidebar"
-          :title="uiStore.sidebarExpanded ? 'Collapse' : 'Expand'"
         >
           <span class="toggle" aria-hidden="true">
             <span class="bars bar1"></span>
