@@ -44,7 +44,7 @@ const progressPercent = computed(() => {
 const previewImageUrl = computed(() => props.project.previewThumbnailUrl || props.project.thumbnailUrl || '')
 const previewVideoUrl = computed(() => props.project.previewVideoUrl || '')
 const hasPreviewVideo = computed(() => Boolean(previewVideoUrl.value))
-const showPlaceholder = computed(() => !previewImageUrl.value && !hasPreviewVideo.value)
+const showPlaceholder = computed(() => !previewImageUrl.value && (!hasPreviewVideo.value || !isPreviewPlaying.value))
 
 const previewVideoRef = ref<HTMLVideoElement | null>(null)
 const isPreviewPlaying = ref(false)
@@ -214,7 +214,7 @@ const handleDeleteRequest = (e: Event) => {
         v-if="hasPreviewVideo"
         ref="previewVideoRef"
         class="thumbnail-video"
-        :class="{ 'is-visible': isPreviewPlaying || !previewImageUrl }"
+        :class="{ 'is-visible': isPreviewPlaying }"
         :src="previewVideoUrl"
         :poster="previewImageUrl || undefined"
         muted
@@ -657,5 +657,4 @@ const handleDeleteRequest = (e: Event) => {
   color: #dc2626;
 }
 </style>
-
 

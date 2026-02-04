@@ -79,10 +79,13 @@
             resultType="com.itda.backend.project.repository.dto.ProjectPreviewCandidate">
         SELECT sv.asset_id AS video_asset_id,
                NULL AS video_fallback_url,
-               sv.thumbnail_asset_id AS thumbnail_asset_id,
-               sv.thumbnail_url AS thumbnail_fallback_url
+               COALESCE(sv.thumbnail_asset_id, master.asset_id) AS thumbnail_asset_id,
+               COALESCE(sv.thumbnail_url, master.content_url) AS thumbnail_fallback_url
         FROM scenes s
         JOIN scene_videos sv ON sv.scene_id = s.id
+        LEFT JOIN nodes master
+            ON master.id = s.active_master_node_id
+           AND master.node_type = 'MASTER'
         WHERE s.project_id = #{projectId}
           AND sv.is_active = 1
           AND sv.status = 'COMPLETED'
