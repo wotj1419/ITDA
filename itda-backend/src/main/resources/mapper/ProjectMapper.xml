@@ -60,6 +60,59 @@
         LIMIT #{limit} OFFSET #{offset}
     </select>
 
+    <select id="findProjectMergePreview"
+            resultType="com.itda.backend.project.repository.dto.ProjectPreviewCandidate">
+        SELECT pm.asset_id AS video_asset_id,
+               NULL AS video_fallback_url,
+               NULL AS thumbnail_asset_id,
+               NULL AS thumbnail_fallback_url
+        FROM project_merges pm
+        WHERE pm.project_id = #{projectId}
+          AND pm.is_active = 1
+          AND pm.status = 'COMPLETED'
+          AND pm.asset_id IS NOT NULL
+        ORDER BY pm.updated_at DESC, pm.id DESC
+        LIMIT 1
+    </select>
+
+    <select id="findSceneMergePreview"
+            resultType="com.itda.backend.project.repository.dto.ProjectPreviewCandidate">
+        SELECT sv.asset_id AS video_asset_id,
+               NULL AS video_fallback_url,
+               NULL AS thumbnail_asset_id,
+               sv.thumbnail_url AS thumbnail_fallback_url
+        FROM scenes s
+        JOIN scene_videos sv ON sv.scene_id = s.id
+        WHERE s.project_id = #{projectId}
+          AND sv.is_active = 1
+          AND sv.status = 'COMPLETED'
+          AND sv.asset_id IS NOT NULL
+        ORDER BY s.order_index ASC, s.id ASC, sv.updated_at DESC, sv.id DESC
+        LIMIT 1
+    </select>
+
+    <select id="findClipPreview"
+            resultType="com.itda.backend.project.repository.dto.ProjectPreviewCandidate">
+        SELECT n.asset_id AS video_asset_id,
+               n.content_url AS video_fallback_url,
+               COALESCE(shot.asset_id, master.asset_id) AS thumbnail_asset_id,
+               COALESCE(shot.content_url, master.content_url) AS thumbnail_fallback_url
+        FROM scenes s
+        JOIN timeline_items ti ON ti.scene_id = s.id
+        JOIN nodes n ON n.id = ti.video_node_id
+        LEFT JOIN nodes shot
+            ON shot.id = n.parent_node_id
+           AND shot.node_type = 'SHOT'
+        LEFT JOIN nodes master
+            ON master.id = s.active_master_node_id
+           AND master.node_type = 'MASTER'
+        WHERE s.project_id = #{projectId}
+          AND n.node_type = 'VIDEO'
+          AND n.is_confirmed = 1
+        ORDER BY s.order_index ASC, s.id ASC, ti.order_index ASC, ti.id ASC
+        LIMIT 1
+    </select>
+
     <!-- updateProject: 동적 업데이트 (null이 아닌 필드만 업데이트) -->
     <update id="updateProject">
         UPDATE projects

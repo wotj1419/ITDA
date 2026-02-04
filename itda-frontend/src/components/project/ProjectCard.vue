@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { RouterLink } from 'vue-router'
 import { MoreVertical, Trash2 } from 'lucide-vue-next'
@@ -40,6 +40,36 @@ const progressPercent = computed(() => {
   if (progress.value.total === 0) return 0
   return Math.round((progress.value.completed / progress.value.total) * 100)
 })
+
+const previewImageUrl = computed(() => props.project.previewThumbnailUrl || props.project.thumbnailUrl || '')
+const previewVideoUrl = computed(() => props.project.previewVideoUrl || '')
+const hasPreviewVideo = computed(() => Boolean(previewVideoUrl.value))
+const showPlaceholder = computed(() => !previewImageUrl.value && !hasPreviewVideo.value)
+
+const previewVideoRef = ref<HTMLVideoElement | null>(null)
+const isPreviewPlaying = ref(false)
+
+const playPreview = async () => {
+  if (!hasPreviewVideo.value) return
+  const videoEl = previewVideoRef.value
+  if (!videoEl) return
+  try {
+    videoEl.preload = 'metadata'
+    videoEl.currentTime = 0
+    await videoEl.play()
+    isPreviewPlaying.value = true
+  } catch {
+    isPreviewPlaying.value = false
+  }
+}
+
+const stopPreview = () => {
+  const videoEl = previewVideoRef.value
+  if (!videoEl) return
+  videoEl.pause()
+  videoEl.currentTime = 0
+  isPreviewPlaying.value = false
+}
 
 
 const badgeVariant = computed(() => {
@@ -158,20 +188,41 @@ const handleDeleteRequest = (e: Event) => {
       <div v-if="isMenuOpen" class="dropdown-menu">
         <button class="menu-item delete" @click="handleDeleteRequest">
           <Trash2 class="icon-sm" />
-          삭제
+          ??젣
         </button>
       </div>
     </div>
 
     <!-- Thumbnail -->
-    <div class="card-thumbnail">
+    <div
+      class="card-thumbnail"
+      @mouseenter="playPreview"
+      @mouseleave="stopPreview"
+      @focusin="playPreview"
+      @focusout="stopPreview"
+    >
+      <video
+        v-if="hasPreviewVideo"
+        ref="previewVideoRef"
+        class="thumbnail-video"
+        :class="{ 'is-visible': isPreviewPlaying || !previewImageUrl }"
+        :src="previewVideoUrl"
+        :poster="previewImageUrl || undefined"
+        muted
+        loop
+        playsinline
+        preload="none"
+      />
       <img
-        v-if="project.thumbnailUrl"
-        :src="project.thumbnailUrl"
+        v-if="previewImageUrl"
+        :src="previewImageUrl"
         :alt="project.title"
         class="thumbnail-image"
       />
-      <div v-else class="thumbnail-placeholder">
+      <div
+        v-if="showPlaceholder"
+        class="thumbnail-placeholder"
+      >
         <img src="/icon.png" alt="아직 미리보기가 없어요" class="preview-icon" />
         <span>아직 미리보기가 없어요</span>
       </div>
@@ -201,7 +252,7 @@ const handleDeleteRequest = (e: Event) => {
           ></div>
         </div>
         <span class="progress-text">
-          {{ progress.total === 0 ? '진행 전' : `${progress.completed}/${progress.total}` }}
+          {{ progress.total === 0 ? '진행 중' : `${progress.completed}/${progress.total}` }}
         </span>
       </div>
 
@@ -266,6 +317,21 @@ const handleDeleteRequest = (e: Event) => {
   width: 100%;
   height: 100%;
   object-fit: cover;
+}
+
+.thumbnail-video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+
+.thumbnail-video.is-visible {
+  opacity: 1;
 }
 
 .thumbnail-placeholder {
@@ -582,3 +648,5 @@ const handleDeleteRequest = (e: Event) => {
   color: #dc2626;
 }
 </style>
+
+
