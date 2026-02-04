@@ -61,6 +61,9 @@ const getScenePresence = (sceneId: number) => {
   return list;
 };
 
+const getStoryboardThumbnail = (scene: Scene, clip: ScenePreviewClip) =>
+  clip.thumbnailUrl || scene.thumbnailUrl || '';
+
 // AvatarGroup용 데이터 포맷 변환
 const getScenePresenceAvatars = (sceneId: number) =>
   getScenePresence(sceneId).map((p) => ({
@@ -317,23 +320,33 @@ const handleOpenScenario = async () => {
                     <div class="storyboard-media">
                       <template v-if="clip.contentUrl">
                         <img
+                          v-if="getStoryboardThumbnail(scene, clip)"
                           class="storyboard-thumb"
-                          :src="clip.thumbnailUrl || scene.thumbnailUrl || '/icon.png'"
+                          :src="getStoryboardThumbnail(scene, clip)"
                           :alt="clip.label || scene.title"
                         />
                         <LazyVideo
                           class="storyboard-video"
                           :src="clip.contentUrl"
-                          :poster="clip.thumbnailUrl || scene.thumbnailUrl || '/icon.png'"
+                          :poster="getStoryboardThumbnail(scene, clip) || undefined"
                           :play-on-hover="true"
+                          preload="none"
                         />
                       </template>
-                      <img
-                        v-else
-                        class="storyboard-thumb"
-                        :src="clip.thumbnailUrl || scene.thumbnailUrl || '/icon.png'"
-                        :alt="clip.label || scene.title"
-                      />
+                      <template v-else>
+                        <img
+                          v-if="getStoryboardThumbnail(scene, clip)"
+                          class="storyboard-thumb"
+                          :src="getStoryboardThumbnail(scene, clip)"
+                          :alt="clip.label || scene.title"
+                        />
+                        <img
+                          v-else
+                          class="storyboard-thumb"
+                          src="/icon.png"
+                          :alt="clip.label || scene.title"
+                        />
+                      </template>
                     </div>
                     <span class="storyboard-label">{{ clip.label || scene.title }}</span>
                   </button>
