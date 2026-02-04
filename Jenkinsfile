@@ -167,6 +167,13 @@ pipeline {
                     fi
                     sed -i "s|^API_IMAGE=.*|API_IMAGE=$DOCKER_IMAGE|" "$DEPLOY_DIR/.env"
                     docker compose -f "$DEPLOY_DIR/docker-compose.yml" up -d nginx api mysql redis
+                    for svc in itda-worker-image itda-worker-video itda-worker-merge; do
+                      if docker ps --format '{{.Names}}' | grep -q "^${svc}$"; then
+                        docker restart "$svc"
+                      else
+                        echo "skip restart: ${svc} (not running)"
+                      fi
+                    done
                 '''
             }
         }
