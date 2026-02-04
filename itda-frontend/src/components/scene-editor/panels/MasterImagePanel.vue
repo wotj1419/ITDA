@@ -28,6 +28,7 @@ interface Props {
 const props = defineProps<Props>();
 const nodeStore = useSceneNodeStore();
 const objectStore = useObjectStore();
+const MAX_OBJECT_SELECTION = 3;
 const autoFilledNodes = new Set<string>();
 let promptPreviewTimeout: ReturnType<typeof setTimeout> | null = null;
 const isPromptEditing = ref(false);
@@ -76,7 +77,7 @@ const {
     style: form.value.style,
     timeOfDay: form.value.timeOfDay,
     mood: form.value.mood,
-    objectIds: form.value.objectIds,
+    objectIds: [...selectedObjectIds.value],
     prompt: result.promptKo || result.promptEnBase,
     promptKo: result.promptKo || result.promptEnBase,
   }),
@@ -90,10 +91,10 @@ const {
     styleKey: resolveStyleKey(form.value.style),
     timeOfDayKey: resolveTimeOfDayKey(form.value.timeOfDay),
     moodKey: resolveMoodKey(form.value.mood) ?? 'NEUTRAL',
-    objectIds: form.value.objectIds,
+    objectIds: [...selectedObjectIds.value],
     detailKo: form.value.additionalDetail,
   }),
-  getReferenceObjectIds: () => (form.value.objectIds.length ? [...form.value.objectIds] : undefined),
+  getReferenceObjectIds: () => (selectedObjectIds.value.length ? [...selectedObjectIds.value] : undefined),
   getPromptOverride: () =>
     form.value.usePromptOverride ? form.value.promptEnFinalOverride : '',
   getPromptPreviewPayload: () => ({
@@ -102,7 +103,7 @@ const {
       styleKey: resolveStyleKey(form.value.style),
       timeOfDayKey: resolveTimeOfDayKey(form.value.timeOfDay),
       moodKey: resolveMoodKey(form.value.mood) ?? 'NEUTRAL',
-      objectIds: form.value.objectIds,
+      objectIds: [...selectedObjectIds.value],
       detailKo: form.value.additionalDetail,
     },
     promptEnFinalOverride: form.value.usePromptOverride ? form.value.promptEnFinalOverride : '',
@@ -137,8 +138,12 @@ const objectNameMap = computed(() => {
   return map;
 });
 
+const selectedObjectIds = computed(() => normalizeSelectedObjectIds(form.value.objectIds));
+const selectedObjectCount = computed(() => selectedObjectIds.value.length);
+const isObjectSelectionFull = computed(() => selectedObjectCount.value >= MAX_OBJECT_SELECTION);
+
 const selectedObjectNames = computed(() =>
-  form.value.objectIds
+  selectedObjectIds.value
     .map((id) => objectNameMap.value.get(id))
     .filter((name): name is string => Boolean(name))
 );
@@ -215,7 +220,7 @@ function buildFinalPromptSignature(): string {
     style: form.value.style,
     timeOfDay: form.value.timeOfDay,
     mood: form.value.mood,
-    objectIds: [...form.value.objectIds],
+    objectIds: [...selectedObjectIds.value],
     additionalDetail: form.value.additionalDetail.trim(),
     prompt: form.value.prompt.trim(),
     usePromptOverride: form.value.usePromptOverride,
@@ -227,6 +232,19 @@ let generateButtonTween: gsap.core.Tween | null = null;
 
 function normalizeIds(ids: number[] | undefined | null): number[] {
   return Array.isArray(ids) ? ids : [];
+}
+
+function normalizeSelectedObjectIds(ids: number[] | undefined | null): number[] {
+  const unique: number[] = [];
+  const seen = new Set<number>();
+  for (const id of normalizeIds(ids)) {
+    if (!Number.isInteger(id) || id <= 0) continue;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    unique.push(id);
+    if (unique.length >= MAX_OBJECT_SELECTION) break;
+  }
+  return unique;
 }
 
 function areNumberArraysEqual(a: number[], b: number[]): boolean {
@@ -248,7 +266,7 @@ function queuePersistLook(): void {
       style: form.value.style,
       timeOfDay: form.value.timeOfDay,
       mood: form.value.mood,
-      objectIds: [...form.value.objectIds],
+      objectIds: [...selectedObjectIds.value],
     });
   }, 300);
 }
@@ -277,7 +295,7 @@ watch(() => props.node.id, () => {
     style: data.value.style || DEFAULT_MASTER_STYLE,
     timeOfDay: data.value.timeOfDay || DEFAULT_MASTER_TIME_OF_DAY,
     mood: data.value.mood || DEFAULT_MASTER_MOOD,
-    objectIds: data.value.objectIds || [],
+    objectIds: normalizeSelectedObjectIds(data.value.objectIds),
     additionalDetail: data.value.additionalDetail || '',
     prompt: data.value.promptKo || data.value.prompt || '',
     promptKo: data.value.promptKo || data.value.prompt || '',
@@ -305,8 +323,12 @@ watch(
   }),
   (next) => {
     if (!data.value) return;
-    const savedObjectIds = normalizeIds(data.value.objectIds);
-    const nextObjectIds = normalizeIds(next.objectIds);
+    const savedObjectIds = normalizeSelectedObjectIds(data.value.objectIds);
+    const rawObjectIds = normalizeIds(next.objectIds);
+    const nextObjectIds = normalizeSelectedObjectIds(rawObjectIds);
+    if (!areNumberArraysEqual(rawObjectIds, nextObjectIds)) {
+      form.value.objectIds = [...nextObjectIds];
+    }
 
     const unchanged =
       next.style === (data.value.style || DEFAULT_MASTER_STYLE) &&
@@ -422,7 +444,7 @@ watch(
     form.value.style = data.value.style || DEFAULT_MASTER_STYLE;
     form.value.timeOfDay = data.value.timeOfDay || DEFAULT_MASTER_TIME_OF_DAY;
     form.value.mood = data.value.mood || DEFAULT_MASTER_MOOD;
-    form.value.objectIds = [...(data.value.objectIds || [])];
+    form.value.objectIds = normalizeSelectedObjectIds(data.value.objectIds);
   }
 );
 
@@ -528,12 +550,22 @@ onUnmounted(() => {
 });
 // 오브젝트 선택 토글
 function toggleObject(objectId: number): void {
-  const idx = form.value.objectIds.indexOf(objectId);
+  const nextObjectIds = normalizeSelectedObjectIds(form.value.objectIds);
+  const idx = nextObjectIds.indexOf(objectId);
   if (idx >= 0) {
-    form.value.objectIds.splice(idx, 1);
-  } else {
-    form.value.objectIds.push(objectId);
+    nextObjectIds.splice(idx, 1);
+    form.value.objectIds = nextObjectIds;
+    return;
   }
+  if (nextObjectIds.length >= MAX_OBJECT_SELECTION) {
+    return;
+  }
+  nextObjectIds.push(objectId);
+  form.value.objectIds = normalizeSelectedObjectIds(nextObjectIds);
+}
+
+function isObjectOptionDisabled(objectId: number): boolean {
+  return isObjectSelectionFull.value && !selectedObjectIds.value.includes(objectId);
 }
 
 
@@ -684,11 +716,17 @@ function setActive(): void {
           <Users class="panel-label-icon" />
           등장 오브젝트
         </label>
+        <p class="panel-subtext">최대 {{ MAX_OBJECT_SELECTION }}개 선택 ({{ selectedObjectCount }}/{{ MAX_OBJECT_SELECTION }})</p>
         <div class="panel-radio-group panel-pill-group panel-pill-group--accent">
-          <label v-for="obj in objectOptions" :key="obj.id" class="panel-radio panel-pill">
+          <label
+            v-for="obj in objectOptions"
+            :key="obj.id"
+            :class="['panel-radio', 'panel-pill', { 'panel-pill--disabled': isObjectOptionDisabled(obj.id) }]"
+          >
             <input
               type="checkbox"
-              :checked="form.objectIds.includes(obj.id)"
+              :checked="selectedObjectIds.includes(obj.id)"
+              :disabled="isObjectOptionDisabled(obj.id)"
               @change="toggleObject(obj.id)"
             />
             <span class="panel-radio-label">{{ obj.name }}</span>
@@ -926,6 +964,10 @@ function setActive(): void {
   margin: 0 0 0.5rem;
   font-size: 0.75rem;
   color: var(--gray-500, #6B7280);
+}
+
+.panel-pill--disabled {
+  opacity: 0.55;
 }
 
 .panel-translation-block .panel-prompt-actions {
