@@ -17,6 +17,7 @@ import { useSceneNodeStore } from './sceneNode';
  */
 export const useCollabStore = defineStore('collab', () => {
     const STORAGE_KEY = 'collab:lastRoomId';
+    const READ_KEY_PREFIX = 'collab:lastReadAt:';
     const CURSOR_THROTTLE_MS = 80;
     const NODE_MOVE_THROTTLE_MS = 80;
 
@@ -28,13 +29,20 @@ export const useCollabStore = defineStore('collab', () => {
     const currentProjectId = ref<number | null>(null);
     const participants = ref<CollabParticipant[]>([]);
     const messages = ref<CollabMessage[]>([]);
+    const lastReadAt = ref(0);
     const isPanelOpen = ref(false);
+    const getReadStorageKey = (projectId: number) => `${READ_KEY_PREFIX}${projectId}`;
 
     // UI State
     const isFloatingBarVisible = ref(false);
     const isMediaConnected = ref(false);
     const isAutoStarting = ref(false);
     const floatingBarResetToken = ref(0);
+    const isCallPanelOpen = ref(false);
+    const isCallPanelCollapsed = ref(false);
+    const callPanelPosition = ref({ x: 0, y: 0 });
+    const hasCallPanelCustomPosition = ref(false);
+    const isCallPanelDimmed = ref(false);
     const speakingMap = reactive(new Map<string, boolean>());
     const localStream = ref<MediaStream | null>(null);
     const audioInputDevices = ref<MediaDeviceInfo[]>([]);
@@ -81,7 +89,20 @@ export const useCollabStore = defineStore('collab', () => {
     // ================================
     const isConnected = computed(() => status.value === 'connected');
     const participantCount = computed(() => participants.value.length);
-    const hasUnreadMessages = computed(() => messages.value.length > 0);
+    const rtcPeerIds = computed(() => Array.from(rtcPeers));
+    const isCallConnecting = computed(() => isAutoStarting.value || rtcJoinPending.value);
+    const getStoredLastReadAt = () => {
+        if (currentProjectId.value === null) return 0;
+        const stored = localStorage.getItem(getReadStorageKey(currentProjectId.value));
+        return stored ? Number(stored) || 0 : 0;
+    };
+
+    const hasUnreadMessages = computed(() => {
+        const lastRead = Math.max(lastReadAt.value, getStoredLastReadAt());
+        return messages.value.some(
+            (m) => m.senderId !== localParticipant.value.odps && (m.timestamp ?? 0) > lastRead
+        );
+    });
 
     const authStore = useAuthStore();
     const sceneNodeStore = useSceneNodeStore();
@@ -292,6 +313,8 @@ export const useCollabStore = defineStore('collab', () => {
         roomId.value = nextRoomId;
         currentProjectId.value = nextProjectId;
         localStorage.setItem(STORAGE_KEY, nextRoomId);
+        const storedLastRead = localStorage.getItem(getReadStorageKey(nextProjectId));
+        lastReadAt.value = storedLastRead ? Number(storedLastRead) || 0 : 0;
 
         try {
             void loadAudioInputDevices();
@@ -300,22 +323,22 @@ export const useCollabStore = defineStore('collab', () => {
                 socketManager.connect();
             }
 
-        // 2. Subscribe to room (legacy signaling)
-        socketManager.subscribeToRoom(roomId.value);
-        // 2-1. Subscribe to chat (projectId)
-        socketManager.subscribeToChat(String(nextProjectId), handleChatMessage);
-        // 2-2. Subscribe to presence (projectId)
-        socketManager.subscribeToPresence(String(nextProjectId), handlePresenceMessage);
-        // 2-3. Subscribe to RTC signaling + errors
-        socketManager.subscribeToRTC(String(nextProjectId), handleRtcMessage);
-        socketManager.subscribeToErrors(handleRtcError);
+            // 2. Subscribe to room (legacy signaling)
+            socketManager.subscribeToRoom(roomId.value);
+            // 2-1. Subscribe to chat (projectId)
+            socketManager.subscribeToChat(String(nextProjectId), handleChatMessage);
+            // 2-2. Subscribe to presence (projectId)
+            socketManager.subscribeToPresence(String(nextProjectId), handlePresenceMessage);
+            // 2-3. Subscribe to RTC signaling + errors
+            socketManager.subscribeToRTC(String(nextProjectId), handleRtcMessage);
+            socketManager.subscribeToErrors(handleRtcError);
 
             // 3. Setup WebRTC Callbacks (Prepare for later)
-        peerConnectionService.setCallbacks({
-            onTrack: handleRemoteTrack,
-            onIceCandidate: (candidate, peerId) => handleLocalIceCandidate(peerId, candidate),
-            onConnectionStateChange: handleConnectionStateChange,
-        });
+            peerConnectionService.setCallbacks({
+                onTrack: handleRemoteTrack,
+                onIceCandidate: (candidate, peerId) => handleLocalIceCandidate(peerId, candidate),
+                onConnectionStateChange: handleConnectionStateChange,
+            });
 
             // 4. Broadcast Join + Presence after connection is ready
             socketManager.onConnected(() => {
@@ -343,7 +366,7 @@ export const useCollabStore = defineStore('collab', () => {
         }
 
         // Backend spec: max 6 participants for audio mesh
-        if (participants.value.length >= 6) {
+        if (participants.value.length > 6) {
             console.warn('[RTC] Room is full (max 6 participants)');
             alert('협업 통화는 최대 6명까지 참여할 수 있습니다.');
             isAutoStarting.value = false;
@@ -402,6 +425,10 @@ export const useCollabStore = defineStore('collab', () => {
         isMuted.value = false;
         localStream.value = null;
         isPanelOpen.value = false;
+        isCallPanelOpen.value = false;
+        isCallPanelCollapsed.value = false;
+        isCallPanelDimmed.value = false;
+        hasCallPanelCustomPosition.value = false;
         rtcJoinPending.value = false;
         rtcJoined.value = false;
         rtcPeers.clear();
@@ -445,6 +472,7 @@ export const useCollabStore = defineStore('collab', () => {
         currentProjectId.value = null;
         participants.value = [];
         messages.value = [];
+        lastReadAt.value = 0;
         cursors.clear();
         lastCursorSentAt = 0;
         lastNodeMoveSentAt.clear();
@@ -454,6 +482,10 @@ export const useCollabStore = defineStore('collab', () => {
         nodeLockUpdatedAt.clear();
         localLockedNodeId = null;
         isPanelOpen.value = false;
+        isCallPanelOpen.value = false;
+        isCallPanelCollapsed.value = false;
+        isCallPanelDimmed.value = false;
+        hasCallPanelCustomPosition.value = false;
         localStorage.removeItem(STORAGE_KEY);
     }
 
@@ -764,6 +796,21 @@ export const useCollabStore = defineStore('collab', () => {
             timestamp: now,
             type: 'chat',
         });
+        updateLastReadAt(now);
+    }
+
+    function updateLastReadAt(nextValue: number) {
+        if (!Number.isFinite(nextValue)) return;
+        if (nextValue <= lastReadAt.value) return;
+        lastReadAt.value = nextValue;
+        if (currentProjectId.value !== null) {
+            localStorage.setItem(getReadStorageKey(currentProjectId.value), String(lastReadAt.value));
+        }
+    }
+
+    function markChatRead() {
+        const latest = messages.value.reduce((max, m) => Math.max(max, m.timestamp ?? 0), 0);
+        updateLastReadAt(latest);
     }
 
     function handleChatMessage(message: any) {
@@ -994,6 +1041,15 @@ export const useCollabStore = defineStore('collab', () => {
         const isKnownParticipant = participants.value.some((participant) => participant.odps === lock.userId);
         if (!isKnownParticipant) return false;
         return true;
+    }
+
+    // 노드를 잠근 사용자의 커서 색상 반환
+    function getNodeLockColor(nodeId: string): string | null {
+        const lock = nodeLocks.get(nodeId);
+        if (!lock) return null;
+        if (!isNodeLockedByOther(nodeId)) return null;
+        // 커서 색상 맵에서 해당 사용자의 색상 가져오기
+        return cursorColorByUser.get(lock.userId) || null;
     }
 
     function handleCursorUpdate(peerId: string, payload: { x: number; y: number; sceneId: number }) {
@@ -1230,6 +1286,10 @@ export const useCollabStore = defineStore('collab', () => {
         rtcJoinPending.value = false;
         rtcJoined.value = false;
         isPanelOpen.value = false;
+        isCallPanelOpen.value = false;
+        isCallPanelCollapsed.value = false;
+        isCallPanelDimmed.value = false;
+        hasCallPanelCustomPosition.value = false;
         stopSpeakingMonitor(localUserId.value);
     }
 
@@ -1381,6 +1441,11 @@ export const useCollabStore = defineStore('collab', () => {
         isMediaConnected,     // Exported
         isAutoStarting,
         floatingBarResetToken,
+        isCallPanelOpen,
+        isCallPanelCollapsed,
+        callPanelPosition,
+        hasCallPanelCustomPosition,
+        isCallPanelDimmed,
         isMuted,
         isVideoOff,
         isScreenSharing,
@@ -1391,8 +1456,11 @@ export const useCollabStore = defineStore('collab', () => {
         isConnected,
         hasUnreadMessages,
         participantCount,
+        rtcPeerIds,
+        isCallConnecting,
         isSpeaking,
         getRemoteVolume,
+        markChatRead,
         // Actions
         joinRoom,
         leaveRoom,
@@ -1415,6 +1483,7 @@ export const useCollabStore = defineStore('collab', () => {
         finishNodeDrag,
         getNodeLock,
         isNodeLockedByOther,
+        getNodeLockColor,
         updateLocation,
         rejoinIfNeeded,
         selectMicrophone,

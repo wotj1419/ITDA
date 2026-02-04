@@ -113,6 +113,9 @@ export function buildNodeSettings(data: AnyNodeData): Record<string, unknown> {
     if ('promptKo' in data) {
       settings.promptKo = data.promptKo ?? '';
     }
+    if ('promptEnFinal' in data) {
+      settings.promptEnFinal = data.promptEnFinal ?? '';
+    }
     if ('promptEnFinalOverride' in data) {
       settings.promptEnFinalOverride = data.promptEnFinalOverride ?? '';
     }
@@ -311,7 +314,7 @@ export function createSceneNodeFromApi(
         startShotId: base.parentNodeId || '',
         endShotId: null,
         videoUrl: resolvedContentUrl,
-        thumbnailUrl: resolvedContentUrl,
+        thumbnailUrl: null,
         duration: DEFAULT_VIDEO_DURATION,
         aspectRatio: DEFAULT_VIDEO_ASPECT_RATIO,
         isConfirmed: !!node.isConfirmed,

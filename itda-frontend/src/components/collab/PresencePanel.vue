@@ -2,10 +2,12 @@
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useCollabStore } from '../../stores/collab'
-import AvatarGroup from '../common/AvatarGroup.vue'
+import { useSceneStore } from '../../stores/scene'
+import Avatar from '../common/Avatar.vue'
 import type { CollabParticipant } from '../../types/ui/collab'
 
 const collabStore = useCollabStore()
+const sceneStore = useSceneStore()
 const router = useRouter()
 const route = useRoute()
 
@@ -28,17 +30,19 @@ const presenceList = computed(() => {
   return Array.from(map.values())
 })
 
-const avatars = computed(() =>
-  presenceList.value.map((p) => ({
-    src: p.avatarUrl || '',
-    fallback: p.name?.[0]?.toUpperCase() || '?',
-    alt: p.name,
-    title: `${p.name || 'Guest'}: ${locationLabel(p)}`,
-    onClick: p.isMe ? undefined : () => followMember(p),
-  }))
-)
-
 const isConnected = computed(() => collabStore.isConnected)
+
+const sceneLabelById = computed(() => {
+  const map = new Map<number, string>()
+  sceneStore.scenes.forEach((scene) => {
+    const order = scene.order ?? scene.sceneId
+    const title = scene.title || ''
+    const label = title ? `씬 ${order}: ${title}` : `씬 ${order}`
+    map.set(scene.sceneId, label)
+  })
+  return map
+})
+
 
 const locationLabel = (member: CollabParticipant) => {
   const location = member.currentLocation
@@ -48,9 +52,17 @@ const locationLabel = (member: CollabParticipant) => {
     case 'SCENE_LIST':
       return '씬 목록'
     case 'SCENE_EDIT':
-      return member.sceneId ? `Scene ${member.sceneId} 편집 중` : '씬 편집 중'
+      if (member.sceneId) {
+        const label = sceneLabelById.value.get(member.sceneId)
+        return label ? `${label} 편집 중` : `Scene ${member.sceneId} 편집 중`
+      }
+      return '씬 편집 중'
     case 'TIMELINE':
-      return '타임라인'
+      if (member.sceneId) {
+        const label = sceneLabelById.value.get(member.sceneId)
+        return label ? `${label} 타임라인` : `Scene ${member.sceneId} 타임라인`
+      }
+      return '전체 타임라인'
     default:
       return 'Online'
   }
@@ -72,7 +84,11 @@ const followMember = (member: CollabParticipant) => {
       }
       break
     case 'TIMELINE':
-      router.push({ name: 'timeline', params: { id: pid } })
+      if (member.sceneId) {
+        router.push({ name: 'scene-timeline', params: { id: pid, sceneId: member.sceneId } })
+      } else {
+        router.push({ name: 'timeline', params: { id: pid } })
+      }
       break
     case 'SCENE_LIST':
     default:
@@ -85,9 +101,6 @@ const followMember = (member: CollabParticipant) => {
 <template>
   <div class="presence">
     <div class="section-label">현재 접속 중</div>
-    <div class="online-users">
-      <AvatarGroup :avatars="avatars" :max="3" size="sm" />
-    </div>
 
     <div v-if="!isConnected" class="presence-empty">Not connected</div>
     <div v-else-if="presenceList.length === 0" class="presence-empty">No one online</div>
@@ -97,13 +110,30 @@ const followMember = (member: CollabParticipant) => {
         :key="member.odps"
         class="presence-item"
       >
-        <span class="presence-name">
-          {{ member.name || 'Guest' }}
-          <span v-if="member.isMe" class="presence-me">(ME)</span>
-        </span>
-        <span class="presence-location">
-          {{ locationLabel(member) }}
-        </span>
+        <button
+          class="presence-avatar-btn"
+          type="button"
+          :disabled="member.isMe"
+          :aria-label="member.isMe ? `${member.name || 'Guest'} (ME)` : `Follow ${member.name || 'Guest'}`"
+          @click="!member.isMe && followMember(member)"
+        >
+          <Avatar
+            class="presence-avatar"
+            :src="member.avatarUrl || ''"
+            :alt="member.name || 'Guest'"
+            :user-id="parseInt(member.odps, 10) || 0"
+            size="sm"
+          />
+        </button>
+        <div class="presence-text">
+          <span class="presence-name">
+            {{ member.name || 'Guest' }}
+            <span v-if="member.isMe" class="presence-me">(ME)</span>
+          </span>
+          <span class="presence-location">
+            {{ locationLabel(member) }}
+          </span>
+        </div>
       </div>
     </div>
   </div>
@@ -123,24 +153,56 @@ const followMember = (member: CollabParticipant) => {
   margin-bottom: 0.25rem;
 }
 
-.online-users {
-  margin-bottom: 0.25rem;
-}
-
 .presence-list {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: 0.5rem;
 }
 
 .presence-item {
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
+  flex-direction: row;
+  align-items: center;
   justify-content: flex-start;
-  gap: 0.1rem;
+  gap: 0.5rem;
+  padding: 0.25rem 0;
   font-size: 0.75rem;
   color: var(--gray-600);
+}
+
+.presence-avatar-btn {
+  border: none;
+  background: transparent;
+  padding: 2px;
+  border-radius: 999px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  overflow: visible;
+  position: relative;
+}
+
+.presence-avatar-btn:disabled {
+  cursor: default;
+}
+
+.presence-avatar-btn:not(:disabled):hover .presence-avatar {
+  box-shadow: 0 0 0 2px rgba(255, 133, 161, 0.35);
+}
+
+.presence-avatar-btn:focus-visible .presence-avatar {
+  outline: 2px solid rgba(255, 133, 161, 0.5);
+  outline-offset: 2px;
+}
+
+
+.presence-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 0;
 }
 
 .presence-name {

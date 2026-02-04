@@ -14,7 +14,6 @@ import { ArrowLeft, Layers, Upload } from 'lucide-vue-next';
 interface Props {
   projectTitle: string;
   sceneTitle: string;
-  zoomLevel: string;
   projectId: number;
   sceneId?: number;
 }
@@ -35,7 +34,7 @@ defineProps<Props>();
 
       <nav class="breadcrumb" aria-label="Breadcrumb">
         <RouterLink to="/dashboard" class="breadcrumb-link">
-          내 프로젝트
+          홈
         </RouterLink>
         <span class="separator">/</span>
         <RouterLink
@@ -49,10 +48,8 @@ defineProps<Props>();
       </nav>
     </div>
 
-    <!-- Right: Zoom & Actions -->
+    <!-- Right: Actions -->
     <div class="header-right">
-      <span class="zoom-indicator">{{ zoomLevel }}</span>
-
       <RouterLink
         :to="sceneId
           ? { name: 'scene-timeline', params: { id: projectId, sceneId } }
@@ -154,15 +151,6 @@ defineProps<Props>();
   gap: 0.75rem;
 }
 
-.zoom-indicator {
-  font-size: 0.75rem;
-  font-family: 'JetBrains Mono', monospace;
-  background: var(--gray-100);
-  padding: 0.25rem 0.5rem;
-  border-radius: 0.25rem;
-  color: var(--gray-600);
-}
-
 .icon {
   width: 20px;
   height: 20px;
@@ -187,6 +175,9 @@ defineProps<Props>();
 }
 
 .export-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
   box-shadow: var(--shadow-lg);
 }
 

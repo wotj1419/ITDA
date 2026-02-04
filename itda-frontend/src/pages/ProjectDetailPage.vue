@@ -398,10 +398,37 @@ const openScenarioDrawer = () => scenarioStore.openDrawer()
   cursor: pointer;
 }
 
-.preview-thumb img {
+.preview-thumb .preview-image,
+.preview-thumb .preview-video {
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
   object-fit: cover;
+  display: block;
+}
+
+.preview-thumb .preview-video {
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.preview-thumb.has-video:hover .preview-video,
+.preview-thumb.has-video:focus-visible .preview-video {
+  opacity: 1;
+}
+
+.preview-thumb.has-video:hover .preview-image,
+.preview-thumb.has-video:focus-visible .preview-image {
+  opacity: 0;
+}
+
+.preview-thumb.force-video .preview-video {
+  opacity: 1;
+}
+
+.preview-thumb.force-video .preview-image {
+  opacity: 0;
 }
 
 .preview-duration {

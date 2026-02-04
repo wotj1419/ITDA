@@ -6,6 +6,9 @@ export interface Project {
   description?: string;
   genre?: string;
   thumbnailUrl?: string;
+  previewType?: 'PROJECT_MERGE' | 'SCENE_MERGE' | 'CLIP' | null;
+  previewThumbnailUrl?: string | null;
+  previewVideoUrl?: string | null;
   role: ProjectRole;
   memberCount: number;
   sceneCount: number;

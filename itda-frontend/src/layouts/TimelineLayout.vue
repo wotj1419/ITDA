@@ -2,34 +2,39 @@
 import { computed } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { useUIStore } from '../stores/ui'
-import { useCollabStore } from '../stores/collab'
 import { useSidebarShortcut } from '../composables/useSidebarShortcut'
-import Button from '../components/common/Button.vue'
 import PresencePanel from '../components/collab/PresencePanel.vue'
+import SidebarHoverMenu from '../components/collab/SidebarHoverMenu.vue'
 import {
   ArrowLeft,
   Layers,
   Film,
   Clock,
-  Phone,
 } from 'lucide-vue-next'
 
 interface Props {
   projectTitle: string
   clipCount: number
   totalDuration: number
+  isSceneTimeline?: boolean
+  sceneTitle?: string
+  sceneId?: number | null
 }
 
 const props = withDefaults(defineProps<Props>(), {
   projectTitle: 'Project',
   clipCount: 0,
   totalDuration: 0,
+  isSceneTimeline: false,
+  sceneTitle: '',
+  sceneId: null,
 })
+
+const timelineLabel = computed(() => props.isSceneTimeline ? '씬 타임라인' : '전체 타임라인')
 
 const route = useRoute()
 const router = useRouter()
 const uiStore = useUIStore()
-const collabStore = useCollabStore()
 
 // Keyboard shortcut (Ctrl+B)
 useSidebarShortcut()
@@ -48,12 +53,6 @@ function formatDuration(seconds: number): string {
   return `${m}:${s.toString().padStart(2, '0')}`
 }
 
-const handleStartCall = () => {
-  const pid = Number(projectId.value)
-  if (Number.isFinite(pid)) {
-    collabStore.startCall(pid)
-  }
-}
 </script>
 
 <template>
@@ -66,7 +65,6 @@ const handleStartCall = () => {
           class="menu-btn"
           :class="{ 'menu-btn--open': uiStore.sidebarExpanded }"
           @click="uiStore.toggleSidebar"
-          :title="uiStore.sidebarExpanded ? 'Collapse' : 'Expand'"
         >
           <span class="toggle" aria-hidden="true">
             <span class="bars bar1"></span>
@@ -81,7 +79,7 @@ const handleStartCall = () => {
         <h2 class="project-title">{{ projectTitle }}</h2>
         <div class="timeline-badge">
           <Layers class="badge-icon" />
-          <span>전체 타임라인</span>
+          <span>{{ timelineLabel }}</span>
         </div>
       </div>
 
@@ -104,17 +102,11 @@ const handleStartCall = () => {
       </div>
 
       <!-- Presence -->
-      <div class="sidebar-section border-top">
-        <div class="sidebar-text">
+      <div class="sidebar-section border-top collab-section">
+        <div class="sidebar-text presence-block">
           <PresencePanel />
         </div>
-        <div class="call-cta">
-          <div class="call-hint">빠른 통화</div>
-          <Button variant="secondary" class="start-call-btn" @click="handleStartCall">
-            <Phone class="icon-sm" />
-            <span class="nav-label call-label">통화 시작</span>
-          </Button>
-        </div>
+        <SidebarHoverMenu :project-id="projectId" :expanded="uiStore.sidebarExpanded" />
       </div>
     </aside>
 
@@ -123,7 +115,7 @@ const handleStartCall = () => {
       <!-- Header -->
       <header class="header">
         <div class="header-left">
-          <button class="btn-icon-back" @click="router.back()" title="Go Back">
+          <button class="btn-icon-back" @click="router.back()">
             <ArrowLeft class="icon-md" />
           </button>
           
@@ -134,16 +126,21 @@ const handleStartCall = () => {
               {{ projectTitle }}
             </RouterLink>
             <span class="separator">/</span>
-            <span class="current">전체 타임라인</span>
+            <template v-if="isSceneTimeline && sceneTitle && sceneId">
+              <RouterLink 
+                :to="{ name: 'scene-edit', params: { projectId: projectId, sceneId: sceneId } }"
+                class="breadcrumb-link"
+              >
+                {{ sceneTitle }}
+              </RouterLink>
+              <span class="separator">/</span>
+            </template>
+            <span class="current">{{ timelineLabel }}</span>
           </div>
         </div>
 
         <div class="header-actions">
           <slot name="actions" />
-          <div class="duration-badge">
-            <Clock class="badge-icon" />
-            <span>{{ formatDuration(totalDuration) }}</span>
-          </div>
         </div>
       </header>
 
@@ -211,6 +208,37 @@ const handleStartCall = () => {
 .border-top {
   border-top: 1px solid var(--rose-100);
   margin-top: auto;
+}
+
+.collab-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  transition: border-color 0.2s ease;
+}
+
+.sidebar-collapsed .collab-section {
+  justify-content: flex-end;
+  padding-bottom: 0.5rem;
+  border-top-color: transparent;
+}
+
+.presence-block {
+  max-height: 320px;
+  opacity: 1;
+  overflow: hidden;
+  transform: translateY(0);
+  transition:
+    max-height 0.25s ease,
+    opacity 0.15s ease 0.2s,
+    transform 0.2s ease;
+}
+
+.sidebar-collapsed .presence-block {
+  max-height: 0;
+  opacity: 0;
+  transform: translateY(6px);
+  pointer-events: none;
 }
 
 .project-title {

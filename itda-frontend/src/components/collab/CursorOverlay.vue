@@ -7,8 +7,25 @@ const collabStore = useCollabStore()
 const activeCursors = computed(() => {
     const toScreen = collabStore.flowToScreenCoordinate
     if (!toScreen) return []
+    
+    // 현재 내가 보고 있는 씬 ID (localParticipant에서 가져옴)
+    const mySceneId = collabStore.localParticipant.sceneId
+    
+    // 참가자 목록에 있는 사용자만 커서 표시
+    const participantIds = new Set(collabStore.participants.map(p => p.odps))
+    
+    // 같은 씬에 있는 참가자만 필터링 (SCENE_EDIT 위치에 있고 같은 씬인 사용자)
+    const sameSceneParticipants = new Set(
+        collabStore.participants
+            .filter(p => p.sceneId === mySceneId && p.currentLocation === 'SCENE_EDIT')
+            .map(p => p.odps)
+    )
+    
     return Array.from(collabStore.cursors.entries())
         .filter(([userId]) => userId !== collabStore.localParticipant.odps)
+        .filter(([userId]) => participantIds.has(userId)) // 참가자가 아니면 커서 표시 안함
+        .filter(([, cursor]) => cursor.sceneId === mySceneId) // 같은 씬의 커서만
+        .filter(([userId]) => sameSceneParticipants.has(userId)) // 같은 씬에 있는 참가자만
         .map(([userId, cursor]) => {
             const participant = collabStore.participants.find(p => p.odps === userId);
             const screen = toScreen({ x: cursor.x, y: cursor.y })
@@ -68,7 +85,7 @@ const activeCursors = computed(() => {
     width: 100vw;
     height: 100vh;
     pointer-events: none; /* Let clicks pass through */
-    z-index: 9998; /* Below control bar but above content */
+    z-index: 100; /* 노드 패널보다 아래에 표시 */
     overflow: hidden;
 }
 

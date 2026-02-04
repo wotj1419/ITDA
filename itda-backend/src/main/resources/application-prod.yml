@@ -12,7 +12,7 @@ spring:
 ai:
   vertex:
     project-id: ${GCP_PROJECT_ID}
-    location: ${GCP_LOCATION}
+    location: ${GCP_LOCATION:global}
     api-version: ${AI_VERTEX_API_VERSION:v1}
   gemini:
     api-key: ${GEMINI_API_KEY:}
@@ -24,7 +24,7 @@ ai:
     response-modalities: ${GEMINI_RESPONSE_MODALITIES:IMAGE}
     timeout-ms: ${GEMINI_TIMEOUT_MS:${VERTEX_IMAGE_TIMEOUT_MS:180000}}
   scenario:
-    model-text: ${VERTEX_TEXT_MODEL}
+    model-text: ${VERTEX_TEXT_MODEL:gemini-3-flash-preview}
     timeout-ms: ${VERTEX_TIMEOUT_MS:180000}
   veo:
     stub: ${AI_VEO_STUB:false}
@@ -36,3 +36,15 @@ logging:
   level:
     com.itda: INFO
     root: WARN
+management:
+  endpoints:
+    web:
+      exposure:
+        include: [ "health", "info", "prometheus" ]
+  endpoint:
+    prometheus:
+      enabled: true
+  prometheus:
+    metrics:
+      export:
+        enabled: true

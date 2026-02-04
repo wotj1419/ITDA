@@ -5,6 +5,7 @@ interface AvatarItem {
   alt?: string
   fallback?: string
   title?: string
+  userId?: number // 사용자 고유 ID
   onClick?: () => void
 }
 
@@ -12,15 +13,43 @@ interface Props {
   avatars: AvatarItem[]
   max?: number
   size?: 'sm' | 'md' | 'lg'
+  useEmoji?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
   max: 3,
   size: 'sm',
+  useEmoji: true,
 })
+
+// 귀여운 동물 이모지 목록
+const AVATAR_EMOJIS = [
+  '🐱', '🐶', '🐰', '🦊', '🐻', '🐼', '🐨', '🦁',
+  '🐯', '🐮', '🐷', '🐸', '🐵', '🐔', '🐧', '🦄',
+  '🐹', '🐝', '🦋', '🐢', '🐙', '🦀', '🐳', '🦩',
+]
+
+// userId 기반으로 이모지 선택 (userId가 없으면 이름 해시 사용)
+function getEmoji(userId?: number, name?: string): string {
+  if (userId !== undefined && userId > 0) {
+    const index = (userId - 1) % AVATAR_EMOJIS.length
+    return AVATAR_EMOJIS[index] ?? '🐱'
+  }
+  if (!name) return AVATAR_EMOJIS[0] ?? '🐱'
+  let hash = 0
+  for (let i = 0; i < name.length; i++) {
+    hash = ((hash << 5) - hash) + name.charCodeAt(i)
+    hash = hash & hash
+  }
+  const index = Math.abs(hash) % AVATAR_EMOJIS.length
+  return AVATAR_EMOJIS[index] ?? '🐱'
+}
 
 const visibleAvatars = computed(() => props.avatars.slice(0, props.max))
 const remaining = computed(() => props.avatars.length - props.max)
+
+const getAvatarEmoji = (avatar: AvatarItem) => getEmoji(avatar.userId, avatar.alt || avatar.fallback || '')
+const shouldShowEmoji = (avatar: AvatarItem) => props.useEmoji && !avatar.src
 </script>
 
 <template>
@@ -32,7 +61,8 @@ const remaining = computed(() => props.avatars.length - props.max)
       :type="avatar.onClick ? 'button' : undefined"
       :class="['avatar', `avatar-${size}`, { 'avatar-clickable': !!avatar.onClick }]"
       :style="{ zIndex: visibleAvatars.length - index }"
-      :title="avatar.title"
+      :data-tooltip="avatar.title"
+      :aria-label="avatar.title"
       @click="avatar.onClick && avatar.onClick()"
     >
       <img
@@ -41,6 +71,9 @@ const remaining = computed(() => props.avatars.length - props.max)
         :alt="avatar.alt || 'Avatar'"
         class="avatar-image"
       />
+      <span v-else-if="shouldShowEmoji(avatar)" class="avatar-emoji">
+        {{ getAvatarEmoji(avatar) }}
+      </span>
       <span v-else class="avatar-fallback">
         {{ avatar.fallback || (avatar.alt?.[0] || '?').toUpperCase() }}
       </span>
@@ -58,6 +91,7 @@ const remaining = computed(() => props.avatars.length - props.max)
 .avatar-group {
   display: flex;
   align-items: center;
+  overflow: visible;
 }
 
 .avatar-group .avatar {
@@ -78,10 +112,11 @@ const remaining = computed(() => props.avatars.length - props.max)
   background: var(--rose-100);
   color: var(--rose-600);
   font-weight: 600;
-  overflow: hidden;
+  overflow: visible;
   flex-shrink: 0;
   border: none;
   padding: 0;
+  position: relative;
 }
 
 .avatar-clickable {
@@ -92,6 +127,52 @@ const remaining = computed(() => props.avatars.length - props.max)
 .avatar-clickable:hover {
   transform: translateY(-1px);
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+}
+
+.avatar[data-tooltip]::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 10px);
+  transform: translate(-50%, 6px);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(255, 245, 249, 0.95));
+  color: var(--gray-800);
+  font-size: 0.68rem;
+  font-weight: 600;
+  padding: 0.35rem 0.6rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 133, 161, 0.25);
+  box-shadow: 0 8px 18px rgba(255, 133, 161, 0.22);
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.18s ease, transform 0.18s ease;
+  z-index: 20;
+}
+
+.avatar[data-tooltip]::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 4px);
+  transform: translateX(-50%);
+  border-width: 6px;
+  border-style: solid;
+  border-color: rgba(255, 255, 255, 0.95) transparent transparent transparent;
+  opacity: 0;
+  transition: opacity 0.18s ease;
+  z-index: 19;
+}
+
+.avatar[data-tooltip]:hover::after,
+.avatar[data-tooltip]:focus-visible::after {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+.avatar[data-tooltip]:hover::before,
+.avatar[data-tooltip]:focus-visible::before {
+  opacity: 1;
 }
 
 /* Sizes */
@@ -117,11 +198,29 @@ const remaining = computed(() => props.avatars.length - props.max)
   width: 100%;
   height: 100%;
   object-fit: cover;
+  border-radius: 50%;
 }
 
 .avatar-more {
   background: var(--gray-100);
   color: var(--gray-500);
   font-size: 0.625rem;
+}
+
+.avatar-emoji {
+  font-size: 0.9rem;
+  line-height: 1;
+}
+
+.avatar-sm .avatar-emoji {
+  font-size: 0.9rem;
+}
+
+.avatar-md .avatar-emoji {
+  font-size: 1.1rem;
+}
+
+.avatar-lg .avatar-emoji {
+  font-size: 1.5rem;
 }
 </style>

@@ -3,13 +3,26 @@ import type { AnyNodeData } from '../types/ui/sceneNodes';
 import type { GeneratePromptRequest, GeneratePromptResponse, PromptPreviewRequest, PromptPreviewResponse } from '../types/api/ai';
 import { JobStatus, PromptStatus } from '../types/ui/sceneNodes';
 import { useSceneNodeStore } from '../stores/sceneNode';
-import { resolveApiUrl, isApiResourceUrl } from '../services/api/urls';
-import { fetchProtectedBlobUrl } from '../services/api/media';
+import { resolveApiUrl } from '../services/api/urls';
 import { SHOT_FALLBACK_THUMBNAIL } from '../utils/fallbacks';
 import { useGenerationToast } from './useGenerationToast';
 import { aiService } from '../services';
 
 export type GenerationToastType = 'image' | 'video' | 'shot' | 'grid';
+
+const VIDEO_FILE_EXTENSIONS = ['.mp4', '.mov', '.m4v', '.webm', '.ogv', '.avi', '.mkv'];
+
+function isLikelyVideoUrl(url: string): boolean {
+  const resolved = resolveApiUrl(url) ?? url;
+  try {
+    const parsed = new URL(resolved, window.location.origin);
+    const pathname = parsed.pathname.toLowerCase();
+    return VIDEO_FILE_EXTENSIONS.some((ext) => pathname.endsWith(ext));
+  } catch {
+    const lowered = resolved.toLowerCase();
+    return VIDEO_FILE_EXTENSIONS.some((ext) => lowered.includes(ext));
+  }
+}
 
 interface UseNodeGenerationOptions {
   nodeId: string;
@@ -120,16 +133,23 @@ export function useNodeGeneration(options: UseNodeGenerationOptions) {
     const toastId = startGenerationToast(options.toastType);
 
     try {
-      nodeStore.updateNodeLocal(options.nodeId, {
+      const runningPatch: Partial<AnyNodeData> = {
         jobStatus: JobStatus.RUNNING,
         generationState: 'requested',
-      });
+      };
+      if (options.nodeType === 'VIDEO') {
+        runningPatch.videoUrl = null;
+        runningPatch.thumbnailUrl = null;
+      }
+      nodeStore.updateNodeLocal(options.nodeId, runningPatch);
 
       const jobId = await aiService.generateNode(options.nodeId, prompt, {
         nodeType: options.nodeType,
         settings: options.getJobSettings(),
         promptEnFinalOverride: options.getPromptOverride?.(),
         referenceObjectIds: options.getReferenceObjectIds?.(),
+        // Idempotency key reuse로 기존 PENDING/FAILED Job이 반환되면 재큐잉하여 timeout 가능성을 줄인다.
+        requeueIfExisting: true,
       });
 
       const result = await aiService.pollJobUntilComplete(jobId, (status) => {
@@ -137,14 +157,48 @@ export function useNodeGeneration(options: UseNodeGenerationOptions) {
       });
 
       if (result.status === 'SUCCEEDED') {
-        const blobUrl = await fetchProtectedBlobUrl(result.resultUrl).catch(() => null);
-        const resolvedResultUrl =
-          blobUrl ?? (isApiResourceUrl(result.resultUrl) ? null : resolveApiUrl(result.resultUrl));
-        const thumbnailCandidate = result.thumbnailUrl ?? result.resultUrl ?? null;
-        const resolvedThumbnailUrl =
-          options.nodeType === 'VIDEO'
-            ? (isApiResourceUrl(thumbnailCandidate) ? null : resolveApiUrl(thumbnailCandidate))
-            : blobUrl ?? (isApiResourceUrl(thumbnailCandidate) ? null : resolveApiUrl(thumbnailCandidate));
+        const rawResultUrl = result.resultUrl ?? null;
+
+        let resolvedResultUrl: string | null = null;
+        if (rawResultUrl) {
+          if (options.nodeType === 'VIDEO') {
+            resolvedResultUrl = await nodeStore.resolveNodeMediaUrl(
+              options.nodeId,
+              'videoUrl',
+              rawResultUrl
+            );
+          } else {
+            resolvedResultUrl = await nodeStore.resolveNodeMediaUrl(
+              options.nodeId,
+              'imageUrl',
+              rawResultUrl
+            );
+          }
+        }
+
+        let resolvedThumbnailUrl: string | null = null;
+        const rawThumbnailUrl = result.thumbnailUrl ?? null;
+        if (options.nodeType === 'VIDEO') {
+          if (rawThumbnailUrl) {
+            const normalizedThumbnailUrl = resolveApiUrl(rawThumbnailUrl) ?? rawThumbnailUrl;
+            if (!isLikelyVideoUrl(normalizedThumbnailUrl)) {
+              resolvedThumbnailUrl = await nodeStore.resolveNodeMediaUrl(
+                options.nodeId,
+                'thumbnailUrl',
+                rawThumbnailUrl
+              );
+            }
+          }
+        } else if (rawThumbnailUrl) {
+          resolvedThumbnailUrl = await nodeStore.resolveNodeMediaUrl(
+            options.nodeId,
+            'thumbnailUrl',
+            rawThumbnailUrl
+          );
+        } else {
+          resolvedThumbnailUrl = resolvedResultUrl;
+        }
+
         nodeStore.updateNodeLocal(options.nodeId, {
           jobStatus: JobStatus.SUCCEEDED,
           generationState: null,

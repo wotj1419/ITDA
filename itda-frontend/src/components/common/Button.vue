@@ -77,4 +77,10 @@ const classes = computed(() => [
     transform: rotate(360deg);
   }
 }
+
+.btn-label {
+  display: inline-flex;
+  align-items: center;
+  gap: inherit;
+}
 </style>

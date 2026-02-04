@@ -1,24 +1,26 @@
 <script setup lang="ts">
-import { computed, ref, type Component } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, type Component } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import type { RouteLocationRaw } from 'vue-router'
 import { useUIStore } from '../stores/ui'
-import { useCollabStore } from '../stores/collab'
 import { useSidebarShortcut } from '../composables/useSidebarShortcut'
 import type { ProjectDetail } from '../types/api/projects'
 import Badge from '../components/common/Badge.vue'
 import Button from '../components/common/Button.vue'
 import ShareButton from '../components/common/ShareButton.vue'
+import AvatarGroup from '../components/common/AvatarGroup.vue'
 import ShareProjectModal from '../components/project/ShareProjectModal.vue'
 import ProjectInfoDrawer from '../components/project/ProjectInfoDrawer.vue'
 import PresencePanel from '../components/collab/PresencePanel.vue'
+import SidebarHoverMenu from '../components/collab/SidebarHoverMenu.vue'
+import { useCollabStore } from '../stores/collab'
+import type { CollabParticipant } from '../types/ui/collab'
 import {
   BookOpen,
   Clapperboard,
   User,
   Layers,
   Settings,
-  Phone,
   Play,
   ArrowLeft,
   Pencil,
@@ -45,8 +47,8 @@ const emit = defineEmits<{
 
 const router = useRouter()
 const route = useRoute()
-const collabStore = useCollabStore()
 const uiStore = useUIStore()
+const collabStore = useCollabStore()
 
 // Keyboard shortcut (Ctrl+B)
 useSidebarShortcut()
@@ -73,13 +75,80 @@ const navItems = computed<NavItem[]>(() => {
   return props.hideScenes ? items.filter((item) => item.key !== 'scenes') : items
 })
 
-const memberBadges = computed(() =>
-  (props.project?.members || []).slice(0, 3).map((member) => ({
-    initials: member.name?.[0]?.toUpperCase() || '?',
+const memberList = computed(() => props.project?.members || [])
+
+const memberAvatars = computed(() =>
+  memberList.value.slice(0, 3).map((member) => ({
+    src: member.profileImageUrl || '',
+    fallback: member.name?.[0]?.toUpperCase() || '?',
+    alt: member.name,
+    title: undefined,
+    userId: member.userId, // userId 추가
   }))
 )
-const totalMembers = computed(() => props.project?.members?.length ?? props.project?.memberCount ?? 0)
-const extraCount = computed(() => Math.max(totalMembers.value - memberBadges.value.length, 0))
+
+const extraCount = computed(() => Math.max(memberList.value.length - memberAvatars.value.length, 0))
+const isMemberMenuOpen = ref(false)
+const memberMenuRef = ref<HTMLElement | null>(null)
+
+const onlineMembers = computed(() => {
+  if (collabStore.status !== 'connected' && collabStore.status !== 'connecting') return new Set<string>()
+  const ids = new Set<string>()
+  const local = collabStore.localParticipant
+  if (local?.odps) {
+    ids.add(String(local.odps))
+  }
+  collabStore.participants.forEach((p: CollabParticipant) => {
+    if (p?.odps) {
+      ids.add(String(p.odps))
+    }
+  })
+  return ids
+})
+
+const isMemberOnline = (memberId: number) => onlineMembers.value.has(String(memberId))
+
+// 귀여운 동물 이모지 목록
+const AVATAR_EMOJIS = [
+  '🐱', '🐶', '🐰', '🦊', '🐻', '🐼', '🐨', '🦁',
+  '🐯', '🐮', '🐷', '🐸', '🐵', '🐔', '🐧', '🦄',
+  '🐹', '🐝', '🦋', '🐢', '🐙', '🦀', '🐳', '🦩',
+]
+
+// userId 기반으로 이모지 선택
+function getEmoji(userId?: number, name?: string): string {
+  if (userId !== undefined && userId > 0) {
+    const index = (userId - 1) % AVATAR_EMOJIS.length
+    return AVATAR_EMOJIS[index] ?? '🐱'
+  }
+  if (!name) return AVATAR_EMOJIS[0] ?? '🐱'
+  let hash = 0
+  for (let i = 0; i < name.length; i++) {
+    hash = ((hash << 5) - hash) + name.charCodeAt(i)
+    hash = hash & hash
+  }
+  const index = Math.abs(hash) % AVATAR_EMOJIS.length
+  return AVATAR_EMOJIS[index] ?? '🐱'
+}
+
+const getMemberEmoji = (userId: number, name?: string) => getEmoji(userId, name)
+
+const toggleMemberMenu = () => {
+  if (!extraCount.value) return
+  isMemberMenuOpen.value = !isMemberMenuOpen.value
+}
+
+const closeMemberMenu = () => {
+  isMemberMenuOpen.value = false
+}
+
+const handleMemberMenuOutside = (event: MouseEvent) => {
+  if (!memberMenuRef.value) return
+  const target = event.target as Node | null
+  if (!target) return
+  if (memberMenuRef.value.contains(target)) return
+  closeMemberMenu()
+}
 
 
 const sidebarClasses = computed(() => [
@@ -99,12 +168,14 @@ const progressPercentage = computed(() => {
   return Math.round((props.progress.completed / props.progress.total) * 100)
 })
 
-const handleStartCall = () => {
-  const pid = Number(projectId.value)
-  if (Number.isFinite(pid)) {
-    collabStore.startCall(pid)
-  }
-}
+onMounted(() => {
+  document.addEventListener('click', handleMemberMenuOutside)
+})
+
+onBeforeUnmount(() => {
+  document.removeEventListener('click', handleMemberMenuOutside)
+})
+
 </script>
 
 <template>
@@ -117,7 +188,6 @@ const handleStartCall = () => {
           class="menu-btn"
           :class="{ 'menu-btn--open': uiStore.sidebarExpanded }"
           @click="uiStore.toggleSidebar"
-          :title="uiStore.sidebarExpanded ? 'Collapse' : 'Expand'"
         >
           <span class="toggle" aria-hidden="true">
             <span class="bars bar1"></span>
@@ -160,17 +230,11 @@ const handleStartCall = () => {
       </nav>
 
       <!-- Online Now -->
-      <div class="sidebar-section border-top">
-        <div class="sidebar-text">
+      <div class="sidebar-section border-top collab-section">
+        <div class="sidebar-text presence-block">
           <PresencePanel />
         </div>
-        <div class="call-cta">
-          <div class="call-hint">빠른 통화</div>
-          <Button variant="secondary" class="start-call-btn" @click="handleStartCall">
-            <Phone class="icon-sm" />
-            <span class="nav-label call-label">통화 시작</span>
-          </Button>
-        </div>
+        <SidebarHoverMenu :project-id="projectId" :expanded="uiStore.sidebarExpanded" />
       </div>
 
 
@@ -181,12 +245,12 @@ const handleStartCall = () => {
       <!-- Header -->
       <header class="header">
         <div class="header-left">
-          <button class="btn-icon-back" @click="router.push('/dashboard')" title="Go to Dashboard">
+          <button class="btn-icon-back" @click="router.push('/dashboard')">
             <ArrowLeft class="icon-md" />
           </button>
           
           <div class="breadcrumb">
-            <RouterLink to="/dashboard">내 프로젝트</RouterLink>
+            <RouterLink to="/dashboard">홈</RouterLink>
             <span class="separator">/</span>
             <span class="current">{{ project?.title || 'Project' }}</span>
             <button
@@ -209,15 +273,46 @@ const handleStartCall = () => {
             <span class="progress-text">{{ progress.completed }}/{{ progress.total }}</span>
           </div>
 
-          <div class="member-pill" v-if="totalMembers > 0">
-            <span
-              v-for="(member, index) in memberBadges"
-              :key="`${member.initials}-${index}`"
-              class="member-initial"
+          <div ref="memberMenuRef" class="member-pill" v-if="memberList.length > 0">
+            <AvatarGroup :avatars="memberAvatars" :max="3" size="sm" />
+            <button
+              v-if="extraCount > 0"
+              class="member-more-btn"
+              type="button"
+              @click.stop="toggleMemberMenu"
             >
-              {{ member.initials }}
-            </span>
-            <span v-if="extraCount > 0" class="member-more">+{{ extraCount }}</span>
+              +{{ extraCount }}
+            </button>
+            <div v-if="isMemberMenuOpen" class="member-dropdown">
+              <div
+                v-for="member in memberList"
+                :key="member.userId"
+                class="member-dropdown__item"
+              >
+                <span
+                  class="member-avatar"
+                  :class="{ 'member-avatar--image': !!member.profileImageUrl }"
+                  :style="member.profileImageUrl ? { backgroundImage: `url(${member.profileImageUrl})` } : {}"
+                >
+                  <span v-if="!member.profileImageUrl" class="member-avatar__emoji">
+                    {{ getMemberEmoji(member.userId, member.name) }}
+                  </span>
+                </span>
+                <div class="member-info">
+                  <span class="member-name">{{ member.name }}</span>
+                  <span
+                    class="member-status"
+                    :class="{
+                      'member-status--online': isMemberOnline(member.userId),
+                      'member-status--offline': !isMemberOnline(member.userId),
+                    }"
+                  >
+                    <span class="member-status__dot" aria-hidden="true"></span>
+                    {{ isMemberOnline(member.userId) ? '온라인' : '오프라인' }}
+                  </span>
+                </div>
+              </div>
+            </div>
           </div>
           <ShareButton @click="uiStore.openModal('share-project')" />
 
@@ -283,15 +378,8 @@ const handleStartCall = () => {
   }
   
   .sidebar-collapsed {
-     /* Optional: width: 0 if we want to hide it completely, but navigation is needed. 
-        Let's keep 72px for icons, but ensure main content isn't squished? 
-        If sidebar is fixed, it doesn't take flex space. 
-        So main content will be full width behind it. 
-        We need to add margin to main content OR padding-left. 
-     */
-     /* Actually, if sidebar is fixed, main content starts at edge.
-        We need padding-left on main-wrapper equal to sidebar width. 
-     */
+     /* Mobile: collapsed sidebar width */
+     width: 72px;
   }
 
   .sidebar:not(.sidebar-collapsed) {
@@ -419,6 +507,37 @@ const handleStartCall = () => {
 .border-top {
   border-top: 1px solid var(--rose-100);
   margin-top: auto;
+}
+
+.collab-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  transition: border-color 0.2s ease;
+}
+
+.sidebar-collapsed .collab-section {
+  justify-content: flex-end;
+  padding-bottom: 0.5rem;
+  border-top-color: transparent;
+}
+
+.presence-block {
+  max-height: 320px;
+  opacity: 1;
+  overflow: hidden;
+  transform: translateY(0);
+  transition:
+    max-height 0.25s ease,
+    opacity 0.15s ease 0.2s,
+    transform 0.2s ease;
+}
+
+.sidebar-collapsed .presence-block {
+  max-height: 0;
+  opacity: 0;
+  transform: translateY(6px);
+  pointer-events: none;
 }
 
 .project-title {
@@ -822,29 +941,129 @@ const handleStartCall = () => {
   display: inline-flex;
   align-items: center;
   gap: 0.25rem;
-  padding: 0.25rem 0.5rem;
-  border: 1px solid var(--rose-100);
-  border-radius: 999px;
-  background: var(--rose-50);
-  color: var(--rose-600);
-  font-size: 0.75rem;
-  font-weight: 600;
+  padding: 0;
+  border: none;
+  background: transparent;
+  position: relative;
 }
 
-.member-initial {
+.member-more-btn {
+  border: 1px solid var(--rose-100);
+  background: var(--rose-50);
+  color: var(--rose-600);
+  font-size: 0.7rem;
+  font-weight: 600;
+  border-radius: 999px;
+  padding: 0.2rem 0.55rem;
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+  white-space: nowrap;
+}
+
+.member-more-btn:hover {
+  background: var(--rose-100);
+  border-color: var(--rose-200);
+}
+
+.member-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  min-width: 200px;
+  max-width: 260px;
+  background: white;
+  border: 1px solid var(--rose-100);
+  border-radius: 12px;
+  box-shadow: 0 16px 32px rgba(15, 23, 42, 0.12);
+  padding: 0.5rem;
+  z-index: 30;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.member-dropdown__item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.35rem 0.3rem;
+  border-radius: 10px;
+}
+
+.member-dropdown__item:hover {
+  background: var(--rose-50);
+}
+
+.member-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  border: 1px solid var(--rose-100);
+  background: var(--rose-100);
+  color: var(--rose-600);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 20px;
-  height: 20px;
-  padding: 0 0.25rem;
-  border-radius: 999px;
-  background: white;
-  border: 1px solid var(--rose-100);
+  font-size: 0.65rem;
+  font-weight: 600;
+  background-position: center;
+  background-size: cover;
+  flex-shrink: 0;
 }
 
-.member-more {
-  padding-left: 0.125rem;
+.member-avatar--image {
+  background-color: transparent;
+}
+
+.member-avatar__emoji {
+  font-size: 0.9rem;
+  line-height: 1;
+}
+
+.member-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.member-name {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--gray-800);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.member-status {
+  font-size: 0.65rem;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.member-status__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--gray-400);
+  flex-shrink: 0;
+}
+
+.member-status--online {
+  color: var(--success-600);
+}
+
+.member-status--online .member-status__dot {
+  background: var(--success-600);
+}
+
+.member-status--offline {
+  color: var(--gray-500);
+}
+
+.member-status--offline .member-status__dot {
+  background: var(--gray-400);
 }
 
 /* Content */
@@ -882,7 +1101,8 @@ const handleStartCall = () => {
     */
     
     .sidebar {
-        /* Default state is collapsed on mobile usually? */
+        /* Mobile: default collapsed state */
+        width: 72px;
     }
     .main-wrapper {
         padding-left: 72px; /* Assume collapsed sidebar width always visible */

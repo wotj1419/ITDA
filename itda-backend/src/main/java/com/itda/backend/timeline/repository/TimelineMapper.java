@@ -1,5 +1,6 @@
 package com.itda.backend.timeline.repository;
 
+import com.itda.backend.node.repository.dto.TimelineNodeRow;
 import com.itda.backend.timeline.repository.dto.ProjectTimelineItem;
 import com.itda.backend.timeline.repository.dto.SceneTimelineItem;
 import org.apache.ibatis.annotations.Mapper;
@@ -11,6 +12,8 @@ import java.util.List;
 public interface TimelineMapper {
 
     List<SceneTimelineItem> findSceneTimelineItems(@Param("sceneId") Long sceneId);
+
+    List<TimelineNodeRow> findProjectTimelineVideoNodes(@Param("projectId") Long projectId);
 
     List<ProjectTimelineItem> findProjectTimelineItems(@Param("projectId") Long projectId);
 
@@ -24,11 +27,11 @@ public interface TimelineMapper {
 
     int countProjectTimelineItems(@Param("projectId") Long projectId);
 
-    int countProjectTimelineItemsBySceneVideoIds(@Param("projectId") Long projectId,
-                                                 @Param("sceneVideoIds") List<Long> sceneVideoIds);
+    int countProjectTimelineItemsByVideoNodeIds(@Param("projectId") Long projectId,
+                                                 @Param("videoNodeIds") List<Long> videoNodeIds);
 
-    int reorderProjectTimelineItems(@Param("projectId") Long projectId,
-                                    @Param("orderedSceneVideoIds") List<Long> orderedSceneVideoIds);
+    int reorderProjectTimelineItemsByVideoNodeIds(@Param("projectId") Long projectId,
+                                                  @Param("orderedVideoNodeIds") List<Long> orderedVideoNodeIds);
 
     int insertSceneTimelineItem(@Param("projectId") Long projectId,
                                 @Param("sceneId") Long sceneId,

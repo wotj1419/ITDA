@@ -23,6 +23,9 @@ public record ProjectTimelineItem(
         String thumbnailUrl,
 
         @Schema(description = "Video URL", example = "/files/ai/videos/node-301.mp4")
-        String videoUrl
+        String videoUrl,
+
+        @Schema(description = "Clip duration (seconds)", example = "4")
+        Integer duration
 ) {
 }

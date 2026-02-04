@@ -2,22 +2,22 @@
 import { computed, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useProjectStore } from '../stores/project'
+import { useSceneStore } from '../stores/scene'
 import { useTimelineStore } from '../stores/timeline'
 import { useUIStore } from '../stores/ui'
 import { useCollabStore } from '../stores/collab'
-import { TIMELINE_PLAYBACK_MODAL_ID } from '../constants/ui'
 
 import TimelineLayout from '../layouts/TimelineLayout.vue'
 import VideoPreview from '../components/timeline/VideoPreview.vue'
 import VideoTrack from '../components/timeline/VideoTrack.vue'
 import TimeRuler from '../components/timeline/TimeRuler.vue'
 import MergeProgress from '../components/timeline/MergeProgress.vue'
-import TimelinePlaybackModal from '../components/timeline/TimelinePlaybackModal.vue'
 import Button from '../components/common/Button.vue'
-import { GitMerge, RefreshCw, Play } from 'lucide-vue-next'
+import { GitMerge, RefreshCw } from 'lucide-vue-next'
 
 const route = useRoute()
 const projectStore = useProjectStore()
+const sceneStore = useSceneStore()
 const timelineStore = useTimelineStore()
 const uiStore = useUIStore()
 const collabStore = useCollabStore()
@@ -31,14 +31,21 @@ const sceneId = computed(() => {
   return Number.isFinite(parsed) ? parsed : null
 })
 
+const sceneTitle = computed(() => {
+  if (sceneId.value === null) return ''
+  const scene = sceneStore.scenes.find(s => s.sceneId === sceneId.value)
+  return scene ? `씬 ${scene.order}: ${scene.title}` : ''
+})
+
 onMounted(async () => {
   if (projectId.value) {
-    // ?? ? ?? (??? ??? ??, ?? ?? ???)
+    // 협업 방 입장
     collabStore.joinRoom(projectId.value)
     collabStore.updateLocation('TIMELINE', sceneId.value ?? undefined)
 
     await Promise.all([
       projectStore.loadProject(projectId.value),
+      sceneStore.loadScenes(projectId.value),
       timelineStore.loadClips(projectId.value, sceneId.value ?? undefined),
     ])
   }
@@ -97,9 +104,6 @@ function handleReset() {
   timelineStore.resetMerge()
 }
 
-function handlePlay() {
-  uiStore.openModal(TIMELINE_PLAYBACK_MODAL_ID)
-}
 
 const timelineMaxTime = computed(() => {
   // Base 10 mins (600s), or total duration + 5 mins buffer (300s)
@@ -121,6 +125,9 @@ function handleWheel(e: WheelEvent) {
     :project-title="project?.title || 'Project'"
     :clip-count="timelineStore.clipCount"
     :total-duration="timelineStore.totalDuration"
+    :is-scene-timeline="sceneId !== null"
+    :scene-title="sceneTitle"
+    :scene-id="sceneId"
   >
     <template #actions>
       <div class="header-buttons">
@@ -155,22 +162,9 @@ function handleWheel(e: WheelEvent) {
         <section>
           <div class="section-header">
             <h3 class="section-title">미리보기</h3>
-            <Button
-              variant="ghost"
-              :disabled="timelineStore.orderedClips.length === 0"
-              @click="handlePlay"
-            >
-              <Play class="icon-md" />
-              재생
-            </Button>
           </div>
           <Card class="preview-card">
-            <VideoPreview
-              :thumbnail-url="timelineStore.orderedClips[0]?.thumbnailUrl"
-              :video-url="timelineStore.orderedClips[0]?.videoUrl"
-              :current-time="0"
-              :total-time="timelineStore.totalDuration"
-            />
+            <VideoPreview :clips="timelineStore.orderedClips" />
           </Card>
         </section>
 
@@ -223,7 +217,6 @@ function handleWheel(e: WheelEvent) {
     </div>
   </TimelineLayout>
 
-  <TimelinePlaybackModal :clips="timelineStore.orderedClips" />
 </template>
 
 <style scoped>

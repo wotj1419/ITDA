@@ -8,7 +8,7 @@ import { computed, inject, nextTick, provide, ref, watch } from 'vue';
 import { panelRegistry } from './index';
 import { useSceneNodeStore } from '../../../stores/sceneNode';
 import { useCollabStore } from '../../../stores/collab';
-import { NodeType } from '../../../types/ui/sceneNodes';
+import { GenerationState, JobStatus, NodeType } from '../../../types/ui/sceneNodes';
 import type { AnyNodeData } from '../../../types/ui/sceneNodes';
 
 // =============================================================================
@@ -48,6 +48,16 @@ const canDeleteSelected = computed(() => {
   if (!nodeType) return false;
   return nodeType !== NodeType.SCENE_HEADER;
 });
+const isSelectedNodeGenerating = computed(() => {
+  const node = selectedNode.value;
+  if (!node) return false;
+  const data = node.data as AnyNodeData | undefined;
+  if (!data) return false;
+  return (
+    data.jobStatus === JobStatus.RUNNING ||
+    data.generationState === GenerationState.REQUESTED
+  );
+});
 
 // =============================================================================
 // Methods
@@ -71,6 +81,7 @@ provide('nodePanelClose', handleClose);
 provide('nodePanelDelete', handleDelete);
 provide('nodePanelCanDelete', canDeleteSelected);
 provide('nodePanelLock', lockInfo);
+provide('nodePanelBusy', isSelectedNodeGenerating);
 
 // Scroll panel content to top when switching nodes (all node types)
 watch(
@@ -128,15 +139,17 @@ watch(
    Panel Styles
    ========================================================================== */
 .node-panel {
+  position: fixed;
+  top: 64px; /* 헤더 높이 */
+  right: 0;
   width: 380px;
-  height: 100%;
+  height: calc(100vh - 64px);
   background: white;
   border-left: 1px solid #F3F4F6;
   display: flex;
   flex-direction: column;
-  position: relative;
   min-height: 0;
-  z-index: 10;
+  z-index: 9999;
   box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
   overflow: hidden;
 }
