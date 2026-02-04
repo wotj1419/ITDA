@@ -24,6 +24,8 @@ public class AssetUrlResolver {
     private static final int PRESIGNED_URL_CACHE_MAX_SIZE = 5000;
     private static final long PRESIGNED_URL_CACHE_FALLBACK_TTL_MILLIS = 5 * 60 * 1000L;
     private static final long PRESIGNED_URL_CACHE_SAFETY_WINDOW_MILLIS = 30 * 1000L;
+    private static final String CACHE_CONTROL_IMAGE = "public, max-age=86400, stale-while-revalidate=604800";
+    private static final String CACHE_CONTROL_VIDEO = "public, max-age=3600, stale-while-revalidate=86400";
 
     private final AssetMapper assetMapper;
     private final S3StorageProperties s3Properties;
@@ -92,6 +94,7 @@ public class AssetUrlResolver {
         GetObjectRequest getRequest = GetObjectRequest.builder()
                 .bucket(bucket.trim())
                 .key(storageKey)
+                .responseCacheControl(resolveResponseCacheControl(asset.getContentType()))
                 .build();
 
         long expires = Math.max(60, s3Properties.getPresignExpireSeconds());
@@ -122,6 +125,16 @@ public class AssetUrlResolver {
 
     private void cleanupExpiredCacheEntries(long nowMillis) {
         presignedUrlCache.entrySet().removeIf(entry -> !entry.getValue().isValid(nowMillis));
+    }
+
+    private String resolveResponseCacheControl(String contentType) {
+        if (contentType == null || contentType.isBlank()) {
+            return CACHE_CONTROL_VIDEO;
+        }
+        if (contentType.startsWith("image/")) {
+            return CACHE_CONTROL_IMAGE;
+        }
+        return CACHE_CONTROL_VIDEO;
     }
 
     private String resolveLocalUrl(Long assetId) {
