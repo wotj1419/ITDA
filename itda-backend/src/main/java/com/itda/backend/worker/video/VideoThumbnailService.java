@@ -5,6 +5,7 @@ import com.itda.backend.job.domain.Job;
 import com.itda.backend.worker.AssetRegistrar;
 import com.itda.backend.worker.image.ImageStorage;
 import com.itda.backend.worker.image.ImageStorageResult;
+import io.micrometer.core.instrument.MeterRegistry;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -26,16 +27,21 @@ public class VideoThumbnailService {
     private static final Duration FFMPEG_TIMEOUT = Duration.ofMinutes(1);
     private static final String THUMB_CONTENT_TYPE = "image/png";
     private static final List<String> SEEK_SECONDS = List.of("0.8", "0.3", "0");
+    private static final String METRIC_THUMBNAIL_FAILURE = "itda.thumbnail.failure.total";
+    private static final String METRIC_THUMBNAIL_SUCCESS = "itda.thumbnail.success.total";
 
     private final ImageStorage imageStorage;
     private final AssetRegistrar assetRegistrar;
+    private final MeterRegistry meterRegistry;
 
     public Optional<ThumbnailAsset> createForVideoFile(Job job, Path videoPath, String context) {
         if (!isValidJob(job)) {
+            incrementFailure(job, "validate", "invalid_job");
             return Optional.empty();
         }
         if (videoPath == null || !Files.exists(videoPath)) {
             log.warn("[VideoThumbnailService] Skip thumbnail: video file missing ({})", context);
+            incrementFailure(job, "validate", "video_missing");
             return Optional.empty();
         }
 
@@ -43,15 +49,20 @@ public class VideoThumbnailService {
         try {
             outputPath = Files.createTempFile("thumb-", ".png");
             if (!extractThumbnail(videoPath, outputPath, context)) {
+                incrementFailure(job, "ffmpeg", "extract_failed");
                 return Optional.empty();
             }
             byte[] bytes = Files.readAllBytes(outputPath);
             if (bytes.length == 0) {
+                incrementFailure(job, "validate", "empty_output");
                 return Optional.empty();
             }
-            return Optional.of(storeThumbnailAsset(job, bytes));
+            ThumbnailAsset asset = storeThumbnailAsset(job, bytes);
+            incrementSuccess(job);
+            return Optional.of(asset);
         } catch (Exception e) {
             log.warn("[VideoThumbnailService] Thumbnail generation failed ({})", context, e);
+            incrementFailure(job, "store", "exception");
             return Optional.empty();
         } finally {
             deleteQuietly(outputPath);
@@ -60,9 +71,11 @@ public class VideoThumbnailService {
 
     public Optional<ThumbnailAsset> createForVideoBytes(Job job, byte[] videoBytes, String context) {
         if (!isValidJob(job)) {
+            incrementFailure(job, "validate", "invalid_job");
             return Optional.empty();
         }
         if (videoBytes == null || videoBytes.length == 0) {
+            incrementFailure(job, "validate", "video_empty");
             return Optional.empty();
         }
 
@@ -73,6 +86,7 @@ public class VideoThumbnailService {
             return createForVideoFile(job, tempVideoPath, context);
         } catch (Exception e) {
             log.warn("[VideoThumbnailService] Failed to prepare thumbnail input ({})", context, e);
+            incrementFailure(job, "prepare", "temp_video_failed");
             return Optional.empty();
         } finally {
             deleteQuietly(tempVideoPath);
@@ -185,5 +199,28 @@ public class VideoThumbnailService {
     }
 
     private record ProcessResult(int exitCode, String output) {
+    }
+
+    private void incrementFailure(Job job, String stage, String reason) {
+        meterRegistry.counter(
+                METRIC_THUMBNAIL_FAILURE,
+                "jobType", resolveJobType(job),
+                "stage", stage,
+                "reason", reason
+        ).increment();
+    }
+
+    private void incrementSuccess(Job job) {
+        meterRegistry.counter(
+                METRIC_THUMBNAIL_SUCCESS,
+                "jobType", resolveJobType(job)
+        ).increment();
+    }
+
+    private String resolveJobType(Job job) {
+        if (job == null || job.getType() == null) {
+            return "UNKNOWN";
+        }
+        return job.getType().name();
     }
 }

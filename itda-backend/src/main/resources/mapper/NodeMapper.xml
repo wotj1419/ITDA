@@ -204,10 +204,7 @@
         SET status = #{status},
             content_url = #{contentUrl},
             asset_id = #{assetId},
-            thumbnail_asset_id = CASE
-                WHEN #{thumbnailAssetId} IS NULL THEN thumbnail_asset_id
-                ELSE #{thumbnailAssetId}
-            END
+            thumbnail_asset_id = #{thumbnailAssetId}
         WHERE id = #{nodeId}
     </update>
 
