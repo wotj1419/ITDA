@@ -20,5 +20,6 @@ public interface ProjectMergeMapper {
 
     int updateAssetAndStatus(@Param("id") Long id,
                              @Param("assetId") Long assetId,
+                             @Param("thumbnailAssetId") Long thumbnailAssetId,
                              @Param("status") String status);
 }

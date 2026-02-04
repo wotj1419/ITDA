@@ -207,6 +207,7 @@ CREATE TABLE nodes (
     is_confirmed TINYINT(1) NOT NULL DEFAULT 0,     -- VIDEO용 확정 플래그
     content_url VARCHAR(500),        -- 생성 결과 URL
     asset_id BIGINT,                -- 생성 결과 에셋 ID
+    thumbnail_asset_id BIGINT,      -- VIDEO ??? ?? ID
     start_shot_node_id BIGINT,       -- VIDEO 시작 샷 노드 ID
     end_shot_node_id BIGINT,         -- VIDEO 종료 샷 노드 ID
     created_by BIGINT,
@@ -218,12 +219,14 @@ CREATE TABLE nodes (
     KEY idx_nodes_status (status),
     KEY idx_nodes_start_shot (start_shot_node_id),
     KEY idx_nodes_asset (asset_id),
+    KEY idx_nodes_thumbnail_asset (thumbnail_asset_id),
     CONSTRAINT fk_nodes_scene FOREIGN KEY (scene_id) REFERENCES scenes(id) ON DELETE CASCADE,
     CONSTRAINT fk_nodes_parent FOREIGN KEY (parent_node_id) REFERENCES nodes(id) ON DELETE CASCADE,
     CONSTRAINT fk_nodes_user FOREIGN KEY (created_by) REFERENCES users(id),
     CONSTRAINT fk_nodes_start_shot FOREIGN KEY (start_shot_node_id) REFERENCES nodes(id) ON DELETE SET NULL,
     CONSTRAINT fk_nodes_end_shot FOREIGN KEY (end_shot_node_id) REFERENCES nodes(id) ON DELETE SET NULL,
-    CONSTRAINT fk_nodes_asset FOREIGN KEY (asset_id) REFERENCES assets(id) ON DELETE SET NULL
+    CONSTRAINT fk_nodes_asset FOREIGN KEY (asset_id) REFERENCES assets(id) ON DELETE SET NULL,
+    CONSTRAINT fk_nodes_thumbnail_asset FOREIGN KEY (thumbnail_asset_id) REFERENCES assets(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- scenes.active_master_node_id FK 추가
@@ -253,6 +256,7 @@ CREATE TABLE scene_videos (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,
     scene_id BIGINT NOT NULL,
     asset_id BIGINT,
+    thumbnail_asset_id BIGINT,
     merge_signature VARCHAR(128),
     status VARCHAR(20) NOT NULL DEFAULT 'QUEUED',  -- QUEUED, GENERATING, COMPLETED, FAILED
     duration_ms INT,
@@ -263,14 +267,17 @@ CREATE TABLE scene_videos (
     KEY idx_scene_videos_scene (scene_id),
     KEY idx_scene_videos_merge_sig (merge_signature),
     KEY idx_scene_videos_scene_active (scene_id, is_active),
+    KEY idx_scene_videos_thumbnail_asset (thumbnail_asset_id),
     CONSTRAINT fk_scene_videos_scene FOREIGN KEY (scene_id) REFERENCES scenes(id) ON DELETE CASCADE,
-    CONSTRAINT fk_scene_videos_asset FOREIGN KEY (asset_id) REFERENCES assets(id) ON DELETE SET NULL
+    CONSTRAINT fk_scene_videos_asset FOREIGN KEY (asset_id) REFERENCES assets(id) ON DELETE SET NULL,
+    CONSTRAINT fk_scene_videos_thumbnail_asset FOREIGN KEY (thumbnail_asset_id) REFERENCES assets(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE project_merges (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,
     project_id BIGINT NOT NULL,
     asset_id BIGINT,
+    thumbnail_asset_id BIGINT,
     merge_signature VARCHAR(128),
     status VARCHAR(20) NOT NULL DEFAULT 'QUEUED',  -- QUEUED, GENERATING, COMPLETED, FAILED
     is_active TINYINT(1) NOT NULL DEFAULT 1,
@@ -279,8 +286,10 @@ CREATE TABLE project_merges (
     KEY idx_project_merges_project (project_id),
     KEY idx_project_merges_project_active (project_id, is_active),
     KEY idx_project_merges_merge_sig (merge_signature),
+    KEY idx_project_merges_thumbnail_asset (thumbnail_asset_id),
     CONSTRAINT fk_project_merges_project FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
-    CONSTRAINT fk_project_merges_asset FOREIGN KEY (asset_id) REFERENCES assets(id) ON DELETE SET NULL
+    CONSTRAINT fk_project_merges_asset FOREIGN KEY (asset_id) REFERENCES assets(id) ON DELETE SET NULL,
+    CONSTRAINT fk_project_merges_thumbnail_asset FOREIGN KEY (thumbnail_asset_id) REFERENCES assets(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ============================================

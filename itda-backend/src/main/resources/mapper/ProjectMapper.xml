@@ -64,7 +64,7 @@
             resultType="com.itda.backend.project.repository.dto.ProjectPreviewCandidate">
         SELECT pm.asset_id AS video_asset_id,
                NULL AS video_fallback_url,
-               NULL AS thumbnail_asset_id,
+               pm.thumbnail_asset_id AS thumbnail_asset_id,
                NULL AS thumbnail_fallback_url
         FROM project_merges pm
         WHERE pm.project_id = #{projectId}
@@ -79,7 +79,7 @@
             resultType="com.itda.backend.project.repository.dto.ProjectPreviewCandidate">
         SELECT sv.asset_id AS video_asset_id,
                NULL AS video_fallback_url,
-               NULL AS thumbnail_asset_id,
+               sv.thumbnail_asset_id AS thumbnail_asset_id,
                sv.thumbnail_url AS thumbnail_fallback_url
         FROM scenes s
         JOIN scene_videos sv ON sv.scene_id = s.id
@@ -95,7 +95,7 @@
             resultType="com.itda.backend.project.repository.dto.ProjectPreviewCandidate">
         SELECT n.asset_id AS video_asset_id,
                n.content_url AS video_fallback_url,
-               COALESCE(shot.asset_id, master.asset_id) AS thumbnail_asset_id,
+               COALESCE(n.thumbnail_asset_id, shot.asset_id, master.asset_id) AS thumbnail_asset_id,
                COALESCE(shot.content_url, master.content_url) AS thumbnail_fallback_url
         FROM scenes s
         JOIN timeline_items ti ON ti.scene_id = s.id

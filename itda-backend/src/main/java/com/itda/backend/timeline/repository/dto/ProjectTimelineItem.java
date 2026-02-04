@@ -13,6 +13,7 @@ public class ProjectTimelineItem {
     private Long sceneId;
     private String sceneTitle;
     private Long assetId;
+    private Long thumbnailAssetId;
     private String fallbackUrl;
     private Long masterAssetId;
     private String masterContentUrl;

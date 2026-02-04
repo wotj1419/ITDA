@@ -43,13 +43,21 @@ public record NodeDetailResponse(
         @Schema(description = "Content URL", example = "/api/nodes/301/content")
         String contentUrl,
 
+        @Schema(description = "Thumbnail URL", example = "https://...")
+        String thumbnailUrl,
+
         @Schema(description = "Position X", example = "100.5")
         Float positionX,
 
         @Schema(description = "Position Y", example = "200.5")
         Float positionY
 ) {
-    public static NodeDetailResponse from(Node node, Map<String, Object> settings, String contentUrl) {
+    public static NodeDetailResponse from(
+            Node node,
+            Map<String, Object> settings,
+            String contentUrl,
+            String thumbnailUrl
+    ) {
         return new NodeDetailResponse(
                 node.getId(),
                 node.getSceneId(),
@@ -61,6 +69,7 @@ public record NodeDetailResponse(
                 node.getIsActive(),
                 node.getIsConfirmed(),
                 contentUrl,
+                thumbnailUrl,
                 node.getPositionX(),
                 node.getPositionY()
         );

@@ -24,6 +24,7 @@ public class MergeResultService {
     public SceneMergeInput resolveSceneMergeInput(Job job,
                                                   Long resultAssetId,
                                                   Integer durationMs,
+                                                  Long thumbnailAssetId,
                                                   String thumbnailUrl) {
         if (job == null) {
             throw new IllegalStateException("Job is required");
@@ -49,11 +50,12 @@ public class MergeResultService {
                 mergeSignature.trim(),
                 resultAssetId,
                 durationMs,
+                thumbnailAssetId,
                 normalizeThumbnail(thumbnailUrl)
         );
     }
 
-    public ProjectMergeInput resolveProjectMergeInput(Job job, Long resultAssetId) {
+    public ProjectMergeInput resolveProjectMergeInput(Job job, Long resultAssetId, Long thumbnailAssetId) {
         if (job == null) {
             throw new IllegalStateException("Job is required");
         }
@@ -68,7 +70,7 @@ public class MergeResultService {
         if (resultAssetId == null) {
             throw new IllegalStateException("Project merge resultAssetId is required");
         }
-        return new ProjectMergeInput(projectId, mergeSignature.trim(), resultAssetId);
+        return new ProjectMergeInput(projectId, mergeSignature.trim(), resultAssetId, thumbnailAssetId);
     }
 
     public void deactivateActiveSceneVideo(Long sceneId) {
@@ -95,6 +97,7 @@ public class MergeResultService {
                 .mergeSignature(input.mergeSignature())
                 .status("COMPLETED")
                 .durationMs(input.durationMs())
+                .thumbnailAssetId(input.thumbnailAssetId())
                 .thumbnailUrl(input.thumbnailUrl())
                 .isActive(true)
                 .build();
@@ -109,6 +112,7 @@ public class MergeResultService {
         ProjectMerge projectMerge = ProjectMerge.builder()
                 .projectId(input.projectId())
                 .assetId(input.assetId())
+                .thumbnailAssetId(input.thumbnailAssetId())
                 .mergeSignature(input.mergeSignature())
                 .status("COMPLETED")
                 .isActive(true)
@@ -128,22 +132,33 @@ public class MergeResultService {
     public void recordSceneMergeResult(Job job,
                                        Long resultAssetId,
                                        Integer durationMs,
+                                       Long thumbnailAssetId,
                                        String thumbnailUrl) {
-        SceneMergeInput input = resolveSceneMergeInput(job, resultAssetId, durationMs, thumbnailUrl);
+        SceneMergeInput input = resolveSceneMergeInput(
+                job,
+                resultAssetId,
+                durationMs,
+                thumbnailAssetId,
+                thumbnailUrl
+        );
         deactivateActiveSceneVideo(input.sceneId());
         Long sceneVideoId = insertSceneVideo(input);
         updateTimelineSceneVideoId(input.sceneId(), sceneVideoId);
     }
 
     public void recordSceneMergeResult(Job job, Long resultAssetId) {
-        recordSceneMergeResult(job, resultAssetId, null, null);
+        recordSceneMergeResult(job, resultAssetId, null, null, null);
     }
 
     @Transactional
-    public void recordProjectMergeResult(Job job, Long resultAssetId) {
-        ProjectMergeInput input = resolveProjectMergeInput(job, resultAssetId);
+    public void recordProjectMergeResult(Job job, Long resultAssetId, Long thumbnailAssetId) {
+        ProjectMergeInput input = resolveProjectMergeInput(job, resultAssetId, thumbnailAssetId);
         deactivateActiveProjectMerge(input.projectId());
         insertProjectMerge(input);
+    }
+
+    public void recordProjectMergeResult(Job job, Long resultAssetId) {
+        recordProjectMergeResult(job, resultAssetId, null);
     }
 
     private String normalizeThumbnail(String thumbnailUrl) {
@@ -159,11 +174,13 @@ public class MergeResultService {
                                   String mergeSignature,
                                   Long assetId,
                                   Integer durationMs,
+                                  Long thumbnailAssetId,
                                   String thumbnailUrl) {
     }
 
     public record ProjectMergeInput(Long projectId,
                                     String mergeSignature,
-                                    Long assetId) {
+                                    Long assetId,
+                                    Long thumbnailAssetId) {
     }
 }

@@ -14,6 +14,7 @@ export interface NodeSummary {
     isActive?: boolean | null
     isConfirmed?: boolean | null
     contentUrl?: string | null
+    thumbnailUrl?: string | null
     position?: NodePosition | null
 }
 
@@ -28,6 +29,7 @@ export interface NodeDetail {
     isActive?: boolean | null
     isConfirmed?: boolean | null
     contentUrl?: string | null
+    thumbnailUrl?: string | null
     positionX?: number | null
     positionY?: number | null
 }
