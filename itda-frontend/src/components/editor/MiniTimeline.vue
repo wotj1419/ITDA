@@ -165,7 +165,13 @@ const progressPercent = Math.min(
         @dragleave="handleDragLeave"
         @drop="handleDrop(clip.clipId)"
       >
-        <button class="clip-remove" @click.stop="handleRemove(clip.clipId)">
+        <button
+          type="button"
+          class="clip-remove"
+          draggable="false"
+          @pointerdown.stop
+          @click.stop="handleRemove(clip.clipId)"
+        >
           <X class="remove-icon" />
         </button>
         <div class="clip-media">
@@ -305,6 +311,7 @@ const progressPercent = Math.min(
   position: relative;
   width: 100%;
   height: 100%;
+  z-index: 1;
 }
 
 .clip-img,
@@ -365,6 +372,7 @@ const progressPercent = Math.min(
   color: white;
   padding: 1px 4px;
   border-radius: 2px;
+  z-index: 2;
 }
 
 .clip-remove {
@@ -382,6 +390,7 @@ const progressPercent = Math.min(
   opacity: 0;
   cursor: pointer;
   transition: opacity 0.2s ease, background 0.2s ease;
+  z-index: 3;
 }
 
 .timeline-clip:hover .clip-remove {
