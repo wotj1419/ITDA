@@ -69,6 +69,8 @@ export function createBaseNodeData(
     jobStatus: null,
     generationState: null,
     promptStatus: PromptStatus.DRAFT,
+    isPromptGenerating: false,
+    isFinalPromptGenerating: false,
     createdAt: now,
     updatedAt: now,
     versionGroupId: id,

@@ -75,6 +75,8 @@ export interface BaseNodeData {
     jobStatus: JobStatus | null;
     generationState: GenerationState | null;
     promptStatus: PromptStatus;
+    isPromptGenerating?: boolean;
+    isFinalPromptGenerating?: boolean;
     createdAt: string;
     updatedAt: string;
 
