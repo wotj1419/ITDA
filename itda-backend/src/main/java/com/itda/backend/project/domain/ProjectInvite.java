@@ -1,4 +1,4 @@
-package com.itda.backend.timeline.domain;
+package com.itda.backend.project.domain;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -11,15 +11,14 @@ import java.time.LocalDateTime;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class ProjectMerge {
+public class ProjectInvite {
 
     private Long id;
     private Long projectId;
-    private Long assetId;
-    private Long thumbnailAssetId;
-    private String mergeSignature;
+    private Long senderId;
+    private Long receiverId;
+    private String role;
     private String status;
-    private Boolean isActive;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

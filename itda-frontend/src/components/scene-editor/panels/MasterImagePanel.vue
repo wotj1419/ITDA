@@ -12,7 +12,8 @@ import BasePanel from './BasePanel.vue';
 import { useSceneNodeStore } from '../../../stores/sceneNode';
 import { useObjectStore } from '../../../stores/object';
 import { useNodeGeneration } from '../../../composables/useNodeGeneration';
-import { Film, Palette, Sun, Smile, Sparkles, FileText, Image, Check, Star, Users, Loader2 } from 'lucide-vue-next';
+import { useGenerationToast } from '../../../composables/useGenerationToast';
+import { Film, Palette, Sun, Smile, FileText, Image, Check, Star, Users, Loader2 } from 'lucide-vue-next';
 import { gsap } from 'gsap';
 import { resolveMoodKey, resolveStyleKey, resolveTimeOfDayKey } from '../../../utils/nodeSettings';
 import {
@@ -28,11 +29,12 @@ interface Props {
 const props = defineProps<Props>();
 const nodeStore = useSceneNodeStore();
 const objectStore = useObjectStore();
+const { startGenerationToast, finishGenerationToast } = useGenerationToast();
+const MAX_OBJECT_SELECTION = 3;
 const autoFilledNodes = new Set<string>();
 let promptPreviewTimeout: ReturnType<typeof setTimeout> | null = null;
 const isPromptEditing = ref(false);
 const isFinalEditing = ref(false);
-const isGeneratingFinalPrompt = ref(false);
 const finalPromptSignature = ref('');
 const finalPromptSourcePromptSnapshot = ref('');
 const approvedFinalPromptSnapshot = ref('');
@@ -76,7 +78,7 @@ const {
     style: form.value.style,
     timeOfDay: form.value.timeOfDay,
     mood: form.value.mood,
-    objectIds: form.value.objectIds,
+    objectIds: [...selectedObjectIds.value],
     prompt: result.promptKo || result.promptEnBase,
     promptKo: result.promptKo || result.promptEnBase,
   }),
@@ -90,10 +92,10 @@ const {
     styleKey: resolveStyleKey(form.value.style),
     timeOfDayKey: resolveTimeOfDayKey(form.value.timeOfDay),
     moodKey: resolveMoodKey(form.value.mood) ?? 'NEUTRAL',
-    objectIds: form.value.objectIds,
+    objectIds: [...selectedObjectIds.value],
     detailKo: form.value.additionalDetail,
   }),
-  getReferenceObjectIds: () => (form.value.objectIds.length ? [...form.value.objectIds] : undefined),
+  getReferenceObjectIds: () => (selectedObjectIds.value.length ? [...selectedObjectIds.value] : undefined),
   getPromptOverride: () =>
     form.value.usePromptOverride ? form.value.promptEnFinalOverride : '',
   getPromptPreviewPayload: () => ({
@@ -102,7 +104,7 @@ const {
       styleKey: resolveStyleKey(form.value.style),
       timeOfDayKey: resolveTimeOfDayKey(form.value.timeOfDay),
       moodKey: resolveMoodKey(form.value.mood) ?? 'NEUTRAL',
-      objectIds: form.value.objectIds,
+      objectIds: [...selectedObjectIds.value],
       detailKo: form.value.additionalDetail,
     },
     promptEnFinalOverride: form.value.usePromptOverride ? form.value.promptEnFinalOverride : '',
@@ -137,13 +139,18 @@ const objectNameMap = computed(() => {
   return map;
 });
 
+const selectedObjectIds = computed(() => normalizeSelectedObjectIds(form.value.objectIds));
+const selectedObjectCount = computed(() => selectedObjectIds.value.length);
+const isObjectSelectionFull = computed(() => selectedObjectCount.value >= MAX_OBJECT_SELECTION);
+
 const selectedObjectNames = computed(() =>
-  form.value.objectIds
+  selectedObjectIds.value
     .map((id) => objectNameMap.value.get(id))
     .filter((name): name is string => Boolean(name))
 );
 
 const data = computed(() => props.node.data as MasterImageNodeData | undefined);
+const isGeneratingFinalPrompt = computed(() => Boolean(data.value?.isFinalPromptGenerating));
 const sceneHeaderData = computed<SceneHeaderNodeData | undefined>(() => {
   const node = nodeStore.nodes.find((candidate) => candidate.data?.type === NodeType.SCENE_HEADER);
   return node?.data && node.data.type === NodeType.SCENE_HEADER ? node.data : undefined;
@@ -182,15 +189,15 @@ const effectiveFinalPrompt = computed(() => {
   return override || form.value.promptEnFinal.trim();
 });
 const aiPromptActionLabel = computed(() =>
-  data.value?.promptStatus === PromptStatus.DRAFT ? 'AI로 생성' : 'AI로 재생성'
+  form.value.prompt.trim().length > 0 ? 'AI 프롬프트 재생성' : 'AI 프롬프트 생성'
 );
 const finalPromptActionLabel = computed(() =>
-  form.value.promptEnFinal.trim().length > 0 ? '최종 프롬프트 재생성' : '최종 프롬프트 생성'
+  form.value.promptEnFinal.trim().length > 0 ? 'AI 최종 프롬프트 재생성' : 'AI 최종 프롬프트 생성'
 );
 const canGenerate = computed(() => {
   // 동일 최종 프롬프트로도 재생성을 허용하므로 dirty 여부는 활성 조건에서 제외한다.
   void isFinalPromptDirty.value;
-  return isPromptApproved.value && !isUiLocked.value;
+  return isPromptApproved.value && !isUiLocked.value && !isFinalEditing.value;
 });
 
 function buildSceneOneLine(): string {
@@ -215,7 +222,7 @@ function buildFinalPromptSignature(): string {
     style: form.value.style,
     timeOfDay: form.value.timeOfDay,
     mood: form.value.mood,
-    objectIds: [...form.value.objectIds],
+    objectIds: [...selectedObjectIds.value],
     additionalDetail: form.value.additionalDetail.trim(),
     prompt: form.value.prompt.trim(),
     usePromptOverride: form.value.usePromptOverride,
@@ -227,6 +234,19 @@ let generateButtonTween: gsap.core.Tween | null = null;
 
 function normalizeIds(ids: number[] | undefined | null): number[] {
   return Array.isArray(ids) ? ids : [];
+}
+
+function normalizeSelectedObjectIds(ids: number[] | undefined | null): number[] {
+  const unique: number[] = [];
+  const seen = new Set<number>();
+  for (const id of normalizeIds(ids)) {
+    if (!Number.isInteger(id) || id <= 0) continue;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    unique.push(id);
+    if (unique.length >= MAX_OBJECT_SELECTION) break;
+  }
+  return unique;
 }
 
 function areNumberArraysEqual(a: number[], b: number[]): boolean {
@@ -248,7 +268,7 @@ function queuePersistLook(): void {
       style: form.value.style,
       timeOfDay: form.value.timeOfDay,
       mood: form.value.mood,
-      objectIds: [...form.value.objectIds],
+      objectIds: [...selectedObjectIds.value],
     });
   }, 300);
 }
@@ -277,7 +297,7 @@ watch(() => props.node.id, () => {
     style: data.value.style || DEFAULT_MASTER_STYLE,
     timeOfDay: data.value.timeOfDay || DEFAULT_MASTER_TIME_OF_DAY,
     mood: data.value.mood || DEFAULT_MASTER_MOOD,
-    objectIds: data.value.objectIds || [],
+    objectIds: normalizeSelectedObjectIds(data.value.objectIds),
     additionalDetail: data.value.additionalDetail || '',
     prompt: data.value.promptKo || data.value.prompt || '',
     promptKo: data.value.promptKo || data.value.prompt || '',
@@ -305,8 +325,12 @@ watch(
   }),
   (next) => {
     if (!data.value) return;
-    const savedObjectIds = normalizeIds(data.value.objectIds);
-    const nextObjectIds = normalizeIds(next.objectIds);
+    const savedObjectIds = normalizeSelectedObjectIds(data.value.objectIds);
+    const rawObjectIds = normalizeIds(next.objectIds);
+    const nextObjectIds = normalizeSelectedObjectIds(rawObjectIds);
+    if (!areNumberArraysEqual(rawObjectIds, nextObjectIds)) {
+      form.value.objectIds = [...nextObjectIds];
+    }
 
     const unchanged =
       next.style === (data.value.style || DEFAULT_MASTER_STYLE) &&
@@ -422,7 +446,7 @@ watch(
     form.value.style = data.value.style || DEFAULT_MASTER_STYLE;
     form.value.timeOfDay = data.value.timeOfDay || DEFAULT_MASTER_TIME_OF_DAY;
     form.value.mood = data.value.mood || DEFAULT_MASTER_MOOD;
-    form.value.objectIds = [...(data.value.objectIds || [])];
+    form.value.objectIds = normalizeSelectedObjectIds(data.value.objectIds);
   }
 );
 
@@ -528,12 +552,22 @@ onUnmounted(() => {
 });
 // 오브젝트 선택 토글
 function toggleObject(objectId: number): void {
-  const idx = form.value.objectIds.indexOf(objectId);
+  const nextObjectIds = normalizeSelectedObjectIds(form.value.objectIds);
+  const idx = nextObjectIds.indexOf(objectId);
   if (idx >= 0) {
-    form.value.objectIds.splice(idx, 1);
-  } else {
-    form.value.objectIds.push(objectId);
+    nextObjectIds.splice(idx, 1);
+    form.value.objectIds = nextObjectIds;
+    return;
   }
+  if (nextObjectIds.length >= MAX_OBJECT_SELECTION) {
+    return;
+  }
+  nextObjectIds.push(objectId);
+  form.value.objectIds = normalizeSelectedObjectIds(nextObjectIds);
+}
+
+function isObjectOptionDisabled(objectId: number): boolean {
+  return isObjectSelectionFull.value && !selectedObjectIds.value.includes(objectId);
 }
 
 
@@ -575,26 +609,33 @@ async function generateFinalPrompt(force = false): Promise<void> {
   if (isGeneratingFinalPrompt.value || isGeneratingPrompt.value || isGeneratingImage.value) return;
   if (!form.value.prompt.trim()) return;
   if (!force && !isNarrativePromptDirtyForFinal.value) return;
-  isGeneratingFinalPrompt.value = true;
+  const toastId = startGenerationToast('final_prompt');
+  nodeStore.updateNodeLocal(props.node.id, { isFinalPromptGenerating: true });
   try {
     // "최종 프롬프트 생성"은 항상 한글 서술 기준으로 재생성되도록 override를 해제한다.
     form.value.usePromptOverride = false;
     form.value.promptEnFinalOverride = '';
     isFinalEditing.value = false;
-    await refreshPromptPreview(true);
+    const previewResult = await refreshPromptPreview(true);
+    const nextPromptEnFinal = previewResult?.promptEnFinal ?? form.value.promptEnFinal;
+    form.value.promptEnFinal = nextPromptEnFinal;
     await nextTick();
     await nodeStore.updateNode(props.node.id, {
       prompt: form.value.prompt,
       promptKo: form.value.promptKo,
-      promptEnFinal: form.value.promptEnFinal,
+      promptEnFinal: nextPromptEnFinal,
       promptEnFinalOverride: '',
     });
     finalPromptSignature.value = buildFinalPromptSignature();
     finalPromptSourcePromptSnapshot.value = form.value.prompt.trim();
+    finishGenerationToast(toastId, 'final_prompt', 'success');
   } catch (error) {
     console.error('Failed to generate final prompt:', error);
+    finishGenerationToast(toastId, 'final_prompt', 'error', {
+      reason: error instanceof Error ? error.message : '알 수 없는 오류',
+    });
   } finally {
-    isGeneratingFinalPrompt.value = false;
+    nodeStore.updateNodeLocal(props.node.id, { isFinalPromptGenerating: false });
   }
 }
 
@@ -684,11 +725,17 @@ function setActive(): void {
           <Users class="panel-label-icon" />
           등장 오브젝트
         </label>
+        <p class="panel-subtext">최대 {{ MAX_OBJECT_SELECTION }}개 선택 ({{ selectedObjectCount }}/{{ MAX_OBJECT_SELECTION }})</p>
         <div class="panel-radio-group panel-pill-group panel-pill-group--accent">
-          <label v-for="obj in objectOptions" :key="obj.id" class="panel-radio panel-pill">
+          <label
+            v-for="obj in objectOptions"
+            :key="obj.id"
+            :class="['panel-radio', 'panel-pill', { 'panel-pill--disabled': isObjectOptionDisabled(obj.id) }]"
+          >
             <input
               type="checkbox"
-              :checked="form.objectIds.includes(obj.id)"
+              :checked="selectedObjectIds.includes(obj.id)"
+              :disabled="isObjectOptionDisabled(obj.id)"
               @change="toggleObject(obj.id)"
             />
             <span class="panel-radio-label">{{ obj.name }}</span>
@@ -756,68 +803,82 @@ function setActive(): void {
           @click="generatePrompt"
         >
           <Loader2 v-if="isGeneratingPrompt" class="panel-btn-icon animate-spin" />
-          <Sparkles v-else class="panel-btn-icon" />
           {{ isGeneratingPrompt ? '생성 중...' : aiPromptActionLabel }}
-        </button>
-        <button
-          class="panel-btn panel-btn--secondary panel-btn--full"
-          :disabled="isUiLocked"
-          @click="generateFinalPrompt(true)"
-        >
-          <Loader2 v-if="isGeneratingFinalPrompt" class="panel-btn-icon animate-spin" />
-          {{ isGeneratingFinalPrompt ? '생성 중...' : finalPromptActionLabel }}
         </button>
       </div>
 
       <!-- Generated Prompt -->
-      <div v-if="isPromptGenerated" class="panel-section panel-section--prompt">
-        <label class="panel-label">
-          <FileText class="panel-label-icon" />
-          최종 프롬프트 (영어)
-        </label>
-        <textarea
-          v-if="form.usePromptOverride"
-          v-model="form.promptEnFinalOverride"
-          :class="['panel-textarea', 'panel-textarea--prompt', { 'panel-textarea--editing': isFinalEditing }]"
-          rows="5"
-          :readonly="!isFinalEditing"
-          placeholder="최종 영어 프롬프트를 직접 입력하세요."
-          @wheel="handlePromptWheel"
-        ></textarea>
+      <div class="panel-section panel-section--prompt">
+        <div class="panel-label-row">
+          <label class="panel-label">
+            <FileText class="panel-label-icon" />
+            최종 프롬프트 (영어)
+          </label>
+          <button
+            v-if="isPromptGenerated"
+            :class="['panel-btn', isFinalEditing ? 'panel-btn--success' : 'panel-btn--text']"
+            :disabled="!form.promptEnFinal && !form.prompt"
+            @click="toggleFinalEditing"
+          >
+            {{ isFinalEditing ? '편집 완료' : '직접 편집' }}
+          </button>
+        </div>
+
+        <template v-if="isPromptGenerated">
+          <textarea
+            v-if="form.usePromptOverride"
+            v-model="form.promptEnFinalOverride"
+            :class="['panel-textarea', 'panel-textarea--prompt', { 'panel-textarea--editing': isFinalEditing }]"
+            rows="5"
+            :readonly="!isFinalEditing"
+            placeholder="최종 영어 프롬프트를 직접 입력하세요."
+            @wheel="handlePromptWheel"
+          ></textarea>
+          <textarea
+            v-else
+            :value="form.promptEnFinal"
+            class="panel-textarea panel-textarea--prompt"
+            rows="5"
+            readonly
+            placeholder="자동으로 갱신됩니다."
+            @wheel="handlePromptWheel"
+          ></textarea>
+        </template>
         <textarea
           v-else
           :value="form.promptEnFinal"
           class="panel-textarea panel-textarea--prompt"
           rows="5"
           readonly
-          placeholder="자동으로 갱신됩니다."
+          placeholder="프롬프트를 생성해주세요."
           @wheel="handlePromptWheel"
         ></textarea>
 
-        <div class="panel-prompt-actions">
-          <button
-            :class="['panel-btn', isFinalEditing ? 'panel-btn--success' : 'panel-btn--text']"
-            :disabled="!form.promptEnFinal && !form.prompt"
-            @click="toggleFinalEditing"
-          >
-            {{ isFinalEditing ? '편집 완료' : '영문 직접 편집' }}
-          </button>
-        </div>
+        <button
+          class="panel-btn panel-btn--secondary panel-btn--full panel-btn--final-prompt"
+          :disabled="isUiLocked || !form.prompt.trim()"
+          @click="generateFinalPrompt(true)"
+        >
+          <Loader2 v-if="isGeneratingFinalPrompt" class="panel-btn-icon animate-spin" />
+          {{ isGeneratingFinalPrompt ? '생성 중...' : finalPromptActionLabel }}
+        </button>
 
-        <div class="panel-prompt-actions panel-prompt-actions--right">
-          <button
-            v-if="!isPromptApproved"
-            class="panel-btn panel-btn--success"
-            :disabled="isGeneratingPrompt || isGeneratingImage"
-            @click="approvePrompt"
-          >
-            <Check class="panel-btn-icon" /> 승인
-          </button>
-          <span v-else class="panel-status panel-status--success">
-            <Check class="panel-status-icon" />
-            승인됨
-          </span>
-        </div>
+        <template v-if="isPromptGenerated">
+          <div class="panel-prompt-actions panel-prompt-actions--right">
+            <button
+              v-if="!isPromptApproved"
+              class="panel-btn panel-btn--success"
+              :disabled="isUiLocked || isFinalEditing"
+              @click="approvePrompt"
+            >
+              <Check class="panel-btn-icon" /> 승인
+            </button>
+            <span v-else class="panel-status panel-status--success">
+              <Check class="panel-status-icon" />
+              승인됨
+            </span>
+          </div>
+        </template>
       </div>
       </fieldset>
     </template>
@@ -897,6 +958,10 @@ function setActive(): void {
   margin-bottom: 0.35rem;
 }
 
+.panel-label-row .panel-label {
+  margin-bottom: 0;
+}
+
 .panel-segmented {
   display: inline-flex;
   align-items: center;
@@ -926,6 +991,10 @@ function setActive(): void {
   margin: 0 0 0.5rem;
   font-size: 0.75rem;
   color: var(--gray-500, #6B7280);
+}
+
+.panel-pill--disabled {
+  opacity: 0.55;
 }
 
 .panel-translation-block .panel-prompt-actions {

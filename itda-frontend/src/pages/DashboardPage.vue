@@ -8,7 +8,7 @@ import type { ProjectInvite } from '../types/api/invites'
 import { useUIStore } from '../stores/ui'
 import { useCollabStore } from '../stores/collab'
 import { useAuthStore } from '../stores/auth'
-import type { Project } from '../types/api/projects'
+import type { ProjectRole } from '../types/api/projects'
 import DefaultLayout from '../layouts/DefaultLayout.vue'
 import ProjectCard from '../components/project/ProjectCard.vue'
 import NewProjectModal from '../components/project/NewProjectModal.vue'
@@ -33,22 +33,38 @@ const notificationEmptyTitle = '\uc54c\ub9bc\uc774 \uc5c6\uc2b5\ub2c8\ub2e4'
 const notificationEmptyMeta = '\uc0c8 \uc54c\ub9bc\uc774 \uc624\uba74 \uc5ec\uae30\uc5d0 \ud45c\uc2dc\ub429\ub2c8\ub2e4.'
 const notificationAvatar = '\ud83d\ude42'
 const notificationCloseSymbol = '\u00d7'
+const inviteProjectSuffix = '\ud504\ub85c\uc81d\ud2b8 \ucd08\ub300'
+const inviteSenderFallback = '\uc54c \uc218 \uc5c6\uc74c'
+const inviteSenderMessageSuffix = '\ub2d8\uc774 \ucd08\ub300\ud588\uc2b5\ub2c8\ub2e4.'
+const inviteAcceptLabel = '\uc218\ub77d'
+const inviteDeclineLabel = '\uac70\uc808'
+const inviteAcceptToastTitle = '\ucd08\ub300 \uc218\ub77d'
+const inviteAcceptToastMessage = '\ud504\ub85c\uc81d\ud2b8\uc5d0 \ucc38\uc5ec\ud588\uc2b5\ub2c8\ub2e4.'
+const inviteDeclineToastTitle = '\ucd08\ub300 \uac70\uc808'
+const inviteDeclineToastMessage = '\ucd08\ub300\ub97c \uac70\uc808\ud588\uc2b5\ub2c8\ub2e4.'
+const deleteOwnerModalTitle = '\uc815\ub9d0\ub85c \uc0ad\uc81c\ud560\uae4c\uc694?'
+const leaveProjectModalTitle = '\ud504\ub85c\uc81d\ud2b8\uc5d0\uc11c \ub098\uac08\uae4c\uc694?'
+const deleteOwnerConfirmText = '\uc0ad\uc81c'
+const leaveProjectConfirmText = '\ub098\uac00\uae30'
 const pendingInvites = computed(() => inviteStore.pendingInvites)
+const invitePollIntervalMs = 15000
+let invitePoller: ReturnType<typeof setInterval> | null = null
 
 // Delete Confirmation State
 const showDeleteModal = ref(false)
-const projectToDelete = ref<{ projectId: number; title: string } | null>(null)
+const projectToDelete = ref<{ projectId: number; title: string; role: ProjectRole } | null>(null)
 
 // Load projects on mount
 onMounted(async () => {
   await projectStore.loadProjects()
   isProjectsLoaded.value = true
   await inviteStore.loadInvites()
-  mergeAcceptedInvites()
+  startInvitePolling()
   document.addEventListener('click', handleNotificationClickOutside)
 })
 
 onUnmounted(() => {
+  stopInvitePolling()
   document.removeEventListener('click', handleNotificationClickOutside)
 })
 
@@ -57,7 +73,6 @@ watch(
   async (email) => {
     if (!email || !isProjectsLoaded.value) return
     await inviteStore.loadInvites()
-    mergeAcceptedInvites()
   }
 )
 
@@ -109,26 +124,34 @@ const handleNotificationClickOutside = (e: MouseEvent) => {
   }
 }
 
-const buildProjectFromInvite = (invite: ProjectInvite): Project => ({
-  projectId: invite.projectId,
-  title: invite.projectTitle,
-  description: '',
-  genre: invite.projectGenre,
-  thumbnailUrl: invite.projectThumbnailUrl,
-  role: 'VIEWER',
-  memberCount: 0,
-  sceneCount: 0,
-  updatedAt: new Date().toISOString(),
-  createdAt: invite.createdAt,
+const isOwnerDelete = computed(() => projectToDelete.value?.role === 'OWNER')
+const deleteModalTitle = computed(() =>
+  isOwnerDelete.value ? deleteOwnerModalTitle : leaveProjectModalTitle
+)
+const deleteModalConfirmText = computed(() =>
+  isOwnerDelete.value ? deleteOwnerConfirmText : leaveProjectConfirmText
+)
+const deleteModalMessage = computed(() => {
+  if (!projectToDelete.value) return ''
+  const title = projectToDelete.value.title
+  if (isOwnerDelete.value) {
+    return `'${title}' \ud504\ub85c\uc81d\ud2b8\ub97c \uc0ad\uc81c\ud558\uc2dc\uaca0\uc2b5\ub2c8\uae4c?\n30\uc77c \ub3d9\uc548\uc740 \ud734\uc9c0\ud1b5\uc5d0\uc11c \ubcf5\uad6c\ud560 \uc218 \uc788\uc2b5\ub2c8\ub2e4.`
+  }
+  return `'${title}' \ud504\ub85c\uc81d\ud2b8\uc5d0\uc11c \ub098\uac00\uba74 \uacf5\uc720\uac00 \ucde8\uc18c\ub418\uace0 \ub354 \uc774\uc0c1 \uc811\uadfc\ud560 \uc218 \uc5c6\uc2b5\ub2c8\ub2e4.`
 })
 
-const mergeAcceptedInvites = () => {
-  inviteStore.acceptedInvites.forEach((invite) => {
-    const exists = projectStore.projects.some((project) => project.projectId === invite.projectId)
-    if (!exists) {
-      projectStore.projects.push(buildProjectFromInvite(invite))
-    }
-  })
+const startInvitePolling = () => {
+  if (invitePoller) return
+  invitePoller = setInterval(async () => {
+    if (inviteStore.isLoading) return
+    await inviteStore.loadInvites()
+  }, invitePollIntervalMs)
+}
+
+const stopInvitePolling = () => {
+  if (!invitePoller) return
+  clearInterval(invitePoller)
+  invitePoller = null
 }
 
 const getInviteAvatar = (invite: ProjectInvite) => {
@@ -138,14 +161,11 @@ const getInviteAvatar = (invite: ProjectInvite) => {
 
 const acceptInvite = async (invite: ProjectInvite) => {
   await inviteStore.acceptInvite(invite.inviteId)
-  const exists = projectStore.projects.some((project) => project.projectId === invite.projectId)
-  if (!exists) {
-    projectStore.projects.unshift(buildProjectFromInvite(invite))
-  }
+  await projectStore.loadProjects()
   uiStore.showToast({
     type: 'success',
-    title: '?? ??',
-    message: '????? ??? ???????.',
+    title: inviteAcceptToastTitle,
+    message: inviteAcceptToastMessage,
   })
 }
 
@@ -153,8 +173,8 @@ const declineInvite = async (invite: ProjectInvite) => {
   await inviteStore.declineInvite(invite.inviteId)
   uiStore.showToast({
     type: 'info',
-    title: '?? ??',
-    message: '??? ??????.',
+    title: inviteDeclineToastTitle,
+    message: inviteDeclineToastMessage,
   })
 }
 
@@ -171,7 +191,7 @@ const handleStartCollab = async (projectId: number) => {
 const handleRequestDelete = (projectId: number) => {
   const project = projectStore.projects.find(p => p.projectId === projectId)
   if (project) {
-    projectToDelete.value = { projectId, title: project.title }
+    projectToDelete.value = { projectId, title: project.title, role: project.role }
     showDeleteModal.value = true
   }
 }
@@ -236,10 +256,10 @@ const cancelDelete = () => {
                 <div class="notification-avatar">{{ getInviteAvatar(invite) }}</div>
                 <div class="notification-content">
                   <div class="notification-title">
-                    {{ invite.projectTitle }} 프로젝트 초대
+                    {{ invite.projectTitle }} {{ inviteProjectSuffix }}
                   </div>
                   <div class="notification-meta">
-                    {{ invite.senderName || invite.senderEmail || '알 수 없음' }} 님이 초대했습니다.
+                    {{ invite.senderName || invite.senderEmail || inviteSenderFallback }} {{ inviteSenderMessageSuffix }}
                   </div>
                   <div class="notification-actions">
                     <button
@@ -247,14 +267,14 @@ const cancelDelete = () => {
                       type="button"
                       @click.stop="acceptInvite(invite)"
                     >
-                      수락
+                      {{ inviteAcceptLabel }}
                     </button>
                     <button
                       class="notif-btn notif-btn--decline"
                       type="button"
                       @click.stop="declineInvite(invite)"
                     >
-                      거절
+                      {{ inviteDeclineLabel }}
                     </button>
                   </div>
                 </div>
@@ -412,10 +432,10 @@ const cancelDelete = () => {
     <!-- Confirm Modal -->
     <ConfirmModal
       :is-open="showDeleteModal"
-      title="잠깐! 휴지통으로 보낼까요?"
-      :message="`'${projectToDelete?.title}' 프로젝트를 정말 삭제하시겠어요?\n30일 동안은 보관되니까 너무 걱정 마세요!`"
-      confirm-text="네, 보낼래요"
-      :is-dangerous="true"
+      :title="deleteModalTitle"
+      :message="deleteModalMessage"
+      :confirm-text="deleteModalConfirmText"
+      :is-dangerous="isOwnerDelete"
       @confirm="confirmDelete"
       @cancel="cancelDelete"
     />

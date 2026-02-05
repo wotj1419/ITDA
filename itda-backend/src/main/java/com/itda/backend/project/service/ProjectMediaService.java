@@ -122,9 +122,13 @@ public class ProjectMediaService {
     private ProjectTimelineItem toTimelineItem(TimelineNodeRow row, int order) {
         String contentUrl = mediaUrlResolver.nodeContentUrl(row.getVideoNodeId(), row.getContentUrl());
         String videoUrl = assetUrlResolver.resolvePublicUrl(row.getAssetId(), row.getContentUrl());
+        String videoThumbnail = assetUrlResolver.resolvePublicUrl(
+                row.getThumbnailAssetId(),
+                row.getThumbnailFallbackUrl()
+        );
         String shotThumbnail = assetUrlResolver.resolvePublicUrl(row.getShotAssetId(), row.getShotContentUrl());
         String masterThumbnail = assetUrlResolver.resolvePublicUrl(row.getMasterAssetId(), row.getMasterContentUrl());
-        String thumbnailUrl = firstImageUrl(shotThumbnail, masterThumbnail);
+        String thumbnailUrl = firstImageUrl(videoThumbnail, shotThumbnail, masterThumbnail);
         return new ProjectTimelineItem(
                 row.getVideoNodeId(),
                 row.getSceneId(),

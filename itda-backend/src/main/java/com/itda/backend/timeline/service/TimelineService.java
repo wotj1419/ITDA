@@ -213,9 +213,10 @@ public class TimelineService {
 
     private SceneTimelineItemResponse toSceneTimelineItemResponse(SceneTimelineItem item) {
         String videoUrl = assetUrlResolver.resolvePublicUrl(item.getAssetId(), item.getFallbackUrl());
+        String videoThumbnail = assetUrlResolver.resolvePublicUrl(item.getThumbnailAssetId(), null);
         String shotThumbnail = assetUrlResolver.resolvePublicUrl(item.getShotAssetId(), item.getShotContentUrl());
         String masterThumbnail = assetUrlResolver.resolvePublicUrl(item.getMasterAssetId(), item.getMasterContentUrl());
-        String thumbnailUrl = firstImageUrl(shotThumbnail, masterThumbnail);
+        String thumbnailUrl = firstImageUrl(videoThumbnail, shotThumbnail, masterThumbnail);
         return SceneTimelineItemResponse.from(
                 item,
                 videoUrl,
@@ -226,7 +227,7 @@ public class TimelineService {
 
     private ProjectTimelineItemResponse toProjectTimelineItemResponse(ProjectTimelineItem item) {
         String videoUrl = assetUrlResolver.resolvePublicUrl(item.getAssetId(), null);
-        String fallbackThumbnail = assetUrlResolver.resolvePublicUrl(null, item.getFallbackUrl());
+        String fallbackThumbnail = assetUrlResolver.resolvePublicUrl(item.getThumbnailAssetId(), item.getFallbackUrl());
         String masterThumbnail = assetUrlResolver.resolvePublicUrl(item.getMasterAssetId(), item.getMasterContentUrl());
         String thumbnailUrl = firstImageUrl(fallbackThumbnail, masterThumbnail);
         return ProjectTimelineItemResponse.from(

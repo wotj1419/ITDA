@@ -1,17 +1,20 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
-import { Play, Pause, SkipBack, SkipForward, Maximize2, ChevronsLeftRight, ChevronsRightLeft } from 'lucide-vue-next'
+import { computed, ref, watch } from 'vue'
+import { Play, Pause, Maximize2 } from 'lucide-vue-next'
 import { useTimelinePlayback } from '../../composables/useTimelinePlayback'
 import type { TimelineClip } from '../../types/ui/timeline'
 
 interface Props {
   clips: TimelineClip[]
+  selectedClipId?: string | null
 }
 
 const props = defineProps<Props>()
+const emit = defineEmits<{
+  (e: 'update:selectedClipId', clipId: string | null): void
+}>()
 
 const containerRef = ref<HTMLElement | null>(null)
-const isExpanded = ref(false)
 
 const clipsRef = computed(() => props.clips)
 const {
@@ -20,12 +23,11 @@ const {
   currentElapsedTime,
   totalDuration,
   isPlaying,
-  canPrev,
-  canNext,
   canPlayCurrent,
   togglePlay,
   playPrev,
   playNext,
+  selectClip,
   onEnded,
   onTimeUpdate,
 } = useTimelinePlayback({ clips: clipsRef })
@@ -33,6 +35,23 @@ void videoRef
 
 const hasClips = computed(() => props.clips.length > 0)
 const hasVideo = computed(() => Boolean(currentClip.value?.videoUrl))
+
+watch(
+  () => props.selectedClipId,
+  (clipId) => {
+    if (!clipId || clipId === currentClip.value?.clipId) return
+    void selectClip(clipId, true)
+  },
+  { immediate: true }
+)
+
+watch(
+  () => currentClip.value?.clipId ?? null,
+  (clipId) => {
+    emit('update:selectedClipId', clipId)
+  },
+  { immediate: true }
+)
 
 function formatTime(seconds: number): string {
   const safeSeconds = Number.isFinite(seconds) ? Math.max(0, Math.floor(seconds)) : 0
@@ -71,7 +90,7 @@ function handleKeydown(event: KeyboardEvent): void {
 
 <template>
   <div class="video-preview" tabindex="0" @keydown="handleKeydown">
-    <div ref="containerRef" class="preview-container" :class="{ expanded: isExpanded }">
+    <div ref="containerRef" class="preview-container">
       <template v-if="hasClips">
         <video
           v-if="hasVideo"
@@ -97,30 +116,26 @@ function handleKeydown(event: KeyboardEvent): void {
       <div v-else class="preview-empty">타임라인에 클립이 없습니다.</div>
 
       <div class="controls">
-
-        <button class="ctrl-btn" :disabled="!canPrev" @click="playPrev" aria-label="이전 클립" title="이전 클립">
-          <SkipBack class="icon" />
-        </button>
-        <button class="ctrl-btn primary" :disabled="!canPlayCurrent" @click="togglePlay" aria-label="재생/일시정지" title="재생/일시정지">
-          <Pause v-if="isPlaying" class="icon" />
-          <Play v-else class="icon" />
-        </button>
-        <button class="ctrl-btn" :disabled="!canNext" @click="playNext" aria-label="다음 클립" title="다음 클립">
-          <SkipForward class="icon" />
-        </button>
-        <button class="ctrl-btn" @click="isExpanded = !isExpanded" aria-label="너비 확대/축소" :title="isExpanded ? '기본 너비로 복귀' : '너비 꽉 채우기'">
-          <ChevronsRightLeft v-if="isExpanded" class="icon" />
-          <ChevronsLeftRight v-else class="icon" />
-        </button>
+        <div class="controls-left">
+          <button
+            class="ctrl-btn primary"
+            :disabled="!canPlayCurrent"
+            @click="togglePlay"
+            aria-label="재생/일시정지"
+            title="재생/일시정지"
+          >
+            <Pause v-if="isPlaying" class="icon" />
+            <Play v-else class="icon" />
+          </button>
+          <div class="timecode">
+            <span>{{ formatTime(currentElapsedTime) }}</span>
+            <span> / </span>
+            <span>{{ formatTime(totalDuration) }}</span>
+          </div>
+        </div>
         <button class="ctrl-btn" @click="toggleFullscreen" aria-label="전체화면" title="전체화면">
           <Maximize2 class="icon" />
         </button>
-      </div>
-
-      <div class="timecode">
-        <span>{{ formatTime(currentElapsedTime) }}</span>
-        <span> / </span>
-        <span>{{ formatTime(totalDuration) }}</span>
       </div>
     </div>
   </div>
@@ -140,18 +155,13 @@ function handleKeydown(event: KeyboardEvent): void {
   border-radius: 16px;
   position: relative;
   overflow: hidden;
-  transition: max-width 0.2s ease;
-}
-
-.preview-container.expanded {
-  max-width: 100%;
 }
 
 .preview-video,
 .preview-image {
   width: 100%;
   height: 100%;
-  object-fit: contain;
+  object-fit: cover;
 }
 
 .preview-empty {
@@ -170,6 +180,13 @@ function handleKeydown(event: KeyboardEvent): void {
   right: 1rem;
   bottom: 1rem;
   display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.controls-left {
+  display: inline-flex;
+  align-items: center;
   gap: 0.5rem;
 }
 
@@ -202,9 +219,6 @@ function handleKeydown(event: KeyboardEvent): void {
 }
 
 .timecode {
-  position: absolute;
-  top: 1rem;
-  right: 1rem;
   background: rgba(0, 0, 0, 0.7);
   padding: 0.25rem 0.625rem;
   border-radius: 6px;

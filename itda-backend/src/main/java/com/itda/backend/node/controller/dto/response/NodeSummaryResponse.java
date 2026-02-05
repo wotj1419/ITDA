@@ -38,14 +38,17 @@ public record NodeSummaryResponse(
         @Schema(description = "Content URL", example = "/api/nodes/301/content")
         String contentUrl,
 
+        @Schema(description = "Thumbnail URL", example = "https://...")
+        String thumbnailUrl,
+
         @Schema(description = "Position")
         PositionDto position
 ) {
     public static NodeSummaryResponse from(Node node) {
-        return from(node, node.getContentUrl());
+        return from(node, node.getContentUrl(), null);
     }
 
-    public static NodeSummaryResponse from(Node node, String contentUrl) {
+    public static NodeSummaryResponse from(Node node, String contentUrl, String thumbnailUrl) {
         return new NodeSummaryResponse(
                 node.getId(),
                 node.getNodeType(),
@@ -56,6 +59,7 @@ public record NodeSummaryResponse(
                 node.getIsActive(),
                 node.getIsConfirmed(),
                 contentUrl,
+                thumbnailUrl,
                 new PositionDto(node.getPositionX(), node.getPositionY())
         );
     }

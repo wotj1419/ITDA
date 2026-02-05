@@ -29,6 +29,7 @@ public enum ErrorCode {
     // ===== 404 Not Found =====
     USER_NOT_FOUND(404, "사용자를 찾을 수 없습니다"),
     PROJECT_NOT_FOUND(404, "프로젝트를 찾을 수 없습니다"),
+    INVITE_NOT_FOUND(404, "Invite not found"),
     SCENE_NOT_FOUND(404, "씬을 찾을 수 없습니다"),
     SCENARIO_NOT_FOUND(404, "시나리오를 찾을 수 없습니다"),
     NODE_NOT_FOUND(404, "노드를 찾을 수 없습니다"),
@@ -45,6 +46,8 @@ public enum ErrorCode {
     INPUT_IMAGE_NOT_READY(409, "입력 이미지가 준비되지 않았습니다"),
     SCENARIO_VERSION_CONFLICT(409, "시나리오가 최신 상태가 아닙니다"),
     MEMBER_ALREADY_EXISTS(409, "이미 프로젝트의 멤버입니다"),
+    INVITE_ALREADY_EXISTS(409, "Invite already exists"),
+    INVITE_STATUS_CONFLICT(409, "Invite status conflict"),
     RTC_ROOM_FULL(409, "방 인원이 초과했습니다. 최대 6명까지 접속가능 합니다"),
 
     // ===== 403 Forbidden (Node specific) =====

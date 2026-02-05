@@ -5,6 +5,7 @@ import ClipItem from './ClipItem.vue'
 
 interface Props {
   clips: TimelineClip[]
+  selectedClipId?: string | null
 }
 
 const props = defineProps<Props>()
@@ -12,6 +13,7 @@ const props = defineProps<Props>()
 const emit = defineEmits<{
   (e: 'reorder', clipIds: string[]): void
   (e: 'remove', clipId: string): void
+  (e: 'select', clipId: string): void
 }>()
 
 const draggedId = ref<string | null>(null)
@@ -71,6 +73,10 @@ function handleDrop(targetClipId: string) {
 function handleRemove(clipId: string) {
   emit('remove', clipId)
 }
+
+function handleSelect(clipId: string) {
+  emit('select', clipId)
+}
 </script>
 
 <template>
@@ -80,6 +86,7 @@ function handleRemove(clipId: string) {
         v-for="clip in clips"
         :key="clip.clipId"
         :clip="clip"
+        :active="props.selectedClipId === clip.clipId"
         :class="{ 'drag-over': dragOverId === clip.clipId }"
         @dragstart="handleDragStart(clip.clipId, $event)"
         @dragend="handleDragEnd"
@@ -87,6 +94,7 @@ function handleRemove(clipId: string) {
         @dragleave="handleDragLeave"
         @drop="handleDrop(clip.clipId)"
         @remove="handleRemove(clip.clipId)"
+        @select="handleSelect(clip.clipId)"
       />
     </TransitionGroup>
 

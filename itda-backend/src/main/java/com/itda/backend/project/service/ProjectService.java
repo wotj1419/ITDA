@@ -1,5 +1,6 @@
 package com.itda.backend.project.service;
 
+import com.itda.backend.asset.service.AssetUrlResolver;
 import com.itda.backend.global.exception.BusinessException;
 import com.itda.backend.global.response.ErrorCode;
 import com.itda.backend.project.controller.dto.request.CreateProjectRequest;
@@ -11,12 +12,17 @@ import com.itda.backend.project.controller.dto.response.ProjectSummaryResponse;
 import com.itda.backend.project.domain.Project;
 import com.itda.backend.project.repository.ProjectMapper;
 import com.itda.backend.project.repository.ProjectMemberMapper;
+import com.itda.backend.project.repository.dto.ProjectPreviewCandidate;
+import com.itda.backend.project.repository.dto.ProjectSummary;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Objects;
+import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
@@ -25,9 +31,14 @@ public class ProjectService {
     private static final String ROLE_OWNER = "OWNER";
     private static final String STATUS_ACTIVE = "ACTIVE";
     private static final int MAX_PAGE_SIZE = 100;
+    private static final String PREVIEW_TYPE_PROJECT_MERGE = "PROJECT_MERGE";
+    private static final String PREVIEW_TYPE_SCENE_MERGE = "SCENE_MERGE";
+    private static final String PREVIEW_TYPE_CLIP = "CLIP";
+    private static final PreviewPayload EMPTY_PREVIEW = new PreviewPayload(null, null, null);
 
     private final ProjectMapper projectMapper;
     private final ProjectMemberMapper projectMemberMapper;
+    private final AssetUrlResolver assetUrlResolver;
 
     @Transactional
     public ProjectCreateResponse createProject(Long userId, CreateProjectRequest request) {
@@ -128,8 +139,81 @@ public class ProjectService {
 
     private List<ProjectSummaryResponse> fetchProjectSummaries(Long userId, int size, int offset) {
         return projectMapper.findAllByUserId(userId, size, offset).stream()
-                .map(ProjectSummaryResponse::from)
+                .map(this::toProjectSummaryResponse)
                 .toList();
+    }
+
+    private ProjectSummaryResponse toProjectSummaryResponse(ProjectSummary summary) {
+        PreviewPayload preview = resolvePreview(summary.getProjectId());
+        return ProjectSummaryResponse.from(
+                summary,
+                preview.type(),
+                preview.thumbnailUrl(),
+                preview.videoUrl()
+        );
+    }
+
+    private PreviewPayload resolvePreview(Long projectId) {
+        List<ResolvedPreviewCandidate> candidates = new ArrayList<>();
+        resolvePreviewCandidate(projectMapper.findProjectMergePreview(projectId), PREVIEW_TYPE_PROJECT_MERGE)
+                .ifPresent(candidates::add);
+        resolvePreviewCandidate(projectMapper.findSceneMergePreview(projectId), PREVIEW_TYPE_SCENE_MERGE)
+                .ifPresent(candidates::add);
+        resolvePreviewCandidate(projectMapper.findClipPreview(projectId), PREVIEW_TYPE_CLIP)
+                .ifPresent(candidates::add);
+
+        if (candidates.isEmpty()) {
+            return EMPTY_PREVIEW;
+        }
+
+        ResolvedPreviewCandidate primary = candidates.stream()
+                .filter(candidate -> !isBlank(candidate.videoUrl()))
+                .findFirst()
+                .orElse(candidates.get(0));
+
+        String thumbnailUrl = firstNonBlank(primary.thumbnailUrl(), candidates);
+        return new PreviewPayload(primary.type(), thumbnailUrl, primary.videoUrl());
+    }
+
+    private Optional<ResolvedPreviewCandidate> resolvePreviewCandidate(
+            Optional<ProjectPreviewCandidate> candidate,
+            String type
+    ) {
+        if (candidate.isEmpty()) {
+            return Optional.empty();
+        }
+
+        ProjectPreviewCandidate value = candidate.get();
+        String thumbnailUrl = assetUrlResolver.resolvePublicUrl(
+                value.getThumbnailAssetId(),
+                value.getThumbnailFallbackUrl()
+        );
+        String videoUrl = assetUrlResolver.resolvePublicUrl(
+                value.getVideoAssetId(),
+                value.getVideoFallbackUrl()
+        );
+
+        if (thumbnailUrl == null && videoUrl == null) {
+            return Optional.empty();
+        }
+        return Optional.of(new ResolvedPreviewCandidate(type, thumbnailUrl, videoUrl));
+    }
+
+    private String firstNonBlank(String primaryThumbnail, List<ResolvedPreviewCandidate> candidates) {
+        if (!isBlank(primaryThumbnail)) {
+            return primaryThumbnail;
+        }
+        return candidates.stream()
+                .map(ResolvedPreviewCandidate::thumbnailUrl)
+                .filter(Objects::nonNull)
+                .map(String::trim)
+                .filter(value -> !value.isEmpty())
+                .findFirst()
+                .orElse(null);
+    }
+
+    private boolean isBlank(String value) {
+        return value == null || value.isBlank();
     }
 
     private ProjectListResponse emptyProjectList(int page, int size, int total) {
@@ -171,5 +255,10 @@ public class ProjectService {
         }
         return (int) offset;
     }
-}
 
+    private record PreviewPayload(String type, String thumbnailUrl, String videoUrl) {
+    }
+
+    private record ResolvedPreviewCandidate(String type, String thumbnailUrl, String videoUrl) {
+    }
+}

@@ -17,6 +17,8 @@ public class TimelineNodeRow {
     private Integer sceneOrder;
     private Integer duration;
     private Long assetId;
+    private Long thumbnailAssetId;
+    private String thumbnailFallbackUrl;
     private String contentUrl;
     private Long shotAssetId;
     private String shotContentUrl;

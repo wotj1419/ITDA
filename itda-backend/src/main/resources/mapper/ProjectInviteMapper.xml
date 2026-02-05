@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.itda.backend.project.repository.ProjectInviteMapper">
+
+    <insert id="insertInvite"
+            parameterType="com.itda.backend.project.domain.ProjectInvite"
+            useGeneratedKeys="true" keyProperty="id" keyColumn="id">
+        INSERT INTO project_invites (project_id, sender_id, receiver_id, role, status)
+        VALUES (#{projectId}, #{senderId}, #{receiverId}, #{role}, #{status})
+    </insert>
+
+    <select id="findById" resultType="com.itda.backend.project.domain.ProjectInvite">
+        SELECT id,
+               project_id,
+               sender_id,
+               receiver_id,
+               role,
+               status,
+               created_at,
+               updated_at
+        FROM project_invites
+        WHERE id = #{inviteId}
+    </select>
+
+    <select id="findByProjectIdAndReceiverId" resultType="com.itda.backend.project.domain.ProjectInvite">
+        SELECT id,
+               project_id,
+               sender_id,
+               receiver_id,
+               role,
+               status,
+               created_at,
+               updated_at
+        FROM project_invites
+        WHERE project_id = #{projectId}
+          AND receiver_id = #{receiverId}
+        LIMIT 1
+    </select>
+
+    <update id="updateInviteForResend">
+        UPDATE project_invites
+        SET status = 'PENDING',
+            role = #{role},
+            sender_id = #{senderId},
+            created_at = CURRENT_TIMESTAMP,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = #{inviteId}
+    </update>
+
+    <update id="updateInviteStatus">
+        UPDATE project_invites
+        SET status = #{status},
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = #{inviteId}
+    </update>
+
+    <select id="findAllByReceiverId"
+            resultType="com.itda.backend.project.controller.dto.response.ProjectInviteResponse">
+        SELECT
+            pi.id AS inviteId,
+            pi.project_id AS projectId,
+            p.title AS projectTitle,
+            p.genre AS projectGenre,
+            NULL AS projectThumbnailUrl,
+            sender.name AS senderName,
+            sender.email AS senderEmail,
+            receiver.email AS receiverEmail,
+            pi.created_at AS createdAt,
+            pi.status
+        FROM project_invites pi
+        JOIN projects p ON p.id = pi.project_id
+        JOIN users sender ON sender.id = pi.sender_id
+        JOIN users receiver ON receiver.id = pi.receiver_id
+        WHERE pi.receiver_id = #{receiverId}
+        ORDER BY pi.created_at DESC
+    </select>
+
+    <select id="findResponseById"
+            resultType="com.itda.backend.project.controller.dto.response.ProjectInviteResponse">
+        SELECT
+            pi.id AS inviteId,
+            pi.project_id AS projectId,
+            p.title AS projectTitle,
+            p.genre AS projectGenre,
+            NULL AS projectThumbnailUrl,
+            sender.name AS senderName,
+            sender.email AS senderEmail,
+            receiver.email AS receiverEmail,
+            pi.created_at AS createdAt,
+            pi.status
+        FROM project_invites pi
+        JOIN projects p ON p.id = pi.project_id
+        JOIN users sender ON sender.id = pi.sender_id
+        JOIN users receiver ON receiver.id = pi.receiver_id
+        WHERE pi.id = #{inviteId}
+    </select>
+
+</mapper>

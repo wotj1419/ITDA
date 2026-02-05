@@ -30,6 +30,7 @@ public class VideoGenerationWorker {
     private final JobRequestParser jobRequestParser;
     private final NodeMapper nodeMapper;
     private final NodeContentLoader nodeContentLoader;
+    private final VideoThumbnailService videoThumbnailService;
 
     public ExecutionResult execute(Job job) {
         requireJobIdentifiers(job);
@@ -65,7 +66,15 @@ public class VideoGenerationWorker {
                 storedVideo.contentType(),
                 storedVideo.storageProvider()
         );
-        return new ExecutionResult(assetId, storedVideo.storageKey());
+        VideoThumbnailService.ThumbnailAsset thumbnail = videoThumbnailService
+                .createForVideoBytes(job, result.bytes(), "video-generation jobId=" + job.getId())
+                .orElse(null);
+        return new ExecutionResult(
+                assetId,
+                storedVideo.storageKey(),
+                thumbnail == null ? null : thumbnail.assetId(),
+                thumbnail == null ? null : thumbnail.storageKey()
+        );
     }
 
     private Node loadNode(Job job) {

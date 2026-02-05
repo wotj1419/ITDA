@@ -16,6 +16,7 @@ public class SceneVideo {
     private Long id;
     private Long sceneId;
     private Long assetId;
+    private Long thumbnailAssetId;
     private String mergeSignature;
     private String status;
     private Integer durationMs;
