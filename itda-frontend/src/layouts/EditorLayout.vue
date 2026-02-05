@@ -80,7 +80,7 @@ const navItems = computed(() => {
       label: '씬 타임라인',
       to: {
         name: 'scene-timeline',
-        params: { id: projectId.value, sceneId: sceneId.value },
+        params: { id: projectId.value, sceneId: sceneId.value } as any,
       },
       active: false,
     });
