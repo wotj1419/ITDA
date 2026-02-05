@@ -1,4 +1,4 @@
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 import type { AnyNodeData } from '../types/ui/sceneNodes';
 import type { GeneratePromptRequest, GeneratePromptResponse, PromptPreviewRequest, PromptPreviewResponse } from '../types/api/ai';
 import { JobStatus, PromptStatus } from '../types/ui/sceneNodes';
@@ -51,7 +51,10 @@ export function useNodeGeneration(options: UseNodeGenerationOptions) {
   const nodeStore = useSceneNodeStore();
   const { startGenerationToast, finishGenerationToast } = useGenerationToast();
 
-  const isGeneratingPrompt = ref(false);
+  const isGeneratingPrompt = computed(() => {
+    const node = nodeStore.nodes.find((item) => item.id === options.nodeId);
+    return Boolean(node?.data?.isPromptGenerating);
+  });
   const isGeneratingJob = ref(false);
   const errorMessage = ref<string | null>(null);
 
@@ -78,7 +81,7 @@ export function useNodeGeneration(options: UseNodeGenerationOptions) {
 
   const generatePrompt = async (): Promise<void> => {
     if (isGeneratingPrompt.value || isGeneratingJob.value) return;
-    isGeneratingPrompt.value = true;
+    nodeStore.updateNodeLocal(options.nodeId, { isPromptGenerating: true });
     errorMessage.value = null;
 
     // 프롬프트 생성 시작 토스트
@@ -112,7 +115,7 @@ export function useNodeGeneration(options: UseNodeGenerationOptions) {
         reason: error instanceof Error ? error.message : '알 수 없는 오류',
       });
     } finally {
-      isGeneratingPrompt.value = false;
+      nodeStore.updateNodeLocal(options.nodeId, { isPromptGenerating: false });
     }
   };
 
