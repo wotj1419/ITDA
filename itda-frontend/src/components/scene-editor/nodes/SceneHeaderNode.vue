@@ -35,6 +35,9 @@ const collabStore = useCollabStore();
 const nodeStyle = NODE_RESIZER_STYLE;
 const { minWidth, minHeight } = getNodeMinSize(props.data.type);
 const nodeRef = ref<HTMLElement | null>(null);
+const headerRef = ref<HTMLElement | null>(null);
+const bodyRef = ref<HTMLElement | null>(null);
+const descriptionRef = ref<HTMLElement | null>(null);
 
 // =============================================================================
 // Computed
@@ -67,17 +70,22 @@ function handleAddChild(event: Event) {
 
 function syncNodeHeight(): void {
   const nodeEl = nodeRef.value;
-  if (!nodeEl) return;
-  const headerEl = nodeEl.querySelector('.node-glass__header') as HTMLElement | null;
-  const bodyEl = nodeEl.querySelector('.node-glass__body') as HTMLElement | null;
-  const headerHeight = headerEl?.offsetHeight ?? 0;
-  const bodyHeight = bodyEl?.scrollHeight ?? 0;
-  const requiredHeight = Math.max(minHeight, Math.ceil(headerHeight + bodyHeight));
+  const headerEl = headerRef.value;
+  const bodyEl = bodyRef.value;
+  const descriptionEl = descriptionRef.value;
+  if (!nodeEl || !headerEl || !descriptionEl) return;
+  const bodyStyle = bodyEl ? getComputedStyle(bodyEl) : null;
+  const paddingTop = bodyStyle ? Number.parseFloat(bodyStyle.paddingTop) || 0 : 0;
+  const paddingBottom = bodyStyle ? Number.parseFloat(bodyStyle.paddingBottom) || 0 : 0;
+  const requiredHeight = Math.max(
+    minHeight,
+    Math.ceil(headerEl.offsetHeight + paddingTop + paddingBottom + descriptionEl.scrollHeight)
+  );
   const node = store.nodes.find((item) => item.id === props.id);
   if (!node) return;
   const currentHeightRaw = (node.style as Record<string, unknown> | undefined)?.height ?? node.height ?? 0;
   const currentHeight = Number(String(currentHeightRaw).replace('px', ''));
-  if (Number.isFinite(currentHeight) && requiredHeight <= currentHeight + 4) return;
+  if (Number.isFinite(currentHeight) && Math.abs(requiredHeight - currentHeight) <= 2) return;
   node.height = requiredHeight;
   node.style = { ...(node.style ?? {}), height: `${requiredHeight}px` };
   store.persistNodePositions();
@@ -89,6 +97,13 @@ onMounted(() => {
 
 watch(
   () => props.data.description,
+  () => {
+    nextTick(syncNodeHeight);
+  }
+);
+
+watch(
+  () => props.data.title,
   () => {
     nextTick(syncNodeHeight);
   }
@@ -106,7 +121,7 @@ watch(
     />
     <div v-if="props.selected" class="node-resizer-outline" />
     <!-- Header -->
-    <div class="node-glass__header">
+    <div ref="headerRef" class="node-glass__header">
       <div class="node-glass__header-left">
         <div class="node-glass__icon-box node-glass__icon-box--header">
           <BookOpen class="node-glass__icon" />
@@ -120,8 +135,8 @@ watch(
     </div>
 
     <!-- Body -->
-    <div class="node-glass__body">
-      <p class="node-glass__description">
+    <div ref="bodyRef" class="node-glass__body">
+      <p ref="descriptionRef" class="node-glass__description">
         {{ data.description || '설명 없음' }}
       </p>
     </div>

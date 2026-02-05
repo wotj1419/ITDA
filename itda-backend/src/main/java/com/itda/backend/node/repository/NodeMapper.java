@@ -55,7 +55,8 @@ public interface NodeMapper {
     int updateStatusAndContentUrlAndAssetId(@Param("nodeId") Long nodeId,
                                             @Param("status") NodeStatus status,
                                             @Param("contentUrl") String contentUrl,
-                                            @Param("assetId") Long assetId);
+                                            @Param("assetId") Long assetId,
+                                            @Param("thumbnailAssetId") Long thumbnailAssetId);
 
     List<TimelineNodeRow> findConfirmedVideoNodesBySceneId(@Param("sceneId") Long sceneId);
 }

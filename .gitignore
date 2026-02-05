@@ -23,6 +23,7 @@ node_modules/
 # Build outputs
 dist/
 build/
+/.gradle-user-home/
 
 # AI Tools
 .serena/

@@ -143,7 +143,7 @@ const followMember = (member: CollabParticipant) => {
 .presence {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 0.35rem;
 }
 
 .section-label {
@@ -156,7 +156,9 @@ const followMember = (member: CollabParticipant) => {
 .presence-list {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 0.3rem;
+  max-height: 180px;
+  overflow-y: auto;
 }
 
 .presence-item {
@@ -165,7 +167,7 @@ const followMember = (member: CollabParticipant) => {
   align-items: center;
   justify-content: flex-start;
   gap: 0.5rem;
-  padding: 0.25rem 0;
+  padding: 0.15rem 0;
   font-size: 0.75rem;
   color: var(--gray-600);
 }
@@ -201,7 +203,7 @@ const followMember = (member: CollabParticipant) => {
 .presence-text {
   display: flex;
   flex-direction: column;
-  gap: 0.1rem;
+  gap: 0.05rem;
   min-width: 0;
 }
 
@@ -216,6 +218,7 @@ const followMember = (member: CollabParticipant) => {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  font-size: 0.72rem;
 }
 
 .presence-me {
@@ -226,7 +229,7 @@ const followMember = (member: CollabParticipant) => {
 
 .presence-location {
   color: var(--gray-500);
-  font-size: 0.7rem;
+  font-size: 0.65rem;
   max-width: 100%;
   white-space: normal;
   overflow-wrap: anywhere;

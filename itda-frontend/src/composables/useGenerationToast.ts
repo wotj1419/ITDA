@@ -1,6 +1,6 @@
 import { useUIStore } from '../stores/ui'
 
-type GenerationKind = 'image' | 'grid' | 'shot' | 'video' | 'prompt' | 'scenario_prompt' | 'plot' | 'scenes'
+type GenerationKind = 'image' | 'grid' | 'shot' | 'video' | 'prompt' | 'final_prompt' | 'scenario_prompt' | 'plot' | 'scenes'
 type GenerationResult = 'success' | 'error'
 type GenerationErrorOptions = {
   reason?: string
@@ -13,6 +13,7 @@ const labelMap: Record<GenerationKind, string> = {
   shot: '샷',
   video: '영상',
   prompt: '프롬프트',
+  final_prompt: '최종 프롬프트',
   scenario_prompt: '시나리오 프롬프트',
   plot: '줄거리',
   scenes: '씬',

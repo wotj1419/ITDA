@@ -20,6 +20,7 @@ const cancelEdit = () => {
 
 const saveEdit = () => {
   scenarioStore.plot.text = editedText.value
+  scenarioStore.plot.status = 'draft'
   isEditing.value = false
 }
 

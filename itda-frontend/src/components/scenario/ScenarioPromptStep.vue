@@ -20,6 +20,7 @@ const cancelEdit = () => {
 
 const saveEdit = () => {
   scenarioStore.prompt.text = editedText.value
+  scenarioStore.prompt.status = 'draft'
   isEditing.value = false
 }
 

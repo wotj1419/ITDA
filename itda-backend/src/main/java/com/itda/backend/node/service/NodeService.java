@@ -77,6 +77,13 @@ public class NodeService {
         return assetUrlResolver.resolvePublicUrl(node.getAssetId(), node.getContentUrl());
     }
 
+    private String resolveNodeThumbnailUrl(Node node) {
+        if (node == null) {
+            return null;
+        }
+        return assetUrlResolver.resolvePublicUrl(node.getThumbnailAssetId(), null);
+    }
+
     /**
      * 노드 생성
      */
@@ -130,7 +137,8 @@ public class NodeService {
                 continue;
             }
             String contentUrl = resolveNodeContentUrl(node);
-            responses.add(NodeSummaryResponse.from(node, contentUrl));
+            String thumbnailUrl = resolveNodeThumbnailUrl(node);
+            responses.add(NodeSummaryResponse.from(node, contentUrl, thumbnailUrl));
         }
 
         return new NodeTreeResponse(responses);
@@ -146,7 +154,8 @@ public class NodeService {
 
         Map<String, Object> settings = deserializeSettings(node.getDataJson());
         String contentUrl = resolveNodeContentUrl(node);
-        return NodeDetailResponse.from(node, settings, contentUrl);
+        String thumbnailUrl = resolveNodeThumbnailUrl(node);
+        return NodeDetailResponse.from(node, settings, contentUrl, thumbnailUrl);
     }
 
     /**
@@ -530,6 +539,7 @@ public class NodeService {
                 NodeType.SCENE_HEADER,
                 scene.getTitle(),
                 scene.getDescription(),
+                null,
                 null,
                 null,
                 null,

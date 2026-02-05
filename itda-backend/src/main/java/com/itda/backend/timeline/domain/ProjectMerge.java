@@ -16,6 +16,7 @@ public class ProjectMerge {
     private Long id;
     private Long projectId;
     private Long assetId;
+    private Long thumbnailAssetId;
     private String mergeSignature;
     private String status;
     private Boolean isActive;

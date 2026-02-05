@@ -12,6 +12,7 @@ import com.itda.backend.worker.ExecutionResult;
 import com.itda.backend.worker.video.VideoContentLoader;
 import com.itda.backend.worker.video.VideoInput;
 import com.itda.backend.worker.video.VideoStorage;
+import com.itda.backend.worker.video.VideoThumbnailService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -48,6 +49,7 @@ public class MergeWorker {
     private final AssetMapper assetMapper;
     private final VideoStorage videoStorage;
     private final VideoContentLoader videoContentLoader;
+    private final VideoThumbnailService videoThumbnailService;
     private final FileStorageProperties fileStorageProperties;
 
     public ExecutionResult execute(Job job) {
@@ -83,8 +85,16 @@ public class MergeWorker {
         try {
             inputs = resolveProjectInputPaths(items);
             mergeTimelineItems(extractPaths(inputs), outputPath);
+            VideoThumbnailService.ThumbnailAsset thumbnail = videoThumbnailService
+                    .createForVideoFile(job, outputPath, "project-merge jobId=" + job.getId())
+                    .orElse(null);
             Asset asset = videoStorage.storeMergedVideo(outputPath, storageKey);
-            return new ExecutionResult(asset.getId(), asset.getStorageKey());
+            return new ExecutionResult(
+                    asset.getId(),
+                    asset.getStorageKey(),
+                    thumbnail == null ? null : thumbnail.assetId(),
+                    thumbnail == null ? null : thumbnail.storageKey()
+            );
         } finally {
             cleanupTempInputs(inputs);
             deleteQuietly(outputPath);
@@ -109,8 +119,16 @@ public class MergeWorker {
         try {
             inputs = resolveSceneInputPaths(items);
             mergeTimelineItems(extractPaths(inputs), outputPath);
+            VideoThumbnailService.ThumbnailAsset thumbnail = videoThumbnailService
+                    .createForVideoFile(job, outputPath, "scene-merge jobId=" + job.getId())
+                    .orElse(null);
             Asset asset = videoStorage.storeMergedVideo(outputPath, storageKey);
-            return new ExecutionResult(asset.getId(), asset.getStorageKey());
+            return new ExecutionResult(
+                    asset.getId(),
+                    asset.getStorageKey(),
+                    thumbnail == null ? null : thumbnail.assetId(),
+                    thumbnail == null ? null : thumbnail.storageKey()
+            );
         } finally {
             cleanupTempInputs(inputs);
             deleteQuietly(outputPath);

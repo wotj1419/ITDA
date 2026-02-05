@@ -28,8 +28,7 @@ const unreadNotifications = computed(() => inviteStore.unreadCount)
 const isNotificationOpen = ref(false)
 const notificationRef = ref<HTMLElement | null>(null)
 const isProjectsLoaded = ref(false)
-const notificationTitle = '\uc54c\ub9bc'
-const notificationFilterLabel = '\uc77d\uc9c0 \uc54a\uc740 \ud56d\ubaa9\ub9cc \ud45c\uc2dc'
+const notificationTitle = '알림'
 const notificationEmptyTitle = '\uc54c\ub9bc\uc774 \uc5c6\uc2b5\ub2c8\ub2e4'
 const notificationEmptyMeta = '\uc0c8 \uc54c\ub9bc\uc774 \uc624\uba74 \uc5ec\uae30\uc5d0 \ud45c\uc2dc\ub429\ub2c8\ub2e4.'
 const notificationAvatar = '\ud83d\ude42'
@@ -239,10 +238,6 @@ const cancelDelete = () => {
             <div class="notification-panel__header">
               <h3>{{ notificationTitle }}</h3>
               <button class="panel-close" type="button" @click="closeNotifications">{{ notificationCloseSymbol }}</button>
-            </div>
-            <div class="notification-panel__filter">
-              <span class="filter-label">{{ notificationFilterLabel }}</span>
-              <span class="filter-pill">OFF</span>
             </div>
             <div class="notification-panel__list">
               <div v-if="pendingInvites.length === 0" class="notification-item notification-item--empty">
@@ -1092,6 +1087,20 @@ const cancelDelete = () => {
   background: var(--gray-100);
   color: var(--gray-600);
   font-weight: 600;
+  border: none;
+  cursor: pointer;
+  font-size: inherit;
+  transition: all 0.2s ease;
+}
+
+.filter-pill:hover {
+  background: var(--rose-100);
+  color: var(--rose-600);
+}
+
+.filter-pill--active {
+  background: var(--rose-500);
+  color: white;
 }
 
 .notification-panel__list {

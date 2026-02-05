@@ -185,8 +185,9 @@ const getScenePresenceAvatars = (sceneId: number) =>
                     v-if="clip.contentUrl"
                     class="preview-video"
                     :src="clip.contentUrl"
-                    :poster="getClipThumbnail(scene, clip, index) || '/icon.png'"
+                    :poster="getClipThumbnail(scene, clip, index) || undefined"
                     :play-on-hover="true"
+                    preload="none"
                   />
                   <img
                     v-else-if="!getClipThumbnail(scene, clip, index)"
