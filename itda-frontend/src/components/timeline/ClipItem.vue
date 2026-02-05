@@ -7,15 +7,19 @@ interface Props {
   clip: TimelineClip
   draggable?: boolean
   active?: boolean
+  previewing?: boolean
 }
 
-withDefaults(defineProps<Props>(), {
+const props = withDefaults(defineProps<Props>(), {
   draggable: true,
+  previewing: false,
 })
 
 const emit = defineEmits<{
   (e: 'remove'): void
   (e: 'select'): void
+  (e: 'hover-start'): void
+  (e: 'hover-end'): void
 }>()
 
 </script>
@@ -23,17 +27,22 @@ const emit = defineEmits<{
 <template>
   <div
     class="clip-item"
-    :class="{ 'is-active': active }"
+    :class="{
+      'is-active': active,
+      previewing: props.previewing,
+    }"
     :draggable="draggable"
     :style="{ width: `${clip.duration * 20}px` }"
     tabindex="0"
     @click="emit('select')"
     @keydown.enter.prevent="emit('select')"
     @keydown.space.prevent="emit('select')"
+    @mouseenter="emit('hover-start')"
+    @mouseleave="emit('hover-end')"
   >
     <div
       class="clip-media"
-      :class="{ 'has-video': Boolean(clip.videoUrl), 'force-video': !clip.thumbnailUrl }"
+      :class="{ 'has-video': Boolean(clip.videoUrl) }"
     >
       <img
         v-if="clip.thumbnailUrl"
@@ -43,11 +52,14 @@ const emit = defineEmits<{
         loading="lazy"
       />
       <LazyVideo
-        v-if="clip.videoUrl"
+        v-if="clip.videoUrl && props.previewing"
         :src="clip.videoUrl"
         class="clip-video"
         :poster="clip.thumbnailUrl || '/icon.png'"
-        :play-on-hover="true"
+        :play-on-hover="false"
+        :lazy="false"
+        :autoplay="true"
+        :loop="true"
       />
       <img
         v-else-if="!clip.thumbnailUrl"
@@ -120,21 +132,13 @@ const emit = defineEmits<{
   transition: opacity 0.2s ease;
 }
 
-.clip-item:hover .clip-video,
+.clip-item.previewing .clip-video,
 .clip-item:focus-visible .clip-video {
   opacity: 1;
 }
 
-.clip-item:hover .clip-image,
+.clip-item.previewing .clip-image,
 .clip-item:focus-visible .clip-image {
-  opacity: 0;
-}
-
-.clip-media.force-video .clip-video {
-  opacity: 1;
-}
-
-.clip-media.force-video .clip-image {
   opacity: 0;
 }
 
