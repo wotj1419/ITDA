@@ -9,6 +9,7 @@
         <id property="videoNodeId" column="video_node_id"/>
         <result property="sceneId" column="scene_id"/>
         <result property="assetId" column="asset_id"/>
+        <result property="thumbnailAssetId" column="thumbnail_asset_id"/>
         <result property="fallbackUrl" column="fallback_url"/>
         <result property="shotAssetId" column="shot_asset_id"/>
         <result property="shotContentUrl" column="shot_content_url"/>
@@ -23,6 +24,7 @@
         <result property="sceneId" column="scene_id"/>
         <result property="sceneTitle" column="scene_title"/>
         <result property="assetId" column="asset_id"/>
+        <result property="thumbnailAssetId" column="thumbnail_asset_id"/>
         <result property="fallbackUrl" column="fallback_url"/>
         <result property="masterAssetId" column="master_asset_id"/>
         <result property="masterContentUrl" column="master_content_url"/>
@@ -34,6 +36,7 @@
         SELECT ti.video_node_id,
                ti.scene_id,
                n.asset_id AS asset_id,
+               n.thumbnail_asset_id AS thumbnail_asset_id,
                n.content_url AS fallback_url,
                shot.asset_id AS shot_asset_id,
                shot.content_url AS shot_content_url,
@@ -63,6 +66,8 @@
                s.order_index AS scene_order,
                CAST(JSON_UNQUOTE(JSON_EXTRACT(n.data_json, '$.duration')) AS UNSIGNED) AS duration,
                n.asset_id AS asset_id,
+               n.thumbnail_asset_id AS thumbnail_asset_id,
+               n.content_url AS thumbnail_fallback_url,
                n.content_url AS content_url,
                shot.asset_id AS shot_asset_id,
                shot.content_url AS shot_content_url,
@@ -88,6 +93,7 @@
                ti.scene_id,
                s.title AS scene_title,
                sv.asset_id AS asset_id,
+               sv.thumbnail_asset_id AS thumbnail_asset_id,
                sv.thumbnail_url AS fallback_url,
                master.asset_id AS master_asset_id,
                master.content_url AS master_content_url,

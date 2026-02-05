@@ -9,6 +9,7 @@ interface Props {
   playOnHover?: boolean
   autoplay?: boolean
   loop?: boolean
+  preload?: 'none' | 'metadata' | 'auto'
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -16,6 +17,7 @@ const props = withDefaults(defineProps<Props>(), {
   playOnHover: false,
   autoplay: false,
   loop: false,
+  preload: 'metadata',
 })
 
 const videoRef = ref<HTMLVideoElement | null>(null)
@@ -70,7 +72,7 @@ const handleMouseLeave = (event: MouseEvent) => {
     :poster="poster || undefined"
     muted
     playsinline
-    preload="metadata"
+    :preload="preload"
     :autoplay="autoplay"
     :loop="loop"
     @mouseenter="handleMouseEnter"

@@ -12,6 +12,7 @@ public class SceneTimelineItem {
     private Long videoNodeId;
     private Long sceneId;
     private Long assetId;
+    private Long thumbnailAssetId;
     private String fallbackUrl;
     private Long shotAssetId;
     private String shotContentUrl;

@@ -76,7 +76,7 @@ public class JobExecutor {
         log.info("[JobExecutor] Job started: id={}, type={}", jobId, job.getType());
 
         try {
-            updateNodeStatusIfApplicable(job, NodeStatus.RUNNING, null, null);
+            updateNodeStatusIfApplicable(job, NodeStatus.RUNNING, null, null, null);
 
             ExecutionResult result = executeByType(job);
             validateExecutionResult(job, result);
@@ -89,19 +89,31 @@ public class JobExecutor {
 
             if (job.getType() == JobType.SCENE_MERGE) {
                 try {
-                    mergeResultService.recordSceneMergeResult(job, result.resultAssetId(), null, null);
+                    mergeResultService.recordSceneMergeResult(
+                            job,
+                            result.resultAssetId(),
+                            null,
+                            result.thumbnailAssetId(),
+                            null
+                    );
                 } catch (Exception e) {
                     log.error("[JobExecutor] Failed to record scene merge result: id={}", jobId, e);
                 }
             } else if (job.getType() == JobType.PROJECT_MERGE) {
                 try {
-                    mergeResultService.recordProjectMergeResult(job, result.resultAssetId());
+                    mergeResultService.recordProjectMergeResult(job, result.resultAssetId(), result.thumbnailAssetId());
                 } catch (Exception e) {
                     log.error("[JobExecutor] Failed to record project merge result: id={}", jobId, e);
                 }
             }
 
-            updateNodeStatusIfApplicable(job, NodeStatus.SUCCEEDED, result.nodeContentKey(), result.resultAssetId());
+            updateNodeStatusIfApplicable(
+                    job,
+                    NodeStatus.SUCCEEDED,
+                    result.nodeContentKey(),
+                    result.resultAssetId(),
+                    result.thumbnailAssetId()
+            );
             log.info("[JobExecutor] Job succeeded: id={}, resultAssetId={}", jobId, result.resultAssetId());
             publishDoneSafely(jobId);
 
@@ -180,7 +192,7 @@ public class JobExecutor {
             return;
         }
 
-        updateNodeStatusIfApplicable(job, NodeStatus.FAILED, null, null);
+        updateNodeStatusIfApplicable(job, NodeStatus.FAILED, null, null, null);
         publishFailedSafely(jobId);
     }
 
@@ -205,7 +217,13 @@ public class JobExecutor {
         return job.getNodeId();
     }
 
-    private void updateNodeStatusIfApplicable(Job job, NodeStatus status, String nodeContentKey, Long assetId) {
+    private void updateNodeStatusIfApplicable(
+            Job job,
+            NodeStatus status,
+            String nodeContentKey,
+            Long assetId,
+            Long thumbnailAssetId
+    ) {
         if (job.getNodeId() == null) {
             return;
         }
@@ -222,7 +240,8 @@ public class JobExecutor {
                     job.getNodeId(),
                     status,
                     nodeContentKey,
-                    assetId
+                    assetId,
+                    thumbnailAssetId
             );
         }
         if (updated == 0) {

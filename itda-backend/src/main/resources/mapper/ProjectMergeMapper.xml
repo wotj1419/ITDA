@@ -9,6 +9,7 @@
         <id property="id" column="id" />
         <result property="projectId" column="project_id" />
         <result property="assetId" column="asset_id" />
+        <result property="thumbnailAssetId" column="thumbnail_asset_id" />
         <result property="mergeSignature" column="merge_signature" />
         <result property="status" column="status" />
         <result property="isActive" column="is_active" />
@@ -20,12 +21,14 @@
         INSERT INTO project_merges (
             project_id,
             asset_id,
+            thumbnail_asset_id,
             merge_signature,
             status,
             is_active
         ) VALUES (
             #{projectId},
             #{assetId},
+            #{thumbnailAssetId},
             #{mergeSignature},
             #{status},
             1
@@ -39,7 +42,7 @@
     </update>
 
     <select id="findActiveByProjectIdAndSignature" resultMap="ProjectMergeMap">
-        SELECT id, project_id, asset_id, merge_signature, status, is_active, created_at, updated_at
+        SELECT id, project_id, asset_id, thumbnail_asset_id, merge_signature, status, is_active, created_at, updated_at
         FROM project_merges
         WHERE project_id = #{projectId}
           AND is_active = 1
@@ -49,7 +52,7 @@
     </select>
 
     <select id="findActiveByProjectId" resultMap="ProjectMergeMap">
-        SELECT id, project_id, asset_id, merge_signature, status, is_active, created_at, updated_at
+        SELECT id, project_id, asset_id, thumbnail_asset_id, merge_signature, status, is_active, created_at, updated_at
         FROM project_merges
         WHERE project_id = #{projectId}
           AND is_active = 1
@@ -60,6 +63,7 @@
     <update id="updateAssetAndStatus">
         UPDATE project_merges
         SET asset_id = #{assetId},
+            thumbnail_asset_id = #{thumbnailAssetId},
             status = #{status}
         WHERE id = #{id}
     </update>

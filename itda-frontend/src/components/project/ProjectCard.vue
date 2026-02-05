@@ -221,7 +221,7 @@ const handleDeleteRequest = (e: Event) => {
         :poster="previewImageUrl || undefined"
         muted
         playsinline
-        preload="none"
+        :preload="previewImageUrl ? 'none' : 'metadata'"
         @timeupdate="handlePreviewTimeUpdate"
       />
       <img
@@ -659,5 +659,3 @@ const handleDeleteRequest = (e: Event) => {
   color: #dc2626;
 }
 </style>
-
-

@@ -20,6 +20,7 @@ public interface SceneVideoMapper {
 
     int updateAssetAndStatus(@Param("id") Long id,
                              @Param("assetId") Long assetId,
+                             @Param("thumbnailAssetId") Long thumbnailAssetId,
                              @Param("status") String status,
                              @Param("thumbnailUrl") String thumbnailUrl,
                              @Param("durationMs") Integer durationMs);
