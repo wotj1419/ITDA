@@ -60,26 +60,39 @@
   height: 14px;
 }
 
-.panel-btn--prompt-generate + .panel-section--prompt {
-  margin-top: 0.75rem;
+.panel-generate-row + .panel-section--prompt {
+  margin-top: 1.5rem;
 }
 
 .panel-section--prompt {
-  padding: 1rem;
+  padding: 0.5rem;
   border-radius: 0.875rem;
   background: transparent;
 }
 
 .panel-section--prompt .panel-label {
   margin-bottom: 0.65rem;
-  color: var(--gray-500, #6B7280);
-  letter-spacing: 0.08em;
+  color: var(--gray-400, #9CA3AF);
+  letter-spacing: 0.12em;
 }
 
 .panel-section--prompt .panel-textarea--prompt {
   font-family: inherit;
   font-size: 0.9375rem;
   color: var(--gray-800, #1F2937);
+}
+
+.panel-btn--final-prompt {
+  margin-top: 0.65rem;
+}
+
+.panel-btn--final-prompt .panel-btn-icon {
+  width: 14px;
+  height: 14px;
+}
+
+.panel-generate-row .panel-btn--prompt-generate {
+  font-size: 0.875rem;
 }
 
 .panel-textarea--editing {
@@ -429,6 +442,13 @@
   padding: 0.9rem 1.25rem;
 }
 
+/* Keep the final-prompt button visually aligned with the AI regenerate button size. */
+.panel-btn--full.panel-btn--final-prompt {
+  min-height: 44px;
+  padding: 0.55rem 0.65rem;
+  font-size: 0.875rem;
+}
+
 .panel-btn--primary {
   background: var(--rose-500);
   color: white;
@@ -532,6 +552,22 @@
   border-color: var(--rose-200, #FFE8F2);
   background: var(--rose-50, #FFFAFC);
   color: var(--rose-600, #FF6B8A);
+}
+
+/* Keep "승인" and "승인됨" controls visually consistent in prompt action area. */
+.panel-prompt-actions--right .panel-btn--success,
+.panel-prompt-actions--right .panel-status--success {
+  min-height: 32px;
+  padding: 0.4rem 0.72rem;
+  font-size: 0.75rem;
+  border-radius: 0.625rem;
+  line-height: 1;
+}
+
+.panel-prompt-actions--right .panel-btn--success .panel-btn-icon,
+.panel-prompt-actions--right .panel-status-icon {
+  width: 14px;
+  height: 14px;
 }
 
 .panel-info {

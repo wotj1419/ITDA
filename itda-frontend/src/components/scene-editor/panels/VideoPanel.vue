@@ -46,7 +46,6 @@ const form = ref({
 
 const isPromptEditing = ref(false);
 const isFinalEditing = ref(false);
-const isGeneratingFinalPrompt = ref(false);
 const finalPromptSignature = ref('');
 const finalPromptSourcePromptSnapshot = ref('');
 const approvedFinalPromptSnapshot = ref('');
@@ -91,6 +90,7 @@ function normalizeDuration(value?: number | null): number {
 }
 
 const data = computed(() => props.node.data as VideoNodeData | undefined);
+const isGeneratingFinalPrompt = computed(() => Boolean(data.value?.isFinalPromptGenerating));
 const startShotData = computed(() => {
   const startId = data.value?.startShotId;
   if (!startId) return undefined;
@@ -284,7 +284,7 @@ const effectiveFinalPrompt = computed(() => {
   return override || form.value.promptEnFinal.trim();
 });
 const aiPromptActionLabel = computed(() =>
-  data.value?.promptStatus === PromptStatus.DRAFT ? 'AI로 생성' : 'AI로 재생성'
+  data.value?.promptStatus === PromptStatus.DRAFT ? 'AI 서술 프롬프트 생성' : 'AI 서술 프롬프트 재생성'
 );
 const finalPromptActionLabel = computed(() =>
   form.value.promptEnFinal.trim().length > 0 ? '최종 프롬프트 재생성' : '최종 프롬프트 생성'
@@ -292,7 +292,7 @@ const finalPromptActionLabel = computed(() =>
 const canGenerateVideoResult = computed(() => {
   // 동일 최종 프롬프트로도 재생성을 허용하므로 dirty 여부는 활성 조건에서 제외한다.
   void isFinalPromptDirty.value;
-  return !isUiLocked.value && isPromptApproved.value;
+  return !isUiLocked.value && isPromptApproved.value && !isFinalEditing.value;
 });
 
 
@@ -557,7 +557,7 @@ async function generateFinalPrompt(force = false): Promise<void> {
   if (isGeneratingFinalPrompt.value || isGeneratingPrompt.value || isGeneratingVideo.value) return;
   if (!form.value.prompt.trim()) return;
   if (!force && !isNarrativePromptDirtyForFinal.value) return;
-  isGeneratingFinalPrompt.value = true;
+  nodeStore.updateNodeLocal(props.node.id, { isFinalPromptGenerating: true });
   try {
     form.value.usePromptOverride = false;
     form.value.promptEnFinalOverride = '';
@@ -575,7 +575,7 @@ async function generateFinalPrompt(force = false): Promise<void> {
   } catch (error) {
     console.error('Failed to generate final prompt:', error);
   } finally {
-    isGeneratingFinalPrompt.value = false;
+    nodeStore.updateNodeLocal(props.node.id, { isFinalPromptGenerating: false });
   }
 }
 
@@ -802,44 +802,17 @@ function handleGenerateVideo(): void {
           <Sparkles v-else class="panel-btn-icon" />
           {{ isGeneratingPrompt ? '생성 중...' : aiPromptActionLabel }}
         </button>
-        <button
-          class="panel-btn panel-btn--secondary panel-btn--full"
-          :disabled="isUiLocked"
-          @click="generateFinalPrompt(true)"
-        >
-          <Loader2 v-if="isGeneratingFinalPrompt" class="panel-btn-icon panel-btn-icon--spin" />
-          <FileText v-else class="panel-btn-icon" />
-          {{ isGeneratingFinalPrompt ? '생성 중...' : finalPromptActionLabel }}
-        </button>
       </div>
 
       <!-- Generated Prompt -->
-      <div v-if="isPromptGenerated" class="panel-section panel-section--prompt">
-        <label class="panel-label">
-          <FileText class="panel-label-icon" />
-          최종 프롬프트 (영어)
-        </label>
-        <textarea
-          v-if="form.usePromptOverride"
-          v-model="form.promptEnFinalOverride"
-          :class="['panel-textarea', 'panel-textarea--prompt', { 'panel-textarea--editing': isFinalEditing }]"
-          rows="5"
-          :readonly="!isFinalEditing"
-          placeholder="최종 영어 프롬프트를 직접 입력하세요."
-          @wheel="handlePromptWheel"
-        ></textarea>
-        <textarea
-          v-else
-          :value="form.promptEnFinal"
-          class="panel-textarea panel-textarea--prompt"
-          rows="5"
-          readonly
-          placeholder="자동으로 갱신됩니다."
-          @wheel="handlePromptWheel"
-        ></textarea>
-
-        <div class="panel-prompt-actions">
+      <div class="panel-section panel-section--prompt">
+        <div class="panel-label-row">
+          <label class="panel-label">
+            <FileText class="panel-label-icon" />
+            최종 프롬프트 (영어)
+          </label>
           <button
+            v-if="isPromptGenerated"
             :class="['panel-btn', isFinalEditing ? 'panel-btn--success' : 'panel-btn--text']"
             :disabled="!form.promptEnFinal && !form.prompt"
             @click="toggleFinalEditing"
@@ -848,20 +821,62 @@ function handleGenerateVideo(): void {
           </button>
         </div>
 
-        <div class="panel-prompt-actions panel-prompt-actions--right">
-          <button
-            v-if="!isPromptApproved"
-            class="panel-btn panel-btn--success"
-            :disabled="isGeneratingPrompt || isGeneratingVideo"
-            @click="approvePrompt"
-          >
-            <Check class="panel-btn-icon" /> 승인
-          </button>
-          <span v-else class="panel-status panel-status--success">
-            <Check class="panel-status-icon" />
-            승인됨
-          </span>
-        </div>
+        <template v-if="isPromptGenerated">
+          <textarea
+            v-if="form.usePromptOverride"
+            v-model="form.promptEnFinalOverride"
+            :class="['panel-textarea', 'panel-textarea--prompt', { 'panel-textarea--editing': isFinalEditing }]"
+            rows="5"
+            :readonly="!isFinalEditing"
+            placeholder="최종 영어 프롬프트를 직접 입력하세요."
+            @wheel="handlePromptWheel"
+          ></textarea>
+          <textarea
+            v-else
+            :value="form.promptEnFinal"
+            class="panel-textarea panel-textarea--prompt"
+            rows="5"
+            readonly
+            placeholder="자동으로 갱신됩니다."
+            @wheel="handlePromptWheel"
+          ></textarea>
+        </template>
+        <textarea
+          v-else
+          :value="form.promptEnFinal"
+          class="panel-textarea panel-textarea--prompt"
+          rows="5"
+          readonly
+          placeholder="프롬프트를 생성해주세요."
+          @wheel="handlePromptWheel"
+        ></textarea>
+
+        <button
+          class="panel-btn panel-btn--secondary panel-btn--full panel-btn--final-prompt"
+          :disabled="isUiLocked || !form.prompt.trim()"
+          @click="generateFinalPrompt(true)"
+        >
+          <Loader2 v-if="isGeneratingFinalPrompt" class="panel-btn-icon panel-btn-icon--spin" />
+          <FileText v-else class="panel-btn-icon" />
+          {{ isGeneratingFinalPrompt ? '생성 중...' : finalPromptActionLabel }}
+        </button>
+
+        <template v-if="isPromptGenerated">
+          <div class="panel-prompt-actions panel-prompt-actions--right">
+            <button
+              v-if="!isPromptApproved"
+              class="panel-btn panel-btn--success"
+              :disabled="isUiLocked || isFinalEditing"
+              @click="approvePrompt"
+            >
+              <Check class="panel-btn-icon" /> 승인
+            </button>
+            <span v-else class="panel-status panel-status--success">
+              <Check class="panel-status-icon" />
+              승인됨
+            </span>
+          </div>
+        </template>
       </div>
       </fieldset>
 
