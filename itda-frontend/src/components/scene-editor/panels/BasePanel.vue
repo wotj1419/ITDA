@@ -157,7 +157,7 @@ const canDelete = computed(() => Boolean(panelCanDelete && panelCanDelete.value)
   flex: 1;
   overflow-y: auto;
   min-height: 0;
-  padding: 0 2rem 2rem;
+  padding: 1rem 2rem 2rem;
   background: #fff;
 }
 
