@@ -76,6 +76,25 @@ public class AuthService {
     }
 
     /**
+     * 비밀번호 재설정 요청
+     */
+    @Transactional(readOnly = true)
+    public void requestPasswordReset(String email) {
+        User user = getUserByEmailOrThrow(email);
+        log.info("Password reset requested: {}", user.getEmail());
+    }
+
+    /**
+     * 비밀번호 재설정 완료
+     */
+    @Transactional
+    public void confirmPasswordReset(String email, String newPassword) {
+        User user = getUserByEmailOrThrow(email);
+        String encoded = passwordEncoder.encode(newPassword);
+        userMapper.updatePassword(user.getId(), encoded);
+    }
+
+    /**
      * 내 정보 조회
      */
     @Transactional(readOnly = true)
