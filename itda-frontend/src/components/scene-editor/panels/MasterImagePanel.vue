@@ -132,6 +132,7 @@ const objectOptions = computed(() =>
     type: item.type,
   }))
 );
+const hasObjectOptions = computed(() => objectOptions.value.length > 0);
 
 const objectNameMap = computed(() => {
   const map = new Map<number, string>();
@@ -721,12 +722,16 @@ function setActive(): void {
 
       <!-- 등장 오브젝트 (다중 선택 체크박스) -->
       <div class="panel-section">
-        <label class="panel-label">
-          <Users class="panel-label-icon" />
-          등장 오브젝트
-        </label>
-        <p class="panel-subtext">최대 {{ MAX_OBJECT_SELECTION }}개 선택 ({{ selectedObjectCount }}/{{ MAX_OBJECT_SELECTION }})</p>
-        <div class="panel-radio-group panel-pill-group panel-pill-group--accent">
+        <div class="panel-label-row">
+          <label class="panel-label">
+            <Users class="panel-label-icon" />
+            등장 오브젝트
+          </label>
+          <span v-if="hasObjectOptions" class="panel-subtext panel-subtext--inline">
+            최대 {{ MAX_OBJECT_SELECTION }}개 선택 ({{ selectedObjectCount }}/{{ MAX_OBJECT_SELECTION }})
+          </span>
+        </div>
+        <div v-if="hasObjectOptions" class="panel-radio-group panel-pill-group panel-pill-group--accent">
           <label
             v-for="obj in objectOptions"
             :key="obj.id"
@@ -741,6 +746,7 @@ function setActive(): void {
             <span class="panel-radio-label">{{ obj.name }}</span>
           </label>
         </div>
+        <p v-else class="panel-empty-state">등록된 오브젝트가 없습니다.</p>
       </div>
 
       <!-- Mood -->
@@ -993,8 +999,23 @@ function setActive(): void {
   color: var(--gray-500, #6B7280);
 }
 
+.panel-subtext--inline {
+  margin: 0;
+}
+
 .panel-pill--disabled {
   opacity: 0.55;
+}
+
+.panel-empty-state {
+  margin: 0;
+  padding: 0.625rem 0.75rem;
+  border-radius: 0.5rem;
+  font-size: 0.75rem;
+  color: var(--gray-500, #6B7280);
+  text-align: center;
+  background: #FDFDFD;
+  border: 1px dashed var(--gray-200, #E5E7EB);
 }
 
 .panel-translation-block .panel-prompt-actions {

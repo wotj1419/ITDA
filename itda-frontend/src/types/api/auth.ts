@@ -22,3 +22,12 @@ export interface SignupRequest {
   password: string;
   name: string;
 }
+
+export interface PasswordResetRequest {
+  email: string;
+}
+
+export interface PasswordResetConfirmRequest {
+  email: string;
+  newPassword: string;
+}

@@ -1,5 +1,10 @@
 import type { AuthService } from '../auth.interface';
-import type { LoginRequest, SignupRequest } from '../../types/api/auth';
+import type {
+    LoginRequest,
+    SignupRequest,
+    PasswordResetRequest,
+    PasswordResetConfirmRequest,
+} from '../../types/api/auth';
 
 export const mockAuthService: AuthService = {
     async login(_credentials: LoginRequest) {
@@ -31,6 +36,16 @@ export const mockAuthService: AuthService = {
             profileImageUrl: 'https://i.pravatar.cc/150?u=user123',
             role: 'USER',
         };
+    },
+
+    async requestPasswordReset(_data: PasswordResetRequest) {
+        await new Promise((resolve) => setTimeout(resolve, 400));
+        void _data;
+    },
+
+    async confirmPasswordReset(_data: PasswordResetConfirmRequest) {
+        await new Promise((resolve) => setTimeout(resolve, 400));
+        void _data;
     },
 
     logout() {
