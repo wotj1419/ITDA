@@ -17,9 +17,23 @@ const videoRef = ref<HTMLVideoElement | null>(null);
 const currentIndex = ref(0);
 const isPlaying = ref(false);
 const isLastClipEnded = ref(false); // 마지막 클립 종료 상태
+const playbackStartIndex = ref(0);
 
 const isOpen = computed(() => uiStore.activeModal === TIMELINE_PLAYBACK_MODAL_ID);
 const currentClip = computed(() => props.clips[currentIndex.value]);
+
+function getStartClipIdFromModalData(): string | null {
+  if (!uiStore.modalData || typeof uiStore.modalData !== 'object') return null;
+  const startClipId = (uiStore.modalData as { startClipId?: unknown }).startClipId;
+  return typeof startClipId === 'string' ? startClipId : null;
+}
+
+function resolvePlaybackStartIndex(): number {
+  const startClipId = getStartClipIdFromModalData();
+  if (!startClipId) return 0;
+  const index = props.clips.findIndex((clip) => clip.clipId === startClipId);
+  return index >= 0 ? index : 0;
+}
 
 function showPlaybackError(message: string): void {
   uiStore.showToast({
@@ -108,8 +122,8 @@ function handleEnded(): void {
 
 function handleReplay(): void {
   isLastClipEnded.value = false;
-  currentIndex.value = 0;
-  void playClipAt(0);
+  currentIndex.value = playbackStartIndex.value;
+  void playClipAt(playbackStartIndex.value);
 }
 
 function handleClose(): void {
@@ -120,6 +134,7 @@ function handleClose(): void {
   }
   isPlaying.value = false;
   isLastClipEnded.value = false;
+  playbackStartIndex.value = 0;
   videoRef.value?.pause();
 }
 
@@ -205,9 +220,10 @@ function handleKeydown(event: KeyboardEvent): void {
 
 watch(isOpen, (open) => {
   if (open) {
-    currentIndex.value = 0;
+    playbackStartIndex.value = resolvePlaybackStartIndex();
+    currentIndex.value = playbackStartIndex.value;
     isLastClipEnded.value = false;
-    void playClipAt(0);
+    void playClipAt(playbackStartIndex.value);
     return;
   }
   handleClose();
