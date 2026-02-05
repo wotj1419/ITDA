@@ -6,6 +6,7 @@ import { ref } from 'vue';
 import type { TimelineClip } from '../../types/ui';
 import { Star, Play, X } from 'lucide-vue-next';
 import LazyVideo from '../media/LazyVideo.vue';
+import { useHoverPreviewPolicy } from '../../composables/useHoverPreviewPolicy';
 
 // =============================================================================
 // Props
@@ -27,12 +28,18 @@ const emit = defineEmits<{
   (e: 'reorder', clipIds: string[]): void;
   (e: 'remove', clipId: string): void;
   (e: 'play'): void;
+  (e: 'play-from', clipId: string): void;
 }>();
 
 const draggedId = ref<string | null>(null);
 const dragOverId = ref<string | null>(null);
-const activePreviewClipId = ref<string | null>(null);
 const thumbStates = ref<Record<string, 'idle' | 'loaded' | 'failed'>>({});
+const {
+  clearPreview,
+  isPreviewing,
+  startPreview: schedulePreviewStart,
+  stopPreview,
+} = useHoverPreviewPolicy({ delayMs: 150 });
 
 const getThumbState = (clipId: string) => thumbStates.value[clipId] ?? 'idle';
 
@@ -58,22 +65,20 @@ const handleThumbError = (clipId: string) => {
 const getPoster = (clip: TimelineClip) =>
   clip.thumbnailUrl || '/icon.png';
 
-const isPreviewing = (clipId: string) => activePreviewClipId.value === clipId;
 const shouldMountVideo = (clip: TimelineClip) =>
   Boolean(clip.videoUrl) && isPreviewing(clip.clipId);
 
 function startPreview(clip: TimelineClip) {
   if (!clip.videoUrl) return;
-  activePreviewClipId.value = clip.clipId;
+  schedulePreviewStart(clip.clipId);
 }
 
-function stopPreview(clipId: string) {
-  if (activePreviewClipId.value === clipId) {
-    activePreviewClipId.value = null;
-  }
+function stopPreviewById(clipId: string) {
+  stopPreview(clipId);
 }
 
 function handleDragStart(clipId: string, event: DragEvent) {
+  clearPreview();
   draggedId.value = clipId;
   if (event.dataTransfer) {
     event.dataTransfer.effectAllowed = 'move';
@@ -125,6 +130,10 @@ function handlePlay() {
   emit('play');
 }
 
+function handleSelect(clipId: string) {
+  emit('play-from', clipId);
+}
+
 // =============================================================================
 // Computed
 // =============================================================================
@@ -161,15 +170,22 @@ function handlePlay() {
         }"
         :title="clip.label || '확정 클립'"
         draggable="true"
+        @click="handleSelect(clip.clipId)"
         @mouseenter="startPreview(clip)"
-        @mouseleave="stopPreview(clip.clipId)"
+        @mouseleave="stopPreviewById(clip.clipId)"
         @dragstart="handleDragStart(clip.clipId, $event)"
         @dragend="handleDragEnd"
         @dragover="handleDragOver(clip.clipId, $event)"
         @dragleave="handleDragLeave"
         @drop="handleDrop(clip.clipId)"
       >
-        <button class="clip-remove" @click.stop="handleRemove(clip.clipId)">
+        <button
+          type="button"
+          class="clip-remove"
+          draggable="false"
+          @pointerdown.stop
+          @click.stop="handleRemove(clip.clipId)"
+        >
           <X class="remove-icon" />
         </button>
         <div class="clip-media">
@@ -362,6 +378,7 @@ function handlePlay() {
   position: relative;
   width: 100%;
   height: 100%;
+  z-index: 1;
 }
 
 .clip-img,
@@ -419,9 +436,9 @@ function handlePlay() {
   font-weight: 600;
   background: rgba(0, 0, 0, 0.75);
   color: white;
-  padding: 1px 5px;
-  border-radius: 4px;
-  backdrop-filter: blur(4px);
+  padding: 1px 4px;
+  border-radius: 2px;
+  z-index: 2;
 }
 
 /* Remove Button */
@@ -439,8 +456,8 @@ function handlePlay() {
   justify-content: center;
   opacity: 0;
   cursor: pointer;
-  transition: all 0.2s ease;
-  backdrop-filter: blur(4px);
+  transition: opacity 0.2s ease, background 0.2s ease;
+  z-index: 3;
 }
 
 .timeline-clip:hover .clip-remove {

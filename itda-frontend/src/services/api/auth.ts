@@ -1,7 +1,14 @@
 import apiClient from './client';
 import type { AuthService } from '../auth.interface';
 import type { ApiResponse } from '../../types/api/common';
-import type { LoginRequest, SignupRequest, User, LoginResponse } from '../../types/api/auth';
+import type {
+    LoginRequest,
+    SignupRequest,
+    User,
+    LoginResponse,
+    PasswordResetRequest,
+    PasswordResetConfirmRequest,
+} from '../../types/api/auth';
 
 export const apiAuthService: AuthService = {
     async login(credentials: LoginRequest) {
@@ -19,6 +26,14 @@ export const apiAuthService: AuthService = {
     async fetchMe() {
         const response = await apiClient.get<ApiResponse<User>>('/auth/me');
         return response.data.data!;
+    },
+
+    async requestPasswordReset(data: PasswordResetRequest) {
+        await apiClient.post('/auth/password/reset/request', data);
+    },
+
+    async confirmPasswordReset(data: PasswordResetConfirmRequest) {
+        await apiClient.post('/auth/password/reset/confirm', data);
     },
 
     logout() {

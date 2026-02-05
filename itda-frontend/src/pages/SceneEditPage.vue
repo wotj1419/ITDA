@@ -22,6 +22,7 @@ import NodePanelContainer from '../components/scene-editor/panels/NodePanelConta
 import AutoLayoutButton from '../components/scene-editor/AutoLayoutButton.vue';
 import MiniTimeline from '../components/editor/MiniTimeline.vue';
 import TimelinePlaybackModal from '../components/timeline/TimelinePlaybackModal.vue';
+import SceneVideoPreviewModal from '../components/scene-editor/SceneVideoPreviewModal.vue';
 import NodeDeleteConfirmModal from '../components/scene-editor/NodeDeleteConfirmModal.vue';
 import { useLayoutButtonPosition } from '../composables/useLayoutButtonPosition';
 import { useSceneEditorEvents } from '../composables/useSceneEditorEvents';
@@ -280,6 +281,13 @@ function handleTimelinePlay(): void {
   uiStore.openModal(TIMELINE_PLAYBACK_MODAL_ID);
 }
 
+function handleTimelinePlayFromClip(clipId: string): void {
+  if (!timelineClips.value.length) return;
+  uiStore.openModal(TIMELINE_PLAYBACK_MODAL_ID, {
+    startClipId: clipId,
+  });
+}
+
 /**
  * 자동 레이아웃 적용
  */
@@ -341,6 +349,7 @@ const { handleBeforeUnload, handleEditorKeydown } = useSceneEditorEvents({
         @reorder="handleTimelineReorder"
         @remove="handleTimelineRemove"
         @play="handleTimelinePlay"
+        @play-from="handleTimelinePlayFromClip"
       />
     </template>
   </EditorLayout>
@@ -353,5 +362,6 @@ const { handleBeforeUnload, handleEditorKeydown } = useSceneEditorEvents({
   />
 
   <TimelinePlaybackModal :clips="timelineClips" />
+  <SceneVideoPreviewModal />
 
 </template>

@@ -1,6 +1,8 @@
 package com.itda.backend.auth.controller;
 
 import com.itda.backend.auth.controller.dto.request.LoginRequest;
+import com.itda.backend.auth.controller.dto.request.PasswordResetConfirmRequest;
+import com.itda.backend.auth.controller.dto.request.PasswordResetRequest;
 import com.itda.backend.auth.controller.dto.request.RefreshRequest;
 import com.itda.backend.auth.controller.dto.request.SignupRequest;
 import com.itda.backend.auth.controller.dto.request.UpdateProfileRequest;
@@ -99,6 +101,40 @@ public class AuthController {
     public ResponseEntity<ApiResponse<LoginResponse>> refresh(@Valid @RequestBody RefreshRequest request) {
         LoginResponse response = authService.refresh(request.refreshToken());
         return ApiResponse.success(response);
+    }
+
+    @Operation(
+            summary = "비밀번호 재설정 요청",
+            description = "입력한 이메일로 비밀번호 재설정 요청을 처리합니다."
+    )
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "200",
+                    description = "요청 처리 성공"
+            )
+    })
+    @PostMapping("/password/reset/request")
+    public ResponseEntity<ApiResponse<Void>> requestPasswordReset(
+            @Valid @RequestBody PasswordResetRequest request) {
+        authService.requestPasswordReset(request.email());
+        return ApiResponse.success();
+    }
+
+    @Operation(
+            summary = "비밀번호 재설정 완료",
+            description = "이메일과 새 비밀번호로 재설정을 완료합니다."
+    )
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "200",
+                    description = "재설정 성공"
+            )
+    })
+    @PostMapping("/password/reset/confirm")
+    public ResponseEntity<ApiResponse<Void>> confirmPasswordReset(
+            @Valid @RequestBody PasswordResetConfirmRequest request) {
+        authService.confirmPasswordReset(request.email(), request.newPassword());
+        return ApiResponse.success();
     }
 
     @Operation(

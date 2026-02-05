@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch, nextTick } from 'vue';
+import { computed, ref, watch, nextTick, onMounted, onUnmounted } from 'vue';
 import { Play, Pause, SkipBack, SkipForward } from 'lucide-vue-next';
 import type { TimelineClip } from '../../types/ui';
 import { useUIStore } from '../../stores/ui';
@@ -17,9 +17,23 @@ const videoRef = ref<HTMLVideoElement | null>(null);
 const currentIndex = ref(0);
 const isPlaying = ref(false);
 const isLastClipEnded = ref(false); // 마지막 클립 종료 상태
+const playbackStartIndex = ref(0);
 
 const isOpen = computed(() => uiStore.activeModal === TIMELINE_PLAYBACK_MODAL_ID);
 const currentClip = computed(() => props.clips[currentIndex.value]);
+
+function getStartClipIdFromModalData(): string | null {
+  if (!uiStore.modalData || typeof uiStore.modalData !== 'object') return null;
+  const startClipId = (uiStore.modalData as { startClipId?: unknown }).startClipId;
+  return typeof startClipId === 'string' ? startClipId : null;
+}
+
+function resolvePlaybackStartIndex(): number {
+  const startClipId = getStartClipIdFromModalData();
+  if (!startClipId) return 0;
+  const index = props.clips.findIndex((clip) => clip.clipId === startClipId);
+  return index >= 0 ? index : 0;
+}
 
 function showPlaybackError(message: string): void {
   uiStore.showToast({
@@ -41,6 +55,7 @@ function findNextPlayableIndex(startIndex: number): number {
 }
 
 async function playClipAt(index: number): Promise<void> {
+  isLastClipEnded.value = false;
   const playableIndex = findNextPlayableIndex(index);
   if (playableIndex === -1) {
     isPlaying.value = false;
@@ -107,24 +122,119 @@ function handleEnded(): void {
 
 function handleReplay(): void {
   isLastClipEnded.value = false;
-  currentIndex.value = 0;
-  void playClipAt(0);
+  currentIndex.value = playbackStartIndex.value;
+  void playClipAt(playbackStartIndex.value);
 }
 
 function handleClose(): void {
+  if (document.fullscreenElement === videoRef.value) {
+    void document.exitFullscreen().catch((error) => {
+      console.error('Failed to exit fullscreen:', error);
+    });
+  }
   isPlaying.value = false;
-  isLastClipEnded.value = false; // 상태 초기화
+  isLastClipEnded.value = false;
+  playbackStartIndex.value = 0;
   videoRef.value?.pause();
+}
+
+async function toggleFullscreen(): Promise<void> {
+  if (!videoRef.value) return;
+
+  if (document.fullscreenElement === videoRef.value) {
+    try {
+      await document.exitFullscreen();
+    } catch (error) {
+      console.error('Failed to exit fullscreen:', error);
+    }
+    return;
+  }
+
+  if (document.fullscreenElement) {
+    try {
+      await document.exitFullscreen();
+    } catch (error) {
+      console.error('Failed to switch fullscreen target:', error);
+      return;
+    }
+  }
+
+  try {
+    await videoRef.value.requestFullscreen();
+  } catch (error) {
+    console.error('Failed to enter fullscreen:', error);
+  }
+}
+
+function handleKeydown(event: KeyboardEvent): void {
+  if (!isOpen.value) return;
+
+  if (event.key === 'Escape') {
+    event.preventDefault();
+    if (document.fullscreenElement === videoRef.value) {
+      void document.exitFullscreen().catch((error) => {
+        console.error('Failed to exit fullscreen:', error);
+      });
+      return;
+    }
+    uiStore.closeModal();
+    return;
+  }
+
+  const target = event.target as HTMLElement | null;
+  if (
+    target &&
+    (target instanceof HTMLInputElement ||
+      target instanceof HTMLTextAreaElement ||
+      target instanceof HTMLSelectElement ||
+      target instanceof HTMLButtonElement ||
+      target instanceof HTMLAnchorElement ||
+      target.isContentEditable)
+  ) {
+    return;
+  }
+
+  if (event.key === 'ArrowLeft') {
+    event.preventDefault();
+    void playPrev();
+    return;
+  }
+
+  if (event.key === 'ArrowRight') {
+    event.preventDefault();
+    void playNext();
+    return;
+  }
+
+  if (event.code === 'Space' || event.key === ' ') {
+    event.preventDefault();
+    void togglePlay();
+    return;
+  }
+
+  if (event.key === 'f' || event.key === 'F') {
+    event.preventDefault();
+    void toggleFullscreen();
+  }
 }
 
 watch(isOpen, (open) => {
   if (open) {
-    currentIndex.value = 0;
-    isLastClipEnded.value = false; // 상태 초기화
-    void playClipAt(0);
+    playbackStartIndex.value = resolvePlaybackStartIndex();
+    currentIndex.value = playbackStartIndex.value;
+    isLastClipEnded.value = false;
+    void playClipAt(playbackStartIndex.value);
     return;
   }
   handleClose();
+});
+
+onMounted(() => {
+  document.addEventListener('keydown', handleKeydown);
+});
+
+onUnmounted(() => {
+  document.removeEventListener('keydown', handleKeydown);
 });
 </script>
 
@@ -133,6 +243,7 @@ watch(isOpen, (open) => {
     :modal-id="TIMELINE_PLAYBACK_MODAL_ID"
     title="타임라인 재생"
     size="lg"
+    :close-on-escape="false"
     @close="handleClose"
   >
     <div class="player">
@@ -263,4 +374,5 @@ watch(isOpen, (open) => {
   font-size: 0.875rem;
   color: var(--gray-400);
 }
+
 </style>

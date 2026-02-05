@@ -9,9 +9,6 @@ import com.itda.backend.global.exception.BusinessException;
 import com.itda.backend.global.response.ErrorCode;
 import com.itda.backend.project.repository.ProjectMapper;
 import com.itda.backend.project.repository.ProjectMemberMapper;
-import com.itda.backend.scene.controller.dto.response.SceneDetailResponse;
-import com.itda.backend.scene.service.SceneService;
-import com.itda.backend.scene.service.dto.SceneDraft;
 import com.itda.backend.scenario.controller.dto.request.GeneratePromptRequest;
 import com.itda.backend.scenario.controller.dto.request.UpdatePlotRequest;
 import com.itda.backend.scenario.controller.dto.request.UpdatePromptRequest;
@@ -51,7 +48,6 @@ public class ScenarioService {
     private final ProjectMapper projectMapper;
     private final ProjectMemberMapper projectMemberMapper;
     private final VertexAiGeminiClient vertexAiGeminiClient;
-    private final SceneService sceneService;
     private final ObjectMapper objectMapper;
 
     @Transactional(readOnly = true)
@@ -127,12 +123,9 @@ public class ScenarioService {
 
         List<AiSceneItem> aiScenes = parseAiScenes(aiResponse);
         validateSceneCount(record.getInputSceneCount(), aiScenes.size());
-        List<SceneDraft> drafts = toSceneDrafts(aiScenes);
-
-        List<SceneDetailResponse> created = sceneService.createScenesAppend(userId, projectId, drafts);
         updateCurrentStepOrThrow(projectId, STEP_SCENES, resolveVersion(record));
 
-        return ScenarioScenesResponse.of(toScenarioSceneItems(created), STEP_SCENES);
+        return ScenarioScenesResponse.of(toScenarioDraftItems(aiScenes), STEP_SCENES);
     }
 
     private ScenarioRecord buildScenarioRecord(Long projectId,
@@ -428,21 +421,19 @@ public class ScenarioService {
         }
     }
 
-    private List<SceneDraft> toSceneDrafts(List<AiSceneItem> aiScenes) {
-        return aiScenes.stream()
-                .map(item -> new SceneDraft(item.title(), item.description()))
-                .toList();
-    }
-
-    private List<ScenarioSceneItem> toScenarioSceneItems(List<SceneDetailResponse> scenes) {
-        return scenes.stream()
-                .map(scene -> new ScenarioSceneItem(
-                        scene.sceneId(),
-                        scene.order(),
-                        scene.title(),
-                        scene.description()
-                ))
-                .toList();
+    private List<ScenarioSceneItem> toScenarioDraftItems(List<AiSceneItem> aiScenes) {
+        List<ScenarioSceneItem> items = new ArrayList<>(aiScenes.size());
+        for (int i = 0; i < aiScenes.size(); i++) {
+            AiSceneItem aiScene = aiScenes.get(i);
+            int order = i + 1;
+            items.add(new ScenarioSceneItem(
+                    -1L * order,
+                    order,
+                    aiScene.title().trim(),
+                    aiScene.description().trim()
+            ));
+        }
+        return items;
     }
 
     private String extractJsonArray(String text) {

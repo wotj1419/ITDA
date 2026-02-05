@@ -2,6 +2,7 @@
 import { ref } from 'vue'
 import type { TimelineClip } from '../../types/ui'
 import ClipItem from './ClipItem.vue'
+import { useHoverPreviewPolicy } from '../../composables/useHoverPreviewPolicy'
 
 interface Props {
   clips: TimelineClip[]
@@ -18,8 +19,15 @@ const emit = defineEmits<{
 
 const draggedId = ref<string | null>(null)
 const dragOverId = ref<string | null>(null)
+const {
+  clearPreview,
+  isPreviewing,
+  startPreview,
+  stopPreview,
+} = useHoverPreviewPolicy({ delayMs: 150 })
 
 function handleDragStart(clipId: string, event: DragEvent) {
+  clearPreview()
   draggedId.value = clipId
   if (event.target instanceof HTMLElement) {
     event.target.classList.add('dragging')
@@ -77,6 +85,15 @@ function handleRemove(clipId: string) {
 function handleSelect(clipId: string) {
   emit('select', clipId)
 }
+
+function handleHoverStart(clip: TimelineClip) {
+  if (!clip.videoUrl) return
+  startPreview(clip.clipId)
+}
+
+function handleHoverEnd(clipId: string) {
+  stopPreview(clipId)
+}
 </script>
 
 <template>
@@ -87,6 +104,7 @@ function handleSelect(clipId: string) {
         :key="clip.clipId"
         :clip="clip"
         :active="props.selectedClipId === clip.clipId"
+        :previewing="isPreviewing(clip.clipId)"
         :class="{ 'drag-over': dragOverId === clip.clipId }"
         @dragstart="handleDragStart(clip.clipId, $event)"
         @dragend="handleDragEnd"
@@ -95,6 +113,8 @@ function handleSelect(clipId: string) {
         @drop="handleDrop(clip.clipId)"
         @remove="handleRemove(clip.clipId)"
         @select="handleSelect(clip.clipId)"
+        @hover-start="handleHoverStart(clip)"
+        @hover-end="handleHoverEnd(clip.clipId)"
       />
     </TransitionGroup>
 
