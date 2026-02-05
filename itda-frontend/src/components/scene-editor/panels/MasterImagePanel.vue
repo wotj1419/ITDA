@@ -12,7 +12,8 @@ import BasePanel from './BasePanel.vue';
 import { useSceneNodeStore } from '../../../stores/sceneNode';
 import { useObjectStore } from '../../../stores/object';
 import { useNodeGeneration } from '../../../composables/useNodeGeneration';
-import { Film, Palette, Sun, Smile, Sparkles, FileText, Image, Check, Star, Users, Loader2 } from 'lucide-vue-next';
+import { useGenerationToast } from '../../../composables/useGenerationToast';
+import { Film, Palette, Sun, Smile, FileText, Image, Check, Star, Users, Loader2 } from 'lucide-vue-next';
 import { gsap } from 'gsap';
 import { resolveMoodKey, resolveStyleKey, resolveTimeOfDayKey } from '../../../utils/nodeSettings';
 import {
@@ -28,6 +29,7 @@ interface Props {
 const props = defineProps<Props>();
 const nodeStore = useSceneNodeStore();
 const objectStore = useObjectStore();
+const { startGenerationToast, finishGenerationToast } = useGenerationToast();
 const MAX_OBJECT_SELECTION = 3;
 const autoFilledNodes = new Set<string>();
 let promptPreviewTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -187,7 +189,7 @@ const effectiveFinalPrompt = computed(() => {
   return override || form.value.promptEnFinal.trim();
 });
 const aiPromptActionLabel = computed(() =>
-  form.value.prompt.trim().length > 0 ? 'AI 서술 프롬프트 재생성' : 'AI 서술 프롬프트 생성'
+  form.value.prompt.trim().length > 0 ? 'AI 프롬프트 재생성' : 'AI 프롬프트 생성'
 );
 const finalPromptActionLabel = computed(() =>
   form.value.promptEnFinal.trim().length > 0 ? 'AI 최종 프롬프트 재생성' : 'AI 최종 프롬프트 생성'
@@ -607,24 +609,31 @@ async function generateFinalPrompt(force = false): Promise<void> {
   if (isGeneratingFinalPrompt.value || isGeneratingPrompt.value || isGeneratingImage.value) return;
   if (!form.value.prompt.trim()) return;
   if (!force && !isNarrativePromptDirtyForFinal.value) return;
+  const toastId = startGenerationToast('final_prompt');
   nodeStore.updateNodeLocal(props.node.id, { isFinalPromptGenerating: true });
   try {
     // "최종 프롬프트 생성"은 항상 한글 서술 기준으로 재생성되도록 override를 해제한다.
     form.value.usePromptOverride = false;
     form.value.promptEnFinalOverride = '';
     isFinalEditing.value = false;
-    await refreshPromptPreview(true);
+    const previewResult = await refreshPromptPreview(true);
+    const nextPromptEnFinal = previewResult?.promptEnFinal ?? form.value.promptEnFinal;
+    form.value.promptEnFinal = nextPromptEnFinal;
     await nextTick();
     await nodeStore.updateNode(props.node.id, {
       prompt: form.value.prompt,
       promptKo: form.value.promptKo,
-      promptEnFinal: form.value.promptEnFinal,
+      promptEnFinal: nextPromptEnFinal,
       promptEnFinalOverride: '',
     });
     finalPromptSignature.value = buildFinalPromptSignature();
     finalPromptSourcePromptSnapshot.value = form.value.prompt.trim();
+    finishGenerationToast(toastId, 'final_prompt', 'success');
   } catch (error) {
     console.error('Failed to generate final prompt:', error);
+    finishGenerationToast(toastId, 'final_prompt', 'error', {
+      reason: error instanceof Error ? error.message : '알 수 없는 오류',
+    });
   } finally {
     nodeStore.updateNodeLocal(props.node.id, { isFinalPromptGenerating: false });
   }
@@ -794,7 +803,6 @@ function setActive(): void {
           @click="generatePrompt"
         >
           <Loader2 v-if="isGeneratingPrompt" class="panel-btn-icon animate-spin" />
-          <Sparkles v-else class="panel-btn-icon" />
           {{ isGeneratingPrompt ? '생성 중...' : aiPromptActionLabel }}
         </button>
       </div>
@@ -852,7 +860,6 @@ function setActive(): void {
           @click="generateFinalPrompt(true)"
         >
           <Loader2 v-if="isGeneratingFinalPrompt" class="panel-btn-icon animate-spin" />
-          <FileText v-else class="panel-btn-icon" />
           {{ isGeneratingFinalPrompt ? '생성 중...' : finalPromptActionLabel }}
         </button>
 

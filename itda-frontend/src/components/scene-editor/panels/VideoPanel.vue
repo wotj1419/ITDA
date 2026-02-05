@@ -11,8 +11,9 @@ import BasePanel from './BasePanel.vue';
 import { useSceneNodeStore } from '../../../stores/sceneNode';
 import { useUIStore } from '../../../stores/ui';
 import { useNodeGeneration } from '../../../composables/useNodeGeneration';
+import { useGenerationToast } from '../../../composables/useGenerationToast';
 import { useHelpPopover } from '../../../composables/useHelpPopover';
-import { Video, Repeat, Move, Timer, FileText, Sparkles, Check, Target, ZoomIn, ZoomOut, ArrowRight, ArrowUp, Circle, Loader2, Star } from 'lucide-vue-next';
+import { Video, Repeat, Move, Timer, FileText, Check, Target, ZoomIn, ZoomOut, ArrowRight, ArrowUp, Circle, Loader2, Star } from 'lucide-vue-next';
 import { resolveCameraMotionKey } from '../../../utils/nodeSettings';
 import {
   DEFAULT_VIDEO_CAMERA_MOTION,
@@ -26,6 +27,7 @@ interface Props {
 const props = defineProps<Props>();
 const nodeStore = useSceneNodeStore();
 const uiStore = useUIStore();
+const { startGenerationToast, finishGenerationToast } = useGenerationToast();
 const cameraMotionHelp = useHelpPopover({
   storageKey: 'scene-editor:camera-motion-help',
   defaultOpen: true,
@@ -284,7 +286,7 @@ const effectiveFinalPrompt = computed(() => {
   return override || form.value.promptEnFinal.trim();
 });
 const aiPromptActionLabel = computed(() =>
-  data.value?.promptStatus === PromptStatus.DRAFT ? 'AI 서술 프롬프트 생성' : 'AI 서술 프롬프트 재생성'
+  data.value?.promptStatus === PromptStatus.DRAFT ? 'AI 프롬프트 생성' : 'AI 프롬프트 재생성'
 );
 const finalPromptActionLabel = computed(() =>
   form.value.promptEnFinal.trim().length > 0 ? '최종 프롬프트 재생성' : '최종 프롬프트 생성'
@@ -557,23 +559,30 @@ async function generateFinalPrompt(force = false): Promise<void> {
   if (isGeneratingFinalPrompt.value || isGeneratingPrompt.value || isGeneratingVideo.value) return;
   if (!form.value.prompt.trim()) return;
   if (!force && !isNarrativePromptDirtyForFinal.value) return;
+  const toastId = startGenerationToast('final_prompt');
   nodeStore.updateNodeLocal(props.node.id, { isFinalPromptGenerating: true });
   try {
     form.value.usePromptOverride = false;
     form.value.promptEnFinalOverride = '';
     isFinalEditing.value = false;
-    await refreshPromptPreview(true);
+    const previewResult = await refreshPromptPreview(true);
+    const nextPromptEnFinal = previewResult?.promptEnFinal ?? form.value.promptEnFinal;
+    form.value.promptEnFinal = nextPromptEnFinal;
     await nextTick();
     await nodeStore.updateNode(props.node.id, {
       prompt: form.value.prompt,
       promptKo: form.value.promptKo,
-      promptEnFinal: form.value.promptEnFinal,
+      promptEnFinal: nextPromptEnFinal,
       promptEnFinalOverride: '',
     });
     finalPromptSignature.value = buildFinalPromptSignature();
     finalPromptSourcePromptSnapshot.value = form.value.prompt.trim();
+    finishGenerationToast(toastId, 'final_prompt', 'success');
   } catch (error) {
     console.error('Failed to generate final prompt:', error);
+    finishGenerationToast(toastId, 'final_prompt', 'error', {
+      reason: error instanceof Error ? error.message : '알 수 없는 오류',
+    });
   } finally {
     nodeStore.updateNodeLocal(props.node.id, { isFinalPromptGenerating: false });
   }
@@ -799,7 +808,6 @@ function handleGenerateVideo(): void {
           @click="generatePrompt"
         >
           <Loader2 v-if="isGeneratingPrompt" class="panel-btn-icon panel-btn-icon--spin" />
-          <Sparkles v-else class="panel-btn-icon" />
           {{ isGeneratingPrompt ? '생성 중...' : aiPromptActionLabel }}
         </button>
       </div>
@@ -857,7 +865,6 @@ function handleGenerateVideo(): void {
           @click="generateFinalPrompt(true)"
         >
           <Loader2 v-if="isGeneratingFinalPrompt" class="panel-btn-icon panel-btn-icon--spin" />
-          <FileText v-else class="panel-btn-icon" />
           {{ isGeneratingFinalPrompt ? '생성 중...' : finalPromptActionLabel }}
         </button>
 
