@@ -13,6 +13,7 @@ import SidebarHoverMenu from '../components/collab/SidebarHoverMenu.vue';
 import {
   BookOpen,
   Clapperboard,
+  Film,
   Layers,
 } from 'lucide-vue-next';
 
@@ -47,30 +48,54 @@ useSidebarShortcut();
 // =============================================================================
 
 const projectId = computed(() => Number(route.params.projectId));
+const sceneId = computed(() => {
+  const raw = route.params.sceneId;
+  const value = Array.isArray(raw) ? raw[0] : raw;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+});
 
-const navItems = computed(() => [
-  {
-    key: 'story',
-    icon: BookOpen,
-    label: '스토리',
-    to: { name: 'project-detail', params: { id: projectId.value } },
-    active: false,
-  },
-  {
-    key: 'scene-editor',
-    icon: Clapperboard,
-    label: '씬 편집',
-    to: null,
-    active: true,
-  },
-  {
+const navItems = computed(() => {
+  const items = [
+    {
+      key: 'story',
+      icon: BookOpen,
+      label: '스토리',
+      to: { name: 'project-detail', params: { id: projectId.value } },
+      active: false,
+    },
+    {
+      key: 'scene-editor',
+      icon: Clapperboard,
+      label: '씬 편집',
+      to: null,
+      active: true,
+    },
+  ];
+
+  if (sceneId.value !== null) {
+    items.push({
+      key: 'scene-timeline',
+      icon: Film,
+      label: '씬 타임라인',
+      to: {
+        name: 'scene-timeline',
+        params: { id: projectId.value, sceneId: sceneId.value },
+      },
+      active: false,
+    });
+  }
+
+  items.push({
     key: 'timeline',
     icon: Layers,
     label: '전체 타임라인',
     to: { name: 'timeline', params: { id: projectId.value } },
     active: false,
-  },
-]);
+  });
+
+  return items;
+});
 
 const sidebarClasses = computed(() => [
   'sidebar',
@@ -336,8 +361,9 @@ const sidebarClasses = computed(() => [
   left: 100%;
   margin-left: 0.5rem;
   padding: 0.5rem 0.75rem;
-  background: var(--gray-900);
-  color: white;
+  background: var(--rose-50);
+  color: var(--gray-900);
+  border: 1px solid var(--rose-100);
   font-size: 0.75rem;
   border-radius: 6px;
   white-space: nowrap;
@@ -443,8 +469,9 @@ const sidebarClasses = computed(() => [
   left: 100%;
   margin-left: 0.5rem;
   padding: 0.5rem 0.75rem;
-  background: var(--gray-900);
-  color: white;
+  background: var(--rose-50);
+  color: var(--gray-900);
+  border: 1px solid var(--rose-100);
   font-size: 0.75rem;
   border-radius: 6px;
   white-space: nowrap;
