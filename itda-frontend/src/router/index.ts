@@ -13,6 +13,16 @@ const routes: RouteRecordRaw[] = [
     component: () => import('../pages/AuthPage.vue'),
   },
   {
+    path: '/auth/forgot',
+    name: 'forgot-password',
+    component: () => import('../pages/ForgotPasswordPage.vue'),
+  },
+  {
+    path: '/auth/reset',
+    name: 'reset-password',
+    component: () => import('../pages/ResetPasswordPage.vue'),
+  },
+  {
     path: '/access-denied',
     name: 'access-denied',
     component: () => import('../pages/AccessDeniedPage.vue'),

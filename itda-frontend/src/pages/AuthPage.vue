@@ -321,7 +321,7 @@ async function handleRegister() {
               <input v-model="loginForm.rememberMe" type="checkbox" class="form-checkbox" />
               <span class="form-check-label">로그인 상태 유지</span>
             </label>
-            <a href="#" class="forgot-link">비밀번호 찾기</a>
+            <router-link to="/auth/forgot" class="forgot-link">비밀번호 찾기</router-link>
           </div>
 
           <button
