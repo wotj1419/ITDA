@@ -34,7 +34,7 @@ async function handleSubmit() {
     await authService.requestPasswordReset({ email: form.value.email })
     router.push({ path: '/auth/reset', query: { email: form.value.email } })
   } catch (_error) {
-    const status = _error?.response?.status
+    const status = (_error as { response?: { status?: number } })?.response?.status
     if (status === 404) {
       emailError.value = '가입되지 않은 이메일입니다.'
       return

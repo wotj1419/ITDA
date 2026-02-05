@@ -74,7 +74,7 @@ async function handleSubmit() {
     })
     router.push('/auth')
   } catch (_error) {
-    const status = _error?.response?.status
+    const status = (_error as { response?: { status?: number } })?.response?.status
     if (status === 404) {
       submitError.value = '가입되지 않은 이메일입니다.'
       return
