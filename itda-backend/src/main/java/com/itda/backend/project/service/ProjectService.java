@@ -73,7 +73,7 @@ public class ProjectService {
         Project project = requireProject(projectId);
         String role = requireMemberRole(projectId, userId);
         Integer memberCount = countMembers(projectId);
-        return ProjectDetailResponse.from(project, role, memberCount);
+        return toProjectDetailResponse(project, role, memberCount);
     }
 
     @Transactional
@@ -85,7 +85,7 @@ public class ProjectService {
 
         Project updatedProject = requireProject(projectId);
         Integer memberCount = countMembers(projectId);
-        return ProjectDetailResponse.from(updatedProject, role, memberCount);
+        return toProjectDetailResponse(updatedProject, role, memberCount);
     }
 
     @Transactional
@@ -147,6 +147,18 @@ public class ProjectService {
         PreviewPayload preview = resolvePreview(summary.getProjectId());
         return ProjectSummaryResponse.from(
                 summary,
+                preview.type(),
+                preview.thumbnailUrl(),
+                preview.videoUrl()
+        );
+    }
+
+    private ProjectDetailResponse toProjectDetailResponse(Project project, String role, Integer memberCount) {
+        PreviewPayload preview = resolvePreview(project.getId());
+        return ProjectDetailResponse.from(
+                project,
+                role,
+                memberCount,
                 preview.type(),
                 preview.thumbnailUrl(),
                 preview.videoUrl()

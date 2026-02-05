@@ -33,16 +33,19 @@ interface Props {
   sceneCount?: number
   progress?: { completed: number; total: number }
   hideScenes?: boolean
+  previewLoading?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
   sceneCount: 0,
   progress: () => ({ completed: 0, total: 0 }),
   hideScenes: false,
+  previewLoading: false,
 })
 
 const emit = defineEmits<{
   (e: 'tab-change', tab: string): void
+  (e: 'preview'): void
 }>()
 
 const router = useRouter()
@@ -316,7 +319,7 @@ onBeforeUnmount(() => {
           </div>
           <ShareButton @click="uiStore.openModal('share-project')" />
 
-          <Button variant="primary" class="btn-preview">
+          <Button variant="primary" class="btn-preview" :loading="previewLoading" @click="emit('preview')">
             <Play class="icon-sm" />
             미리보기
           </Button>

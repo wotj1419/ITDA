@@ -3,7 +3,10 @@ import ProjectLayout from '../layouts/ProjectLayout.vue'
 import StoryTab from './project/sections/StoryTab.vue'
 import ScenesTab from './project/sections/ScenesTab.vue'
 import ObjectsTab from './project/sections/ObjectsTab.vue'
+import TimelinePlaybackModal from '../components/timeline/TimelinePlaybackModal.vue'
+import SceneVideoPreviewModal from '../components/scene-editor/SceneVideoPreviewModal.vue'
 import { useProjectDetail } from './project/composables/useProjectDetail'
+import { SCENE_VIDEO_PREVIEW_MODAL_ID, TIMELINE_PLAYBACK_MODAL_ID } from '../constants/ui'
 
 const {
   activeTab,
@@ -47,10 +50,16 @@ const {
   handleDownloadObjectImage,
 } = useProjectDetail()
 
-import { computed, onMounted, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useCollabStore } from '../stores/collab'
+import { useTimelineStore } from '../stores/timeline'
+import { useUIStore } from '../stores/ui'
 
 const collabStore = useCollabStore()
+const timelineStore = useTimelineStore()
+const uiStore = useUIStore()
+const isProjectPreviewLoading = ref(false)
+const projectPreviewClips = computed(() => timelineStore.orderedClips)
 // Hide Scenes tab UI (page disabled for now).
 const isScenesTabHidden = true
 const visibleTabs = computed(() =>
@@ -74,8 +83,67 @@ watch(projectId, (newId) => {
     }
 })
 
+onUnmounted(() => {
+  timelineStore.clearTimeline()
+})
 
+function openProjectMergedPreview(): boolean {
+  if (!project.value?.previewVideoUrl) return false
+  uiStore.openModal(SCENE_VIDEO_PREVIEW_MODAL_ID, {
+    title: project.value.title || '프로젝트 미리보기',
+    videoUrl: project.value.previewVideoUrl,
+    posterUrl: project.value.previewThumbnailUrl || project.value.thumbnailUrl || null,
+  })
+  return true
+}
 
+async function openTimelineFallbackPreview(): Promise<boolean> {
+  if (!projectId.value) return false
+
+  await timelineStore.loadClips(projectId.value, undefined, {
+    hydrateDurations: false,
+  })
+
+  if (timelineStore.error) {
+    console.error('Failed to load timeline clips for preview fallback:', timelineStore.error)
+    return false
+  }
+
+  const startClip = timelineStore.orderedClips.find((clip) => Boolean(clip.videoUrl))
+  if (!startClip) return false
+
+  uiStore.openModal(TIMELINE_PLAYBACK_MODAL_ID, { startClipId: startClip.clipId })
+  return true
+}
+
+async function handleProjectPreview(): Promise<void> {
+  if (!projectId.value || !project.value || isProjectPreviewLoading.value) return
+
+  isProjectPreviewLoading.value = true
+  try {
+    if (openProjectMergedPreview()) {
+      return
+    }
+
+    const openedFallback = await openTimelineFallbackPreview()
+    if (!openedFallback) {
+      uiStore.showToast({
+        type: 'error',
+        title: 'Preview unavailable',
+        message: 'No playable videos are available.',
+      })
+    }
+  } catch (error) {
+    console.error('Failed to open project preview modal:', error)
+    uiStore.showToast({
+      type: 'error',
+      title: 'Preview unavailable',
+      message: 'Could not open preview. Please try again shortly.',
+    })
+  } finally {
+    isProjectPreviewLoading.value = false
+  }
+}
 
 
 const openScenarioDrawer = () => scenarioStore.openDrawer()
@@ -88,7 +156,9 @@ const openScenarioDrawer = () => scenarioStore.openDrawer()
     :scene-count="scenes.length"
     :progress="sceneProgress"
     :hide-scenes="isScenesTabHidden"
+    :preview-loading="isProjectPreviewLoading"
     @tab-change="handleTabChange"
+    @preview="handleProjectPreview"
   >
     <div class="project-content">
       <!-- Tabs -->
@@ -159,7 +229,9 @@ const openScenarioDrawer = () => scenarioStore.openDrawer()
         :handle-download-object-image="handleDownloadObjectImage"
       />
     </div>
-</ProjectLayout>
+  </ProjectLayout>
+  <TimelinePlaybackModal :clips="projectPreviewClips" />
+  <SceneVideoPreviewModal />
 </template>
 
 <style>

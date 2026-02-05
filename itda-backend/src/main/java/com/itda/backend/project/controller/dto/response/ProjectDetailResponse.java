@@ -20,6 +20,15 @@ public record ProjectDetailResponse(
         @Schema(description = "Project genre", example = "SF")
         String genre,
 
+        @Schema(description = "Preview source type", example = "PROJECT_MERGE")
+        String previewType,
+
+        @Schema(description = "Preview thumbnail URL", example = "https://...")
+        String previewThumbnailUrl,
+
+        @Schema(description = "Preview video URL", example = "https://...")
+        String previewVideoUrl,
+
         @Schema(description = "My role in project", example = "OWNER")
         String myRole,
 
@@ -32,12 +41,22 @@ public record ProjectDetailResponse(
         @Schema(description = "Created at", example = "2026-01-15T12:00:00")
         LocalDateTime createdAt
 ) {
-    public static ProjectDetailResponse from(Project project, String role, Integer memberCount) {
+    public static ProjectDetailResponse from(
+            Project project,
+            String role,
+            Integer memberCount,
+            String previewType,
+            String previewThumbnailUrl,
+            String previewVideoUrl
+    ) {
         return new ProjectDetailResponse(
                 project.getId(),
                 project.getTitle(),
                 project.getDescription(),
                 project.getGenre(),
+                previewType,
+                previewThumbnailUrl,
+                previewVideoUrl,
                 role,
                 project.getOwnerId(),
                 memberCount,
