@@ -28,6 +28,7 @@ const emit = defineEmits<{
   (e: 'reorder', clipIds: string[]): void;
   (e: 'remove', clipId: string): void;
   (e: 'play'): void;
+  (e: 'play-from', clipId: string): void;
 }>();
 
 const draggedId = ref<string | null>(null);
@@ -129,6 +130,10 @@ function handlePlay() {
   emit('play');
 }
 
+function handleSelect(clipId: string) {
+  emit('play-from', clipId);
+}
+
 // =============================================================================
 // Computed
 // =============================================================================
@@ -161,6 +166,7 @@ const progressPercent = Math.min(
         }"
         :title="clip.label || '확정 클립'"
         draggable="true"
+        @click="handleSelect(clip.clipId)"
         @mouseenter="startPreview(clip)"
         @mouseleave="stopPreviewById(clip.clipId)"
         @dragstart="handleDragStart(clip.clipId, $event)"

@@ -281,6 +281,13 @@ function handleTimelinePlay(): void {
   uiStore.openModal(TIMELINE_PLAYBACK_MODAL_ID);
 }
 
+function handleTimelinePlayFromClip(clipId: string): void {
+  if (!timelineClips.value.length) return;
+  uiStore.openModal(TIMELINE_PLAYBACK_MODAL_ID, {
+    startClipId: clipId,
+  });
+}
+
 /**
  * 자동 레이아웃 적용
  */
@@ -342,6 +349,7 @@ const { handleBeforeUnload, handleEditorKeydown } = useSceneEditorEvents({
         @reorder="handleTimelineReorder"
         @remove="handleTimelineRemove"
         @play="handleTimelinePlay"
+        @play-from="handleTimelinePlayFromClip"
       />
     </template>
   </EditorLayout>
