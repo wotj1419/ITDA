@@ -35,7 +35,7 @@ export function useTimelinePlayback({ clips }: UseTimelinePlaybackArgs) {
     return -1
   }
 
-  const ensurePlayableIndex = (): void => {
+  const ensureIndexInRange = (): void => {
     if (clips.value.length === 0) {
       currentIndex.value = 0
       currentClipTime.value = 0
@@ -44,10 +44,6 @@ export function useTimelinePlayback({ clips }: UseTimelinePlaybackArgs) {
     }
     if (currentIndex.value >= clips.value.length) {
       currentIndex.value = clips.value.length - 1
-    }
-    if (!clips.value[currentIndex.value]?.videoUrl) {
-      const fallback = findPlayableIndex(0, 1)
-      currentIndex.value = fallback >= 0 ? fallback : 0
     }
   }
 
@@ -81,6 +77,13 @@ export function useTimelinePlayback({ clips }: UseTimelinePlaybackArgs) {
     } else {
       pauseCurrent()
     }
+  }
+
+  const selectClip = async (clipId: string, autoplay = true): Promise<void> => {
+    const index = clips.value.findIndex((clip) => clip.clipId === clipId)
+    if (index < 0) return
+    const shouldAutoplay = autoplay && Boolean(clips.value[index]?.videoUrl)
+    await seekTo(index, shouldAutoplay)
   }
 
   const playNext = async (): Promise<void> => {
@@ -120,7 +123,7 @@ export function useTimelinePlayback({ clips }: UseTimelinePlaybackArgs) {
     clips,
     async () => {
       const wasPlaying = isPlaying.value
-      ensurePlayableIndex()
+      ensureIndexInRange()
       await nextTick()
       if (wasPlaying) {
         await playCurrent()
@@ -142,6 +145,7 @@ export function useTimelinePlayback({ clips }: UseTimelinePlaybackArgs) {
     togglePlay,
     playPrev,
     playNext,
+    selectClip,
     onEnded,
     onTimeUpdate,
   }

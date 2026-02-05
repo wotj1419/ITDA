@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useProjectStore } from '../stores/project'
 import { useSceneStore } from '../stores/scene'
@@ -36,6 +36,24 @@ const sceneTitle = computed(() => {
   const scene = sceneStore.scenes.find(s => s.sceneId === sceneId.value)
   return scene ? `씬 ${scene.order}: ${scene.title}` : ''
 })
+
+const orderedClips = computed(() => timelineStore.orderedClips)
+const selectedClipId = ref<string | null>(null)
+
+watch(
+  orderedClips,
+  (clips) => {
+    if (clips.length === 0) {
+      selectedClipId.value = null
+      return
+    }
+    if (selectedClipId.value && clips.some((clip) => clip.clipId === selectedClipId.value)) {
+      return
+    }
+    selectedClipId.value = clips[0]?.clipId ?? null
+  },
+  { immediate: true }
+)
 
 onMounted(async () => {
   if (projectId.value) {
@@ -105,6 +123,11 @@ function handleReset() {
 }
 
 
+function handleSelectClip(clipId: string | null) {
+  selectedClipId.value = clipId
+}
+
+
 const timelineMaxTime = computed(() => {
   // Base 10 mins (600s), or total duration + 5 mins buffer (300s)
   return Math.max(600, timelineStore.totalDuration + 300)
@@ -164,7 +187,11 @@ function handleWheel(e: WheelEvent) {
             <h3 class="section-title">미리보기</h3>
           </div>
           <Card class="preview-card">
-            <VideoPreview :clips="timelineStore.orderedClips" />
+            <VideoPreview
+              :clips="orderedClips"
+              :selected-clip-id="selectedClipId"
+              @update:selected-clip-id="handleSelectClip"
+            />
           </Card>
         </section>
 
@@ -187,9 +214,11 @@ function handleWheel(e: WheelEvent) {
               >
                 <TimeRuler :max-time="timelineMaxTime" :px-per-sec="20" />
                 <VideoTrack
-                  :clips="timelineStore.orderedClips"
+                  :clips="orderedClips"
+                  :selected-clip-id="selectedClipId"
                   @reorder="handleReorder"
                   @remove="handleRemove"
+                  @select="handleSelectClip"
                 />
               </div>
             </div>

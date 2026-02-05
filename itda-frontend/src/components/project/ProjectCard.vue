@@ -35,6 +35,8 @@ const progress = computed(() => {
   return { completed, total }
 })
 const isHighlighted = computed(() => projectStore.highlightedProjectId === props.project.projectId)
+const isOwner = computed(() => props.project.role === 'OWNER')
+const deleteLabel = computed(() => (isOwner.value ? '\uc0ad\uc81c' : '\ub098\uac00\uae30'))
 
 const progressPercent = computed(() => {
   if (progress.value.total === 0) return 0
@@ -197,7 +199,7 @@ const handleDeleteRequest = (e: Event) => {
       <div v-if="isMenuOpen" class="dropdown-menu">
         <button class="menu-item delete" @click="handleDeleteRequest">
           <Trash2 class="icon-sm" />
-          ??젣
+          {{ deleteLabel }}
         </button>
       </div>
     </div>

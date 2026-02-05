@@ -61,6 +61,11 @@ type FitViewOptions = {
   maxZoom?: number;
 };
 
+type ApplyLayoutOptions = {
+  /** When false, keep the current viewport (zoom/pan) unchanged. */
+  fitView?: boolean;
+};
+
 const DEFAULT_HEADER_POSITION = { x: 0, y: -200 };
 const INITIAL_ZOOM = 0.7;
 const INITIAL_FIT_OPTIONS: FitViewOptions = {
@@ -163,7 +168,7 @@ watch(
 // Layout
 // =============================================================================
 
-function applyLayout(fitOptions?: FitViewOptions): void {
+function applyLayout(fitOptions?: FitViewOptions, options?: ApplyLayoutOptions): void {
   const { nodes: layoutedNodes } = getLayoutedElements(
     nodeStore.nodes,
     nodeStore.edges,
@@ -178,14 +183,17 @@ function applyLayout(fitOptions?: FitViewOptions): void {
     }
   });
 
-  // 약간의 지연 후 fitView
-  setTimeout(() => {
-    const resolvedOptions = fitOptions ? { ...fitOptions } : { padding: 0.2 };
-    if (resolvedOptions.padding === undefined) {
-      resolvedOptions.padding = 0.2;
-    }
-    fitView(resolvedOptions);
-  }, 100);
+  const shouldFitView = options?.fitView ?? true;
+  if (shouldFitView) {
+    // 약간의 지연 후 fitView
+    setTimeout(() => {
+      const resolvedOptions = fitOptions ? { ...fitOptions } : { padding: 0.2 };
+      if (resolvedOptions.padding === undefined) {
+        resolvedOptions.padding = 0.2;
+      }
+      fitView(resolvedOptions);
+    }, 100);
+  }
 
   nodeStore.persistNodePositions();
 }
@@ -268,7 +276,8 @@ async function handleAddChild(nodeId: string, nodeType: NodeType): Promise<void>
       break;
   }
   // 레이아웃 재적용
-  applyLayout();
+  // 노드 추가 시에는 현재 사용자가 보고 있는 뷰포트를 유지한다.
+  applyLayout(undefined, { fitView: false });
 }
 
 async function handleConfirmVideo(nodeId: string): Promise<void> {
