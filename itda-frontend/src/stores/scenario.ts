@@ -136,6 +136,8 @@ export const useScenarioStore = defineStore('scenario', () => {
 
     const toStatus = (status?: string) =>
         status?.toLowerCase() === 'approved' ? 'approved' : 'draft'
+    const toDraftSceneId = (sceneId: number, fallbackIndex: number): number =>
+        sceneId < 0 ? sceneId : -(fallbackIndex + 1)
 
     // Actions
     const openDrawer = () => {
@@ -396,9 +398,9 @@ export const useScenarioStore = defineStore('scenario', () => {
 
         await run(async () => {
             const response = await generateScenarioScenes(activeProjectId.value as number)
-            scenes.value = response.scenes.map((scene) => ({
-                id: scene.sceneId,
-                order: scene.order,
+            scenes.value = response.scenes.map((scene, index) => ({
+                id: toDraftSceneId(scene.sceneId, index),
+                order: index + 1,
                 title: scene.title,
                 description: scene.description,
             }))
@@ -446,10 +448,10 @@ export const useScenarioStore = defineStore('scenario', () => {
     }
 
     const addScene = () => {
-        const maxId = scenes.value.length > 0 ? Math.max(...scenes.value.map(s => s.id)) : 0
+        const minId = scenes.value.length > 0 ? Math.min(...scenes.value.map((s) => s.id)) : 0
         const maxOrder = scenes.value.length > 0 ? Math.max(...scenes.value.map(s => s.order)) : 0
         const newScene = {
-            id: maxId + 1,
+            id: minId > 0 ? -1 : minId - 1,
             order: maxOrder + 1,
             title: '', // 빈 문자열로 시작
             description: '', // 빈 문자열로 시작
