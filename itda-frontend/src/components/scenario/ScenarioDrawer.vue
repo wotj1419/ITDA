@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { Sparkles, X, ChevronLeft } from 'lucide-vue-next'
+import { ref } from 'vue'
+import { Sparkles, X, ChevronLeft, ChevronRight, RotateCcw } from 'lucide-vue-next'
 import { useScenarioStore } from '../../stores/scenario'
 import StepIndicator from './StepIndicator.vue'
 import ScenarioInputStep from './ScenarioInputStep.vue'
@@ -7,8 +8,10 @@ import ScenarioPromptStep from './ScenarioPromptStep.vue'
 import ScenarioPlotStep from './ScenarioPlotStep.vue'
 import ScenarioScenesStep from './ScenarioScenesStep.vue'
 import Button from '../common/Button.vue'
+import ConfirmModal from '../common/ConfirmModal.vue'
 
 const scenarioStore = useScenarioStore()
+const showResetConfirm = ref(false)
 
 const handleClose = () => {
   scenarioStore.closeDrawer()
@@ -16,6 +19,23 @@ const handleClose = () => {
 
 const handlePrevStep = () => {
   scenarioStore.prevStep()
+}
+
+const handleNextStep = () => {
+  scenarioStore.nextStep()
+}
+
+const handleReset = () => {
+  showResetConfirm.value = true
+}
+
+const confirmReset = () => {
+  showResetConfirm.value = false
+  scenarioStore.resetWizard()
+}
+
+const cancelReset = () => {
+  showResetConfirm.value = false
 }
 </script>
 
@@ -60,32 +80,62 @@ const handlePrevStep = () => {
         </div>
 
         <!-- Content -->
-        <main class="drawer-content">
+        <main class="drawer-content" :class="{ 'is-blocked': scenarioStore.isGenerating }" :aria-busy="scenarioStore.isGenerating ? 'true' : 'false'">
           <Transition name="step-fade" mode="out-in">
             <ScenarioInputStep v-if="scenarioStore.currentStep === 1" key="step1" />
             <ScenarioPromptStep v-else-if="scenarioStore.currentStep === 2" key="step2" />
             <ScenarioPlotStep v-else-if="scenarioStore.currentStep === 3" key="step3" />
             <ScenarioScenesStep v-else-if="scenarioStore.currentStep === 4" key="step4" />
           </Transition>
+        
+          <div v-if="scenarioStore.isGenerating" class="drawer-content-overlay" aria-hidden="true" />
         </main>
 
         <!-- Footer Navigation -->
         <footer class="drawer-footer">
           <Button
-            v-if="scenarioStore.currentStep > 1"
             variant="secondary"
-            @click="handlePrevStep"
+            :disabled="scenarioStore.isGenerating"
+            @click="handleReset"
           >
-            <ChevronLeft class="icon-sm" />
-            이전
+            <RotateCcw class="icon-sm" />
+            초기화
           </Button>
-          <div v-else />
-          
-          <!-- Next button only shows on step 1 -->
-          <!-- Other steps handle navigation through their own buttons -->
+          <div class="footer-nav">
+            <Button
+              v-if="scenarioStore.currentStep > 1"
+              variant="secondary"
+              :disabled="scenarioStore.isGenerating"
+              @click="handlePrevStep"
+            >
+              <ChevronLeft class="icon-sm" />
+              이전
+            </Button>
+            <Button
+              v-if="scenarioStore.currentStep < 4"
+              variant="secondary"
+              :disabled="scenarioStore.isGenerating || !scenarioStore.canGoNext"
+              @click="handleNextStep"
+            >
+              다음
+              <ChevronRight class="icon-sm" />
+            </Button>
+          </div>
         </footer>
       </aside>
     </Transition>
+
+    <!-- Reset Confirm Modal -->
+    <ConfirmModal
+      :is-open="showResetConfirm"
+      title="초기화"
+      message="작성 중인 내용이 모두 초기화됩니다.
+계속하시겠습니까?"
+      confirm-text="초기화"
+      cancel-text="취소"
+      @confirm="confirmReset"
+      @cancel="cancelReset"
+    />
   </Teleport>
 </template>
 
@@ -188,10 +238,29 @@ const handlePrevStep = () => {
 }
 
 /* Content */
+
 .drawer-content {
   flex: 1;
   padding: 1.25rem;
   overflow-y: auto;
+  position: relative;
+}
+
+.drawer-content.is-blocked > *:not(.drawer-content-overlay) {
+  pointer-events: none;
+  user-select: none;
+  filter: blur(1px);
+}
+
+
+.drawer-content-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(255, 255, 255, 0.35);
+  backdrop-filter: blur(1px);
+  z-index: 10;
+  cursor: not-allowed;
+  pointer-events: all;
 }
 
 /* Footer */
@@ -202,6 +271,12 @@ const handlePrevStep = () => {
   padding: 1rem 1.25rem;
   border-top: 1px solid var(--rose-100);
   background: var(--gray-50);
+}
+
+.footer-nav {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
 }
 
 /* Animations */

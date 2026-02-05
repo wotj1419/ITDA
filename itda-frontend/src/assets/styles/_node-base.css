@@ -73,7 +73,10 @@
     min-height: 100px;
 }
 
-.node-glass--header,
+.node-glass--header {
+    --node-add-btn-clearance: 1.25rem;
+}
+
 .node-glass--master,
 .node-glass--grid,
 .node-glass--shot {

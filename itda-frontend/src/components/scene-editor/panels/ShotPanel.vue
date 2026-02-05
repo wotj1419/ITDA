@@ -47,7 +47,14 @@ const shotTypeOptions = ['와이드샷', '미디엄샷', '클로즈업', '익스
 const expressionOptions = ['기본', '미소', '슬픔', '놀람', '분노', '무표정'];
 
 const data = computed(() => props.node.data as ShotNodeData | undefined);
-const shotLabel = computed(() => String.fromCharCode(65 + (data.value?.gridCellIndex || 0)));
+const shotLabel = computed(() => {
+  const version = data.value?.version;
+  if (typeof version === 'number' && Number.isFinite(version)) {
+    return String(version);
+  }
+  const index = data.value?.gridCellIndex ?? 0;
+  return String(index + 1);
+});
 const hasPromptContent = computed(() => {
   if (!data.value) return false;
   return Boolean(

@@ -60,6 +60,8 @@ export const useScenarioStore = defineStore('scenario', () => {
         prompt: ScenarioPrompt
         plot: ScenarioPlot
         scenes: ScenarioScene[]
+        promptApprovedText: string
+        plotApprovedText: string
     }>>({})
 
     const pendingProjectInfo = ref<Record<number, { title: string; description: string }>>({})
@@ -67,7 +69,7 @@ export const useScenarioStore = defineStore('scenario', () => {
     const input = ref<ScenarioInput>({
         genre: '',
         mood: '',
-        sceneCount: 5,
+        sceneCount: 0,
         keywords: '',
         characterHints: '',
         backgroundHints: '',
@@ -84,17 +86,45 @@ export const useScenarioStore = defineStore('scenario', () => {
         status: 'draft',
     })
 
+    const promptApprovedText = ref('')
+    const plotApprovedText = ref('')
+
+    // 생성 시점의 입력값 스냅샷 (입력값 변경 감지용)
+    const lastGeneratedInput = ref<ScenarioInput | null>(null)
+
     const scenes = ref<ScenarioScene[]>([])
+
+    // 입력값 변경 여부 확인 (고급 옵션 포함)
+    const inputChanged = computed(() => {
+        if (!lastGeneratedInput.value) return false
+        const last = lastGeneratedInput.value
+        const curr = input.value
+        return (
+            curr.genre !== last.genre ||
+            curr.mood !== last.mood ||
+            curr.sceneCount !== last.sceneCount ||
+            curr.keywords !== last.keywords ||
+            curr.characterHints !== last.characterHints ||
+            curr.backgroundHints !== last.backgroundHints ||
+            curr.referenceStyle !== last.referenceStyle
+        )
+    })
 
     // Computed
     const canGoNext = computed(() => {
         switch (currentStep.value) {
             case 1:
-                return input.value.genre && input.value.mood
+                // 입력값이 변경되었으면 재생성 필요
+                if (inputChanged.value) return false
+                return Boolean(input.value.genre && input.value.mood && prompt.value.text?.trim())
             case 2:
-                return prompt.value.status === 'approved'
+                // 프롬프트 텍스트가 승인된 내용과 같으면 활성화
+                if (!promptApprovedText.value) return false
+                return prompt.value.text === promptApprovedText.value
             case 3:
-                return plot.value.status === 'approved'
+                // 줄거리 텍스트가 승인된 내용과 같으면 활성화
+                if (!plotApprovedText.value) return false
+                return plot.value.text === plotApprovedText.value
             case 4:
                 return scenes.value.length > 0
             default:
@@ -121,7 +151,7 @@ export const useScenarioStore = defineStore('scenario', () => {
         input.value = {
             genre: '',
             mood: '',
-            sceneCount: 5,
+            sceneCount: 0,
             keywords: '',
             characterHints: '',
             backgroundHints: '',
@@ -129,6 +159,9 @@ export const useScenarioStore = defineStore('scenario', () => {
         }
         prompt.value = { text: '', status: 'draft' }
         plot.value = { text: '', status: 'draft' }
+        promptApprovedText.value = ''
+        plotApprovedText.value = ''
+        lastGeneratedInput.value = null
         scenes.value = []
     }
 
@@ -140,6 +173,8 @@ export const useScenarioStore = defineStore('scenario', () => {
                 prompt: JSON.parse(JSON.stringify(prompt.value)),
                 plot: JSON.parse(JSON.stringify(plot.value)),
                 scenes: JSON.parse(JSON.stringify(scenes.value)),
+                promptApprovedText: promptApprovedText.value,
+                plotApprovedText: plotApprovedText.value,
             }
         }
     }
@@ -163,6 +198,8 @@ export const useScenarioStore = defineStore('scenario', () => {
             prompt.value = JSON.parse(JSON.stringify(state.prompt))
             plot.value = JSON.parse(JSON.stringify(state.plot))
             scenes.value = JSON.parse(JSON.stringify(state.scenes))
+            promptApprovedText.value = state.promptApprovedText || ''
+            plotApprovedText.value = state.plotApprovedText || ''
         } else {
             resetWizard()
         }
@@ -212,6 +249,9 @@ export const useScenarioStore = defineStore('scenario', () => {
                 status: toStatus(promptData.status),
             }
 
+            // 생성 시점의 입력값 스냅샷 저장
+            lastGeneratedInput.value = { ...input.value }
+
             nextStep()
             finishGenerationToast(toastId, 'scenario_prompt', 'success')
         }, {
@@ -231,6 +271,7 @@ export const useScenarioStore = defineStore('scenario', () => {
         await run(async () => {
             await updateScenarioPrompt(activeProjectId.value as number, prompt.value.text, 'APPROVED')
             prompt.value.status = 'approved'
+            promptApprovedText.value = prompt.value.text
 
             // Calls generatePlot internally, but we want to track it here or let generatePlot handle it?
             // Original code: await generatePlot()
@@ -321,6 +362,7 @@ export const useScenarioStore = defineStore('scenario', () => {
         await run(async () => {
             await updateScenarioPlot(activeProjectId.value as number, plot.value.text, 'APPROVED')
             plot.value.status = 'approved'
+            plotApprovedText.value = plot.value.text
             await generateScenes({ allowWhileLoading: true, loading: false })
         }, { errorMessage: 'Failed to approve plot' })
     }
@@ -404,10 +446,11 @@ export const useScenarioStore = defineStore('scenario', () => {
     }
 
     const addScene = () => {
-        const newId = Math.max(...scenes.value.map(s => s.id), 0) + 1
+        const maxId = scenes.value.length > 0 ? Math.max(...scenes.value.map(s => s.id)) : 0
+        const maxOrder = scenes.value.length > 0 ? Math.max(...scenes.value.map(s => s.order)) : 0
         const newScene = {
-            id: newId,
-            order: scenes.value.length + 1,
+            id: maxId + 1,
+            order: maxOrder + 1,
             title: '', // 빈 문자열로 시작
             description: '', // 빈 문자열로 시작
         }
@@ -428,13 +471,24 @@ export const useScenarioStore = defineStore('scenario', () => {
         }
     }
 
-    
+
     const setPendingProjectInfo = (projectId: number, title: string, description: string) => {
         pendingProjectInfo.value[projectId] = { title, description }
     }
 
     const clearPendingProjectInfo = (projectId: number) => {
         delete pendingProjectInfo.value[projectId]
+    }
+
+    const revertUnapproved = () => {
+        if (prompt.value.status !== 'approved' && promptApprovedText.value) {
+            prompt.value.text = promptApprovedText.value
+            prompt.value.status = 'approved'
+        }
+        if (plot.value.status !== 'approved' && plotApprovedText.value) {
+            plot.value.text = plotApprovedText.value
+            plot.value.status = 'approved'
+        }
     }
 
     const setGenre = async (genre: string) => {
@@ -495,5 +549,6 @@ export const useScenarioStore = defineStore('scenario', () => {
         setPendingProjectInfo,
         clearPendingProjectInfo,
         setGenre,
+        revertUnapproved,
     }
 })
