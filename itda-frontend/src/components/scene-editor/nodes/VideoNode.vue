@@ -5,11 +5,13 @@
  * 
  * 설계 문서: docs/vue-flow-node-workflow-design.md Section 3.7
  */
-import { computed, nextTick, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 import { Handle, Position } from '@vue-flow/core';
 import { NodeResizer } from '@vue-flow/node-resizer';
 import { useSceneNodeStore } from '../../../stores/sceneNode';
 import { useCollabStore } from '../../../stores/collab';
+import { useUIStore } from '../../../stores/ui';
+import { SCENE_VIDEO_PREVIEW_MODAL_ID } from '../../../constants/ui';
 import { JobStatus } from '../../../types/ui/sceneNodes';
 import type { ShotNodeData, VideoNodeData } from '../../../types/ui/sceneNodes';
 import { useNodeStatus } from '../../../composables/useNodeStatus';
@@ -30,8 +32,14 @@ interface Props {
 const props = defineProps<Props>();
 const store = useSceneNodeStore();
 const collabStore = useCollabStore();
+const uiStore = useUIStore();
 const videoRef = ref<HTMLVideoElement | null>(null);
 const shouldLoadVideo = ref(false);
+const HOVER_PREVIEW_DELAY_MS = 150;
+const isReducedMotionPreferred =
+  typeof window !== 'undefined' &&
+  window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+let hoverPreviewTimer: ReturnType<typeof setTimeout> | null = null;
 
 const nodeStyle = NODE_RESIZER_STYLE;
 const { minWidth, minHeight } = getNodeMinSize(props.data.type);
@@ -158,21 +166,53 @@ function handleConfirm(event: Event): void {
 function handleThumbnailClick(event: MouseEvent): void {
   if (!canPlayVideo.value) return;
   event.stopPropagation();
-  if (!shouldRenderVideo.value) {
+  handleThumbnailHoverLeave();
+  uiStore.openModal(SCENE_VIDEO_PREVIEW_MODAL_ID, {
+    nodeId: props.id,
+    title: `영상 ${props.data.version}${isTransition.value ? ' (트랜지션)' : ''}`,
+    videoUrl: props.data.videoUrl,
+    posterUrl: fallbackThumbnail.value,
+  });
+}
+
+function clearHoverPreviewTimer(): void {
+  if (hoverPreviewTimer === null) return;
+  clearTimeout(hoverPreviewTimer);
+  hoverPreviewTimer = null;
+}
+
+function stopInlinePreview(): void {
+  clearHoverPreviewTimer();
+  shouldLoadVideo.value = false;
+  if (videoRef.value) {
+    videoRef.value.pause();
+    videoRef.value.currentTime = 0;
+  }
+  store.deactivateVideoPreview(props.id);
+}
+
+function startInlinePreview(): void {
+  if (!canPlayVideo.value || isReducedMotionPreferred) return;
+  clearHoverPreviewTimer();
+  hoverPreviewTimer = setTimeout(() => {
+    store.activateVideoPreview(props.id);
     shouldLoadVideo.value = true;
+    hoverPreviewTimer = null;
     nextTick(() => {
       const current = videoRef.value;
       if (!current) return;
+      current.currentTime = 0;
       void current.play().catch(() => {});
     });
-    return;
-  }
-  if (!videoRef.value) return;
-  if (videoRef.value.paused) {
-    void videoRef.value.play().catch(() => {});
-  } else {
-    videoRef.value.pause();
-  }
+  }, HOVER_PREVIEW_DELAY_MS);
+}
+
+function handleThumbnailHoverEnter(): void {
+  startInlinePreview();
+}
+
+function handleThumbnailHoverLeave(): void {
+  stopInlinePreview();
 }
 
 function handleRetry(event: Event): void {
@@ -190,16 +230,41 @@ watch(
     const prevVideoUrl = prev?.[0];
     if (nextVideoUrl !== prevVideoUrl) {
       shouldLoadVideo.value = false;
+      store.deactivateVideoPreview(props.id);
     }
     if (!nextVideoUrl || nextJobStatus !== JobStatus.SUCCEEDED || nextGenerationState === 'requested') {
       shouldLoadVideo.value = false;
+      store.deactivateVideoPreview(props.id);
       if (videoRef.value && !videoRef.value.paused) {
         videoRef.value.pause();
+        videoRef.value.currentTime = 0;
       }
     }
   },
   { immediate: true }
 );
+
+watch(
+  () => store.activePreviewVideoNodeId,
+  (activeNodeId) => {
+    if (activeNodeId === props.id) {
+      return;
+    }
+    clearHoverPreviewTimer();
+    if (!shouldLoadVideo.value) {
+      return;
+    }
+    shouldLoadVideo.value = false;
+    if (videoRef.value) {
+      videoRef.value.pause();
+      videoRef.value.currentTime = 0;
+    }
+  }
+);
+
+onBeforeUnmount(() => {
+  stopInlinePreview();
+});
 </script>
 
 <template>
@@ -263,6 +328,8 @@ watch(
         class="node-glass__thumbnail node-glass__thumbnail--video"
         :class="{ 'node-glass__thumbnail--loading': isThumbnailLoading && !isThumbnailVisible && !shouldRenderVideo }"
         @click="handleThumbnailClick"
+        @mouseenter="handleThumbnailHoverEnter"
+        @mouseleave="handleThumbnailHoverLeave"
       >
         <video
           v-if="shouldRenderVideo"

@@ -6,6 +6,7 @@ import { ref } from 'vue';
 import type { TimelineClip } from '../../types/ui';
 import { Star, Play, X } from 'lucide-vue-next';
 import LazyVideo from '../media/LazyVideo.vue';
+import { useHoverPreviewPolicy } from '../../composables/useHoverPreviewPolicy';
 
 // =============================================================================
 // Props
@@ -31,8 +32,13 @@ const emit = defineEmits<{
 
 const draggedId = ref<string | null>(null);
 const dragOverId = ref<string | null>(null);
-const activePreviewClipId = ref<string | null>(null);
 const thumbStates = ref<Record<string, 'idle' | 'loaded' | 'failed'>>({});
+const {
+  clearPreview,
+  isPreviewing,
+  startPreview: schedulePreviewStart,
+  stopPreview,
+} = useHoverPreviewPolicy({ delayMs: 150 });
 
 const getThumbState = (clipId: string) => thumbStates.value[clipId] ?? 'idle';
 
@@ -58,22 +64,20 @@ const handleThumbError = (clipId: string) => {
 const getPoster = (clip: TimelineClip) =>
   clip.thumbnailUrl || '/icon.png';
 
-const isPreviewing = (clipId: string) => activePreviewClipId.value === clipId;
 const shouldMountVideo = (clip: TimelineClip) =>
   Boolean(clip.videoUrl) && isPreviewing(clip.clipId);
 
 function startPreview(clip: TimelineClip) {
   if (!clip.videoUrl) return;
-  activePreviewClipId.value = clip.clipId;
+  schedulePreviewStart(clip.clipId);
 }
 
-function stopPreview(clipId: string) {
-  if (activePreviewClipId.value === clipId) {
-    activePreviewClipId.value = null;
-  }
+function stopPreviewById(clipId: string) {
+  stopPreview(clipId);
 }
 
 function handleDragStart(clipId: string, event: DragEvent) {
+  clearPreview();
   draggedId.value = clipId;
   if (event.dataTransfer) {
     event.dataTransfer.effectAllowed = 'move';
@@ -158,7 +162,7 @@ const progressPercent = Math.min(
         :title="clip.label || '확정 클립'"
         draggable="true"
         @mouseenter="startPreview(clip)"
-        @mouseleave="stopPreview(clip.clipId)"
+        @mouseleave="stopPreviewById(clip.clipId)"
         @dragstart="handleDragStart(clip.clipId, $event)"
         @dragend="handleDragEnd"
         @dragover="handleDragOver(clip.clipId, $event)"

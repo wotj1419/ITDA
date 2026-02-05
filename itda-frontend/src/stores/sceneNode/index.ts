@@ -114,6 +114,7 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
     // end shot 선택 모드 (트랜지션 영상용)
     const selectionMode = ref<'none' | 'selectEndShot'>('none');
     const endShotTargetVideoId = ref<string | null>(null);
+    const activePreviewVideoNodeId = ref<string | null>(null);
 
     const sceneId = ref<string | null>(null);
     const sceneInfoRef = ref<{ title: string; description: string; order: number } | null>(null);
@@ -641,6 +642,17 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
         selectedNodeId.value = null;
         selectionMode.value = 'none';
         endShotTargetVideoId.value = null;
+        activePreviewVideoNodeId.value = null;
+    }
+
+    function activateVideoPreview(nodeId: string): void {
+        activePreviewVideoNodeId.value = nodeId;
+    }
+
+    function deactivateVideoPreview(nodeId?: string): void {
+        if (!nodeId || activePreviewVideoNodeId.value === nodeId) {
+            activePreviewVideoNodeId.value = null;
+        }
     }
 
     function resetHydrationState(): void {
@@ -1953,6 +1965,7 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
         selectedNodeId,
         selectionMode,
         endShotTargetVideoId,
+        activePreviewVideoNodeId,
         sceneId,
         isLoading,
         isSaving,
@@ -2003,6 +2016,8 @@ export const useSceneNodeStore = defineStore('sceneNode', () => {
         toggleVideoConfirm,
         updateTimelineOrder,
         resolveNodeMediaUrl,
+        activateVideoPreview,
+        deactivateVideoPreview,
 
         // Actions - Collapse
         toggleCollapse,
