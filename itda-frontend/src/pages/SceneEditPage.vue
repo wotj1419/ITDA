@@ -22,6 +22,7 @@ import NodePanelContainer from '../components/scene-editor/panels/NodePanelConta
 import AutoLayoutButton from '../components/scene-editor/AutoLayoutButton.vue';
 import MiniTimeline from '../components/editor/MiniTimeline.vue';
 import TimelinePlaybackModal from '../components/timeline/TimelinePlaybackModal.vue';
+import SceneVideoPreviewModal from '../components/scene-editor/SceneVideoPreviewModal.vue';
 import NodeDeleteConfirmModal from '../components/scene-editor/NodeDeleteConfirmModal.vue';
 import { useLayoutButtonPosition } from '../composables/useLayoutButtonPosition';
 import { useSceneEditorEvents } from '../composables/useSceneEditorEvents';
@@ -353,5 +354,6 @@ const { handleBeforeUnload, handleEditorKeydown } = useSceneEditorEvents({
   />
 
   <TimelinePlaybackModal :clips="timelineClips" />
+  <SceneVideoPreviewModal />
 
 </template>
