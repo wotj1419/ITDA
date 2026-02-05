@@ -65,21 +65,21 @@ watch(videoUrl, () => {
   <ModalBase
     :modal-id="SCENE_VIDEO_PREVIEW_MODAL_ID"
     :title="modalTitle"
-    size="xl"
+    size="lg"
     @close="handleClose"
   >
-    <div class="preview-modal__body">
+    <div class="player">
       <video
         v-if="videoUrl"
         ref="videoRef"
-        class="preview-modal__video"
+        class="player-video"
         :src="videoUrl"
         :poster="posterUrl || undefined"
         controls
         preload="metadata"
         playsinline
       />
-      <div v-else class="preview-modal__empty">
+      <div v-else class="player-empty">
         재생 가능한 영상이 없습니다.
       </div>
     </div>
@@ -87,23 +87,27 @@ watch(videoUrl, () => {
 </template>
 
 <style scoped>
-.preview-modal__body {
-  width: 100%;
+.player {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
 }
 
-.preview-modal__video {
+.player-video {
   width: 100%;
-  max-height: 70vh;
+  max-height: 420px;
   border-radius: 12px;
   background: var(--gray-950);
 }
 
-.preview-modal__empty {
+.player-empty {
   min-height: 180px;
+  padding: 2rem;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--gray-500);
+  text-align: center;
+  color: var(--gray-400);
   font-size: 0.875rem;
 }
 </style>
