@@ -63,9 +63,12 @@ export function useNodeGeneration(options: UseNodeGenerationOptions) {
     errorMessage.value = null;
   };
 
-  const refreshPromptPreview = async (force = false, promptOverride?: string): Promise<void> => {
-    if (!force && !options.previewEnabled) return;
-    if (!options.getPromptPreviewPayload) return;
+  const refreshPromptPreview = async (
+    force = false,
+    promptOverride?: string
+  ): Promise<PromptPreviewResponse | null> => {
+    if (!force && !options.previewEnabled) return null;
+    if (!options.getPromptPreviewPayload) return null;
     try {
       const payload = options.getPromptPreviewPayload();
       if (typeof promptOverride === 'string' && promptOverride.trim()) {
@@ -75,8 +78,10 @@ export function useNodeGeneration(options: UseNodeGenerationOptions) {
       if (options.onPromptPreview) {
         nodeStore.updateNodeLocal(options.nodeId, options.onPromptPreview(result));
       }
+      return result;
     } catch (error) {
       console.error('Failed to preview prompt:', error);
+      return null;
     }
   };
 
