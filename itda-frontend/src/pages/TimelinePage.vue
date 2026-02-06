@@ -14,6 +14,7 @@ import TimeRuler from '../components/timeline/TimeRuler.vue'
 import MergeProgress from '../components/timeline/MergeProgress.vue'
 import Button from '../components/common/Button.vue'
 import { GitMerge, RefreshCw } from 'lucide-vue-next'
+import { triggerDownload } from '../utils/download'
 
 const route = useRoute()
 const projectStore = useProjectStore()
@@ -77,11 +78,32 @@ watch([projectId, sceneId], async ([nextProjectId, nextSceneId]) => {
   collabStore.updateLocation('TIMELINE', nextSceneId ?? undefined)
 
   await timelineStore.loadClips(nextProjectId, nextSceneId ?? undefined)
+  await timelineStore.loadClips(nextProjectId, nextSceneId ?? undefined)
 })
+
+watch(
+  () => timelineStore.mergeStatus,
+  (status) => {
+    if (status === 'done') {
+      uiStore.showToast({
+        type: 'success',
+        title: '병합 완료',
+        message: '영상이 준비되었습니다.',
+      })
+    } else if (status === 'error') {
+      uiStore.showToast({
+        type: 'error',
+        title: '병합 실패',
+        message: '영상 병합에 실패했습니다. 다시 시도해주세요.',
+      })
+    }
+  }
+)
 
 async function handleReorder(clipIds: string[]) {
   const success = await timelineStore.reorderClips(clipIds)
   if (success) {
+    timelineStore.resetMerge()
     uiStore.showToast({
       type: 'success',
       title: '순서 변경',
@@ -93,6 +115,7 @@ async function handleReorder(clipIds: string[]) {
 async function handleRemove(clipId: string) {
   const success = await timelineStore.removeClip(clipId)
   if (success) {
+    timelineStore.resetMerge()
     uiStore.showToast({
       type: 'success',
       title: '삭제',
@@ -102,19 +125,12 @@ async function handleRemove(clipId: string) {
 }
 
 async function handleMerge() {
-  const success = await timelineStore.startMerge()
-  if (success) {
-    uiStore.showToast({
-      type: 'success',
-      title: '병합 완료',
-      message: '영상이 준비되었습니다.',
-    })
-  }
+  await timelineStore.startMerge()
 }
 
 function handleDownload() {
   if (timelineStore.downloadUrl) {
-    window.open(timelineStore.downloadUrl, '_blank')
+    triggerDownload(timelineStore.downloadUrl)
   }
 }
 

@@ -20,7 +20,6 @@ import {
   Clapperboard,
   User,
   Layers,
-  Settings,
   Play,
   ArrowLeft,
   Pencil,
@@ -29,20 +28,23 @@ import {
 
 interface Props {
   project: ProjectDetail | null
-  activeTab: 'story' | 'scenes' | 'objects' | 'timeline' | 'settings'
+  activeTab: 'story' | 'scenes' | 'objects' | 'timeline'
   sceneCount?: number
   progress?: { completed: number; total: number }
   hideScenes?: boolean
+  previewLoading?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
   sceneCount: 0,
   progress: () => ({ completed: 0, total: 0 }),
   hideScenes: false,
+  previewLoading: false,
 })
 
 const emit = defineEmits<{
   (e: 'tab-change', tab: string): void
+  (e: 'preview'): void
 }>()
 
 const router = useRouter()
@@ -70,7 +72,6 @@ const navItems = computed<NavItem[]>(() => {
     { key: 'scenes', icon: Clapperboard, label: '씬', badge: props.sceneCount, to: null },
     { key: 'objects', icon: User, label: '오브젝트', to: null },
     { key: 'timeline', icon: Layers, label: '전체 타임라인', to: { name: 'timeline', params: { id: projectId.value } } },
-    { key: 'settings', icon: Settings, label: '설정', to: null },
   ]
   return props.hideScenes ? items.filter((item) => item.key !== 'scenes') : items
 })
@@ -316,7 +317,7 @@ onBeforeUnmount(() => {
           </div>
           <ShareButton @click="uiStore.openModal('share-project')" />
 
-          <Button variant="primary" class="btn-preview">
+          <Button variant="primary" class="btn-preview" :loading="previewLoading" @click="emit('preview')">
             <Play class="icon-sm" />
             미리보기
           </Button>

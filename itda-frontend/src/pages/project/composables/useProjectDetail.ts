@@ -16,7 +16,7 @@ import {
 
 export type { ScenePreview, ScenePreviewClip } from './scenePreviewMapper';
 
-export type ProjectTab = 'story' | 'scenes' | 'objects' | 'timeline' | 'settings';
+export type ProjectTab = 'story' | 'scenes' | 'objects' | 'timeline';
 
 export function useProjectDetail() {
   const route = useRoute();

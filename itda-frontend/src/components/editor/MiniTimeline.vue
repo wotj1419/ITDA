@@ -137,22 +137,26 @@ function handleSelect(clipId: string) {
 // =============================================================================
 // Computed
 // =============================================================================
-
-const progressPercent = Math.min(
-  (props.totalDuration / props.maxDuration) * 100,
-  100
-);
 </script>
 
 <template>
   <div class="mini-timeline" :class="{ 'is-expanded': clips.length > 0 }">
-    <!-- Label -->
-    <div class="timeline-label">
-      <Star class="label-icon" />
-      <span>확정</span>
+    <!-- Left Controls: Label + Play -->
+    <div class="timeline-controls">
+      <div class="timeline-label">
+        <Star class="label-icon" />
+        <span>확정</span>
+      </div>
+
+      <button class="timeline-play" @click="handlePlay">
+        <Play class="play-icon" />
+      </button>
     </div>
 
-    <!-- Clips -->
+    <!-- Divider -->
+    <div class="timeline-divider" />
+
+    <!-- Clips Area -->
     <div class="timeline-clips">
       <div
         v-for="clip in clips"
@@ -188,7 +192,7 @@ const progressPercent = Math.min(
           <img
             v-if="clip.thumbnailUrl"
             :src="clip.thumbnailUrl"
-            :alt="clip.label || '??? ???'"
+            :alt="clip.label || '확정 클립'"
             class="clip-img"
             @load="handleThumbLoad(clip.clipId, $event)"
             @error="handleThumbError(clip.clipId)"
@@ -207,7 +211,7 @@ const progressPercent = Math.min(
             v-else-if="!clip.thumbnailUrl"
             class="clip-placeholder"
           >
-            ?앹꽦 ???
+            🎬
           </div>
         </div>
         <span class="clip-duration">{{ clip.duration }}s</span>
@@ -215,23 +219,10 @@ const progressPercent = Math.min(
 
       <!-- Empty State -->
       <div v-if="clips.length === 0" class="timeline-empty">
-        확정된 클립이 없습니다
+        <span class="empty-icon">🎞️</span>
+        <span class="empty-text">영상을 확정하면 여기에 쌓여요!</span>
       </div>
     </div>
-
-    <!-- Progress Bar -->
-    <div class="timeline-progress">
-      <div
-        class="progress-bar"
-        :style="{ width: `${progressPercent}%` }"
-      />
-    </div>
-
-    <!-- Timeline Play -->
-    <button class="timeline-play" @click="handlePlay">
-      <Play class="link-icon" />
-      재생
-    </button>
   </div>
 </template>
 
@@ -243,41 +234,96 @@ const progressPercent = Math.min(
 .mini-timeline {
   display: flex;
   align-items: center;
-  gap: 1.5rem;
-  height: 40px;
-  padding: 0 1.5rem;
-  background: white;
+  gap: 0;
+  height: 48px;
+  padding: 0 1rem;
+  background: linear-gradient(180deg, #fefefe 0%, #faf9f9 100%);
   border-top: 1px solid var(--gray-100);
   position: relative;
   z-index: 20;
-  transition: height 0.2s ease, padding 0.2s ease;
+  transition: height 0.25s ease, padding 0.25s ease;
 }
 
 .mini-timeline.is-expanded {
-  height: 72px;
-  padding: 0.25rem 1.5rem;
+  height: 80px;
+  padding: 0.5rem 1rem;
 }
 
 /* ==========================================================================
-   Label
+   Left Controls
    ========================================================================== */
+
+.timeline-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-shrink: 0;
+  padding-right: 1rem;
+}
 
 .timeline-label {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  font-size: 10px;
-  font-weight: 900;
+  gap: 0.375rem;
+  font-size: 11px;
+  font-weight: 800;
   text-transform: uppercase;
-  letter-spacing: 0.2em;
+  letter-spacing: 0.15em;
   color: var(--rose-500);
   white-space: nowrap;
+  background: linear-gradient(135deg, var(--rose-50) 0%, #fff5f5 100%);
+  padding: 0.375rem 0.625rem;
+  border-radius: 20px;
+  border: 1px solid var(--rose-100);
 }
 
 .label-icon {
+  width: 12px;
+  height: 12px;
+  fill: currentColor;
+}
+
+/* Play Button */
+.timeline-play {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--rose-400) 0%, var(--rose-500) 100%);
+  color: white;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 8px rgba(244, 63, 94, 0.3);
+}
+
+.timeline-play:hover {
+  transform: scale(1.1);
+  box-shadow: 0 4px 12px rgba(244, 63, 94, 0.4);
+}
+
+.timeline-play:active {
+  transform: scale(0.95);
+}
+
+.play-icon {
   width: 14px;
   height: 14px;
-  fill: currentColor;
+  margin-left: 2px;
+}
+
+/* ==========================================================================
+   Divider
+   ========================================================================== */
+
+.timeline-divider {
+  width: 1px;
+  height: 32px;
+  background: linear-gradient(180deg, transparent 0%, var(--gray-200) 50%, transparent 100%);
+  margin: 0 0.75rem;
+  flex-shrink: 0;
 }
 
 /* ==========================================================================
@@ -286,35 +332,46 @@ const progressPercent = Math.min(
 
 .timeline-clips {
   display: flex;
-  gap: 0.5rem;
+  gap: 0.625rem;
   flex: 1;
   overflow-x: auto;
-  padding: 4px 0;
+  padding: 6px 4px;
   align-items: center;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.timeline-clips::-webkit-scrollbar {
+  display: none;
 }
 
 .timeline-clip {
   position: relative;
-  width: 64px;
-  height: 48px;
-  border-radius: 4px;
+  width: 72px;
+  height: 54px;
+  border-radius: 8px;
   overflow: hidden;
   flex-shrink: 0;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-  transition: transform 0.2s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  transition: all 0.2s ease;
+  border: 2px solid transparent;
+  background: var(--gray-100);
 }
 
 .mini-timeline.is-expanded .timeline-clip {
-  height: 56px;
-  width: 74px;
-}
-
-.timeline-clip.drag-over {
-  box-shadow: 0 0 0 2px var(--rose-300);
+  width: 88px;
+  height: 66px;
 }
 
 .timeline-clip:hover {
-  transform: scale(1.05);
+  transform: translateY(-2px) scale(1.02);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+  border-color: var(--rose-200);
+}
+
+.timeline-clip.drag-over {
+  border-color: var(--rose-400);
+  box-shadow: 0 0 0 3px rgba(244, 63, 94, 0.2);
 }
 
 .clip-media {
@@ -340,10 +397,8 @@ const progressPercent = Math.min(
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.65rem;
-  font-weight: 600;
-  color: var(--gray-400);
-  background: var(--gray-50);
+  font-size: 1.25rem;
+  background: linear-gradient(135deg, var(--gray-100) 0%, var(--gray-50) 100%);
 }
 
 .clip-img {
@@ -372,28 +427,30 @@ const progressPercent = Math.min(
   opacity: 0;
 }
 
+/* Clip Duration Badge */
 .clip-duration {
   position: absolute;
-  bottom: 2px;
-  right: 2px;
-  font-size: 0.625rem;
-  font-weight: 500;
-  background: rgba(0, 0, 0, 0.7);
+  bottom: 3px;
+  right: 3px;
+  font-size: 9px;
+  font-weight: 600;
+  background: rgba(0, 0, 0, 0.75);
   color: white;
   padding: 1px 4px;
   border-radius: 2px;
   z-index: 2;
 }
 
+/* Remove Button */
 .clip-remove {
   position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 16px;
-  height: 16px;
+  top: 3px;
+  left: 3px;
+  width: 18px;
+  height: 18px;
   border: none;
   border-radius: 50%;
-  background: rgba(0, 0, 0, 0.55);
+  background: rgba(0, 0, 0, 0.6);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -408,7 +465,8 @@ const progressPercent = Math.min(
 }
 
 .clip-remove:hover {
-  background: rgba(220, 38, 38, 0.85);
+  background: var(--rose-500);
+  transform: scale(1.1);
 }
 
 .remove-icon {
@@ -417,53 +475,28 @@ const progressPercent = Math.min(
   color: white;
 }
 
-.timeline-empty {
-  font-size: 10px;
-  color: var(--gray-300);
-}
-
 /* ==========================================================================
-   Progress Bar
+   Empty State
    ========================================================================== */
 
-.timeline-progress {
-  width: 80px;
-  height: 4px;
-  background: var(--gray-200);
-  border-radius: 2px;
-  overflow: hidden;
-}
-
-.progress-bar {
-  height: 100%;
-  background: linear-gradient(90deg, var(--rose-400), var(--rose-500));
-  border-radius: 2px;
-  transition: width 0.3s ease;
-}
-
-.timeline-play {
+.timeline-empty {
   display: flex;
   align-items: center;
-  gap: 0.375rem;
-  padding: 0.5rem 0.75rem;
-  font-size: 0.75rem;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  background: linear-gradient(135deg, var(--gray-50) 0%, #f8f8f8 100%);
+  border-radius: 12px;
+  border: 1px dashed var(--gray-200);
+}
+
+.empty-icon {
+  font-size: 1.25rem;
+}
+
+.empty-text {
+  font-size: 11px;
   font-weight: 500;
-  color: var(--gray-700);
-  background: var(--gray-50);
-  border: 1px solid var(--gray-200);
-  border-radius: 6px;
-  cursor: pointer;
-  transition: all 0.2s ease;
+  color: var(--gray-400);
   white-space: nowrap;
-}
-
-.timeline-play:hover {
-  background: var(--gray-100);
-  color: var(--gray-900);
-}
-
-.link-icon {
-  width: 14px;
-  height: 14px;
 }
 </style>
