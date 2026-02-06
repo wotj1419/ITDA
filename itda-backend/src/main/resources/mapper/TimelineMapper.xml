@@ -111,19 +111,25 @@
 
     <select id="countSceneTimelineItems" resultType="int">
         SELECT COUNT(*)
-        FROM timeline_items
-        WHERE scene_id = #{sceneId}
-          AND video_node_id IS NOT NULL
+        FROM timeline_items ti
+        JOIN nodes n ON n.id = ti.video_node_id
+        WHERE ti.scene_id = #{sceneId}
+          AND ti.video_node_id IS NOT NULL
+          AND n.node_type = 'VIDEO'
+          AND n.is_confirmed = 1
     </select>
 
     <select id="countSceneTimelineItemsByVideoNodeIds" resultType="int">
         SELECT COUNT(*)
-        FROM timeline_items
-        WHERE scene_id = #{sceneId}
-          AND video_node_id IN
+        FROM timeline_items ti
+        JOIN nodes n ON n.id = ti.video_node_id
+        WHERE ti.scene_id = #{sceneId}
+          AND ti.video_node_id IN
         <foreach collection="videoNodeIds" item="id" open="(" separator="," close=")">
             #{id}
         </foreach>
+          AND n.node_type = 'VIDEO'
+          AND n.is_confirmed = 1
     </select>
 
     <update id="reorderSceneTimelineItems">

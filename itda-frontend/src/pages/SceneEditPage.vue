@@ -14,6 +14,8 @@ import { useUIStore } from '../stores/ui';
 import { useCollabStore } from '../stores/collab';
 import { TIMELINE_PLAYBACK_MODAL_ID } from '../constants/ui';
 import type { ProjectDetail } from '../types/api/projects';
+import { fetchSceneExport } from '../services/api/timeline';
+import { triggerDownload } from '../utils/download';
 
 import EditorLayout from '../layouts/EditorLayout.vue';
 import EditorHeader from '../components/editor/EditorHeader.vue';
@@ -79,6 +81,14 @@ const sceneTitle = computed(() => {
 // Keep mini timeline in sync with /projects/:id/scenes/:sceneId/timeline data source.
 const timelineClips = computed(() => timelineStore.orderedClips);
 const totalDuration = computed(() => timelineStore.totalDuration);
+const pendingSceneExport = ref(false);
+const exportHandling = ref(false);
+const isSceneExporting = computed(
+  () => pendingSceneExport.value || timelineStore.mergeStatus === 'merging'
+);
+const exportDisabled = computed(
+  () => !timelineClips.value.length || isSceneExporting.value
+);
 
 /**
  * 레이아웃 정렬 버튼의 동적 bottom 위치
@@ -198,6 +208,55 @@ watch([projectId, sceneId], async ([, newSceneId]) => {
   }
 });
 
+watch(
+  () => timelineStore.mergeStatus,
+  async (status) => {
+    if (!pendingSceneExport.value || exportHandling.value) return;
+    if (status !== 'done' && status !== 'error') return;
+
+    exportHandling.value = true;
+    try {
+      if (status === 'done') {
+        const sceneIdValue = Number(sceneId.value);
+        let url = timelineStore.downloadUrl;
+
+        if (!url && Number.isFinite(sceneIdValue)) {
+          try {
+            url = await fetchSceneExport(sceneIdValue);
+          } catch (error) {
+            console.error('Failed to fetch scene export url', error);
+          }
+        }
+
+        if (url) {
+          triggerDownload(url);
+          uiStore.showToast({
+            type: 'success',
+            title: '씬 내보내기',
+            message: '다운로드를 시작했습니다.',
+          });
+        } else {
+          uiStore.showToast({
+            type: 'error',
+            title: '씬 내보내기 실패',
+            message: '다운로드 링크를 가져오지 못했습니다.',
+          });
+        }
+        return;
+      }
+
+      uiStore.showToast({
+        type: 'error',
+        title: '씬 내보내기 실패',
+        message: '병합 중 오류가 발생했습니다.',
+      });
+    } finally {
+      pendingSceneExport.value = false;
+      exportHandling.value = false;
+    }
+  }
+);
+
 // =============================================================================
 // Event Handlers
 // =============================================================================
@@ -245,6 +304,7 @@ function handleDeleteCancel(): void {
 async function handleTimelineReorder(clipIds: string[]): Promise<void> {
   const success = await timelineStore.reorderClips(clipIds);
   if (!success) return;
+  timelineStore.resetMerge();
 
   clipIds.forEach((clipId, index) => {
     const clip = timelineStore.clips.find((item) => item.clipId === clipId);
@@ -260,11 +320,47 @@ async function handleTimelineRemove(clipId: string): Promise<void> {
   const target = timelineStore.clips.find((clip) => clip.clipId === clipId);
   const success = await timelineStore.removeClip(clipId);
   if (!success) return;
+  timelineStore.resetMerge();
 
   if (target && typeof target.nodeId === 'number') {
     nodeStore.updateNodeLocal(String(target.nodeId), {
       isConfirmed: false,
       timelineOrder: undefined,
+    });
+  }
+}
+
+async function handleSceneExport(): Promise<void> {
+  if (!timelineClips.value.length) {
+    uiStore.showToast({
+      type: 'error',
+      title: '씬 내보내기',
+      message: '내보낼 클립이 없습니다.',
+    });
+    return;
+  }
+
+  if (isSceneExporting.value) return;
+
+  const clipIds = timelineClips.value.map((clip) => clip.clipId);
+  const reorderSuccess = await timelineStore.reorderClips(clipIds);
+  if (!reorderSuccess) {
+    uiStore.showToast({
+      type: 'error',
+      title: '씬 내보내기 실패',
+      message: '타임라인 순서를 저장하지 못했습니다. 다시 시도해 주세요.',
+    });
+    return;
+  }
+
+  pendingSceneExport.value = true;
+  const started = await timelineStore.startMerge();
+  if (!started) {
+    pendingSceneExport.value = false;
+    uiStore.showToast({
+      type: 'error',
+      title: '씬 내보내기 실패',
+      message: '병합 요청에 실패했습니다.',
     });
   }
 }
@@ -316,6 +412,9 @@ const { handleBeforeUnload, handleEditorKeydown } = useSceneEditorEvents({
         :scene-title="sceneTitle"
         :project-id="projectId"
         :scene-id="Number(sceneId)"
+        :export-disabled="exportDisabled"
+        :export-loading="isSceneExporting"
+        @export="handleSceneExport"
       />
     </template>
 

@@ -196,7 +196,7 @@ public class ProjectController {
                         @AuthenticationPrincipal CustomUserDetails userDetails,
                         @Parameter(description = "프로젝트 ID") @PathVariable Long projectId) {
                 MediaFile mediaFile = mediaFileService.loadProjectExport(userDetails.getUserId(), projectId);
-                ContentDisposition contentDisposition = ContentDisposition.inline()
+                ContentDisposition contentDisposition = ContentDisposition.attachment()
                                 .filename(mediaFile.filename())
                                 .build();
                 return ResponseEntity.ok()

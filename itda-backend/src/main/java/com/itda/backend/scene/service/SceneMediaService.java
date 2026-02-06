@@ -35,7 +35,11 @@ public class SceneMediaService {
                         "No active scene merge result"));
 
         String fallbackUrl = mediaUrlResolver.sceneExportUrl(sceneId);
-        String downloadUrl = assetUrlResolver.resolveUrl(activeSceneVideo.getAssetId(), fallbackUrl);
+        String downloadUrl = assetUrlResolver.resolveDownloadUrl(
+                activeSceneVideo.getAssetId(),
+                fallbackUrl,
+                "scene-" + sceneId + ".mp4"
+        );
 
         return new SceneExportResponse(
                 activeSceneVideo.getAssetId(),

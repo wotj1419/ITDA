@@ -101,7 +101,11 @@ public class ProjectMediaService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.EXPORT_NOT_FOUND,
                         "No active project merge result"));
         String fallbackUrl = mediaUrlResolver.projectExportUrl(projectId);
-        String downloadUrl = assetUrlResolver.resolveUrl(activeMerge.getAssetId(), fallbackUrl);
+        String downloadUrl = assetUrlResolver.resolveDownloadUrl(
+                activeMerge.getAssetId(),
+                fallbackUrl,
+                "project-" + projectId + ".mp4"
+        );
         return new ProjectExportResponse(
                 activeMerge.getAssetId(),
                 downloadUrl,
