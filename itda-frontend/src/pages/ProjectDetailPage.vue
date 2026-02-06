@@ -109,7 +109,7 @@ function openProjectMergedPreview(): boolean {
 type PreviewFallbackResult = 'opened' | 'empty' | 'error'
 
 async function openTimelineFallbackPreview(): Promise<PreviewFallbackResult> {
-  if (!projectId.value) return false
+  if (!projectId.value) return 'error'
 
   await timelineStore.loadClips(projectId.value, undefined, {
     hydrateDurations: false,
