@@ -309,9 +309,13 @@ async function handleTimelineReorder(clipIds: string[]): Promise<void> {
 
   const task = timelineStore.reorderClips(clipIds);
   pendingReorder.value = task;
-  const success = await task;
-  if (pendingReorder.value === task) {
-    pendingReorder.value = null;
+  let success = false;
+  try {
+    success = await task;
+  } finally {
+    if (pendingReorder.value === task) {
+      pendingReorder.value = null;
+    }
   }
   if (!success) return;
   timelineStore.resetMerge();
