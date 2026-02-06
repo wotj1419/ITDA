@@ -262,26 +262,16 @@ export const useTimelineStore = defineStore('timeline', () => {
     const startedAt = Date.now()
     const maxDurationMs = 120000
 
-    mergePollTimer = setInterval(async () => {
+    mergePollTimer = setInterval(() => {
       if (mergeStatus.value !== 'merging') {
         stopMergePolling()
         return
       }
 
+      // 타임아웃 체크만 수행 - 완료는 WebSocket 이벤트로 처리
       if (Date.now() - startedAt > maxDurationMs) {
         markMergeError()
         return
-      }
-
-      try {
-        const url = await fetchExportUrl()
-        if (url) {
-          downloadUrl.value = url
-          await markMergeDone()
-        }
-      } catch (error) {
-        // Ignore intermittent export errors while polling
-        console.warn('Merge polling failed', error)
       }
     }, 3000)
   }
@@ -289,6 +279,12 @@ export const useTimelineStore = defineStore('timeline', () => {
   const handleProjectEvent = async (event: ProjectEventMessage) => {
     const eventType = event.event
     const payload = event.data as ProjectEventPayload
+
+    // 현재 병합 진행 중이 아니면 무시
+    if (mergeStatus.value !== 'merging') return
+
+    // jobId가 현재 병합 작업과 일치하는지 확인
+    const isCurrentMergeJob = mergeJobId.value != null && payload?.jobId === mergeJobId.value
 
     const isProjectMerge = payload?.type === 'PROJECT_MERGE'
     const isSceneMerge = payload?.type === 'SCENE_MERGE'
@@ -298,6 +294,7 @@ export const useTimelineStore = defineStore('timeline', () => {
       const targetType = payload.target?.type
       if (targetType && targetType !== 'PROJECT') return
       if (currentProjectId.value && targetId && targetId !== currentProjectId.value) return
+      if (!isCurrentMergeJob && payload?.jobId) return  // jobId가 다르면 무시
 
       if (eventType === 'job.failed' || payload.status === 'FAILED') {
         markMergeError()
@@ -314,6 +311,7 @@ export const useTimelineStore = defineStore('timeline', () => {
       const targetType = payload.target?.type
       if (targetType && targetType !== 'SCENE') return
       if (currentSceneId.value && targetId && targetId !== currentSceneId.value) return
+      if (!isCurrentMergeJob && payload?.jobId) return  // jobId가 다르면 무시
 
       if (eventType === 'job.failed' || payload.status === 'FAILED') {
         markMergeError()
@@ -325,12 +323,8 @@ export const useTimelineStore = defineStore('timeline', () => {
       return
     }
 
-    const isMergeEvent =
-      payload?.type === 'PROJECT_MERGE' ||
-      payload?.type === 'SCENE_MERGE' ||
-      (mergeJobId.value != null && payload?.jobId === mergeJobId.value)
-
-    if (isMergeEvent) {
+    // jobId로 현재 병합 작업 확인
+    if (isCurrentMergeJob) {
       if (eventType === 'job.failed' || payload.status === 'FAILED') {
         markMergeError()
         return
@@ -470,15 +464,18 @@ export const useTimelineStore = defineStore('timeline', () => {
         mergeStatus.value = 'done'
         mergeProgress.value = 100
         mergeStatusText.value = '병합 완료 (캐시됨)'
+        stopMergePolling()
         downloadUrl.value = await fetchExportUrl()
+        return true
       } else if (result.status === 'FAILED') {
         mergeStatus.value = 'error'
         mergeStatusText.value = '병합 실패'
+        stopMergePolling()
+        return false
       } else {
         mergeStatusText.value = '병합 진행 중'
+        return true
       }
-
-      return true
     } catch (e) {
       markMergeError()
       console.error(e)

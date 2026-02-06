@@ -77,7 +77,27 @@ watch([projectId, sceneId], async ([nextProjectId, nextSceneId]) => {
   collabStore.updateLocation('TIMELINE', nextSceneId ?? undefined)
 
   await timelineStore.loadClips(nextProjectId, nextSceneId ?? undefined)
+  await timelineStore.loadClips(nextProjectId, nextSceneId ?? undefined)
 })
+
+watch(
+  () => timelineStore.mergeStatus,
+  (status) => {
+    if (status === 'done') {
+      uiStore.showToast({
+        type: 'success',
+        title: '병합 완료',
+        message: '영상이 준비되었습니다.',
+      })
+    } else if (status === 'error') {
+      uiStore.showToast({
+        type: 'error',
+        title: '병합 실패',
+        message: '영상 병합에 실패했습니다. 다시 시도해주세요.',
+      })
+    }
+  }
+)
 
 async function handleReorder(clipIds: string[]) {
   const success = await timelineStore.reorderClips(clipIds)
@@ -102,14 +122,7 @@ async function handleRemove(clipId: string) {
 }
 
 async function handleMerge() {
-  const success = await timelineStore.startMerge()
-  if (success) {
-    uiStore.showToast({
-      type: 'success',
-      title: '병합 완료',
-      message: '영상이 준비되었습니다.',
-    })
-  }
+  await timelineStore.startMerge()
 }
 
 function handleDownload() {

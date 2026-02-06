@@ -20,7 +20,6 @@ import {
   Clapperboard,
   User,
   Layers,
-  Settings,
   Play,
   ArrowLeft,
   Pencil,
@@ -29,7 +28,7 @@ import {
 
 interface Props {
   project: ProjectDetail | null
-  activeTab: 'story' | 'scenes' | 'objects' | 'timeline' | 'settings'
+  activeTab: 'story' | 'scenes' | 'objects' | 'timeline'
   sceneCount?: number
   progress?: { completed: number; total: number }
   hideScenes?: boolean
@@ -73,7 +72,6 @@ const navItems = computed<NavItem[]>(() => {
     { key: 'scenes', icon: Clapperboard, label: '씬', badge: props.sceneCount, to: null },
     { key: 'objects', icon: User, label: '오브젝트', to: null },
     { key: 'timeline', icon: Layers, label: '전체 타임라인', to: { name: 'timeline', params: { id: projectId.value } } },
-    { key: 'settings', icon: Settings, label: '설정', to: null },
   ]
   return props.hideScenes ? items.filter((item) => item.key !== 'scenes') : items
 })

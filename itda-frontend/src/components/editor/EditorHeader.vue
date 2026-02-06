@@ -5,7 +5,7 @@
  */
 import { RouterLink } from 'vue-router';
 import Button from '../common/Button.vue';
-import { ArrowLeft, Layers, Upload } from 'lucide-vue-next';
+import { ArrowLeft, Film, Upload } from 'lucide-vue-next';
 
 // =============================================================================
 // Props
@@ -56,7 +56,7 @@ defineProps<Props>();
           : { name: 'timeline', params: { id: projectId } }"
         class="header-action"
       >
-        <Layers class="icon-sm" />
+        <Film class="icon-sm" />
         <span class="header-action-text">씬 타임라인</span>
       </RouterLink>
 

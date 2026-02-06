@@ -31,6 +31,7 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 const timelineLabel = computed(() => props.isSceneTimeline ? '씬 타임라인' : '전체 타임라인')
+const timelineIcon = computed(() => (props.isSceneTimeline ? Film : Layers))
 
 const route = useRoute()
 const router = useRouter()
@@ -78,7 +79,7 @@ function formatDuration(seconds: number): string {
       <div class="sidebar-section border-bottom sidebar-text">
         <h2 class="project-title">{{ projectTitle }}</h2>
         <div class="timeline-badge">
-          <Layers class="badge-icon" />
+          <component :is="timelineIcon" class="badge-icon" />
           <span>{{ timelineLabel }}</span>
         </div>
       </div>
