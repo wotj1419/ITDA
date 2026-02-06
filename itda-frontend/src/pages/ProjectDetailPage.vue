@@ -97,7 +97,9 @@ function openProjectMergedPreview(): boolean {
   return true
 }
 
-async function openTimelineFallbackPreview(): Promise<boolean> {
+type PreviewFallbackResult = 'opened' | 'empty' | 'error'
+
+async function openTimelineFallbackPreview(): Promise<PreviewFallbackResult> {
   if (!projectId.value) return false
 
   await timelineStore.loadClips(projectId.value, undefined, {
@@ -106,14 +108,14 @@ async function openTimelineFallbackPreview(): Promise<boolean> {
 
   if (timelineStore.error) {
     console.error('Failed to load timeline clips for preview fallback:', timelineStore.error)
-    return false
+    return 'error'
   }
 
   const startClip = timelineStore.orderedClips.find((clip) => Boolean(clip.videoUrl))
-  if (!startClip) return false
+  if (!startClip) return 'empty'
 
   uiStore.openModal(TIMELINE_PLAYBACK_MODAL_ID, { startClipId: startClip.clipId })
-  return true
+  return 'opened'
 }
 
 async function handleProjectPreview(): Promise<void> {
@@ -125,20 +127,28 @@ async function handleProjectPreview(): Promise<void> {
       return
     }
 
-    const openedFallback = await openTimelineFallbackPreview()
-    if (!openedFallback) {
+    const fallbackResult = await openTimelineFallbackPreview()
+    if (fallbackResult === 'error') {
       uiStore.showToast({
         type: 'error',
-        title: 'Preview unavailable',
-        message: 'No playable videos are available.',
+        title: '미리보기 실패',
+        message: '미리보기 데이터를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.',
+      })
+      return
+    }
+    if (fallbackResult === 'empty') {
+      uiStore.showToast({
+        type: 'error',
+        title: '미리보기 불가',
+        message: '재생 가능한 영상이 없습니다.',
       })
     }
   } catch (error) {
     console.error('Failed to open project preview modal:', error)
     uiStore.showToast({
       type: 'error',
-      title: 'Preview unavailable',
-      message: 'Could not open preview. Please try again shortly.',
+      title: '미리보기 실패',
+      message: '미리보기를 열지 못했습니다. 잠시 후 다시 시도해 주세요.',
     })
   } finally {
     isProjectPreviewLoading.value = false
