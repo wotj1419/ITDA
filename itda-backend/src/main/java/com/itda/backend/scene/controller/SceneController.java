@@ -169,7 +169,7 @@ public class SceneController {
                         @Parameter(description = "Scene ID") @PathVariable Long sceneId) {
                 Long userId = userId(userDetails);
                 MediaFile mediaFile = mediaFileService.loadSceneExport(userId, sceneId);
-                ContentDisposition contentDisposition = ContentDisposition.inline()
+                ContentDisposition contentDisposition = ContentDisposition.attachment()
                                 .filename(mediaFile.filename())
                                 .build();
                 return ResponseEntity.ok()

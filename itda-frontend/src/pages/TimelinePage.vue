@@ -14,6 +14,7 @@ import TimeRuler from '../components/timeline/TimeRuler.vue'
 import MergeProgress from '../components/timeline/MergeProgress.vue'
 import Button from '../components/common/Button.vue'
 import { GitMerge, RefreshCw } from 'lucide-vue-next'
+import { triggerDownload } from '../utils/download'
 
 const route = useRoute()
 const projectStore = useProjectStore()
@@ -102,6 +103,7 @@ watch(
 async function handleReorder(clipIds: string[]) {
   const success = await timelineStore.reorderClips(clipIds)
   if (success) {
+    timelineStore.resetMerge()
     uiStore.showToast({
       type: 'success',
       title: '순서 변경',
@@ -113,6 +115,7 @@ async function handleReorder(clipIds: string[]) {
 async function handleRemove(clipId: string) {
   const success = await timelineStore.removeClip(clipId)
   if (success) {
+    timelineStore.resetMerge()
     uiStore.showToast({
       type: 'success',
       title: '삭제',
@@ -127,7 +130,7 @@ async function handleMerge() {
 
 function handleDownload() {
   if (timelineStore.downloadUrl) {
-    window.open(timelineStore.downloadUrl, '_blank')
+    triggerDownload(timelineStore.downloadUrl)
   }
 }
 

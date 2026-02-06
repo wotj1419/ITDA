@@ -46,6 +46,11 @@ public class AssetUrlResolver {
         return presignedUrl != null ? presignedUrl : fallbackUrl;
     }
 
+    public String resolveDownloadUrl(Long assetId, String fallbackUrl, String filename) {
+        String presignedUrl = resolveS3PresignedDownloadUrl(assetId, filename);
+        return presignedUrl != null ? presignedUrl : fallbackUrl;
+    }
+
     public String resolvePublicUrl(Long assetId, String fallbackUrl) {
         String presignedUrl = resolveS3PresignedUrl(assetId);
         if (presignedUrl != null) {
@@ -108,6 +113,47 @@ public class AssetUrlResolver {
         return url;
     }
 
+    private String resolveS3PresignedDownloadUrl(Long assetId, String filename) {
+        if (assetId == null) {
+            return null;
+        }
+
+        Asset asset = assetMapper.findById(assetId).orElse(null);
+        if (asset == null || asset.getStorageProvider() != StorageProvider.S3) {
+            return null;
+        }
+
+        String storageKey = asset.getStorageKey();
+        if (storageKey == null || storageKey.isBlank()) {
+            return null;
+        }
+
+        S3Presigner presigner = s3PresignerProvider.getIfAvailable();
+        if (presigner == null) {
+            return null;
+        }
+
+        String bucket = s3Properties.getBucket();
+        if (bucket == null || bucket.isBlank()) {
+            return null;
+        }
+
+        GetObjectRequest getRequest = GetObjectRequest.builder()
+                .bucket(bucket.trim())
+                .key(storageKey)
+                .responseCacheControl(resolveResponseCacheControl(asset.getContentType()))
+                .responseContentDisposition(buildAttachmentContentDisposition(filename, storageKey))
+                .build();
+
+        long expires = Math.max(60, s3Properties.getPresignExpireSeconds());
+        GetObjectPresignRequest presignRequest = GetObjectPresignRequest.builder()
+                .signatureDuration(Duration.ofSeconds(expires))
+                .getObjectRequest(getRequest)
+                .build();
+
+        return presigner.presignGetObject(presignRequest).url().toString();
+    }
+
     private void cachePresignedUrl(Long assetId, String url, long nowMillis, long expiresSeconds) {
         if (assetId == null || url == null || url.isBlank()) {
             return;
@@ -135,6 +181,21 @@ public class AssetUrlResolver {
             return CACHE_CONTROL_IMAGE;
         }
         return CACHE_CONTROL_VIDEO;
+    }
+
+    private String buildAttachmentContentDisposition(String filename, String storageKey) {
+        String candidate = filename;
+        if (candidate == null || candidate.isBlank()) {
+            int slash = storageKey.lastIndexOf('/');
+            candidate = slash >= 0 ? storageKey.substring(slash + 1) : storageKey;
+        }
+        String sanitized = candidate == null
+                ? "export.mp4"
+                : candidate.replace("\"", "").replace("\r", "").replace("\n", "").trim();
+        if (sanitized.isEmpty()) {
+            sanitized = "export.mp4";
+        }
+        return "attachment; filename=\"" + sanitized + "\"";
     }
 
     private String resolveLocalUrl(Long assetId) {

@@ -16,9 +16,18 @@ interface Props {
   sceneTitle: string;
   projectId: number;
   sceneId?: number;
+  exportDisabled?: boolean;
+  exportLoading?: boolean;
 }
 
-defineProps<Props>();
+withDefaults(defineProps<Props>(), {
+  exportDisabled: false,
+  exportLoading: false,
+});
+
+const emit = defineEmits<{
+  (e: 'export'): void;
+}>();
 </script>
 
 <template>
@@ -60,7 +69,14 @@ defineProps<Props>();
         <span class="header-action-text">씬 타임라인</span>
       </RouterLink>
 
-      <Button variant="primary" size="sm" class="export-btn">
+      <Button
+        variant="primary"
+        size="sm"
+        class="export-btn"
+        :disabled="exportDisabled"
+        :loading="exportLoading"
+        @click="emit('export')"
+      >
         <Upload class="icon-sm" />
         <span class="export-btn-text">씬 내보내기</span>
       </Button>
