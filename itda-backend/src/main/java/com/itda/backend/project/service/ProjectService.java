@@ -21,7 +21,6 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.ArrayList;
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Objects;
 import java.util.Optional;
 
 @Service
@@ -73,7 +72,7 @@ public class ProjectService {
         Project project = requireProject(projectId);
         String role = requireMemberRole(projectId, userId);
         Integer memberCount = countMembers(projectId);
-        return ProjectDetailResponse.from(project, role, memberCount);
+        return toProjectDetailResponse(project, role, memberCount);
     }
 
     @Transactional
@@ -85,7 +84,7 @@ public class ProjectService {
 
         Project updatedProject = requireProject(projectId);
         Integer memberCount = countMembers(projectId);
-        return ProjectDetailResponse.from(updatedProject, role, memberCount);
+        return toProjectDetailResponse(updatedProject, role, memberCount);
     }
 
     @Transactional
@@ -153,6 +152,18 @@ public class ProjectService {
         );
     }
 
+    private ProjectDetailResponse toProjectDetailResponse(Project project, String role, Integer memberCount) {
+        PreviewPayload preview = resolvePreview(project.getId());
+        return ProjectDetailResponse.from(
+                project,
+                role,
+                memberCount,
+                preview.type(),
+                preview.thumbnailUrl(),
+                preview.videoUrl()
+        );
+    }
+
     private PreviewPayload resolvePreview(Long projectId) {
         List<ResolvedPreviewCandidate> candidates = new ArrayList<>();
         resolvePreviewCandidate(projectMapper.findProjectMergePreview(projectId), PREVIEW_TYPE_PROJECT_MERGE)
@@ -171,8 +182,7 @@ public class ProjectService {
                 .findFirst()
                 .orElse(candidates.get(0));
 
-        String thumbnailUrl = firstNonBlank(primary.thumbnailUrl(), candidates);
-        return new PreviewPayload(primary.type(), thumbnailUrl, primary.videoUrl());
+        return new PreviewPayload(primary.type(), primary.thumbnailUrl(), primary.videoUrl());
     }
 
     private Optional<ResolvedPreviewCandidate> resolvePreviewCandidate(
@@ -197,19 +207,6 @@ public class ProjectService {
             return Optional.empty();
         }
         return Optional.of(new ResolvedPreviewCandidate(type, thumbnailUrl, videoUrl));
-    }
-
-    private String firstNonBlank(String primaryThumbnail, List<ResolvedPreviewCandidate> candidates) {
-        if (!isBlank(primaryThumbnail)) {
-            return primaryThumbnail;
-        }
-        return candidates.stream()
-                .map(ResolvedPreviewCandidate::thumbnailUrl)
-                .filter(Objects::nonNull)
-                .map(String::trim)
-                .filter(value -> !value.isEmpty())
-                .findFirst()
-                .orElse(null);
     }
 
     private boolean isBlank(String value) {
