@@ -83,11 +83,12 @@ const timelineClips = computed(() => timelineStore.orderedClips);
 const totalDuration = computed(() => timelineStore.totalDuration);
 const pendingSceneExport = ref(false);
 const exportHandling = ref(false);
+const pendingReorder = ref<Promise<boolean> | null>(null);
 const isSceneExporting = computed(
   () => pendingSceneExport.value || timelineStore.mergeStatus === 'merging'
 );
 const exportDisabled = computed(
-  () => !timelineClips.value.length || isSceneExporting.value
+  () => !timelineClips.value.length || isSceneExporting.value || pendingReorder.value !== null
 );
 
 /**
@@ -302,7 +303,16 @@ function handleDeleteCancel(): void {
 }
 
 async function handleTimelineReorder(clipIds: string[]): Promise<void> {
-  const success = await timelineStore.reorderClips(clipIds);
+  if (pendingReorder.value) {
+    await pendingReorder.value;
+  }
+
+  const task = timelineStore.reorderClips(clipIds);
+  pendingReorder.value = task;
+  const success = await task;
+  if (pendingReorder.value === task) {
+    pendingReorder.value = null;
+  }
   if (!success) return;
   timelineStore.resetMerge();
 
@@ -342,15 +352,16 @@ async function handleSceneExport(): Promise<void> {
 
   if (isSceneExporting.value) return;
 
-  const clipIds = timelineClips.value.map((clip) => clip.clipId);
-  const reorderSuccess = await timelineStore.reorderClips(clipIds);
-  if (!reorderSuccess) {
-    uiStore.showToast({
-      type: 'error',
-      title: '씬 내보내기 실패',
-      message: '타임라인 순서를 저장하지 못했습니다. 다시 시도해 주세요.',
-    });
-    return;
+  if (pendingReorder.value) {
+    const reorderSuccess = await pendingReorder.value;
+    if (!reorderSuccess) {
+      uiStore.showToast({
+        type: 'error',
+        title: '씬 내보내기 실패',
+        message: '타임라인 순서를 저장하지 못했습니다. 다시 시도해 주세요.',
+      });
+      return;
+    }
   }
 
   pendingSceneExport.value = true;
