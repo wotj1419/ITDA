@@ -59,7 +59,9 @@ const collabStore = useCollabStore()
 const timelineStore = useTimelineStore()
 const uiStore = useUIStore()
 const isProjectPreviewLoading = ref(false)
+const isPreviewTimelineActive = ref(false)
 const projectPreviewClips = computed(() => timelineStore.orderedClips)
+const isTimelinePreviewOpen = computed(() => uiStore.activeModal === TIMELINE_PLAYBACK_MODAL_ID)
 // Hide Scenes tab UI (page disabled for now).
 const isScenesTabHidden = true
 const visibleTabs = computed(() =>
@@ -81,6 +83,13 @@ watch(projectId, (newId) => {
         collabStore.joinRoom(Number(newId))
         collabStore.updateLocation('SCENE_LIST')
     }
+})
+
+watch(isTimelinePreviewOpen, (open) => {
+  if (!open && isPreviewTimelineActive.value) {
+    timelineStore.clearTimeline()
+    isPreviewTimelineActive.value = false
+  }
 })
 
 onUnmounted(() => {
@@ -108,13 +117,18 @@ async function openTimelineFallbackPreview(): Promise<PreviewFallbackResult> {
 
   if (timelineStore.error) {
     console.error('Failed to load timeline clips for preview fallback:', timelineStore.error)
+    isPreviewTimelineActive.value = false
     return 'error'
   }
 
   const startClip = timelineStore.orderedClips.find((clip) => Boolean(clip.videoUrl))
-  if (!startClip) return 'empty'
+  if (!startClip) {
+    isPreviewTimelineActive.value = false
+    return 'empty'
+  }
 
   uiStore.openModal(TIMELINE_PLAYBACK_MODAL_ID, { startClipId: startClip.clipId })
+  isPreviewTimelineActive.value = true
   return 'opened'
 }
 

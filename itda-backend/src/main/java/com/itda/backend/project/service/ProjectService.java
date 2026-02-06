@@ -21,7 +21,6 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.ArrayList;
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Objects;
 import java.util.Optional;
 
 @Service
@@ -183,8 +182,7 @@ public class ProjectService {
                 .findFirst()
                 .orElse(candidates.get(0));
 
-        String thumbnailUrl = firstNonBlank(primary.thumbnailUrl(), candidates);
-        return new PreviewPayload(primary.type(), thumbnailUrl, primary.videoUrl());
+        return new PreviewPayload(primary.type(), primary.thumbnailUrl(), primary.videoUrl());
     }
 
     private Optional<ResolvedPreviewCandidate> resolvePreviewCandidate(
@@ -209,19 +207,6 @@ public class ProjectService {
             return Optional.empty();
         }
         return Optional.of(new ResolvedPreviewCandidate(type, thumbnailUrl, videoUrl));
-    }
-
-    private String firstNonBlank(String primaryThumbnail, List<ResolvedPreviewCandidate> candidates) {
-        if (!isBlank(primaryThumbnail)) {
-            return primaryThumbnail;
-        }
-        return candidates.stream()
-                .map(ResolvedPreviewCandidate::thumbnailUrl)
-                .filter(Objects::nonNull)
-                .map(String::trim)
-                .filter(value -> !value.isEmpty())
-                .findFirst()
-                .orElse(null);
     }
 
     private boolean isBlank(String value) {
