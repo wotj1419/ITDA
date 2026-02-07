@@ -17,6 +17,9 @@ import {
   Play,
   Zap,
   Star,
+  LayoutGrid,
+  Camera,
+  Video,
 } from 'lucide-vue-next'
 
 gsap.registerPlugin(ScrollTrigger)
@@ -105,7 +108,8 @@ const scrollTo = (id: string) => {
   closeMobileMenu()
   const el = document.getElementById(id)
   if (el) {
-    el.scrollIntoView({ behavior: 'smooth' })
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    el.scrollIntoView({ behavior: reducedMotion ? 'auto' : 'smooth' })
   }
 }
 
@@ -323,6 +327,7 @@ onUnmounted(() => {
         <div class="nav-links">
           <a href="#features" class="nav-anchor" @click.prevent="scrollTo('features')">기능</a>
           <a href="#workflow" class="nav-anchor" @click.prevent="scrollTo('workflow')">워크플로우</a>
+          <a href="#node-edge" class="nav-anchor" @click.prevent="scrollTo('node-edge')">노드&엣지</a>
           <RouterLink to="/auth" class="nav-anchor">로그인</RouterLink>
           <RouterLink to="/auth" class="btn-nav-cta">
             <Zap :size="14" />
@@ -340,6 +345,7 @@ onUnmounted(() => {
         <div v-if="mobileMenuOpen" class="mobile-menu">
           <a href="#features" class="mobile-link" @click.prevent="scrollTo('features')">기능</a>
           <a href="#workflow" class="mobile-link" @click.prevent="scrollTo('workflow')">워크플로우</a>
+          <a href="#node-edge" class="mobile-link" @click.prevent="scrollTo('node-edge')">노드&엣지</a>
           <RouterLink to="/auth" class="mobile-link" @click="closeMobileMenu">로그인</RouterLink>
           <RouterLink to="/auth" class="btn-nav-cta mobile-cta" @click="closeMobileMenu">
             <Zap :size="14" />
@@ -513,6 +519,229 @@ onUnmounted(() => {
       </div>
     </section>
 
+    <!-- ─── Node & Edge Section ─── -->
+    <section class="node-edge-section" id="node-edge">
+      <div class="section-container">
+        <div class="section-header">
+          <span class="section-label">
+            <GitBranch :size="14" />
+            Node & Edge
+          </span>
+          <h2 class="section-title">연결 흐름이 보이는 노드 캔버스</h2>
+          <p class="section-sub">기획부터 완성까지, 장면 생성의 연결 구조를 한눈에 확인합니다</p>
+        </div>
+
+        <div class="node-edge-board">
+          <div class="node-edge-grid"></div>
+          <svg class="node-edge-lines" viewBox="0 0 1200 760" preserveAspectRatio="none" aria-hidden="true">
+            <defs>
+              <linearGradient
+                id="nodeEdgeFlowGradientTop"
+                gradientUnits="userSpaceOnUse"
+                x1="479"
+                y1="191"
+                x2="721"
+                y2="191"
+              >
+                <stop offset="0%" stop-color="rgb(255, 77, 141)" stop-opacity="0" />
+                <stop offset="30%" stop-color="rgb(255, 77, 141)" stop-opacity="1" />
+                <stop offset="60%" stop-color="rgb(255, 77, 141)" stop-opacity="0" />
+                <stop offset="100%" stop-color="rgb(255, 77, 141)" stop-opacity="0" />
+                <animateTransform
+                  attributeName="gradientTransform"
+                  type="translate"
+                  from="-145 0"
+                  to="242 0"
+                  dur="3s"
+                  repeatCount="indefinite"
+                  calcMode="spline"
+                  keyTimes="0;1"
+                  keySplines="0.42 0 0.58 1"
+                />
+              </linearGradient>
+
+              <linearGradient
+                id="nodeEdgeFlowGradientDown"
+                gradientUnits="userSpaceOnUse"
+                x1="840"
+                y1="271"
+                x2="840"
+                y2="421"
+              >
+                <stop offset="0%" stop-color="rgb(255, 77, 141)" stop-opacity="0" />
+                <stop offset="30%" stop-color="rgb(255, 77, 141)" stop-opacity="1" />
+                <stop offset="60%" stop-color="rgb(255, 77, 141)" stop-opacity="0" />
+                <stop offset="100%" stop-color="rgb(255, 77, 141)" stop-opacity="0" />
+                <animateTransform
+                  attributeName="gradientTransform"
+                  type="translate"
+                  from="0 -90"
+                  to="0 150"
+                  dur="3s"
+                  repeatCount="indefinite"
+                  calcMode="spline"
+                  keyTimes="0;1"
+                  keySplines="0.42 0 0.58 1"
+                />
+              </linearGradient>
+
+              <linearGradient
+                id="nodeEdgeFlowGradientBottom"
+                gradientUnits="userSpaceOnUse"
+                x1="721"
+                y1="511"
+                x2="479"
+                y2="511"
+              >
+                <stop offset="0%" stop-color="rgb(255, 77, 141)" stop-opacity="0" />
+                <stop offset="30%" stop-color="rgb(255, 77, 141)" stop-opacity="1" />
+                <stop offset="60%" stop-color="rgb(255, 77, 141)" stop-opacity="0" />
+                <stop offset="100%" stop-color="rgb(255, 77, 141)" stop-opacity="0" />
+                <animateTransform
+                  attributeName="gradientTransform"
+                  type="translate"
+                  from="145 0"
+                  to="-242 0"
+                  dur="3s"
+                  repeatCount="indefinite"
+                  calcMode="spline"
+                  keyTimes="0;1"
+                  keySplines="0.42 0 0.58 1"
+                />
+              </linearGradient>
+            </defs>
+
+            <g class="edge-flow">
+              <path class="edge-flow__track" d="M479 191 L721 191"></path>
+              <path class="edge-flow__highlight" d="M479 191 L721 191" stroke="url(#nodeEdgeFlowGradientTop)">
+                <animate
+                  attributeName="opacity"
+                  values="0;1;0"
+                  keyTimes="0;0.3;1"
+                  dur="3s"
+                  repeatCount="indefinite"
+                  calcMode="spline"
+                  keySplines="0.42 0 0.58 1;0.42 0 0.58 1"
+                />
+              </path>
+            </g>
+
+            <g class="edge-flow">
+              <path class="edge-flow__track" d="M840 271 L840 421"></path>
+              <path class="edge-flow__highlight" d="M840 271 L840 421" stroke="url(#nodeEdgeFlowGradientDown)">
+                <animate
+                  attributeName="opacity"
+                  values="0;1;0"
+                  keyTimes="0;0.3;1"
+                  dur="3s"
+                  repeatCount="indefinite"
+                  calcMode="spline"
+                  keySplines="0.42 0 0.58 1;0.42 0 0.58 1"
+                />
+              </path>
+            </g>
+
+            <g class="edge-flow">
+              <path class="edge-flow__track" d="M721 511 L479 511"></path>
+              <path class="edge-flow__highlight" d="M721 511 L479 511" stroke="url(#nodeEdgeFlowGradientBottom)">
+                <animate
+                  attributeName="opacity"
+                  values="0;1;0"
+                  keyTimes="0;0.3;1"
+                  dur="3s"
+                  repeatCount="indefinite"
+                  calcMode="spline"
+                  keySplines="0.42 0 0.58 1;0.42 0 0.58 1"
+                />
+              </path>
+            </g>
+          </svg>
+
+          <article class="node-card node-card--master">
+            <span class="node-port node-port--source-right"></span>
+            <div class="node-card-header">
+              <div class="node-card-header-left">
+                <Palette :size="16" class="node-card-icon" />
+                <div class="node-card-title-group">
+                  <span class="node-card-title">마스터 이미지 v1</span>
+                  <span class="node-card-subtitle">기준 비주얼</span>
+                </div>
+              </div>
+              <span class="node-card-status node-card-status--running"></span>
+            </div>
+            <div class="node-card-body">
+              <div class="node-card-thumbnail">
+                <span class="node-card-thumbnail-label">프롬프트 승인 후 이미지 생성</span>
+              </div>
+            </div>
+          </article>
+
+          <article class="node-card node-card--grid-a">
+            <span class="node-port node-port--target-left"></span>
+            <span class="node-port node-port--source-bottom"></span>
+            <div class="node-card-header">
+              <div class="node-card-header-left">
+                <LayoutGrid :size="16" class="node-card-icon" />
+                <div class="node-card-title-group">
+                  <span class="node-card-title">그리드 v1</span>
+                  <span class="node-card-subtitle">2x3 레이아웃</span>
+                </div>
+              </div>
+              <span class="node-card-status node-card-status--succeeded"></span>
+            </div>
+            <div class="node-card-body">
+              <div class="node-card-thumbnail">
+                <span class="node-card-thumbnail-label">샷 타입 선택 기반 생성</span>
+              </div>
+            </div>
+          </article>
+
+          <article class="node-card node-card--shot-a">
+            <span class="node-port node-port--target-top"></span>
+            <span class="node-port node-port--source-left"></span>
+            <div class="node-card-header">
+              <div class="node-card-header-left">
+                <Camera :size="16" class="node-card-icon" />
+                <div class="node-card-title-group">
+                  <span class="node-card-title">샷 A v1</span>
+                  <span class="node-card-subtitle">클로즈업</span>
+                </div>
+              </div>
+              <span class="node-card-status node-card-status--succeeded"></span>
+            </div>
+            <div class="node-card-body">
+              <div class="node-card-thumbnail">
+                <span class="node-card-thumbnail-label">그리드 칸 선택 후 고품질 재생성</span>
+              </div>
+            </div>
+          </article>
+
+          <article class="node-card node-card--video-a">
+            <div class="node-card-badge node-card-badge--confirmed">
+              <Star :size="12" />
+            </div>
+            <span class="node-port node-port--target-right"></span>
+            <div class="node-card-header">
+              <div class="node-card-header-left">
+                <Video :size="16" class="node-card-icon" />
+                <div class="node-card-title-group">
+                  <span class="node-card-title">영상 A v1</span>
+                  <span class="node-card-subtitle">샷 A 기준 · 5초</span>
+                </div>
+              </div>
+              <span class="node-card-status node-card-status--confirmed"></span>
+            </div>
+            <div class="node-card-body">
+              <div class="node-card-thumbnail">
+                <Play :size="18" class="node-card-placeholder-icon" />
+                <span class="node-card-thumbnail-label">확정 영상만 타임라인 반영</span>
+              </div>
+            </div>
+          </article>
+        </div>
+      </div>
+    </section>
+
     <!-- ─── CTA Section ─── -->
     <section class="cta-section">
       <div class="cta-aurora"></div>
@@ -557,6 +786,7 @@ onUnmounted(() => {
               <h5 class="footer-col-title">제품</h5>
               <a href="#features" class="footer-link" @click.prevent="scrollTo('features')">기능 소개</a>
               <a href="#workflow" class="footer-link" @click.prevent="scrollTo('workflow')">워크플로우</a>
+              <a href="#node-edge" class="footer-link" @click.prevent="scrollTo('node-edge')">노드 & 엣지</a>
             </div>
             <div class="footer-col">
               <h5 class="footer-col-title">지원</h5>
@@ -726,6 +956,18 @@ onUnmounted(() => {
   text-align: center;
   justify-content: center;
   margin-top: 0.5rem;
+}
+
+.nav-anchor:focus-visible,
+.btn-nav-cta:focus-visible,
+.mobile-menu-btn:focus-visible,
+.mobile-link:focus-visible,
+.btn-hero-primary:focus-visible,
+.btn-hero-secondary:focus-visible,
+.btn-cta-primary:focus-visible,
+.footer-link:focus-visible {
+  outline: 2px solid var(--rose-500);
+  outline-offset: 3px;
 }
 
 .slide-down-enter-active,
@@ -1244,7 +1486,7 @@ onUnmounted(() => {
 
 .section-sub {
   font-size: 1.05rem;
-  color: var(--gray-400);
+  color: var(--gray-500);
   max-width: 500px;
   margin: 0 auto;
   line-height: 1.6;
@@ -1478,10 +1720,325 @@ onUnmounted(() => {
 
 .wf-step-desc {
   font-size: 0.82rem;
-  color: var(--gray-400);
+  color: var(--gray-500);
   line-height: 1.5;
   max-width: 160px;
   margin: 0 auto;
+}
+
+/* ─── Node & Edge Section ─── */
+.node-edge-section {
+  position: relative;
+  padding: 8rem 2rem;
+  background: linear-gradient(180deg, #fff 0%, rgba(255, 240, 245, 0.82) 44%, #fff 100%);
+  overflow: hidden;
+}
+
+.node-edge-section::before {
+  content: '';
+  position: absolute;
+  top: 15%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(880px, 84vw);
+  height: 260px;
+  background: radial-gradient(circle, rgba(255, 133, 161, 0.18) 0%, transparent 72%);
+  filter: blur(56px);
+  pointer-events: none;
+}
+
+.node-edge-board {
+  position: relative;
+  z-index: 1;
+  min-height: 760px;
+  margin-top: 2.8rem;
+  border: 1px solid rgba(255, 214, 229, 0.55);
+  border-radius: var(--radius-2xl);
+  background: var(--rose-canvas, #fafafb);
+  box-shadow: 0 4px 12px rgba(255, 133, 161, 0.08), 0 18px 42px rgba(255, 133, 161, 0.12);
+  overflow: hidden;
+}
+
+.node-edge-grid {
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(circle at 1px 1px, rgba(255, 179, 198, 0.62) 1.1px, transparent 0);
+  background-size: 28px 28px;
+  opacity: 0.42;
+  pointer-events: none;
+}
+
+.node-edge-lines {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.node-edge-lines .edge-flow {
+  isolation: isolate;
+}
+
+.node-edge-lines .edge-flow__track {
+  fill: none;
+  stroke: #ffc1d6;
+  stroke-width: 3.8;
+  stroke-linecap: butt;
+  stroke-linejoin: round;
+  opacity: 1;
+}
+
+.node-edge-lines .edge-flow__highlight {
+  fill: none;
+  stroke-width: 4.2;
+  stroke-linecap: butt;
+  stroke-linejoin: round;
+  opacity: 1;
+  filter: drop-shadow(0 0 2px rgba(255, 77, 141, 0.35));
+  pointer-events: none;
+  will-change: opacity;
+}
+
+.node-card {
+  position: absolute;
+  z-index: 2;
+  width: clamp(185px, 21vw, 238px);
+  min-height: 170px;
+  border-radius: var(--radius-xl);
+  border: 1px solid rgba(255, 214, 229, 0.5);
+  background: #fff;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.03), 0 2px 8px rgba(0, 0, 0, 0.02);
+  transition: border-color 0.28s ease, box-shadow 0.28s ease;
+  overflow: visible;
+  display: flex;
+  flex-direction: column;
+}
+
+.node-card:hover {
+  border-color: rgba(255, 133, 161, 0.62);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.06), 0 4px 12px rgba(0, 0, 0, 0.04);
+}
+
+.node-card--master {
+  top: 14%;
+  left: 30%;
+  transform: translateX(-50%);
+}
+
+.node-card--grid-a {
+  top: 14%;
+  left: 70%;
+  transform: translateX(-50%);
+}
+
+.node-card--shot-a {
+  top: 56%;
+  left: 70%;
+  transform: translateX(-50%);
+}
+
+.node-card--video-a {
+  top: 56%;
+  left: 30%;
+  transform: translateX(-50%);
+}
+
+.node-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 0.875rem 0.5rem;
+}
+
+.node-card-header-left {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.node-card-title-group {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.node-card-icon {
+  flex-shrink: 0;
+  color: var(--gray-600, #4b5563);
+}
+
+.node-card--master .node-card-icon {
+  color: var(--rose-600, #ff6b8a);
+}
+
+.node-card--grid-a .node-card-icon {
+  color: var(--rose-500, #ff85a1);
+}
+
+.node-card--shot-a .node-card-icon {
+  color: var(--rose-400, #ffb3c6);
+}
+
+.node-card--video-a .node-card-icon {
+  color: var(--rose-400, #ffb3c6);
+}
+
+.node-card-title {
+  font-size: 0.94rem;
+  font-weight: 630;
+  color: var(--gray-800, #1f2937);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  letter-spacing: -0.01em;
+}
+
+.node-card-subtitle {
+  font-size: 0.76rem;
+  color: var(--gray-500, #6b7280);
+  margin-top: 0.1rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.node-card-status {
+  width: 22px;
+  height: 22px;
+  border-radius: var(--radius-full);
+  background: rgba(0, 0, 0, 0.04);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.node-card-status::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.node-card-status--idle::before {
+  background: rgba(156, 163, 175, 0.9);
+}
+
+.node-card-status--running::before {
+  background: rgba(59, 130, 246, 0.9);
+}
+
+.node-card-status--succeeded::before {
+  background: var(--rose-500, #ff85a1);
+}
+
+.node-card-status--confirmed::before {
+  background: var(--success, #22c55e);
+}
+
+.node-card-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 0 0.875rem 0.875rem;
+  display: flex;
+}
+
+.node-card-thumbnail {
+  width: 100%;
+  min-height: 76px;
+  border-radius: 1rem;
+  border: 1px solid var(--gray-100, #f3f4f6);
+  background: rgba(250, 250, 251, 0.7);
+  padding: 0.7rem 0.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.node-card-thumbnail-label {
+  font-size: 0.78rem;
+  color: var(--gray-500, #6b7280);
+  line-height: 1.48;
+  text-align: center;
+  word-break: keep-all;
+}
+
+.node-card-placeholder-icon {
+  color: var(--rose-500, #ff85a1);
+}
+
+.node-card-badge {
+  position: absolute;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  z-index: 3;
+  border-radius: var(--radius-full);
+}
+
+.node-card-badge--active {
+  top: -13px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 0.26rem 0.66rem;
+  font-size: 0.68rem;
+  font-weight: 700;
+  background: var(--rose-500, #ff4d8d);
+  color: #fff;
+  box-shadow: 0 9px 18px rgba(255, 77, 141, 0.3);
+}
+
+.node-card-badge--confirmed {
+  top: -10px;
+  right: 10px;
+  width: 24px;
+  height: 24px;
+  justify-content: center;
+  color: #fff;
+  background: linear-gradient(135deg, var(--success, #22c55e), var(--success-light, #4ade80));
+  box-shadow: 0 9px 18px rgba(34, 197, 94, 0.28);
+}
+
+.node-port {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--rose-400, #ffb3c6);
+  border: 2px solid #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  z-index: 3;
+}
+
+.node-card--video-a .node-port {
+  background: var(--success, #22c55e);
+}
+
+.node-port--target-top {
+  top: -5px;
+  left: calc(50% - 5px);
+}
+
+.node-port--source-bottom {
+  left: calc(50% - 5px);
+  bottom: -5px;
+}
+
+.node-port--target-left,
+.node-port--source-left {
+  top: calc(50% - 5px);
+  left: -5px;
+}
+
+.node-port--target-right,
+.node-port--source-right {
+  top: calc(50% - 5px);
+  right: -5px;
 }
 
 /* ─── CTA Section ─── */
@@ -1572,7 +2129,7 @@ onUnmounted(() => {
 
 .cta-sub {
   font-size: 1.05rem;
-  color: var(--gray-400);
+  color: var(--gray-500);
   margin-bottom: 2.5rem;
   line-height: 1.6;
 }
@@ -1714,6 +2271,31 @@ onUnmounted(() => {
   font-style: italic;
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .landing *,
+  .landing *::before,
+  .landing *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .bento-card:hover,
+  .btn-nav-cta:hover,
+  .btn-hero-primary:hover,
+  .btn-hero-secondary:hover,
+  .btn-cta-primary:hover,
+  .wf-step:hover .wf-icon-circle,
+  .node-card:hover {
+    transform: none !important;
+  }
+
+  .node-edge-lines .edge-flow__highlight {
+    display: none !important;
+  }
+}
+
 /* ─── Responsive ─── */
 @media (max-width: 1024px) {
   .bento-grid {
@@ -1722,6 +2304,14 @@ onUnmounted(() => {
 
   .bento-span-2 {
     grid-column: span 1;
+  }
+
+  .node-edge-board {
+    min-height: 700px;
+  }
+
+  .node-card {
+    width: clamp(170px, 24vw, 230px);
   }
 }
 
@@ -1824,12 +2414,52 @@ onUnmounted(() => {
   }
 
   .features-section,
-  .workflow-section {
+  .workflow-section,
+  .node-edge-section {
     padding: 5rem 1.5rem;
   }
 
   .cta-section {
     padding: 6rem 1.5rem;
+  }
+
+  .node-edge-board {
+    min-height: auto;
+    padding: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+  }
+
+  .node-edge-lines {
+    display: none;
+  }
+
+  .node-card {
+    position: relative;
+    inset: auto;
+    left: auto;
+    top: auto;
+    width: 100%;
+    transform: none !important;
+  }
+
+  .node-port {
+    display: none;
+  }
+
+  .node-card::after {
+    content: '';
+    position: absolute;
+    left: 18px;
+    right: 18px;
+    bottom: -0.5rem;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(251, 113, 133, 0.45), transparent);
+  }
+
+  .node-card:last-child::after {
+    display: none;
   }
 }
 
