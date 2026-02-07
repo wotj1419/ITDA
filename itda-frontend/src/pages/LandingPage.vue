@@ -1,8 +1,6 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { onMounted, onUnmounted, ref, type ComponentPublicInstance } from 'vue'
 import { RouterLink } from 'vue-router'
-import { gsap } from 'gsap'
-import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import {
   Sparkles,
   Pencil,
@@ -20,11 +18,19 @@ import {
   LayoutGrid,
   Camera,
   Video,
+  Volume2,
+  VolumeX,
+  MousePointer2,
 } from 'lucide-vue-next'
+import {
+  getNodeCursorStyle,
+  nodeCollabCursors,
+  nodeCursorAnchors,
+  pickNextNodeCursorAnchorKey,
+} from './landing/nodeCursor'
+import { setupLandingAnimations } from './landing/useLandingAnimations'
+import { useLandingInteractions } from './landing/useLandingInteractions'
 
-gsap.registerPlugin(ScrollTrigger)
-
-/* ─── Data ─── */
 const features = [
   {
     icon: Pencil,
@@ -32,7 +38,7 @@ const features = [
     description: '아이디어만 입력하면 AI가 씬별 시나리오를 자동으로 작성합니다.',
     span: 'span-2',
     accent: true,
-    tag: 'GPT-4o',
+    tag: 'Gemini',
   },
   {
     icon: Palette,
@@ -51,17 +57,9 @@ const features = [
     tag: 'Visual',
   },
   {
-    icon: Film,
-    title: 'AI 영상 변환',
-    description: 'Veo 3.1로 스토리보드 이미지를 시네마틱 영상으로 변환합니다.',
-    span: '',
-    accent: true,
-    tag: 'Veo 3.1',
-  },
-  {
     icon: Users,
     title: '실시간 협업',
-    description: 'WebRTC 화상통화로 팀원과 아이디어를 실시간으로 공유합니다.',
+    description: 'WebRTC 화상통화, 실시간 채팅, 커서 이름 표시로 협업 맥락을 즉시 공유합니다.',
     span: '',
     accent: false,
     tag: 'WebRTC',
@@ -69,9 +67,9 @@ const features = [
   {
     icon: Layers,
     title: '타임라인 편집',
-    description: '확정된 영상 클립을 조합하여 최종 영화를 완성합니다.',
+    description: '확정된 영상 클립을 조합하여 최종 영상을 완성합니다.',
     span: '',
-    accent: false,
+    accent: true,
     tag: 'Editor',
   },
 ]
@@ -89,235 +87,59 @@ const stats = [
   { value: '∞', label: '무한한 상상력' },
 ]
 
-/* ─── Refs ─── */
+const selectedHeroVideo = '/scene-1.mp4'
 const mainContainer = ref<HTMLElement | null>(null)
-const navBar = ref<HTMLElement | null>(null)
-const mobileMenuOpen = ref(false)
 
-let ctx: gsap.Context
+const {
+  navBar,
+  mobileMenuOpen,
+  mockupRef,
+  heroVideoRef,
+  heroVideoMuted,
+  toggleMobileMenu,
+  closeMobileMenu,
+  playHeroVideo,
+  toggleHeroVideoSound,
+  scrollTo,
+  onScroll,
+  onMockupMouseMove,
+  onMockupMouseLeave,
+} = useLandingInteractions()
 
-const toggleMobileMenu = () => {
-  mobileMenuOpen.value = !mobileMenuOpen.value
+const setNavBarRef = (element: Element | ComponentPublicInstance | null) => {
+  navBar.value = element as HTMLElement | null
 }
 
-const closeMobileMenu = () => {
-  mobileMenuOpen.value = false
+const setMockupRef = (element: Element | ComponentPublicInstance | null) => {
+  mockupRef.value = element as HTMLElement | null
 }
 
-const scrollTo = (id: string) => {
-  closeMobileMenu()
-  const el = document.getElementById(id)
-  if (el) {
-    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    el.scrollIntoView({ behavior: reducedMotion ? 'auto' : 'smooth' })
-  }
-}
+let cleanupLandingAnimations: (() => void) | null = null
 
-/* ─── Scroll-based navbar ─── */
-const onScroll = () => {
-  if (!navBar.value) return
-  if (window.scrollY > 50) {
-    navBar.value.classList.add('nav-scrolled')
-  } else {
-    navBar.value.classList.remove('nav-scrolled')
-  }
-}
-
-/* ─── Mouse tilt for mockup ─── */
-const mockupRef = ref<HTMLElement | null>(null)
-const onMockupMouseMove = (e: MouseEvent) => {
-  if (!mockupRef.value) return
-  const rect = mockupRef.value.getBoundingClientRect()
-  const x = (e.clientX - rect.left) / rect.width - 0.5
-  const y = (e.clientY - rect.top) / rect.height - 0.5
-  gsap.to(mockupRef.value, {
-    rotateY: x * 6,
-    rotateX: -y * 4,
-    duration: 0.6,
-    ease: 'power2.out',
-  })
-}
-const onMockupMouseLeave = () => {
-  if (!mockupRef.value) return
-  gsap.to(mockupRef.value, {
-    rotateY: 0,
-    rotateX: 2,
-    duration: 0.8,
-    ease: 'elastic.out(1, 0.5)',
-  })
-}
-
-/* ─── GSAP ─── */
 onMounted(() => {
   window.addEventListener('scroll', onScroll, { passive: true })
+  onScroll()
+  playHeroVideo(heroVideoRef.value)
 
-  ctx = gsap.context(() => {
-    /* Hero entrance timeline */
-    const heroTl = gsap.timeline({ defaults: { ease: 'power3.out' } })
-    heroTl
-      .from('.hero-badge', { y: 30, opacity: 0, duration: 0.8, scale: 0.9 }, 0.3)
-      .from('.hero-headline', { y: 50, opacity: 0, duration: 1 }, 0.5)
-      .from('.hero-sub', { y: 30, opacity: 0, duration: 0.8 }, 0.8)
-      .from('.hero-cta-group', { y: 30, opacity: 0, duration: 0.8 }, 1.0)
-      .from('.hero-stats', { y: 20, opacity: 0, duration: 0.7 }, 1.2)
-      .from('.app-mockup-wrapper', { y: 80, opacity: 0, scale: 0.95, duration: 1.2 }, 1.3)
-
-    /* Hero aurora orbs floating — more dramatic movement */
-    gsap.utils.toArray<HTMLElement>('.hero-orb').forEach((orb, i) => {
-      gsap.to(orb, {
-        y: i % 2 === 0 ? -35 : 35,
-        x: i % 2 === 0 ? 20 : -20,
-        scale: 1 + (i % 3) * 0.08,
-        duration: 4 + i * 0.7,
-        ease: 'sine.inOut',
-        yoyo: true,
-        repeat: -1,
-      })
-    })
-
-    /* Floating sparkle particles */
-    gsap.utils.toArray<HTMLElement>('.sparkle-particle').forEach((p, i) => {
-      gsap.to(p, {
-        y: -30 - i * 10,
-        x: (i % 2 === 0 ? 1 : -1) * (10 + i * 5),
-        opacity: 0,
-        duration: 2.5 + i * 0.5,
-        ease: 'power1.out',
-        repeat: -1,
-        delay: i * 0.6,
-      })
-    })
-
-    /* Hero mockup parallax scrub */
-    gsap.to('.app-mockup-wrapper', {
-      y: -80,
-      ease: 'none',
-      scrollTrigger: {
-        trigger: '.hero-section',
-        start: 'top top',
-        end: 'bottom top',
-        scrub: 1.5,
-      },
-    })
-
-    /* Section headers reveal */
-    gsap.utils.toArray<HTMLElement>('.section-header').forEach((header) => {
-      gsap.from(header, {
-        scrollTrigger: {
-          trigger: header,
-          start: 'top 85%',
-          toggleActions: 'play none none reverse',
-        },
-        y: 40,
-        opacity: 0,
-        duration: 0.9,
-        ease: 'power3.out',
-      })
-    })
-
-    /* Features stagger with scale */
-    const bentoCards = gsap.utils.toArray<HTMLElement>('.bento-card')
-    gsap.set(bentoCards, { autoAlpha: 1 })
-    gsap.from(bentoCards, {
-      scrollTrigger: {
-        trigger: '.features-section',
-        start: 'top 75%',
-        once: true,
-        invalidateOnRefresh: true,
-      },
-      y: 70,
-      autoAlpha: 0,
-      scale: 0.95,
-      duration: 0.9,
-      stagger: 0.1,
-      ease: 'power3.out',
-      immediateRender: false,
-    })
-
-    /* Workflow steps stagger */
-    gsap.from('.wf-step', {
-      scrollTrigger: {
-        trigger: '.workflow-section',
-        start: 'top 75%',
-        toggleActions: 'play none none reverse',
-      },
-      y: 50,
-      opacity: 0,
-      scale: 0.9,
-      duration: 0.9,
-      stagger: 0.15,
-      ease: 'back.out(1.7)',
-    })
-
-    /* Workflow connector line scrub */
-    gsap.fromTo(
-      '.wf-progress-fill',
-      { width: '0%' },
-      {
-        width: '100%',
-        ease: 'none',
-        scrollTrigger: {
-          trigger: '.workflow-section',
-          start: 'top 55%',
-          end: 'bottom 55%',
-          scrub: 1,
-        },
-      },
-    )
-
-    /* CTA section */
-    gsap.from('.cta-section-inner', {
-      scrollTrigger: {
-        trigger: '.cta-section',
-        start: 'top 85%',
-        toggleActions: 'play none none reverse',
-      },
-      y: 50,
-      opacity: 0,
-      scale: 0.97,
-      duration: 1,
-      ease: 'power3.out',
-    })
-
-    /* CTA orbs — more dramatic */
-    gsap.utils.toArray<HTMLElement>('.cta-orb').forEach((orb, i) => {
-      gsap.to(orb, {
-        y: i % 2 === 0 ? -25 : 25,
-        x: i % 2 === 0 ? 15 : -15,
-        scale: 1 + (i % 2) * 0.1,
-        duration: 4 + i * 1.5,
-        ease: 'sine.inOut',
-        yoyo: true,
-        repeat: -1,
-      })
-    })
-
-    /* Stat counters reveal */
-    gsap.from('.stat-item', {
-      scrollTrigger: {
-        trigger: '.hero-stats',
-        start: 'top 90%',
-        toggleActions: 'play none none reverse',
-      },
-      y: 20,
-      opacity: 0,
-      duration: 0.6,
-      stagger: 0.12,
-      ease: 'power2.out',
-    })
-  }, mainContainer.value as Element)
+  cleanupLandingAnimations = setupLandingAnimations({
+    mainContainer,
+    nodeCollabCursors,
+    nodeCursorAnchors,
+    pickNextNodeCursorAnchorKey,
+  })
 })
 
 onUnmounted(() => {
   window.removeEventListener('scroll', onScroll)
-  ctx.revert()
+  cleanupLandingAnimations?.()
+  cleanupLandingAnimations = null
 })
 </script>
 
 <template>
   <div class="landing" ref="mainContainer">
     <!-- ─── Navigation ─── -->
-    <nav class="nav-bar" ref="navBar">
+    <nav class="nav-bar" :ref="setNavBarRef">
       <div class="nav-inner">
         <RouterLink to="/" class="nav-logo">
           <img src="/icon.png" alt="잇다" class="nav-logo-img" />
@@ -328,7 +150,6 @@ onUnmounted(() => {
           <a href="#features" class="nav-anchor" @click.prevent="scrollTo('features')">기능</a>
           <a href="#workflow" class="nav-anchor" @click.prevent="scrollTo('workflow')">워크플로우</a>
           <a href="#node-edge" class="nav-anchor" @click.prevent="scrollTo('node-edge')">노드&엣지</a>
-          <RouterLink to="/auth" class="nav-anchor">로그인</RouterLink>
           <RouterLink to="/auth" class="btn-nav-cta">
             <Zap :size="14" />
             무료로 시작하기
@@ -357,23 +178,12 @@ onUnmounted(() => {
 
     <!-- ─── Hero Section ─── -->
     <section class="hero-section">
-      <!-- Aurora mesh background -->
       <div class="hero-aurora"></div>
-      <!-- Orbs -->
       <div class="hero-orb hero-orb-1"></div>
       <div class="hero-orb hero-orb-2"></div>
       <div class="hero-orb hero-orb-3"></div>
       <div class="hero-orb hero-orb-4"></div>
-      <div class="hero-orb hero-orb-5"></div>
-      <!-- Dot grid -->
       <div class="hero-dot-grid"></div>
-      <!-- Floating sparkles -->
-      <div class="sparkle-particle sp-1"><Star :size="10" /></div>
-      <div class="sparkle-particle sp-2"><Star :size="8" /></div>
-      <div class="sparkle-particle sp-3"><Sparkles :size="12" /></div>
-      <div class="sparkle-particle sp-4"><Star :size="9" /></div>
-      <div class="sparkle-particle sp-5"><Sparkles :size="10" /></div>
-      <!-- Noise overlay -->
       <div class="noise-overlay"></div>
 
       <div class="hero-content">
@@ -389,7 +199,7 @@ onUnmounted(() => {
         </h1>
 
         <p class="hero-sub">
-          아이디어 하나로 시작하는 AI 영화 제작.<br class="mobile-br" />
+          아이디어 하나로 시작하는 AI 영상 제작.<br class="mobile-br" />
           시나리오부터 최종 편집까지, 잇다가 함께합니다.
         </p>
 
@@ -401,7 +211,7 @@ onUnmounted(() => {
               <ArrowRight :size="18" />
             </span>
           </RouterLink>
-          <a href="#features" class="btn-hero-secondary" @click.prevent="scrollTo('features')">
+          <a href="#demo-video" class="btn-hero-secondary" @click.prevent="scrollTo('demo-video')">
             <Play :size="16" class="play-icon" />
             데모 보기
           </a>
@@ -415,16 +225,13 @@ onUnmounted(() => {
         </div>
       </div>
 
-      <div class="app-mockup-wrapper">
-        <div class="mockup-glow"></div>
-        <div class="mockup-ring"></div>
+      <div class="app-mockup-wrapper" id="demo-video">
         <div
           class="app-mockup"
-          ref="mockupRef"
-          @mousemove="onMockupMouseMove"
-          @mouseleave="onMockupMouseLeave"
+          :ref="setMockupRef"
+          @pointermove="onMockupMouseMove"
+          @pointerleave="onMockupMouseLeave"
         >
-          <div class="mockup-border-gradient"></div>
           <div class="mockup-inner">
             <div class="mockup-bar">
               <div class="mockup-dots">
@@ -437,13 +244,25 @@ onUnmounted(() => {
             </div>
             <div class="mockup-screen">
               <video
-                src="/web.firstpage.video.mp4"
-                muted
-                loop
+                ref="heroVideoRef"
+                :src="selectedHeroVideo"
+                :muted="heroVideoMuted"
                 autoplay
+                loop
                 playsinline
+                preload="auto"
                 class="mockup-video"
               ></video>
+              <button
+                type="button"
+                class="hero-sound-toggle"
+                @click="toggleHeroVideoSound"
+                :aria-label="heroVideoMuted ? '영상 소리 켜기' : '영상 음소거'"
+              >
+                <VolumeX v-if="heroVideoMuted" :size="14" />
+                <Volume2 v-else :size="14" />
+                <span>{{ heroVideoMuted ? '소리 켜기' : '음소거' }}</span>
+              </button>
             </div>
           </div>
         </div>
@@ -493,8 +312,8 @@ onUnmounted(() => {
             <Zap :size="14" />
             Workflow
           </span>
-          <h2 class="section-title">아이디어에서 영화까지, 단 4단계</h2>
-          <p class="section-sub">직관적인 파이프라인으로 누구나 영화 감독이 될 수 있습니다</p>
+          <h2 class="section-title">아이디어에서 영상까지, 단 4단계</h2>
+          <p class="section-sub">직관적인 파이프라인으로 누구나 영상 제작자가 될 수 있습니다</p>
         </div>
 
         <div class="wf-track">
@@ -611,7 +430,7 @@ onUnmounted(() => {
               </linearGradient>
             </defs>
 
-            <g class="edge-flow">
+            <g class="edge-flow edge-flow--master-grid">
               <path class="edge-flow__track" d="M479 191 L721 191"></path>
               <path class="edge-flow__highlight" d="M479 191 L721 191" stroke="url(#nodeEdgeFlowGradientTop)">
                 <animate
@@ -626,7 +445,7 @@ onUnmounted(() => {
               </path>
             </g>
 
-            <g class="edge-flow">
+            <g class="edge-flow edge-flow--grid-shot">
               <path class="edge-flow__track" d="M840 271 L840 421"></path>
               <path class="edge-flow__highlight" d="M840 271 L840 421" stroke="url(#nodeEdgeFlowGradientDown)">
                 <animate
@@ -641,7 +460,7 @@ onUnmounted(() => {
               </path>
             </g>
 
-            <g class="edge-flow">
+            <g class="edge-flow edge-flow--shot-video">
               <path class="edge-flow__track" d="M721 511 L479 511"></path>
               <path class="edge-flow__highlight" d="M721 511 L479 511" stroke="url(#nodeEdgeFlowGradientBottom)">
                 <animate
@@ -656,6 +475,24 @@ onUnmounted(() => {
               </path>
             </g>
           </svg>
+
+          <div class="node-cursor-layer" aria-hidden="true">
+            <div
+              v-for="cursor in nodeCollabCursors"
+              :key="cursor.id"
+              class="collab-cursor"
+              :style="getNodeCursorStyle(cursor)"
+            >
+              <span class="collab-cursor-pointer-wrap">
+                <MousePointer2 :size="16" class="collab-cursor-pointer-icon" />
+                <span class="collab-cursor-click"></span>
+              </span>
+              <span class="collab-cursor-tag">
+                <span class="collab-cursor-tag-dot"></span>
+                {{ cursor.name }}
+              </span>
+            </div>
+          </div>
 
           <article class="node-card node-card--master">
             <span class="node-port node-port--source-right"></span>
@@ -756,9 +593,9 @@ onUnmounted(() => {
           지금 바로 시작하세요
         </div>
         <h2 class="cta-headline">
-          당신의 이야기를<br /><span class="brand-gradient">AI 영화</span>로 만들어보세요
+          당신의 이야기를<br /><span class="brand-gradient">AI 영상</span>로 만들어보세요
         </h2>
-        <p class="cta-sub">무료로 시작하세요. 신용카드가 필요하지 않습니다.</p>
+        <p class="cta-sub"></p>
         <RouterLink to="/auth" class="btn-cta-primary">
           <span class="btn-shimmer"></span>
           <span class="btn-content">
@@ -778,7 +615,7 @@ onUnmounted(() => {
               <img src="/icon.png" alt="잇다" class="footer-logo-img" />
               <span class="footer-logo-text">잇다</span>
             </RouterLink>
-            <p class="footer-tagline">AI로 만드는 새로운 영화 제작 경험</p>
+            <p class="footer-tagline">AI로 만드는 새로운 영상 제작 경험</p>
           </div>
 
           <div class="footer-columns">
@@ -820,22 +657,23 @@ onUnmounted(() => {
 
 /* ─── Navigation ─── */
 .nav-bar {
-  position: fixed;
+  position: absolute;
   top: 0;
   left: 0;
   right: 0;
   z-index: 100;
-  background: transparent;
+  background: rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(16px) saturate(150%);
+  -webkit-backdrop-filter: blur(16px) saturate(150%);
   transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-  border-bottom: 1px solid transparent;
+  border-bottom: 1px solid rgba(255, 214, 229, 0.72);
+  pointer-events: auto;
 }
 
 .nav-bar.nav-scrolled {
-  background: rgba(255, 255, 255, 0.72);
-  backdrop-filter: blur(24px) saturate(180%);
-  -webkit-backdrop-filter: blur(24px) saturate(180%);
-  border-bottom-color: rgba(255, 133, 161, 0.15);
-  box-shadow: 0 1px 24px rgba(255, 133, 161, 0.06);
+  background: rgba(255, 255, 255, 0.9);
+  border-bottom-color: rgba(255, 193, 214, 0.9);
+  box-shadow: 0 8px 24px rgba(255, 133, 161, 0.1);
 }
 
 .nav-inner {
@@ -846,6 +684,10 @@ onUnmounted(() => {
   align-items: center;
   justify-content: space-between;
   padding: 0 2rem;
+}
+
+.nav-bar.nav-scrolled .nav-inner {
+  box-shadow: none;
 }
 
 .nav-logo {
@@ -992,9 +834,9 @@ onUnmounted(() => {
   justify-content: flex-start;
   padding: 8rem 2rem 5rem;
   overflow: hidden;
+  background: #fff;
 }
 
-/* Aurora mesh gradient */
 .hero-aurora {
   position: absolute;
   inset: -50%;
@@ -1057,17 +899,6 @@ onUnmounted(() => {
   filter: blur(110px);
 }
 
-.hero-orb-5 {
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  width: 600px;
-  height: 600px;
-  background: radial-gradient(circle, rgba(255, 133, 161, 0.04), transparent 70%);
-  opacity: 1;
-  filter: blur(80px);
-}
-
 .hero-dot-grid {
   position: absolute;
   inset: 0;
@@ -1078,21 +909,6 @@ onUnmounted(() => {
   -webkit-mask-image: radial-gradient(ellipse 65% 55% at 50% 35%, black 15%, transparent 65%);
   opacity: 0.35;
 }
-
-/* Sparkle particles */
-.sparkle-particle {
-  position: absolute;
-  z-index: 1;
-  color: var(--rose-400);
-  opacity: 0.6;
-  pointer-events: none;
-}
-
-.sp-1 { top: 18%; left: 12%; }
-.sp-2 { top: 25%; right: 15%; }
-.sp-3 { top: 45%; left: 8%; }
-.sp-4 { bottom: 30%; right: 10%; }
-.sp-5 { bottom: 20%; left: 20%; }
 
 /* Noise texture */
 .noise-overlay {
@@ -1194,7 +1010,7 @@ onUnmounted(() => {
 
 .hero-sub {
   font-size: clamp(1rem, 2vw, 1.15rem);
-  color: var(--gray-500);
+  color: var(--gray-600);
   line-height: 1.75;
   margin-bottom: 2.5rem;
   letter-spacing: -0.01em;
@@ -1310,7 +1126,7 @@ onUnmounted(() => {
 
 .stat-label {
   font-size: 0.78rem;
-  color: var(--gray-400);
+  color: var(--gray-500);
   font-weight: 500;
 }
 
@@ -1321,42 +1137,8 @@ onUnmounted(() => {
   width: 100%;
   max-width: 980px;
   margin: 3.5rem auto 0;
+  scroll-margin-top: 84px;
   perspective: 1400px;
-}
-
-.mockup-glow {
-  position: absolute;
-  inset: -60px;
-  background: radial-gradient(ellipse at center, rgba(255, 133, 161, 0.12) 0%, transparent 65%);
-  border-radius: var(--radius-2xl);
-  z-index: -1;
-  animation: glow-pulse 4s ease-in-out infinite;
-}
-
-@keyframes glow-pulse {
-  0%, 100% { opacity: 0.7; transform: scale(1); }
-  50% { opacity: 1; transform: scale(1.03); }
-}
-
-.mockup-ring {
-  position: absolute;
-  inset: -3px;
-  border-radius: calc(var(--radius-xl) + 3px);
-  background: conic-gradient(
-    from 0deg,
-    var(--rose-300),
-    var(--rose-500),
-    var(--rose-400),
-    var(--rose-200),
-    var(--rose-300)
-  );
-  z-index: -1;
-  opacity: 0.5;
-  animation: ring-spin 6s linear infinite;
-}
-
-@keyframes ring-spin {
-  to { filter: hue-rotate(15deg); }
 }
 
 .app-mockup {
@@ -1367,20 +1149,6 @@ onUnmounted(() => {
   transform-style: preserve-3d;
   transition: transform 0.1s;
   will-change: transform;
-}
-
-.mockup-border-gradient {
-  position: absolute;
-  inset: 0;
-  border-radius: var(--radius-xl);
-  padding: 1.5px;
-  background: linear-gradient(135deg, var(--rose-300), var(--rose-500), var(--rose-300));
-  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-  -webkit-mask-composite: xor;
-  mask-composite: exclude;
-  z-index: 2;
-  pointer-events: none;
 }
 
 .mockup-inner {
@@ -1430,6 +1198,7 @@ onUnmounted(() => {
 }
 
 .mockup-screen {
+  position: relative;
   width: 100%;
   aspect-ratio: 16 / 9;
   overflow: hidden;
@@ -1443,11 +1212,126 @@ onUnmounted(() => {
   display: block;
 }
 
+.node-cursor-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  pointer-events: none;
+}
+
+.collab-cursor {
+  position: absolute;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  transform-origin: 0 0;
+  will-change: transform;
+}
+
+.collab-cursor-pointer-wrap {
+  position: relative;
+  width: 16px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.collab-cursor-pointer-icon {
+  color: var(--cursor-color, #ff6b9b);
+  transform: rotate(-16deg);
+  filter:
+    drop-shadow(0 0 0.8px rgba(15, 23, 42, 0.8))
+    drop-shadow(0 1px 2px rgba(15, 23, 42, 0.45));
+}
+
+.collab-cursor-click {
+  position: absolute;
+  left: 78%;
+  top: 72%;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: 1.8px solid var(--cursor-color, #ff6b9b);
+  background: rgba(255, 255, 255, 0.38);
+  opacity: 0;
+  transform: translate(-50%, -50%);
+}
+
+.collab-cursor-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.2rem 0.52rem;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--cursor-color, #ff6b9b) 38%, #dbe4ef);
+  background: color-mix(in srgb, var(--cursor-color, #ff6b9b) 12%, #ffffff);
+  color: #0f172a;
+  font-size: 0.66rem;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+  box-shadow: 0 5px 14px rgba(15, 23, 42, 0.16);
+}
+
+.collab-cursor-tag-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--cursor-color, #ff6b9b);
+  box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.08);
+}
+
+.hero-sound-toggle {
+  position: absolute;
+  right: 0.85rem;
+  bottom: 0.85rem;
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.42rem 0.62rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  background: rgba(17, 17, 19, 0.66);
+  backdrop-filter: blur(6px);
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 0.72rem;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  cursor: pointer;
+  transition: background-color 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+}
+
+.hero-sound-toggle:hover {
+  background: rgba(23, 23, 26, 0.82);
+  border-color: rgba(255, 255, 255, 0.36);
+  transform: translateY(-1px);
+}
+
+.hero-sound-toggle:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(255, 133, 161, 0.55);
+}
+
 /* ─── Features Section ─── */
 .features-section {
   padding: 8rem 2rem;
   background: var(--rose-canvas, #fbfbfc);
   position: relative;
+  overflow: hidden;
+}
+
+.features-section::before {
+  content: '';
+  position: absolute;
+  top: 8%;
+  right: -8%;
+  width: 380px;
+  height: 380px;
+  background: radial-gradient(circle, rgba(255, 179, 198, 0.25), transparent 70%);
+  filter: blur(16px);
+  pointer-events: none;
 }
 
 .section-container {
@@ -1458,6 +1342,8 @@ onUnmounted(() => {
 .section-header {
   text-align: center;
   margin-bottom: 2.5rem;
+  max-width: 640px;
+  margin-inline: auto;
 }
 
 .section-label {
@@ -1486,7 +1372,7 @@ onUnmounted(() => {
 
 .section-sub {
   font-size: 1.05rem;
-  color: var(--gray-500);
+  color: var(--gray-600);
   max-width: 500px;
   margin: 0 auto;
   line-height: 1.6;
@@ -1500,14 +1386,14 @@ onUnmounted(() => {
 
 .bento-card {
   position: relative;
-  background: #fff;
-  border: 1.5px solid var(--rose-200);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.94), #fff);
+  border: 1.5px solid rgba(255, 214, 229, 0.92);
   border-radius: var(--radius-xl);
   padding: 2rem;
   overflow: hidden;
   transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
   cursor: default;
-  box-shadow: 0 2px 8px rgba(255, 133, 161, 0.06);
+  box-shadow: 0 3px 12px rgba(255, 133, 161, 0.08);
 }
 
 .bento-card:hover {
@@ -1549,7 +1435,7 @@ onUnmounted(() => {
 }
 
 .bento-accent {
-  background: linear-gradient(135deg, var(--rose-50), #fff);
+  background: linear-gradient(135deg, rgba(255, 245, 249, 0.9), #fff);
   border-color: var(--rose-300);
 }
 
@@ -1599,7 +1485,7 @@ onUnmounted(() => {
 
 .bento-desc {
   font-size: 0.88rem;
-  color: var(--gray-500, #6b7280);
+  color: var(--gray-600, #4b5563);
   line-height: 1.65;
 }
 
@@ -1608,6 +1494,19 @@ onUnmounted(() => {
   padding: 8rem 2rem;
   background: linear-gradient(180deg, var(--rose-50) 0%, #fff 100%);
   position: relative;
+  overflow: hidden;
+}
+
+.workflow-section::before {
+  content: '';
+  position: absolute;
+  bottom: -12%;
+  left: -10%;
+  width: 420px;
+  height: 420px;
+  background: radial-gradient(circle, rgba(255, 179, 198, 0.2), transparent 70%);
+  filter: blur(18px);
+  pointer-events: none;
 }
 
 .wf-track {
@@ -1643,13 +1542,27 @@ onUnmounted(() => {
   text-align: center;
   position: relative;
   z-index: 1;
+  border: 1px solid rgba(255, 214, 229, 0.55);
+  border-radius: var(--radius-xl);
+  background: rgba(255, 255, 255, 0.78);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  padding: 1.2rem 1rem 1.35rem;
+  box-shadow: 0 6px 18px rgba(255, 133, 161, 0.08);
+  transition: border-color 0.25s ease, box-shadow 0.25s ease, transform 0.25s ease;
+}
+
+.wf-step:hover {
+  border-color: rgba(255, 133, 161, 0.5);
+  box-shadow: 0 12px 26px rgba(255, 133, 161, 0.15);
+  transform: translateY(-4px);
 }
 
 .wf-icon-wrapper {
   position: relative;
   width: 72px;
   height: 72px;
-  margin: 0 auto 1.25rem;
+  margin: 0 auto 1rem;
 }
 
 .wf-icon-ring {
@@ -1716,11 +1629,18 @@ onUnmounted(() => {
   letter-spacing: -0.02em;
   color: var(--gray-900);
   margin-bottom: 0.4rem;
+  overflow: hidden;
+  line-height: 1.25;
+}
+
+.wf-step-title :deep(.wf-title-word) {
+  display: inline-block;
+  will-change: transform, opacity;
 }
 
 .wf-step-desc {
   font-size: 0.82rem;
-  color: var(--gray-500);
+  color: var(--gray-600);
   line-height: 1.5;
   max-width: 160px;
   margin: 0 auto;
@@ -1730,20 +1650,19 @@ onUnmounted(() => {
 .node-edge-section {
   position: relative;
   padding: 8rem 2rem;
-  background: linear-gradient(180deg, #fff 0%, rgba(255, 240, 245, 0.82) 44%, #fff 100%);
+  background: linear-gradient(180deg, var(--rose-50) 0%, #fff 100%);
   overflow: hidden;
 }
 
 .node-edge-section::before {
   content: '';
   position: absolute;
-  top: 15%;
-  left: 50%;
-  transform: translateX(-50%);
-  width: min(880px, 84vw);
-  height: 260px;
-  background: radial-gradient(circle, rgba(255, 133, 161, 0.18) 0%, transparent 72%);
-  filter: blur(56px);
+  top: -12%;
+  right: -10%;
+  width: 420px;
+  height: 420px;
+  background: radial-gradient(circle, rgba(255, 179, 198, 0.2), transparent 70%);
+  filter: blur(18px);
   pointer-events: none;
 }
 
@@ -1779,29 +1698,38 @@ onUnmounted(() => {
 
 .node-edge-lines .edge-flow {
   isolation: isolate;
+  --edge-impulse: 0;
+  transition: opacity 0.2s ease;
+}
+
+.node-edge-lines .edge-flow.edge-flow--active {
+  --edge-impulse: 1;
 }
 
 .node-edge-lines .edge-flow__track {
   fill: none;
   stroke: #ffc1d6;
-  stroke-width: 3.8;
+  stroke-width: calc(3.6px + (var(--edge-impulse) * 0.9px));
   stroke-linecap: butt;
   stroke-linejoin: round;
-  opacity: 1;
+  opacity: calc(0.92 + (var(--edge-impulse) * 0.08));
+  transition: stroke-width 0.68s ease, opacity 0.68s ease;
 }
 
 .node-edge-lines .edge-flow__highlight {
   fill: none;
-  stroke-width: 4.2;
+  stroke-width: calc(4px + (var(--edge-impulse) * 1px));
   stroke-linecap: butt;
   stroke-linejoin: round;
-  opacity: 1;
-  filter: drop-shadow(0 0 2px rgba(255, 77, 141, 0.35));
+  opacity: calc(0.8 + (var(--edge-impulse) * 0.2));
+  filter: drop-shadow(0 0 calc(2px + (var(--edge-impulse) * 4px)) rgba(255, 77, 141, 0.35));
   pointer-events: none;
-  will-change: opacity;
+  will-change: opacity, filter;
+  transition: stroke-width 0.68s ease, opacity 0.68s ease, filter 0.68s ease;
 }
 
 .node-card {
+  --node-impulse: 0;
   position: absolute;
   z-index: 2;
   width: clamp(185px, 21vw, 238px);
@@ -1814,6 +1742,22 @@ onUnmounted(() => {
   overflow: visible;
   display: flex;
   flex-direction: column;
+}
+
+.node-card.node-card--flow-active {
+  --node-impulse: 1;
+}
+
+.node-card::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  border: 1px solid rgba(255, 133, 161, calc(0.16 + (var(--node-impulse) * 0.34)));
+  box-shadow: 0 0 calc(4px + (var(--node-impulse) * 18px)) rgba(255, 77, 141, calc(var(--node-impulse) * 0.22));
+  opacity: calc(0.12 + (var(--node-impulse) * 0.88));
+  pointer-events: none;
+  transition: border-color 0.68s ease, box-shadow 0.68s ease, opacity 0.68s ease;
 }
 
 .node-card:hover {
@@ -2011,12 +1955,20 @@ onUnmounted(() => {
   border-radius: 50%;
   background: var(--rose-400, #ffb3c6);
   border: 2px solid #fff;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  box-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.1),
+    0 0 calc(2px + (var(--node-impulse) * 8px)) rgba(255, 77, 141, calc(0.1 + (var(--node-impulse) * 0.35)));
+  transform: scale(calc(1 + (var(--node-impulse) * 0.24)));
+  transform-origin: center;
+  transition: transform 0.62s ease, box-shadow 0.62s ease;
   z-index: 3;
 }
 
 .node-card--video-a .node-port {
   background: var(--success, #22c55e);
+  box-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.1),
+    0 0 calc(2px + (var(--node-impulse) * 8px)) rgba(34, 197, 94, calc(0.12 + (var(--node-impulse) * 0.38)));
 }
 
 .node-port--target-top {
@@ -2101,6 +2053,13 @@ onUnmounted(() => {
   text-align: center;
   max-width: 700px;
   margin: 0 auto;
+  border: 1px solid rgba(255, 214, 229, 0.62);
+  border-radius: var(--radius-2xl);
+  padding: 2.4rem 2rem;
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  box-shadow: 0 14px 38px rgba(255, 133, 161, 0.12);
 }
 
 .cta-badge {
@@ -2129,7 +2088,7 @@ onUnmounted(() => {
 
 .cta-sub {
   font-size: 1.05rem;
-  color: var(--gray-500);
+  color: var(--gray-600);
   margin-bottom: 2.5rem;
   line-height: 1.6;
 }
@@ -2313,6 +2272,10 @@ onUnmounted(() => {
   .node-card {
     width: clamp(170px, 24vw, 230px);
   }
+
+  .wf-track {
+    gap: 1rem;
+  }
 }
 
 @media (max-width: 768px) {
@@ -2343,6 +2306,10 @@ onUnmounted(() => {
     justify-content: center;
   }
 
+  .collab-cursor {
+    transform: scale(0.92);
+  }
+
   .mobile-br {
     display: none;
   }
@@ -2353,10 +2320,6 @@ onUnmounted(() => {
 
   .stat-value {
     font-size: 1.1rem;
-  }
-
-  .app-mockup {
-    transform: none !important;
   }
 
   .wf-track {
@@ -2383,6 +2346,7 @@ onUnmounted(() => {
     display: flex;
     align-items: flex-start;
     gap: 1.25rem;
+    padding: 1rem;
   }
 
   .wf-icon-wrapper {
@@ -2423,6 +2387,10 @@ onUnmounted(() => {
     padding: 6rem 1.5rem;
   }
 
+  .cta-section-inner {
+    padding: 2rem 1.3rem;
+  }
+
   .node-edge-board {
     min-height: auto;
     padding: 1rem;
@@ -2432,6 +2400,10 @@ onUnmounted(() => {
   }
 
   .node-edge-lines {
+    display: none;
+  }
+
+  .node-cursor-layer {
     display: none;
   }
 
@@ -2475,6 +2447,12 @@ onUnmounted(() => {
   .hero-stats {
     flex-direction: column;
     gap: 1rem;
+  }
+}
+
+@media (hover: none), (pointer: coarse) {
+  .app-mockup {
+    transform: none !important;
   }
 }
 </style>
