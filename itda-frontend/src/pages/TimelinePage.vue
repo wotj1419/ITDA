@@ -641,7 +641,7 @@ function handleWheel(e: WheelEvent) {
                   활성화
                 </Button>
                 <Button
-                  variant="danger"
+                  variant="ghost"
                   size="sm"
                   class="export-btn export-btn-delete"
                   :disabled="item.active || isDeletingExport"
@@ -995,7 +995,52 @@ function handleWheel(e: WheelEvent) {
 }
 
 .export-actions :deep(.export-btn) {
-  min-width: 86px;
+  min-width: 0;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.export-actions :deep(.export-btn-preview) {
+  background: var(--gray-50);
+  color: var(--gray-700);
+  border: 1px solid var(--gray-200);
+}
+
+.export-actions :deep(.export-btn-preview:hover) {
+  background: white;
+  border-color: var(--rose-200);
+  color: var(--rose-600);
+}
+
+.export-actions :deep(.export-btn-activate) {
+  background: var(--rose-50);
+  border: 1px solid var(--rose-200);
+  color: var(--rose-700);
+}
+
+.export-actions :deep(.export-btn-activate:hover) {
+  background: var(--rose-100);
+  border-color: var(--rose-300);
+  color: var(--rose-700);
+}
+
+.export-actions :deep(.export-btn-download) {
+  box-shadow: var(--shadow-sm);
+}
+
+.export-actions :deep(.export-btn-download:hover) {
+  box-shadow: var(--shadow-md);
+  transform: translateY(-1px);
+}
+
+.export-actions :deep(.export-btn-delete) {
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  color: var(--error);
+}
+
+.export-actions :deep(.export-btn-delete:hover) {
+  background: rgba(239, 68, 68, 0.08);
+  color: var(--error-600);
 }
 
 .export-pagination {
