@@ -15,12 +15,13 @@ import MergeProgress from '../components/timeline/MergeProgress.vue'
 import Button from '../components/common/Button.vue'
 import Badge from '../components/common/Badge.vue'
 import ConfirmModal from '../components/common/ConfirmModal.vue'
+import TimelinePlaybackModal from '../components/timeline/TimelinePlaybackModal.vue'
 import SceneVideoPreviewModal from '../components/scene-editor/SceneVideoPreviewModal.vue'
 import { GitMerge, RefreshCw } from 'lucide-vue-next'
 import { triggerDownload } from '../utils/download'
 import { formatRelativeTime } from '../utils/date'
 import { fetchSceneExports, deleteSceneExport, activateSceneExport, fetchProjectExportPreview } from '../services/api/timeline'
-import { SCENE_VIDEO_PREVIEW_MODAL_ID } from '../constants/ui'
+import { SCENE_VIDEO_PREVIEW_MODAL_ID, TIMELINE_PLAYBACK_MODAL_ID } from '../constants/ui'
 import type { SceneExportItem } from '../types/api/timeline'
 import type { TimelineClip } from '../types/ui'
 
@@ -329,6 +330,13 @@ function handleReset() {
 
 function handleSelectClip(clipId: string | null) {
   selectedClipId.value = clipId
+}
+
+function handleProjectClipPlayback(clipId: string): void {
+  if (!orderedClips.value.length) return
+  uiStore.openModal(TIMELINE_PLAYBACK_MODAL_ID, {
+    startClipId: clipId,
+  })
 }
 
 async function loadSceneExports(page?: number): Promise<void> {
@@ -702,7 +710,7 @@ function handleWheel(e: WheelEvent) {
                     type="button"
                     class="project-clip-thumb"
                     :class="{ active: selectedClipId === clip.clipId }"
-                    @click="handleSelectClip(clip.clipId)"
+                    @click="handleProjectClipPlayback(clip.clipId)"
                   >
                     <img v-if="clip.thumbnailUrl" :src="clip.thumbnailUrl" :alt="clip.label || row.scene.title" />
                     <div v-else class="project-clip-thumb-placeholder">No Preview</div>
@@ -901,6 +909,7 @@ function handleWheel(e: WheelEvent) {
     </div>
   </TimelineLayout>
 
+  <TimelinePlaybackModal :clips="orderedClips" />
   <SceneVideoPreviewModal />
   <ConfirmModal
     :is-open="!!deleteTarget"
