@@ -64,11 +64,16 @@ export async function fetchSceneExports(
         size: params?.size ?? 8,
         totalCount: 0,
         totalPages: 0,
+        activeItem: null,
     }
 }
 
 export async function deleteSceneExport(sceneId: number, sceneVideoId: number): Promise<void> {
     await apiClient.delete<ApiResponse<void>>(`/scenes/${sceneId}/exports/${sceneVideoId}`)
+}
+
+export async function activateSceneExport(sceneId: number, sceneVideoId: number): Promise<void> {
+    await apiClient.post<ApiResponse<void>>(`/scenes/${sceneId}/exports/${sceneVideoId}/activate`)
 }
 
 export type { TimelineItem } from '../../types/api/timeline'

@@ -55,4 +55,5 @@ export interface SceneExportListResponse {
   size: number;
   totalCount: number;
   totalPages: number;
+  activeItem?: SceneExportItem | null;
 }

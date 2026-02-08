@@ -19,7 +19,7 @@ import SceneVideoPreviewModal from '../components/scene-editor/SceneVideoPreview
 import { GitMerge, RefreshCw } from 'lucide-vue-next'
 import { triggerDownload } from '../utils/download'
 import { formatRelativeTime } from '../utils/date'
-import { fetchSceneExports, deleteSceneExport } from '../services/api/timeline'
+import { fetchSceneExports, deleteSceneExport, activateSceneExport } from '../services/api/timeline'
 import { SCENE_VIDEO_PREVIEW_MODAL_ID } from '../constants/ui'
 import type { SceneExportItem } from '../types/api/timeline'
 
@@ -51,10 +51,12 @@ const orderedClips = computed(() => timelineStore.orderedClips)
 const selectedClipId = ref<string | null>(null)
 
 const sceneExports = ref<SceneExportItem[]>([])
+const activeExport = ref<SceneExportItem | null>(null)
 const isExportLoading = ref(false)
 const exportError = ref<string | null>(null)
 const deleteTarget = ref<SceneExportItem | null>(null)
 const isDeletingExport = ref(false)
+const activatingExportId = ref<number | null>(null)
 const exportPage = ref(1)
 const exportPageSize = 8
 const exportTotalCount = ref(0)
@@ -65,6 +67,11 @@ const exportEllipsis = '...'
 const exportCountLabel = computed(() => (
   exportTotalCount.value > 0 ? exportTotalCount.value : sceneExports.value.length
 ))
+
+const filteredExports = computed(() => {
+  if (!activeExport.value) return sceneExports.value
+  return sceneExports.value.filter(item => item.sceneVideoId !== activeExport.value?.sceneVideoId)
+})
 
 const exportTotalPages = computed(() => {
   if (exportTotalCount.value <= 0) return 0
@@ -129,6 +136,7 @@ watch([projectId, sceneId], async ([nextProjectId, nextSceneId]) => {
     await loadSceneExports()
   } else {
     sceneExports.value = []
+    activeExport.value = null
     exportError.value = null
     exportPage.value = 1
     exportTotalCount.value = 0
@@ -199,28 +207,37 @@ function handleSelectClip(clipId: string | null) {
   selectedClipId.value = clipId
 }
 
-async function loadSceneExports(page = 1): Promise<void> {
+async function loadSceneExports(page?: number): Promise<void> {
   if (sceneId.value === null) return
   isExportLoading.value = true
   exportError.value = null
-  exportPage.value = page
+  const resolvedPage = Number.isFinite(page)
+    ? Math.max(1, page as number)
+    : Math.max(1, exportPage.value)
+  exportPage.value = resolvedPage
   exportTotalCount.value = 0
   try {
     const response = await fetchSceneExports(sceneId.value, {
-      page,
+      page: resolvedPage,
       size: exportPageSize,
     })
     sceneExports.value = response.items
+    activeExport.value = response.activeItem ?? null
     exportTotalCount.value = response.totalCount
     exportPage.value = response.page
   } catch (error) {
     console.error('Failed to load scene exports', error)
     exportError.value = '병합 영상 목록을 불러오지 못했습니다.'
     sceneExports.value = []
+    activeExport.value = null
     exportTotalCount.value = 0
   } finally {
     isExportLoading.value = false
   }
+}
+
+function handleExportRefresh(): void {
+  void loadSceneExports(exportPage.value)
 }
 
 function goToExportPage(page: number): void {
@@ -244,10 +261,8 @@ function formatCreatedAt(value?: string | null): string {
   return formatRelativeTime(date)
 }
 
-function getStatusMeta(status?: string | null): { label: string; variant: 'default' | 'success' | 'warning' | 'error' | 'info' } {
+function getStatusMeta(status?: string | null): { label: string; variant: 'warning' | 'error' | 'info' } | null {
   switch (status) {
-    case 'COMPLETED':
-      return { label: '완료', variant: 'success' }
     case 'FAILED':
       return { label: '실패', variant: 'error' }
     case 'GENERATING':
@@ -255,7 +270,7 @@ function getStatusMeta(status?: string | null): { label: string; variant: 'defau
     case 'QUEUED':
       return { label: '대기', variant: 'info' }
     default:
-      return { label: status || '알 수 없음', variant: 'default' }
+      return null
   }
 }
 
@@ -265,6 +280,10 @@ function canPreviewExport(item: SceneExportItem): boolean {
 
 function canDownloadExport(item: SceneExportItem): boolean {
   return item.status === 'COMPLETED' && Boolean(item.downloadUrl)
+}
+
+function canActivateExport(item: SceneExportItem): boolean {
+  return item.status === 'COMPLETED' && !item.active
 }
 
 function handlePreviewExport(item: SceneExportItem): void {
@@ -280,6 +299,31 @@ function handlePreviewExport(item: SceneExportItem): void {
 function handleDownloadExport(item: SceneExportItem): void {
   if (!item.downloadUrl) return
   triggerDownload(item.downloadUrl)
+}
+
+async function handleActivateExport(item: SceneExportItem): Promise<void> {
+  if (sceneId.value === null || !canActivateExport(item)) return
+  activatingExportId.value = item.sceneVideoId
+  try {
+    await activateSceneExport(sceneId.value, item.sceneVideoId)
+    uiStore.showToast({
+      type: 'success',
+      title: '대표 병합 영상 변경',
+      message: '씬 대표 병합 영상이 업데이트되었습니다.',
+    })
+    await loadSceneExports(exportPage.value)
+  } catch (error) {
+    console.error('Failed to activate scene export', error)
+    uiStore.showToast({
+      type: 'error',
+      title: '대표 병합 영상 변경 실패',
+      message: '대표 병합 영상 설정에 실패했습니다.',
+    })
+  } finally {
+    if (activatingExportId.value === item.sceneVideoId) {
+      activatingExportId.value = null
+    }
+  }
 }
 
 function requestDeleteExport(item: SceneExportItem): void {
@@ -433,7 +477,7 @@ function handleWheel(e: WheelEvent) {
                 variant="secondary"
                 size="sm"
                 :disabled="isExportLoading"
-                @click="loadSceneExports"
+                @click="handleExportRefresh"
               >
                 새로고침
               </Button>
@@ -444,11 +488,76 @@ function handleWheel(e: WheelEvent) {
           </p>
 
           <div v-if="isExportLoading" class="export-loading">병합 영상 목록을 불러오는 중...</div>
-          <Card v-else-if="sceneExports.length === 0" dashed class="export-empty">
+          <Card v-else-if="sceneExports.length === 0 && !activeExport" dashed class="export-empty">
             아직 생성된 병합 영상이 없습니다.
           </Card>
           <div v-else class="export-list">
-            <Card v-for="item in sceneExports" :key="item.sceneVideoId" class="export-card">
+            <Card
+              v-if="activeExport"
+              :key="`active-${activeExport.sceneVideoId}`"
+              class="export-card export-card-active"
+            >
+              <div class="export-thumb">
+                <img
+                  v-if="activeExport.thumbnailUrl"
+                  :src="activeExport.thumbnailUrl"
+                  alt="merge thumbnail"
+                />
+                <div v-else class="export-thumb-placeholder">No Preview</div>
+                <span class="export-active">활성</span>
+              </div>
+              <div class="export-info">
+                <div class="export-badges">
+                  <Badge
+                    v-if="getStatusMeta(activeExport.status)"
+                    :variant="getStatusMeta(activeExport.status).variant"
+                  >
+                    {{ getStatusMeta(activeExport.status).label }}
+                  </Badge>
+                  <Badge variant="rose">활성</Badge>
+                </div>
+                <div class="export-title">
+                  {{ sceneTitle ? `${sceneTitle} 병합 영상` : '씬 병합 영상' }}
+                </div>
+                <div class="export-meta">
+                  <span>생성: {{ formatCreatedAt(activeExport.createdAt) }}</span>
+                  <span>길이: {{ formatDurationMs(activeExport.durationMs) }}</span>
+                </div>
+              </div>
+              <div class="export-actions">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  :disabled="!canPreviewExport(activeExport)"
+                  @click="handlePreviewExport(activeExport)"
+                >
+                  미리보기
+                </Button>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  :disabled="!canDownloadExport(activeExport)"
+                  @click="handleDownloadExport(activeExport)"
+                >
+                  다운로드
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled
+                >
+                  대표 설정
+                </Button>
+                <Button
+                  variant="danger"
+                  size="sm"
+                  disabled
+                >
+                  삭제
+                </Button>
+              </div>
+            </Card>
+            <Card v-for="item in filteredExports" :key="item.sceneVideoId" class="export-card">
               <div class="export-thumb">
                 <img
                   v-if="item.thumbnailUrl"
@@ -460,7 +569,10 @@ function handleWheel(e: WheelEvent) {
               </div>
               <div class="export-info">
                 <div class="export-badges">
-                  <Badge :variant="getStatusMeta(item.status).variant">
+                  <Badge
+                    v-if="getStatusMeta(item.status)"
+                    :variant="getStatusMeta(item.status).variant"
+                  >
                     {{ getStatusMeta(item.status).label }}
                   </Badge>
                   <Badge v-if="item.active" variant="rose">활성</Badge>
@@ -489,6 +601,15 @@ function handleWheel(e: WheelEvent) {
                   @click="handleDownloadExport(item)"
                 >
                   다운로드
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  :disabled="!canActivateExport(item)"
+                  :loading="activatingExportId === item.sceneVideoId"
+                  @click="handleActivateExport(item)"
+                >
+                  대표 설정
                 </Button>
                 <Button
                   variant="danger"
@@ -736,6 +857,13 @@ function handleWheel(e: WheelEvent) {
   grid-template-columns: 160px 1fr auto;
   gap: 1rem;
   align-items: center;
+}
+
+.export-card-active {
+  border: 1px solid var(--rose-300);
+  background: var(--rose-50);
+  border-radius: 12px;
+  padding: 0.5rem;
 }
 
 .export-thumb {
