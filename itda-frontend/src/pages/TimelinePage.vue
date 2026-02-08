@@ -47,6 +47,10 @@ const sceneTitle = computed(() => {
 
 const isSceneTimeline = computed(() => sceneId.value !== null)
 
+const orderedScenes = computed(() => sceneStore.orderedScenes)
+const sceneCount = computed(() => sceneStore.sceneCount)
+const sceneProgress = computed(() => sceneStore.progress)
+
 const orderedClips = computed(() => timelineStore.orderedClips)
 const selectedClipId = ref<string | null>(null)
 
@@ -304,13 +308,24 @@ function formatCreatedAt(value?: string | null): string {
 function getStatusMeta(status?: string | null): { label: string; variant: 'warning' | 'error' | 'info'; visible: boolean } {
   switch (status) {
     case 'FAILED':
-      return { label: '??', variant: 'error', visible: true }
+      return { label: '실패', variant: 'error', visible: true }
     case 'GENERATING':
-      return { label: '???', variant: 'warning', visible: true }
+      return { label: '생성 중', variant: 'warning', visible: true }
     case 'QUEUED':
-      return { label: '??', variant: 'info', visible: true }
+      return { label: '대기', variant: 'info', visible: true }
     default:
       return { label: '', variant: 'info', visible: false }
+  }
+}
+
+function getSceneStatusMeta(status?: string | null): { label: string; variant: 'success' | 'info' | 'default' } {
+  switch (status) {
+    case 'COMPLETED':
+      return { label: '완료', variant: 'success' }
+    case 'IN_PROGRESS':
+      return { label: '진행 중', variant: 'info' }
+    default:
+      return { label: '초안', variant: 'default' }
   }
 }
 
@@ -450,6 +465,41 @@ function handleWheel(e: WheelEvent) {
         <span>타임라인 데이터를 불러오는 중...</span>
       </div>
       <template v-else>
+        <section v-if="!isSceneTimeline" class="project-overview-section">
+          <div class="section-header">
+            <div>
+              <h3 class="section-title">프로젝트 타임라인</h3>
+              <p class="section-subtitle text-muted">프로젝트의 흐름과 진행 상황을 한눈에 확인하세요.</p>
+            </div>
+          </div>
+          <Card class="project-overview-card">
+            <div class="project-metrics">
+              <div class="project-metric">
+                <span class="metric-label">씬</span>
+                <span class="metric-value">{{ sceneCount }}</span>
+              </div>
+              <div class="project-metric">
+                <span class="metric-label">완료</span>
+                <span class="metric-value">{{ sceneProgress.completed }}</span>
+              </div>
+              <div class="project-metric">
+                <span class="metric-label">완료율</span>
+                <span class="metric-value">{{ sceneProgress.percentage }}%</span>
+              </div>
+              <div class="project-metric">
+                <span class="metric-label">클립</span>
+                <span class="metric-value">{{ timelineStore.clipCount }}</span>
+              </div>
+              <div class="project-metric">
+                <span class="metric-label">총 길이</span>
+                <span class="metric-value">{{ formatDurationMs(timelineStore.totalDuration * 1000) }}</span>
+              </div>
+            </div>
+          </Card>
+        </section>
+
+        
+
         <!-- Preview -->
         <section>
           <div class="section-header">
@@ -494,6 +544,46 @@ function handleWheel(e: WheelEvent) {
               <span class="duration-text">총 길이: {{ timelineStore.totalDuration }}초</span>
             </div>
           </Card>
+        </section>
+<section v-if="!isSceneTimeline" class="project-scenes-section">
+          <div class="section-header">
+            <div class="section-title-wrap">
+              <h3 class="section-title">씬 목록</h3>
+              <span class="section-count">{{ sceneCount }}</span>
+            </div>
+          </div>
+          <p class="section-subtitle text-muted">씬 편집과 타임라인 화면으로 빠르게 이동할 수 있습니다.</p>
+          <Card v-if="orderedScenes.length === 0" dashed class="project-scenes-empty">
+            아직 생성된 씬이 없습니다.
+          </Card>
+          <div v-else class="project-scene-list">
+            <Card v-for="scene in orderedScenes" :key="scene.sceneId" class="project-scene-card">
+              <div class="project-scene-row">
+                <div class="project-scene-info">
+                  <div class="project-scene-header">
+                    <Badge variant="default" size="sm">씬 {{ scene.order }}</Badge>
+                    <Badge :variant="getSceneStatusMeta(scene.status).variant" size="sm">
+                      {{ getSceneStatusMeta(scene.status).label }}
+                    </Badge>
+                  </div>
+                  <div class="project-scene-title">{{ scene.title }}</div>
+                  <p v-if="scene.description" class="project-scene-description">{{ scene.description }}</p>
+                </div>
+                <div class="project-scene-actions">
+                  <RouterLink :to="{ name: 'scene-edit', params: { projectId: projectId, sceneId: scene.sceneId } }" custom v-slot="{ navigate }">
+                    <Button variant="secondary" size="sm" @click="navigate">
+                      씬 편집
+                    </Button>
+                  </RouterLink>
+                  <RouterLink :to="{ name: 'scene-timeline', params: { id: projectId, sceneId: scene.sceneId } }" custom v-slot="{ navigate }">
+                    <Button variant="primary" size="sm" @click="navigate">
+                      타임라인
+                    </Button>
+                  </RouterLink>
+                </div>
+              </div>
+            </Card>
+          </div>
         </section>
         <!-- Merge Progress -->
         <section>
@@ -765,6 +855,12 @@ function handleWheel(e: WheelEvent) {
   font-size: 0.75rem;
   color: var(--gray-500);
 }
+.section-subtitle {
+  margin: 0.35rem 0 0;
+  font-size: 0.85rem;
+  color: var(--gray-500);
+  line-height: 1.4;
+}
 .preview-card,
 .track-card {
   padding: 1.5rem;
@@ -826,6 +922,138 @@ function handleWheel(e: WheelEvent) {
   gap: 0.75rem;
   justify-content: flex-end;
   padding-top: 0.5rem;
+}
+
+
+.project-overview-card {
+  padding: 1.5rem;
+  border: 1px solid var(--rose-200);
+  border-radius: 18px;
+  background: linear-gradient(135deg, var(--rose-100), white);
+  box-shadow: none;
+}
+
+.project-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 1rem;
+}
+
+.project-metric {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.75rem 0.9rem;
+  border-radius: 12px;
+  border: 1px solid var(--rose-200);
+  background: linear-gradient(135deg, var(--rose-50), white);
+}
+
+.metric-label {
+  font-size: 0.7rem;
+  color: var(--gray-600);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.metric-value {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--gray-900);
+}
+
+.project-scenes-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.project-scenes-empty {
+  text-align: center;
+  color: var(--gray-500);
+  padding: 1.25rem;
+  border: 1px dashed var(--rose-200);
+  background: linear-gradient(135deg, var(--rose-50), white);
+}
+
+.project-scene-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.project-scene-card {
+  padding: 1.1rem 1.35rem;
+  border: 1px solid var(--rose-100);
+  border-radius: 18px;
+  background: white;
+  box-shadow: none;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.project-scene-card:hover {
+  border-color: var(--rose-200);
+  box-shadow: 0 16px 36px -20px rgba(255, 133, 161, 0.35);
+  transform: translateY(-1px);
+}
+
+.project-scene-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.project-scene-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem;
+}
+
+.project-scene-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.project-scene-title {
+  margin-top: 0.35rem;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--gray-900);
+}
+
+.project-scene-description {
+  margin: 0.25rem 0 0;
+  font-size: 0.85rem;
+  color: var(--gray-500);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.project-scene-actions {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
+  flex-shrink: 0;
+}
+
+@media (max-width: 960px) {
+  .project-metrics {
+    grid-template-columns: repeat(2, minmax(120px, 1fr));
+  }
+
+  .project-scene-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .project-scene-actions {
+    justify-content: flex-start;
+  }
 }
 
 
