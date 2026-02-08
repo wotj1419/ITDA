@@ -1,6 +1,6 @@
 import apiClient from './client'
 import type { ApiResponse } from '../../types/api/common'
-import type { ProjectTimeline, SceneTimeline } from '../../types/api/timeline'
+import type { ProjectTimeline, SceneTimeline, SceneExportListResponse } from '../../types/api/timeline'
 
 export async function fetchProjectTimeline(projectId: number): Promise<ProjectTimeline> {
     const response = await apiClient.get<ApiResponse<ProjectTimeline>>(`/projects/${projectId}/timeline`)
@@ -48,6 +48,27 @@ export async function fetchSceneExport(sceneId: number): Promise<string | null> 
 export async function fetchProjectExport(projectId: number): Promise<string | null> {
     const response = await apiClient.get<ApiResponse<{ downloadUrl: string }>>(`/projects/${projectId}/export`)
     return response.data.data?.downloadUrl || null
+}
+
+export async function fetchSceneExports(
+    sceneId: number,
+    params?: { page?: number; size?: number }
+): Promise<SceneExportListResponse> {
+    const response = await apiClient.get<ApiResponse<SceneExportListResponse>>(
+        `/scenes/${sceneId}/exports`,
+        { params }
+    )
+    return response.data.data || {
+        items: [],
+        page: params?.page ?? 1,
+        size: params?.size ?? 8,
+        totalCount: 0,
+        totalPages: 0,
+    }
+}
+
+export async function deleteSceneExport(sceneId: number, sceneVideoId: number): Promise<void> {
+    await apiClient.delete<ApiResponse<void>>(`/scenes/${sceneId}/exports/${sceneVideoId}`)
 }
 
 export type { TimelineItem } from '../../types/api/timeline'
