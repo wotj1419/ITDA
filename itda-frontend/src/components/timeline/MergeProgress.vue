@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { MergeStatus } from '../../stores/timeline'
 import Button from '../common/Button.vue'
-import { Check, Play, Download, Loader2 } from 'lucide-vue-next'
+import { Check, Play, Download, Loader2, AlertTriangle } from 'lucide-vue-next'
 
 interface Props {
   status: MergeStatus
@@ -61,7 +61,7 @@ const emit = defineEmits<{
     <!-- Error -->
     <div v-if="status === 'error'" class="merge-error">
       <div class="error-content">
-        <span class="error-icon">⚠️</span>
+        <AlertTriangle class="error-icon" />
         <span>병합 중 오류가 발생했습니다. 다시 시도해주세요.</span>
       </div>
     </div>
@@ -206,6 +206,9 @@ const emit = defineEmits<{
 }
 
 .error-icon {
-  font-size: 1.25rem;
+  width: 18px;
+  height: 18px;
+  color: var(--error-600);
+  flex-shrink: 0;
 }
 </style>

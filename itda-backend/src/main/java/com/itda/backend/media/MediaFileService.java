@@ -105,6 +105,21 @@ public class MediaFileService {
         return toMediaFile(targetPath);
     }
 
+    public MediaFile loadSceneExportById(Long userId, Long sceneId, Long sceneVideoId) {
+        Scene scene = sceneMapper.findById(sceneId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.SCENE_NOT_FOUND));
+        projectAccessService.ensureProjectAccessible(scene.getProjectId(), userId);
+        SceneVideo sceneVideo = sceneVideoMapper.findById(sceneVideoId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.EXPORT_NOT_FOUND));
+        if (!sceneId.equals(sceneVideo.getSceneId())) {
+            throw new BusinessException(ErrorCode.EXPORT_NOT_FOUND);
+        }
+        Path targetPath = resolveExportPathByAsset(sceneVideo.getAssetId(),
+                ErrorCode.EXPORT_NOT_FOUND,
+                "No export asset for scene");
+        return toMediaFile(targetPath);
+    }
+
     public MediaFile loadObjectImage(Long userId, Long objectId) {
         ObjectSheet objectSheet = objectMapper.findById(objectId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.OBJECT_NOT_FOUND));

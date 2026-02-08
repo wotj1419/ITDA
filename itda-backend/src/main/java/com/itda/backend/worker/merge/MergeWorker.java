@@ -38,6 +38,7 @@ import java.util.Optional;
 public class MergeWorker {
 
     private static final Duration PROCESS_TIMEOUT = Duration.ofMinutes(10);
+    private static final Duration PROBE_TIMEOUT = Duration.ofSeconds(20);
     private static final String PROJECTS_DIR = "projects";
     private static final String SCENES_DIR = "scenes";
     private static final String MERGES_DIR = "merges";
@@ -119,6 +120,7 @@ public class MergeWorker {
         try {
             inputs = resolveSceneInputPaths(items);
             mergeTimelineItems(extractPaths(inputs), outputPath);
+            Integer durationMs = probeDurationMs(outputPath);
             VideoThumbnailService.ThumbnailAsset thumbnail = videoThumbnailService
                     .createForVideoFile(job, outputPath, "scene-merge jobId=" + job.getId())
                     .orElse(null);
@@ -127,7 +129,8 @@ public class MergeWorker {
                     asset.getId(),
                     asset.getStorageKey(),
                     thumbnail == null ? null : thumbnail.assetId(),
-                    thumbnail == null ? null : thumbnail.storageKey()
+                    thumbnail == null ? null : thumbnail.storageKey(),
+                    durationMs
             );
         } finally {
             cleanupTempInputs(inputs);
@@ -356,6 +359,43 @@ public class MergeWorker {
         } catch (Exception e) {
             log.warn("[MergeWorker] ffprobe failed, treating as no-audio: file={}", path);
             return false;
+        }
+    }
+
+    private Integer probeDurationMs(Path path) {
+        List<String> command = List.of(
+                "ffprobe",
+                "-v", "error",
+                "-show_entries", "format=duration",
+                "-of", "default=noprint_wrappers=1:nokey=1",
+                path.toString()
+        );
+        try {
+            ProcessResult result = runProcess(command, PROBE_TIMEOUT);
+            if (result.exitCode() != 0) {
+                log.warn("[MergeWorker] ffprobe duration failed: exitCode={}, file={}", result.exitCode(), path);
+                return null;
+            }
+            String output = result.output().trim();
+            if (output.isEmpty()) {
+                return null;
+            }
+            String firstLine = output.lines().findFirst().orElse(output).trim();
+            double seconds = Double.parseDouble(firstLine);
+            if (!Double.isFinite(seconds) || seconds <= 0) {
+                return null;
+            }
+            long ms = Math.round(seconds * 1000.0);
+            if (ms <= 0) {
+                return null;
+            }
+            if (ms > Integer.MAX_VALUE) {
+                return Integer.MAX_VALUE;
+            }
+            return (int) ms;
+        } catch (Exception e) {
+            log.warn("[MergeWorker] ffprobe duration failed: file={}", path, e);
+            return null;
         }
     }
 

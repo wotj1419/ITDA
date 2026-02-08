@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
+import { Film } from 'lucide-vue-next'
 import type { TimelineClip } from '../../types/ui'
 import ClipItem from './ClipItem.vue'
 import { useHoverPreviewPolicy } from '../../composables/useHoverPreviewPolicy'
@@ -119,7 +120,7 @@ function handleHoverEnd(clipId: string) {
     </TransitionGroup>
 
     <div v-if="clips.length === 0" class="track-empty">
-      <span class="empty-icon">🎬</span>
+      <Film class="empty-icon" />
       <span>확정된 클립이 없습니다</span>
     </div>
   </div>
@@ -157,17 +158,19 @@ function handleHoverEnd(clipId: string) {
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
-  height: 64px;
-  border: 2px dashed var(--rose-200);
-  border-radius: 8px;
+  height: 72px;
+  border: 1px dashed var(--rose-200);
+  border-radius: 12px;
   font-size: 0.75rem;
-  color: var(--gray-400);
-  background-color: var(--white); /* Ensure it covers anything behind if needed */
+  color: var(--gray-500);
+  background: linear-gradient(180deg, var(--rose-50), white);
   z-index: 10;
 }
 
 .empty-icon {
-  font-size: 1.5rem;
+  width: 20px;
+  height: 20px;
+  color: var(--rose-300);
 }
 
 /* Transition animations */
