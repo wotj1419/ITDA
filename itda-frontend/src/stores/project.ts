@@ -125,7 +125,21 @@ export const useProjectStore = defineStore('project', () => {
   async function loadProjects(): Promise<void> {
     await run(async () => {
       const fetched = await fetchProjects()
-      projects.value = fetched.map((project) => {
+
+      // Fetch members for each project in parallel (Frontend-only approach)
+      const projectsWithMembers = await Promise.all(
+        fetched.map(async (project) => {
+          try {
+            const members = await fetchProjectMembers(project.projectId)
+            return { ...project, members }
+          } catch (e) {
+            console.error(`Failed to fetch members for project ${project.projectId}`, e)
+            return { ...project, members: [] }
+          }
+        })
+      )
+
+      projects.value = projectsWithMembers.map((project) => {
         const lastAccessed = lastAccessedMap.value[project.projectId]
         if (lastAccessed) {
           const updatedAt = new Date(project.updatedAt).getTime()
