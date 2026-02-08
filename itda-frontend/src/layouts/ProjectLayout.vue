@@ -84,7 +84,8 @@ const memberAvatars = computed(() =>
     fallback: member.name?.[0]?.toUpperCase() || '?',
     alt: member.name,
     title: undefined,
-    userId: member.userId, // userId 추가
+    userId: member.userId,
+    onClick: toggleMemberMenu, // Add click handler
   }))
 )
 
@@ -135,7 +136,7 @@ function getEmoji(userId?: number, name?: string): string {
 const getMemberEmoji = (userId: number, name?: string) => getEmoji(userId, name)
 
 const toggleMemberMenu = () => {
-  if (!extraCount.value) return
+  // if (!extraCount.value) return // Removed guard to allow opening even with few members
   isMemberMenuOpen.value = !isMemberMenuOpen.value
 }
 
@@ -164,10 +165,7 @@ const handleNavClick = (item: typeof navItems.value[0]) => {
   emit('tab-change', item.key)
 }
 
-const progressPercentage = computed(() => {
-  if (props.progress.total === 0) return 0
-  return Math.round((props.progress.completed / props.progress.total) * 100)
-})
+// progressPercentage removed
 
 onMounted(() => {
   document.addEventListener('click', handleMemberMenuOutside)
@@ -266,13 +264,7 @@ onBeforeUnmount(() => {
         </div>
 
         <div class="header-actions">
-          <div class="progress-section">
-            <span class="progress-label">제작 진행도</span>
-            <div class="progress-bar">
-              <div class="progress-fill" :style="{ width: `${progressPercentage}%` }"></div>
-            </div>
-            <span class="progress-text">{{ progress.completed }}/{{ progress.total }}</span>
-          </div>
+          <!-- Progress Section Removed -->
 
           <div ref="memberMenuRef" class="member-pill" v-if="memberList.length > 0">
             <AvatarGroup :avatars="memberAvatars" :max="3" size="sm" />

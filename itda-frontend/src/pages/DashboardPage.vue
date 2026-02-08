@@ -29,10 +29,10 @@ const isNotificationOpen = ref(false)
 const notificationRef = ref<HTMLElement | null>(null)
 const isProjectsLoaded = ref(false)
 const notificationTitle = '알림'
-const notificationEmptyTitle = '\uc54c\ub9bc\uc774 \uc5c6\uc2b5\ub2c8\ub2e4'
-const notificationEmptyMeta = '\uc0c8 \uc54c\ub9bc\uc774 \uc624\uba74 \uc5ec\uae30\uc5d0 \ud45c\uc2dc\ub429\ub2c8\ub2e4.'
-const notificationAvatar = '\ud83d\ude42'
-const notificationCloseSymbol = '\u00d7'
+const notificationEmptyTitle = '알림이 없습니다'
+const notificationEmptyMeta = '새 알림이 오면 여기에 표시됩니다.'
+const notificationCloseSymbol = '×'
+// notificationAvatar removed
 const inviteProjectSuffix = '\ud504\ub85c\uc81d\ud2b8 \ucd08\ub300'
 const inviteSenderFallback = '\uc54c \uc218 \uc5c6\uc74c'
 const inviteSenderMessageSuffix = '\ub2d8\uc774 \ucd08\ub300\ud588\uc2b5\ub2c8\ub2e4.'
@@ -154,9 +154,31 @@ const stopInvitePolling = () => {
   invitePoller = null
 }
 
+// 귀여운 동물 이모지 목록 (Avatar.vue와 동일)
+const AVATAR_EMOJIS = [
+  '🐱', '🐶', '🐰', '🦊', '🐻', '🐼', '🐨', '🦁',
+  '🐯', '🐮', '🐷', '🐸', '🐵', '🐔', '🐧', '🦄',
+  '🐹', '🐝', '🦋', '🐢', '🐙', '🦀', '🐳', '🦩',
+]
+
+function getEmoji(userId?: number, name?: string): string {
+  if (userId !== undefined && userId > 0) {
+    const index = (userId - 1) % AVATAR_EMOJIS.length
+    return AVATAR_EMOJIS[index] ?? '🐱'
+  }
+  if (!name) return AVATAR_EMOJIS[0] ?? '🐱'
+  let hash = 0
+  for (let i = 0; i < name.length; i++) {
+    hash = ((hash << 5) - hash) + name.charCodeAt(i)
+    hash = hash & hash
+  }
+  const index = Math.abs(hash) % AVATAR_EMOJIS.length
+  return AVATAR_EMOJIS[index] ?? '🐱'
+}
+
 const getInviteAvatar = (invite: ProjectInvite) => {
   const source = invite.senderName || invite.senderEmail || ''
-  return source ? source.trim()[0]?.toUpperCase() : notificationAvatar
+  return getEmoji(invite.senderId, source)
 }
 
 const acceptInvite = async (invite: ProjectInvite) => {
@@ -241,7 +263,7 @@ const cancelDelete = () => {
             </div>
             <div class="notification-panel__list">
               <div v-if="pendingInvites.length === 0" class="notification-item notification-item--empty">
-                <div class="notification-avatar">{{ notificationAvatar }}</div>
+                <div class="notification-avatar">🐱</div>
                 <div class="notification-content">
                   <div class="notification-title">{{ notificationEmptyTitle }}</div>
                   <div class="notification-meta">{{ notificationEmptyMeta }}</div>

@@ -5,8 +5,9 @@ import { MoreVertical, Trash2 } from 'lucide-vue-next'
 import type { Project } from '../../types/api/projects'
 import Badge from '../common/Badge.vue'
 import TimeAgo from '../common/TimeAgo.vue'
+import AvatarGroup from '../common/AvatarGroup.vue'
 import { useProjectStore } from '../../stores/project'
-import { useSceneStore } from '../../stores/scene'
+// useSceneStore removed
 
 interface Props {
   project: Project
@@ -20,7 +21,7 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 const projectStore = useProjectStore()
-const sceneStore = useSceneStore()
+// sceneStore removed
 
 const handleCardClick = () => {
   projectStore.touchProject(props.project.projectId)
@@ -29,18 +30,22 @@ const handleCardClick = () => {
 const isMenuOpen = ref(false)
 const menuRef = ref<HTMLElement | null>(null)
 
-const progress = computed(() => {
-  const completed = sceneStore.getCompletedSceneCount(props.project.projectId)
-  const total = Math.max(props.project.sceneCount ?? 0, completed)
-  return { completed, total }
-})
+// Progress logic removed
+
 const isHighlighted = computed(() => projectStore.highlightedProjectId === props.project.projectId)
 const isOwner = computed(() => props.project.role === 'OWNER')
-const deleteLabel = computed(() => (isOwner.value ? '\uc0ad\uc81c' : '\ub098\uac00\uae30'))
 
-const progressPercent = computed(() => {
-  if (progress.value.total === 0) return 0
-  return Math.round((progress.value.completed / progress.value.total) * 100)
+
+const deleteLabel = computed(() => (isOwner.value ? '삭제' : '나가기'))
+
+const memberAvatars = computed(() => {
+  const members = props.project.members || []
+  return members.map(m => ({
+    userId: m.userId,
+    src: m.profileImageUrl || undefined,
+    alt: m.name,
+    title: m.name
+  }))
 })
 
 const previewImageUrl = computed(() => props.project.previewThumbnailUrl || props.project.thumbnailUrl || '')
@@ -254,17 +259,9 @@ const handleDeleteRequest = (e: Event) => {
         {{ project.description }}
       </p>
 
-      <!-- Progress -->
-      <div class="card-progress">
-        <div class="progress-bar">
-          <div
-            class="progress-bar-fill"
-            :style="{ width: `${progressPercent}%` }"
-          ></div>
-        </div>
-        <span class="progress-text">
-          {{ progress.total === 0 ? '진행 중' : `${progress.completed}/${progress.total}` }}
-        </span>
+      <!-- Members -->
+      <div class="card-members">
+        <AvatarGroup :avatars="memberAvatars" :max="6" size="sm" />
       </div>
 
       <!-- Footer -->
@@ -408,38 +405,18 @@ const handleDeleteRequest = (e: Event) => {
   margin: 0;
 }
 
-/* Progress */
-.card-progress {
+/* Members */
+.card-members {
+  margin-bottom: 0.75rem;
+  height: 28px;
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  margin-bottom: 0.75rem;
 }
 
-.project-card--list .card-progress {
+.project-card--list .card-members {
   margin-bottom: 0;
 }
-
-.progress-bar {
-  flex: 1;
-  height: 4px;
-  background: var(--gray-100);
-  border-radius: 2px;
-  overflow: hidden;
-}
-
-.progress-bar-fill {
-  height: 100%;
-  background: linear-gradient(90deg, var(--rose-400), var(--rose-500));
-  border-radius: 2px;
-  transition: width 0.3s ease;
-}
-
-.progress-text {
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: var(--rose-500);
-}
+/* Styles for manual avatar group removed as we use AvatarGroup component */
 
 /* Footer */
 .card-footer {
