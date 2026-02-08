@@ -545,6 +545,17 @@ function handleWheel(e: WheelEvent) {
             </div>
           </Card>
         </section>
+<!-- Merge Progress -->
+        <section>
+          <MergeProgress
+            :status="timelineStore.mergeStatus"
+            :progress="timelineStore.mergeProgress"
+            :status-text="timelineStore.mergeStatusText"
+            :download-url="timelineStore.downloadUrl"
+            @preview="handleMergePreview"
+            @download="handleDownload"
+          />
+        </section>
 <section v-if="!isSceneTimeline" class="project-scenes-section">
           <div class="section-header">
             <div class="section-title-wrap">
@@ -585,17 +596,7 @@ function handleWheel(e: WheelEvent) {
             </Card>
           </div>
         </section>
-        <!-- Merge Progress -->
-        <section>
-          <MergeProgress
-            :status="timelineStore.mergeStatus"
-            :progress="timelineStore.mergeProgress"
-            :status-text="timelineStore.mergeStatusText"
-            :download-url="timelineStore.downloadUrl"
-            @preview="handleMergePreview"
-            @download="handleDownload"
-          />
-        </section>
+        
         <section v-if="isSceneTimeline" class="export-section">
           <div class="section-header export-header">
             <div class="section-title-wrap">
