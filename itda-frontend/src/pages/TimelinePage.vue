@@ -19,7 +19,7 @@ import SceneVideoPreviewModal from '../components/scene-editor/SceneVideoPreview
 import { GitMerge, RefreshCw } from 'lucide-vue-next'
 import { triggerDownload } from '../utils/download'
 import { formatRelativeTime } from '../utils/date'
-import { fetchSceneExports, deleteSceneExport, activateSceneExport } from '../services/api/timeline'
+import { fetchSceneExports, deleteSceneExport, activateSceneExport, fetchProjectExportPreview } from '../services/api/timeline'
 import { SCENE_VIDEO_PREVIEW_MODAL_ID } from '../constants/ui'
 import type { SceneExportItem } from '../types/api/timeline'
 
@@ -191,6 +191,46 @@ async function handleRemove(clipId: string) {
 
 async function handleMerge() {
   await timelineStore.startMerge()
+}
+
+async function handleMergePreview(): Promise<void> {
+  if (sceneId.value !== null) {
+    if (!activeExport.value) {
+      await loadSceneExports(exportPage.value)
+    }
+
+    const target = activeExport.value
+    if (target && canPreviewExport(target)) {
+      handlePreviewExport(target)
+      return
+    }
+
+    uiStore.showToast({
+      type: 'error',
+      title: '미리보기 불가',
+      message: '아직 미리보기 가능한 병합 영상이 없습니다.',
+    })
+    return
+  }
+
+  if (!projectId.value) return
+
+  const previewUrl = await fetchProjectExportPreview(projectId.value).catch(() => null)
+  if (!previewUrl) {
+    uiStore.showToast({
+      type: 'error',
+      title: '미리보기 불가',
+      message: '프로젝트 병합 영상 미리보기를 불러오지 못했습니다.',
+    })
+    return
+  }
+
+  const title = project.value?.title ? `${project.value.title} 병합 영상` : '프로젝트 병합 영상'
+  uiStore.openModal(SCENE_VIDEO_PREVIEW_MODAL_ID, {
+    title,
+    videoUrl: previewUrl,
+    posterUrl: null,
+  })
 }
 
 function handleDownload() {
@@ -462,7 +502,7 @@ function handleWheel(e: WheelEvent) {
             :progress="timelineStore.mergeProgress"
             :status-text="timelineStore.mergeStatusText"
             :download-url="timelineStore.downloadUrl"
-            @preview="() => {}"
+            @preview="handleMergePreview"
             @download="handleDownload"
           />
         </section>
@@ -706,26 +746,27 @@ function handleWheel(e: WheelEvent) {
   }
 }
 .section-title {
-  font-size: 0.625rem;
+  margin: 0;
+  font-size: 1rem;
   font-weight: 600;
-  color: var(--gray-500);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  margin-bottom: 0.75rem;
+  color: var(--gray-900);
+  letter-spacing: 0;
+  text-transform: none;
 }
 .section-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 0.75rem;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
 }
 .section-hint {
   font-size: 0.75rem;
-  color: var(--gray-400);
+  color: var(--gray-500);
 }
 .preview-card,
 .track-card {
-  padding: 1.5rem;
+  padding: 1.25rem;
 }
 .track-info {
   display: flex;
@@ -795,6 +836,8 @@ function handleWheel(e: WheelEvent) {
   justify-content: space-between;
   gap: 0.75rem;
   flex-wrap: wrap;
+  padding-bottom: 0.25rem;
+  border-bottom: 1px solid var(--gray-100);
 }
 
 .project-section-title-wrap {
@@ -861,9 +904,8 @@ function handleWheel(e: WheelEvent) {
 
 .export-card-active {
   border: 1px solid var(--rose-300);
-  background: var(--rose-50);
-  border-radius: 12px;
-  padding: 0.5rem;
+  background: linear-gradient(135deg, var(--rose-50), white);
+  box-shadow: 0 12px 24px -16px rgba(255, 133, 161, 0.45);
 }
 
 .export-thumb {
@@ -934,6 +976,7 @@ function handleWheel(e: WheelEvent) {
   gap: 0.5rem;
   flex-wrap: wrap;
   justify-content: flex-end;
+  align-items: center;
 }
 
 .export-pagination {
@@ -943,6 +986,7 @@ function handleWheel(e: WheelEvent) {
   gap: 0.5rem;
   flex-wrap: wrap;
   padding-top: 0.5rem;
+  margin-top: 0.25rem;
 }
 
 .export-ellipsis {
@@ -958,6 +1002,7 @@ function handleWheel(e: WheelEvent) {
 .export-error {
   font-size: 0.75rem;
   color: var(--error-600);
+  margin-top: 0.25rem;
 }
 
 @media (max-width: 960px) {

@@ -50,6 +50,11 @@ export async function fetchProjectExport(projectId: number): Promise<string | nu
     return response.data.data?.downloadUrl || null
 }
 
+export async function fetchProjectExportPreview(projectId: number): Promise<string | null> {
+    const response = await apiClient.get<ApiResponse<{ previewUrl: string }>>(`/projects/${projectId}/export`)
+    return response.data.data?.previewUrl || null
+}
+
 export async function fetchSceneExports(
     sceneId: number,
     params?: { page?: number; size?: number }

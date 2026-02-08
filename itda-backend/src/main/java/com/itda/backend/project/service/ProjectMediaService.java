@@ -100,14 +100,17 @@ public class ProjectMediaService {
         ProjectMerge activeMerge = projectMergeMapper.findActiveByProjectId(projectId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.EXPORT_NOT_FOUND,
                         "No active project merge result"));
-        String fallbackUrl = mediaUrlResolver.projectExportUrl(projectId);
+        String previewFallback = mediaUrlResolver.projectExportPreviewUrl(projectId);
+        String downloadFallback = mediaUrlResolver.projectExportUrl(projectId);
+        String previewUrl = assetUrlResolver.resolveUrl(activeMerge.getAssetId(), previewFallback);
         String downloadUrl = assetUrlResolver.resolveDownloadUrl(
                 activeMerge.getAssetId(),
-                fallbackUrl,
+                downloadFallback,
                 "project-" + projectId + ".mp4"
         );
         return new ProjectExportResponse(
                 activeMerge.getAssetId(),
+                previewUrl,
                 downloadUrl,
                 activeMerge.getMergeSignature(),
                 activeMerge.getStatus());

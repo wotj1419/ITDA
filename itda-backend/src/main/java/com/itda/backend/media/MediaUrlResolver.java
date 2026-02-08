@@ -13,6 +13,7 @@ public class MediaUrlResolver {
     private static final String NODE_CONTENT_SUFFIX = "/content";
     private static final String PROJECT_EXPORT_PREFIX = "/api/projects/";
     private static final String PROJECT_EXPORT_SUFFIX = "/export/file";
+    private static final String PROJECT_EXPORT_PREVIEW_SUFFIX = "/export/preview";
     private static final String SCENE_EXPORT_PREFIX = "/api/scenes/";
     private static final String SCENE_EXPORT_SUFFIX = "/export/file";
     private static final String SCENE_EXPORT_ITEM_SUFFIX = "/exports/";
@@ -39,6 +40,13 @@ public class MediaUrlResolver {
             return null;
         }
         return PROJECT_EXPORT_PREFIX + projectId + PROJECT_EXPORT_SUFFIX;
+    }
+
+    public String projectExportPreviewUrl(Long projectId) {
+        if (projectId == null) {
+            return null;
+        }
+        return PROJECT_EXPORT_PREFIX + projectId + PROJECT_EXPORT_PREVIEW_SUFFIX;
     }
 
     public String sceneExportUrl(Long sceneId) {

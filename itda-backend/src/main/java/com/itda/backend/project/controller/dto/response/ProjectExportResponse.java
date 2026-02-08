@@ -6,6 +6,8 @@ import io.swagger.v3.oas.annotations.media.Schema;
 public record ProjectExportResponse(
         @Schema(description = "Asset ID", example = "123")
         Long assetId,
+        @Schema(description = "Preview URL", example = "/api/projects/101/export/preview")
+        String previewUrl,
         @Schema(description = "Download URL", example = "/api/projects/101/export/file")
         String downloadUrl,
         @Schema(description = "Merge signature", example = "f2c6b5...")

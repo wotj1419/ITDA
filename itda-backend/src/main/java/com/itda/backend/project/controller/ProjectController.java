@@ -206,4 +206,26 @@ public class ProjectController {
                                                 contentDisposition.toString())
                                 .body(mediaFile.resource());
         }
+        @Operation(summary = "Project export preview", description = "Preview merged project file inline.")
+        @ApiResponses({
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Preview success", content = @Content(mediaType = "application/octet-stream", schema = @Schema(type = "string", format = "binary"))),
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized"),
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden"),
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Export file not found")
+        })
+        @GetMapping("/{projectId}/export/preview")
+        public ResponseEntity<Resource> previewExport(
+                        @AuthenticationPrincipal CustomUserDetails userDetails,
+                        @Parameter(description = "?ê¾¨ì¤ˆ?ì•ºë“ƒ ID") @PathVariable Long projectId) {
+                MediaFile mediaFile = mediaFileService.loadProjectExport(userDetails.getUserId(), projectId);
+                ContentDisposition contentDisposition = ContentDisposition.inline()
+                                .filename(mediaFile.filename())
+                                .build();
+                return ResponseEntity.ok()
+                                .contentType(mediaFile.mediaType())
+                                .contentLength(mediaFile.contentLength())
+                                .header(HttpHeaders.CONTENT_DISPOSITION,
+                                                contentDisposition.toString())
+                                .body(mediaFile.resource());
+        }
 }
