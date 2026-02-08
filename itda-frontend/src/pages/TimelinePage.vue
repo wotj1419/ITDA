@@ -22,6 +22,7 @@ import { formatRelativeTime } from '../utils/date'
 import { fetchSceneExports, deleteSceneExport, activateSceneExport, fetchProjectExportPreview } from '../services/api/timeline'
 import { SCENE_VIDEO_PREVIEW_MODAL_ID } from '../constants/ui'
 import type { SceneExportItem } from '../types/api/timeline'
+import type { TimelineClip } from '../types/ui'
 
 const route = useRoute()
 const projectStore = useProjectStore()
@@ -53,6 +54,85 @@ const sceneProgress = computed(() => sceneStore.progress)
 
 const orderedClips = computed(() => timelineStore.orderedClips)
 const selectedClipId = ref<string | null>(null)
+
+type ProjectClipGroup = {
+  sceneId: number
+  order: number
+  title: string
+  clips: TimelineClip[]
+  previewClips: TimelineClip[]
+  clipCount: number
+  totalDurationMs: number
+}
+
+const projectClipPreviewLimit = 6
+const expandedSceneIds = ref<Set<number>>(new Set())
+
+const isSceneListExpanded = ref(true)
+const toggleSceneList = () => {
+  isSceneListExpanded.value = !isSceneListExpanded.value
+}
+
+
+const projectClipGroups = computed<ProjectClipGroup[]>(() => {
+  if (isSceneTimeline.value) return []
+  const clipsByScene = new Map<number, TimelineClip[]>()
+  orderedClips.value.forEach((clip) => {
+    if (!clip.sceneId) return
+    const list = clipsByScene.get(clip.sceneId) ?? []
+    list.push(clip)
+    clipsByScene.set(clip.sceneId, list)
+  })
+
+  return orderedScenes.value
+    .map((scene) => {
+      const clips = (clipsByScene.get(scene.sceneId) ?? [])
+        .slice()
+        .sort((a, b) => a.order - b.order)
+      const clipCount = clips.length
+      const totalDurationMs = clips.reduce((sum, clip) => sum + (clip.duration || 0) * 1000, 0)
+      return {
+        sceneId: scene.sceneId,
+        order: scene.order,
+        title: scene.title,
+        clips,
+        previewClips: clips.slice(0, projectClipPreviewLimit),
+        clipCount,
+        totalDurationMs,
+      }
+    })
+    .filter((group) => group.clipCount > 0)
+})
+
+const projectClipGroupBySceneId = computed(() => {
+  const map = new Map<number, ProjectClipGroup>()
+  projectClipGroups.value.forEach((group) => {
+    map.set(group.sceneId, group)
+  })
+  return map
+})
+
+const projectSceneRows = computed(() => {
+  if (isSceneTimeline.value) return []
+  const groupMap = projectClipGroupBySceneId.value
+  return orderedScenes.value.map((scene) => ({
+    scene,
+    clipGroup: groupMap.get(scene.sceneId) ?? null,
+  }))
+})
+
+const isSceneGroupExpanded = (sceneId: number) => expandedSceneIds.value.has(sceneId)
+
+const toggleSceneGroup = (sceneId: number) => {
+  const next = new Set(expandedSceneIds.value)
+  if (next.has(sceneId)) {
+    next.delete(sceneId)
+  } else {
+    next.add(sceneId)
+  }
+  expandedSceneIds.value = next
+}
+
 
 const sceneExports = ref<SceneExportItem[]>([])
 const activeExport = ref<SceneExportItem | null>(null)
@@ -514,35 +594,37 @@ function handleWheel(e: WheelEvent) {
           </Card>
         </section>
         <!-- Video Track -->
-        <section>
+        <section v-if="isSceneTimeline">
           <div class="section-header">
             <h3 class="section-title">타임라인 클립</h3>
-            <span class="section-hint">드래그로 순서를 변경할 수 있습니다.</span>
           </div>
+          <p v-if="isSceneTimeline" class="section-hint">드래그로 순서를 변경할 수 있습니다.</p>
           <Card class="track-card">
-            <div 
-              class="timeline-scroll-container" 
-              :style="{ overflowX: timelineStore.clipCount === 0 ? 'hidden' : 'auto' }"
-              @wheel="handleWheel"
-            >
-              <div 
-                class="timeline-inner-wrapper"
-                :style="{ width: timelineStore.clipCount === 0 ? '100%' : `${timelineMaxTime * 20}px` }"
+            <template v-if="isSceneTimeline">
+              <div
+                class="timeline-scroll-container"
+                :style="{ overflowX: timelineStore.clipCount === 0 ? 'hidden' : 'auto' }"
+                @wheel="handleWheel"
               >
-                <TimeRuler :max-time="timelineMaxTime" :px-per-sec="20" />
-                <VideoTrack
-                  :clips="orderedClips"
-                  :selected-clip-id="selectedClipId"
-                  @reorder="handleReorder"
-                  @remove="handleRemove"
-                  @select="handleSelectClip"
-                />
+                <div
+                  class="timeline-inner-wrapper"
+                  :style="{ width: timelineStore.clipCount === 0 ? '100%' : `${timelineMaxTime * 20}px` }"
+                >
+                  <TimeRuler :max-time="timelineMaxTime" :px-per-sec="20" />
+                  <VideoTrack
+                    :clips="orderedClips"
+                    :selected-clip-id="selectedClipId"
+                    @reorder="handleReorder"
+                    @remove="handleRemove"
+                    @select="handleSelectClip"
+                  />
+                </div>
               </div>
-            </div>
-            <div class="track-info">
-              <span class="clip-count">{{ timelineStore.clipCount }}개 클립</span>
-              <span class="duration-text">총 길이: {{ timelineStore.totalDuration }}초</span>
-            </div>
+              <div class="track-info">
+                <span class="clip-count">{{ timelineStore.clipCount }}개 클립</span>
+                <span class="duration-text">총 길이: {{ timelineStore.totalDuration }}초</span>
+              </div>
+            </template>
           </Card>
         </section>
 <!-- Merge Progress -->
@@ -561,39 +643,78 @@ function handleWheel(e: WheelEvent) {
             <div class="section-title-wrap">
               <h3 class="section-title">씬 목록</h3>
               <span class="section-count">{{ sceneCount }}</span>
+              <Button variant="ghost" size="sm" class="section-toggle" @click="toggleSceneList">
+                {{ isSceneListExpanded ? '접기' : '펼침' }}
+              </Button>
             </div>
           </div>
-          <p class="section-subtitle text-muted">씬 편집과 타임라인 화면으로 빠르게 이동할 수 있습니다.</p>
+          <div v-show="isSceneListExpanded" class="project-scenes-body">
+            <p class="section-subtitle text-muted">씬 편집과 타임라인 화면으로 빠르게 이동할 수 있습니다.</p>
           <Card v-if="orderedScenes.length === 0" dashed class="project-scenes-empty">
             아직 생성된 씬이 없습니다.
           </Card>
           <div v-else class="project-scene-list">
-            <Card v-for="scene in orderedScenes" :key="scene.sceneId" class="project-scene-card">
+            <Card v-for="row in projectSceneRows" :key="row.scene.sceneId" class="project-scene-card">
               <div class="project-scene-row">
                 <div class="project-scene-info">
                   <div class="project-scene-header">
-                    <Badge variant="default" size="sm">씬 {{ scene.order }}</Badge>
-                    <Badge :variant="getSceneStatusMeta(scene.status).variant" size="sm">
-                      {{ getSceneStatusMeta(scene.status).label }}
+                    <Badge variant="default" size="sm">씬 {{ row.scene.order }}</Badge>
+                    <Badge :variant="getSceneStatusMeta(row.scene.status).variant" size="sm">
+                      {{ getSceneStatusMeta(row.scene.status).label }}
                     </Badge>
                   </div>
-                  <div class="project-scene-title">{{ scene.title }}</div>
-                  <p v-if="scene.description" class="project-scene-description">{{ scene.description }}</p>
+                  <div class="project-scene-title">{{ row.scene.title }}</div>
+                  <p v-if="row.scene.description" class="project-scene-description">{{ row.scene.description }}</p>
                 </div>
                 <div class="project-scene-actions">
-                  <RouterLink :to="{ name: 'scene-edit', params: { projectId: projectId, sceneId: scene.sceneId } }" custom v-slot="{ navigate }">
+                  <RouterLink :to="{ name: 'scene-edit', params: { projectId: projectId, sceneId: row.scene.sceneId } }" custom v-slot="{ navigate }">
                     <Button variant="secondary" size="sm" @click="navigate">
                       씬 편집
                     </Button>
                   </RouterLink>
-                  <RouterLink :to="{ name: 'scene-timeline', params: { id: projectId, sceneId: scene.sceneId } }" custom v-slot="{ navigate }">
+                  <RouterLink :to="{ name: 'scene-timeline', params: { id: projectId, sceneId: row.scene.sceneId } }" custom v-slot="{ navigate }">
                     <Button variant="primary" size="sm" @click="navigate">
                       타임라인
                     </Button>
                   </RouterLink>
                 </div>
               </div>
+              <div v-if="row.clipGroup" class="project-scene-clips">
+                <div class="project-scene-clip-meta">
+                  <div class="project-scene-clip-meta-items">
+                    <span class="project-scene-clip-count">{{ row.clipGroup.clipCount }}개</span>
+                    <span class="project-scene-clip-duration">{{ formatDurationMs(row.clipGroup.totalDurationMs) }}</span>
+                  </div>
+                  <Button
+                    v-if="row.clipGroup.clipCount > projectClipPreviewLimit"
+                    variant="ghost"
+                    size="sm"
+                    class="project-clip-toggle"
+                    @click="toggleSceneGroup(row.scene.sceneId)"
+                  >
+                    {{ isSceneGroupExpanded(row.scene.sceneId) ? '접기' : `+${row.clipGroup.clipCount - projectClipPreviewLimit}개 더보기` }}
+                  </Button>
+                </div>
+                <div class="project-clip-strip">
+                  <button
+                    v-for="clip in (isSceneGroupExpanded(row.scene.sceneId) ? row.clipGroup.clips : row.clipGroup.previewClips)"
+                    :key="clip.clipId"
+                    type="button"
+                    class="project-clip-thumb"
+                    :class="{ active: selectedClipId === clip.clipId }"
+                    @click="handleSelectClip(clip.clipId)"
+                  >
+                    <img v-if="clip.thumbnailUrl" :src="clip.thumbnailUrl" :alt="clip.label || row.scene.title" />
+                    <div v-else class="project-clip-thumb-placeholder">No Preview</div>
+                    <span class="project-clip-duration">{{ formatDurationMs(clip.duration * 1000) }}</span>
+                  </button>
+                </div>
+              </div>
+              <div v-else class="project-scene-clip-empty">
+                확정된 클립이 없습니다.
+              </div>
             </Card>
+          </div>
           </div>
         </section>
         
@@ -850,17 +971,29 @@ function handleWheel(e: WheelEvent) {
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.35rem;
 }
 .section-hint {
+  margin: 0;
   font-size: 0.75rem;
   color: var(--gray-500);
 }
 .section-subtitle {
-  margin: 0.35rem 0 0;
+  margin: 0;
   font-size: 0.85rem;
   color: var(--gray-500);
   line-height: 1.4;
+}
+.section-header .section-subtitle {
+  margin-top: 0.25rem;
+}
+.section-header + .section-hint,
+.section-header + .section-subtitle {
+  margin-top: 0.1rem;
+  margin-bottom: 0.75rem;
+}
+.project-scenes-body > .section-subtitle {
+  margin-bottom: 0.75rem;
 }
 .preview-card,
 .track-card {
@@ -877,6 +1010,123 @@ function handleWheel(e: WheelEvent) {
   border-radius: 12px;
   border: 1px dashed var(--rose-200);
   background: linear-gradient(135deg, var(--rose-50), white);
+}
+.project-clip-empty {
+  text-align: center;
+  color: var(--gray-500);
+  padding: 1.5rem;
+  border: 1px dashed var(--rose-200);
+  border-radius: 16px;
+  background: linear-gradient(135deg, var(--rose-50), white);
+}
+.project-clip-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+.project-clip-group {
+  padding: 1rem;
+  border: 1px solid var(--rose-100);
+  border-radius: 16px;
+  background: white;
+}
+.project-clip-group-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+.project-clip-group-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 700;
+  color: var(--gray-900);
+}
+.project-clip-group-name {
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+.project-clip-group-meta {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  font-size: 0.75rem;
+  color: var(--gray-500);
+}
+.project-clip-group-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+.project-clip-toggle {
+  border: 1px solid var(--rose-200);
+  background: var(--rose-50);
+  color: var(--rose-600);
+  font-size: 0.7rem;
+  font-weight: 700;
+  border-radius: 999px;
+  padding: 0.25rem 0.65rem;
+  cursor: pointer;
+}
+.project-clip-toggle:hover {
+  background: var(--rose-100);
+}
+.project-clip-strip {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+  overflow-x: auto;
+  padding-bottom: 0.25rem;
+}
+.project-clip-thumb {
+  position: relative;
+  width: 104px;
+  height: 58px;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid var(--rose-100);
+  background: var(--rose-50);
+  cursor: pointer;
+  flex-shrink: 0;
+  padding: 0;
+}
+.project-clip-thumb:focus-visible {
+  outline: 2px solid var(--rose-400);
+  outline-offset: 2px;
+}
+.project-clip-thumb.active {
+  border-color: var(--rose-400);
+  box-shadow: 0 0 0 2px rgba(255, 133, 161, 0.3);
+}
+.project-clip-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.project-clip-thumb-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.65rem;
+  color: var(--gray-400);
+}
+.project-clip-duration {
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  background: rgba(15, 23, 42, 0.7);
+  color: white;
+  font-size: 0.65rem;
+  padding: 2px 6px;
+  border-radius: 999px;
 }
 .clip-count {
   font-size: 0.75rem;
@@ -970,6 +1220,12 @@ function handleWheel(e: WheelEvent) {
   gap: 0.5rem;
 }
 
+.project-scenes-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
 .project-scenes-empty {
   text-align: center;
   color: var(--gray-500);
@@ -1042,9 +1298,50 @@ function handleWheel(e: WheelEvent) {
   flex-shrink: 0;
 }
 
+.project-scene-clips {
+  margin-top: 0.85rem;
+  padding-top: 0.75rem;
+  border-top: 1px dashed var(--rose-100);
+}
+
+.project-scene-clip-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.project-scene-clip-meta-items {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.75rem;
+  color: var(--gray-500);
+}
+
+.project-scene-clip-count,
+.project-scene-clip-duration {
+  font-weight: 600;
+}
+
+.project-scene-clip-empty {
+  margin-top: 0.85rem;
+  padding: 0.75rem 1rem;
+  border-radius: 12px;
+  border: 1px dashed var(--rose-200);
+  background: linear-gradient(135deg, var(--rose-50), white);
+  color: var(--gray-500);
+  font-size: 0.8rem;
+}
+
 @media (max-width: 960px) {
   .project-metrics {
     grid-template-columns: repeat(2, minmax(120px, 1fr));
+  }
+
+  .project-clip-group-actions {
+    width: 100%;
+    justify-content: flex-start;
   }
 
   .project-scene-row {
@@ -1094,6 +1391,21 @@ function handleWheel(e: WheelEvent) {
   display: flex;
   align-items: center;
   gap: 0.5rem;
+}
+
+.section-toggle {
+  border-radius: 999px;
+  padding: 0.2rem 0.75rem;
+  font-weight: 600;
+  color: var(--gray-600);
+  border: 1px solid var(--gray-200);
+  background: white;
+}
+
+.section-toggle:hover {
+  color: var(--gray-800);
+  border-color: var(--rose-200);
+  background: var(--rose-50);
 }
 
 .section-hint.export-hint {
