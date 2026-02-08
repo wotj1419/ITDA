@@ -348,16 +348,16 @@ async function handleActivateExport(item: SceneExportItem): Promise<void> {
     await activateSceneExport(sceneId.value, item.sceneVideoId)
     uiStore.showToast({
       type: 'success',
-      title: '대표 병합 영상 변경',
-      message: '씬 대표 병합 영상이 업데이트되었습니다.',
+      title: '활성 병합 영상 변경',
+      message: '씬 활성 병합 영상이 업데이트되었습니다.',
     })
     await loadSceneExports(exportPage.value)
   } catch (error) {
     console.error('Failed to activate scene export', error)
     uiStore.showToast({
       type: 'error',
-      title: '대표 병합 영상 변경 실패',
-      message: '대표 병합 영상 설정에 실패했습니다.',
+      title: '활성 병합 영상 변경 실패',
+      message: '활성 병합 영상 설정에 실패했습니다.',
     })
   } finally {
     if (activatingExportId.value === item.sceneVideoId) {
@@ -507,12 +507,12 @@ function handleWheel(e: WheelEvent) {
           />
         </section>
         <section v-if="isSceneTimeline" class="export-section">
-          <div class="project-section-header">
-            <div class="project-section-title-wrap">
-              <h3 class="project-section-title">씬 병합 영상</h3>
+          <div class="section-header export-header">
+            <div class="section-title-wrap">
+              <h3 class="section-title">씬 병합 영상</h3>
               <span class="section-count">{{ exportCountLabel }}</span>
             </div>
-            <div class="project-section-actions">
+            <div class="section-actions">
               <Button
                 variant="secondary"
                 size="sm"
@@ -523,7 +523,7 @@ function handleWheel(e: WheelEvent) {
               </Button>
             </div>
           </div>
-          <p class="project-section-hint">
+          <p class="section-hint export-hint">
             씬에서 생성한 병합 영상을 미리보기/다운로드/삭제할 수 있습니다.
           </p>
 
@@ -544,7 +544,6 @@ function handleWheel(e: WheelEvent) {
                   alt="merge thumbnail"
                 />
                 <div v-else class="export-thumb-placeholder">No Preview</div>
-                <span class="export-active">활성</span>
               </div>
               <div class="export-info">
                 <div class="export-badges">
@@ -568,6 +567,7 @@ function handleWheel(e: WheelEvent) {
                 <Button
                   variant="secondary"
                   size="sm"
+                  class="export-btn export-btn-preview"
                   :disabled="!canPreviewExport(activeExport)"
                   @click="handlePreviewExport(activeExport)"
                 >
@@ -576,24 +576,11 @@ function handleWheel(e: WheelEvent) {
                 <Button
                   variant="primary"
                   size="sm"
+                  class="export-btn export-btn-download"
                   :disabled="!canDownloadExport(activeExport)"
                   @click="handleDownloadExport(activeExport)"
                 >
                   다운로드
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled
-                >
-                  대표 설정
-                </Button>
-                <Button
-                  variant="danger"
-                  size="sm"
-                  disabled
-                >
-                  삭제
                 </Button>
               </div>
             </Card>
@@ -605,7 +592,6 @@ function handleWheel(e: WheelEvent) {
                   alt="merge thumbnail"
                 />
                 <div v-else class="export-thumb-placeholder">No Preview</div>
-                <span v-if="item.active" class="export-active">활성</span>
               </div>
               <div class="export-info">
                 <div class="export-badges">
@@ -629,6 +615,7 @@ function handleWheel(e: WheelEvent) {
                 <Button
                   variant="secondary"
                   size="sm"
+                  class="export-btn export-btn-preview"
                   :disabled="!canPreviewExport(item)"
                   @click="handlePreviewExport(item)"
                 >
@@ -637,23 +624,26 @@ function handleWheel(e: WheelEvent) {
                 <Button
                   variant="primary"
                   size="sm"
+                  class="export-btn export-btn-download"
                   :disabled="!canDownloadExport(item)"
                   @click="handleDownloadExport(item)"
                 >
                   다운로드
                 </Button>
                 <Button
-                  variant="outline"
+                  variant="secondary"
                   size="sm"
+                  class="export-btn export-btn-activate"
                   :disabled="!canActivateExport(item)"
                   :loading="activatingExportId === item.sceneVideoId"
                   @click="handleActivateExport(item)"
                 >
-                  대표 설정
+                  활성화
                 </Button>
                 <Button
                   variant="danger"
                   size="sm"
+                  class="export-btn export-btn-delete"
                   :disabled="item.active || isDeletingExport"
                   @click="requestDeleteExport(item)"
                 >
@@ -721,7 +711,15 @@ function handleWheel(e: WheelEvent) {
 .timeline-content {
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: 2rem;
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+.timeline-content > section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
 }
 .loading-state {
   display: flex;
@@ -752,6 +750,9 @@ function handleWheel(e: WheelEvent) {
   color: var(--gray-900);
   letter-spacing: 0;
   text-transform: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
 }
 .section-header {
   display: flex;
@@ -766,15 +767,19 @@ function handleWheel(e: WheelEvent) {
 }
 .preview-card,
 .track-card {
-  padding: 1.25rem;
+  padding: 1.5rem;
+  border-color: var(--rose-200);
+  box-shadow: 0 12px 24px -18px rgba(15, 23, 42, 0.18);
 }
 .track-info {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-top: 0.75rem;
-  padding-top: 0.75rem;
-  border-top: 1px solid var(--rose-100);
+  margin-top: 1rem;
+  padding: 0.75rem 1rem;
+  border-radius: 12px;
+  border: 1px dashed var(--rose-200);
+  background: linear-gradient(135deg, var(--rose-50), white);
 }
 .clip-count {
   font-size: 0.75rem;
@@ -788,8 +793,8 @@ function handleWheel(e: WheelEvent) {
 .timeline-scroll-container {
   overflow-x: auto;
   border: 1px solid var(--rose-200);
-  border-radius: 8px;
-  background: var(--rose-50);
+  border-radius: 12px;
+  background: linear-gradient(180deg, var(--rose-50), white);
   /* Custom scrollbar styling */
   scrollbar-width: thin;
   scrollbar-color: transparent transparent;
@@ -830,27 +835,16 @@ function handleWheel(e: WheelEvent) {
   gap: 0.75rem;
 }
 
-.project-section-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  flex-wrap: wrap;
-  padding-bottom: 0.25rem;
-  border-bottom: 1px solid var(--gray-100);
+.section-header.export-header {
+  border-bottom: none;
+  padding-bottom: 0;
+  margin-bottom: 0.25rem;
 }
 
-.project-section-title-wrap {
+.section-title-wrap {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-}
-
-.project-section-title {
-  margin: 0;
-  font-size: 1rem;
-  font-weight: 600;
-  color: var(--gray-900);
 }
 
 .section-count {
@@ -867,13 +861,13 @@ function handleWheel(e: WheelEvent) {
   font-weight: 700;
 }
 
-.project-section-actions {
+.section-actions {
   display: flex;
   align-items: center;
   gap: 0.5rem;
 }
 
-.project-section-hint {
+.section-hint.export-hint {
   margin: 0;
   font-size: 0.8125rem;
   color: var(--gray-500);
@@ -896,16 +890,44 @@ function handleWheel(e: WheelEvent) {
 }
 
 .export-card {
-  display: grid;
-  grid-template-columns: 160px 1fr auto;
-  gap: 1rem;
+  position: relative;
+  display: flex;
   align-items: center;
+  gap: 1.25rem;
+  padding: 1.25rem 1.5rem;
+  border: 1px solid var(--rose-100);
+  border-radius: 18px;
+  background: white;
+  box-shadow: none;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.export-card:hover {
+  border-color: var(--rose-200);
+  box-shadow: 0 16px 36px -20px rgba(255, 133, 161, 0.35);
+  transform: translateY(-1px);
 }
 
 .export-card-active {
-  border: 1px solid var(--rose-300);
-  background: linear-gradient(135deg, var(--rose-50), white);
-  box-shadow: 0 12px 24px -16px rgba(255, 133, 161, 0.45);
+  border: 1px solid var(--rose-200);
+  background: linear-gradient(90deg, rgba(255, 239, 247, 0.85), rgba(255, 255, 255, 1) 45%);
+  box-shadow: 0 16px 36px -22px rgba(255, 133, 161, 0.35);
+}
+
+.export-card-active:hover {
+  transform: none;
+  border-color: var(--rose-200);
+  box-shadow: 0 16px 36px -22px rgba(255, 133, 161, 0.4);
+}
+.export-card-active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 6px;
+  background: linear-gradient(180deg, var(--rose-400), var(--rose-500));
+  border-radius: 16px 0 0 16px;
 }
 
 .export-thumb {
@@ -916,9 +938,11 @@ function handleWheel(e: WheelEvent) {
   overflow: hidden;
   background: var(--rose-50);
   border: 1px solid var(--rose-100);
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.65);
 }
 
 .export-thumb img {
@@ -932,23 +956,12 @@ function handleWheel(e: WheelEvent) {
   color: var(--gray-400);
 }
 
-.export-active {
-  position: absolute;
-  top: 6px;
-  left: 6px;
-  background: var(--rose-500);
-  color: white;
-  font-size: 0.625rem;
-  font-weight: 600;
-  padding: 2px 6px;
-  border-radius: 999px;
-}
-
 .export-info {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
   min-width: 0;
+  flex: 1;
 }
 
 .export-badges {
@@ -958,8 +971,8 @@ function handleWheel(e: WheelEvent) {
 }
 
 .export-title {
-  font-size: 0.9rem;
-  font-weight: 600;
+  font-size: 0.95rem;
+  font-weight: 700;
   color: var(--gray-900);
 }
 
@@ -977,6 +990,12 @@ function handleWheel(e: WheelEvent) {
   flex-wrap: wrap;
   justify-content: flex-end;
   align-items: center;
+  margin-top: 0;
+  flex-shrink: 0;
+}
+
+.export-actions :deep(.export-btn) {
+  min-width: 86px;
 }
 
 .export-pagination {
@@ -985,8 +1004,9 @@ function handleWheel(e: WheelEvent) {
   align-items: center;
   gap: 0.5rem;
   flex-wrap: wrap;
-  padding-top: 0.5rem;
+  padding-top: 0.75rem;
   margin-top: 0.25rem;
+  border-top: 1px solid var(--rose-100);
 }
 
 .export-ellipsis {
@@ -1003,11 +1023,16 @@ function handleWheel(e: WheelEvent) {
   font-size: 0.75rem;
   color: var(--error-600);
   margin-top: 0.25rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 10px;
+  border: 1px solid var(--error-border);
+  background: var(--error-bg);
 }
 
 @media (max-width: 960px) {
   .export-card {
-    grid-template-columns: 1fr;
+    flex-direction: column;
+    align-items: flex-start;
   }
 
   .export-thumb {
@@ -1018,6 +1043,7 @@ function handleWheel(e: WheelEvent) {
 
   .export-actions {
     justify-content: flex-start;
+    margin-top: 0.5rem;
   }
 }
 /* Uses global .icon-sm from base.css */
