@@ -301,16 +301,16 @@ function formatCreatedAt(value?: string | null): string {
   return formatRelativeTime(date)
 }
 
-function getStatusMeta(status?: string | null): { label: string; variant: 'warning' | 'error' | 'info' } | null {
+function getStatusMeta(status?: string | null): { label: string; variant: 'warning' | 'error' | 'info'; visible: boolean } {
   switch (status) {
     case 'FAILED':
-      return { label: '실패', variant: 'error' }
+      return { label: '??', variant: 'error', visible: true }
     case 'GENERATING':
-      return { label: '생성 중', variant: 'warning' }
+      return { label: '???', variant: 'warning', visible: true }
     case 'QUEUED':
-      return { label: '대기', variant: 'info' }
+      return { label: '??', variant: 'info', visible: true }
     default:
-      return null
+      return { label: '', variant: 'info', visible: false }
   }
 }
 
@@ -548,7 +548,7 @@ function handleWheel(e: WheelEvent) {
               <div class="export-info">
                 <div class="export-badges">
                   <Badge
-                    v-if="getStatusMeta(activeExport.status)"
+                    v-if="getStatusMeta(activeExport.status).visible"
                     :variant="getStatusMeta(activeExport.status).variant"
                   >
                     {{ getStatusMeta(activeExport.status).label }}
@@ -596,7 +596,7 @@ function handleWheel(e: WheelEvent) {
               <div class="export-info">
                 <div class="export-badges">
                   <Badge
-                    v-if="getStatusMeta(item.status)"
+                    v-if="getStatusMeta(item.status).visible"
                     :variant="getStatusMeta(item.status).variant"
                   >
                     {{ getStatusMeta(item.status).label }}
