@@ -1226,41 +1226,55 @@ function handleWheel(e: WheelEvent) {
 .project-scenes-section {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 0.75rem;
 }
 
 .project-scenes-body {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: 1rem;
 }
 
 .project-scenes-empty {
   text-align: center;
   color: var(--gray-500);
-  padding: 1.25rem;
+  padding: 1.5rem;
   border: 1px dashed var(--rose-200);
+  border-radius: 16px;
   background: linear-gradient(135deg, var(--rose-50), white);
 }
 
 .project-scene-list {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: 1rem;
 }
 
 .project-scene-card {
-  padding: 1.1rem 1.35rem;
+  position: relative;
+  padding: 1.2rem 1.4rem 1.3rem;
   border: 1px solid var(--rose-100);
-  border-radius: 18px;
-  background: white;
-  box-shadow: none;
+  border-radius: 20px;
+  background: linear-gradient(135deg, rgba(255, 245, 249, 0.75), #ffffff 60%);
+  box-shadow: 0 10px 30px -20px rgba(255, 133, 161, 0.35);
   transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.project-scene-card::before {
+  content: '';
+  position: absolute;
+  left: 14px;
+  top: 14px;
+  width: 4px;
+  height: 24px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, var(--rose-300), var(--rose-500));
+  opacity: 0.8;
 }
 
 .project-scene-card:hover {
   border-color: var(--rose-200);
-  box-shadow: 0 16px 36px -20px rgba(255, 133, 161, 0.35);
+  box-shadow: 0 18px 36px -22px rgba(255, 133, 161, 0.4);
   transform: translateY(-1px);
 }
 
@@ -1273,7 +1287,7 @@ function handleWheel(e: WheelEvent) {
 
 .project-scene-row {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 1.5rem;
 }
@@ -1281,11 +1295,12 @@ function handleWheel(e: WheelEvent) {
 .project-scene-info {
   flex: 1;
   min-width: 0;
+  padding-left: 0.75rem;
 }
 
 .project-scene-title {
   margin-top: 0.35rem;
-  font-size: 0.95rem;
+  font-size: 1rem;
   font-weight: 700;
   color: var(--gray-900);
 }
@@ -1305,12 +1320,15 @@ function handleWheel(e: WheelEvent) {
   gap: 0.5rem;
   justify-content: flex-end;
   flex-shrink: 0;
+  padding-top: 0.25rem;
 }
 
 .project-scene-clips {
-  margin-top: 0.85rem;
-  padding-top: 0.75rem;
-  border-top: 1px dashed var(--rose-100);
+  margin-top: 1rem;
+  padding: 0.85rem 0.85rem 0.75rem;
+  border-radius: 16px;
+  border: 1px solid var(--rose-100);
+  background: rgba(255, 255, 255, 0.75);
 }
 
 .project-scene-clip-meta {
@@ -1334,9 +1352,9 @@ function handleWheel(e: WheelEvent) {
 }
 
 .project-scene-clip-empty {
-  margin-top: 0.85rem;
-  padding: 0.75rem 1rem;
-  border-radius: 12px;
+  margin-top: 1rem;
+  padding: 0.85rem 1rem;
+  border-radius: 14px;
   border: 1px dashed var(--rose-200);
   background: linear-gradient(135deg, var(--rose-50), white);
   color: var(--gray-500);
@@ -1360,6 +1378,14 @@ function handleWheel(e: WheelEvent) {
 
   .project-scene-actions {
     justify-content: flex-start;
+  }
+
+  .project-scene-info {
+    padding-left: 0;
+  }
+
+  .project-scene-card::before {
+    display: none;
   }
 }
 
