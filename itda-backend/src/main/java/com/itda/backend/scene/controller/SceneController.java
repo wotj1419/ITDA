@@ -9,6 +9,8 @@ import com.itda.backend.scene.controller.dto.request.ReorderScenesRequest;
 import com.itda.backend.scene.controller.dto.request.UpdateSceneRequest;
 import com.itda.backend.scene.controller.dto.response.SceneCreateResponse;
 import com.itda.backend.scene.controller.dto.response.SceneDetailResponse;
+import com.itda.backend.scene.controller.dto.response.SceneExportItemResponse;
+import com.itda.backend.scene.controller.dto.response.SceneExportListResponse;
 import com.itda.backend.scene.controller.dto.response.SceneExportResponse;
 import com.itda.backend.scene.controller.dto.response.SceneSummaryResponse;
 import com.itda.backend.scene.service.SceneMediaService;
@@ -34,6 +36,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
@@ -156,6 +159,22 @@ public class SceneController {
                 return ApiResponse.success(response);
         }
 
+        @Operation(summary = "Scene export list", description = "List merged scene exports.")
+        @ApiResponses({
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Export list"),
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized"),
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden"),
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Scene not found")
+        })
+        @GetMapping("/scenes/{sceneId}/exports")
+        public ResponseEntity<ApiResponse<SceneExportListResponse>> listSceneExports(
+                        @AuthenticationPrincipal CustomUserDetails userDetails,
+                        @Parameter(description = "Scene ID") @PathVariable Long sceneId,
+                        @RequestParam(required = false) Integer page,
+                        @RequestParam(required = false) Integer size) {
+                return ApiResponse.success(sceneMediaService.listExports(userId(userDetails), sceneId, page, size));
+        }
+
         @Operation(summary = "Scene export download", description = "Download merged scene file. Content type is resolved by server.")
         @ApiResponses({
                         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Download success", content = @Content(mediaType = "application/octet-stream", schema = @Schema(type = "string", format = "binary"))),
@@ -178,6 +197,71 @@ public class SceneController {
                                 .header(HttpHeaders.CONTENT_DISPOSITION,
                                                 contentDisposition.toString())
                                 .body(mediaFile.resource());
+        }
+
+        @Operation(summary = "Scene export preview", description = "Preview merged scene file (inline).")
+        @ApiResponses({
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Preview success", content = @Content(mediaType = "application/octet-stream", schema = @Schema(type = "string", format = "binary"))),
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized"),
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden"),
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Export file not found")
+        })
+        @GetMapping("/scenes/{sceneId}/exports/{sceneVideoId}/preview")
+        public ResponseEntity<Resource> previewSceneExport(
+                        @AuthenticationPrincipal CustomUserDetails userDetails,
+                        @Parameter(description = "Scene ID") @PathVariable Long sceneId,
+                        @Parameter(description = "Scene video ID") @PathVariable Long sceneVideoId) {
+                Long userId = userId(userDetails);
+                MediaFile mediaFile = mediaFileService.loadSceneExportById(userId, sceneId, sceneVideoId);
+                ContentDisposition contentDisposition = ContentDisposition.inline()
+                                .filename(mediaFile.filename())
+                                .build();
+                return ResponseEntity.ok()
+                                .contentType(mediaFile.mediaType())
+                                .contentLength(mediaFile.contentLength())
+                                .header(HttpHeaders.CONTENT_DISPOSITION, contentDisposition.toString())
+                                .body(mediaFile.resource());
+        }
+
+        @Operation(summary = "Scene export download (by id)", description = "Download merged scene file by export id.")
+        @ApiResponses({
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Download success", content = @Content(mediaType = "application/octet-stream", schema = @Schema(type = "string", format = "binary"))),
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized"),
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden"),
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Export file not found")
+        })
+        @GetMapping("/scenes/{sceneId}/exports/{sceneVideoId}/file")
+        public ResponseEntity<Resource> downloadSceneExportById(
+                        @AuthenticationPrincipal CustomUserDetails userDetails,
+                        @Parameter(description = "Scene ID") @PathVariable Long sceneId,
+                        @Parameter(description = "Scene video ID") @PathVariable Long sceneVideoId) {
+                Long userId = userId(userDetails);
+                MediaFile mediaFile = mediaFileService.loadSceneExportById(userId, sceneId, sceneVideoId);
+                ContentDisposition contentDisposition = ContentDisposition.attachment()
+                                .filename(mediaFile.filename())
+                                .build();
+                return ResponseEntity.ok()
+                                .contentType(mediaFile.mediaType())
+                                .contentLength(mediaFile.contentLength())
+                                .header(HttpHeaders.CONTENT_DISPOSITION, contentDisposition.toString())
+                                .body(mediaFile.resource());
+        }
+
+        @Operation(summary = "Scene export delete", description = "Delete merged scene export (inactive only).")
+        @ApiResponses({
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Delete success"),
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Invalid request"),
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized"),
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden"),
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Export not found")
+        })
+        @DeleteMapping("/scenes/{sceneId}/exports/{sceneVideoId}")
+        public ResponseEntity<ApiResponse<Void>> deleteSceneExport(
+                        @AuthenticationPrincipal CustomUserDetails userDetails,
+                        @Parameter(description = "Scene ID") @PathVariable Long sceneId,
+                        @Parameter(description = "Scene video ID") @PathVariable Long sceneVideoId) {
+                sceneMediaService.deleteExport(userId(userDetails), sceneId, sceneVideoId);
+                return ApiResponse.success();
         }
 
         private static Long userId(CustomUserDetails userDetails) {

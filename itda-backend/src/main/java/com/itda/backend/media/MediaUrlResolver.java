@@ -15,6 +15,7 @@ public class MediaUrlResolver {
     private static final String PROJECT_EXPORT_SUFFIX = "/export/file";
     private static final String SCENE_EXPORT_PREFIX = "/api/scenes/";
     private static final String SCENE_EXPORT_SUFFIX = "/export/file";
+    private static final String SCENE_EXPORT_ITEM_SUFFIX = "/exports/";
 
     public String nodeContentUrl(Node node) {
         if (node == null) {
@@ -45,6 +46,20 @@ public class MediaUrlResolver {
             return null;
         }
         return SCENE_EXPORT_PREFIX + sceneId + SCENE_EXPORT_SUFFIX;
+    }
+
+    public String sceneExportFileUrl(Long sceneId, Long sceneVideoId) {
+        if (sceneId == null || sceneVideoId == null) {
+            return null;
+        }
+        return SCENE_EXPORT_PREFIX + sceneId + SCENE_EXPORT_ITEM_SUFFIX + sceneVideoId + "/file";
+    }
+
+    public String sceneExportPreviewUrl(Long sceneId, Long sceneVideoId) {
+        if (sceneId == null || sceneVideoId == null) {
+            return null;
+        }
+        return SCENE_EXPORT_PREFIX + sceneId + SCENE_EXPORT_ITEM_SUFFIX + sceneVideoId + "/preview";
     }
 
     private String buildNodeContentUrl(Long nodeId) {
