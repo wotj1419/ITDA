@@ -57,7 +57,7 @@
         SELECT id, scene_id, asset_id, thumbnail_asset_id, merge_signature, status, duration_ms, thumbnail_url, is_active, created_at, updated_at
         FROM scene_videos
         WHERE scene_id = #{sceneId}
-        ORDER BY created_at DESC, id DESC
+        ORDER BY is_active DESC, created_at DESC, id DESC
     </select>
 
     <select id="countBySceneId" resultType="int">
@@ -70,9 +70,15 @@
         SELECT id, scene_id, asset_id, thumbnail_asset_id, merge_signature, status, duration_ms, thumbnail_url, is_active, created_at, updated_at
         FROM scene_videos
         WHERE scene_id = #{sceneId}
-        ORDER BY created_at DESC, id DESC
+        ORDER BY is_active DESC, created_at DESC, id DESC
         LIMIT #{limit} OFFSET #{offset}
     </select>
+
+    <update id="activateBySceneId">
+        UPDATE scene_videos
+        SET is_active = CASE WHEN id = #{sceneVideoId} THEN 1 ELSE 0 END
+        WHERE scene_id = #{sceneId}
+    </update>
 
     <select id="findActiveBySceneIdAndSignature" resultMap="SceneVideoMap">
         SELECT id, scene_id, asset_id, thumbnail_asset_id, merge_signature, status, duration_ms, thumbnail_url, is_active, created_at, updated_at

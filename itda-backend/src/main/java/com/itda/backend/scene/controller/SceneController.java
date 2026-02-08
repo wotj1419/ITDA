@@ -264,6 +264,23 @@ public class SceneController {
                 return ApiResponse.success();
         }
 
+        @Operation(summary = "Scene export activate", description = "Set selected scene export as active.")
+        @ApiResponses({
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Activate success"),
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Invalid request"),
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized"),
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden"),
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Export not found")
+        })
+        @PostMapping("/scenes/{sceneId}/exports/{sceneVideoId}/activate")
+        public ResponseEntity<ApiResponse<Void>> activateSceneExport(
+                        @AuthenticationPrincipal CustomUserDetails userDetails,
+                        @Parameter(description = "Scene ID") @PathVariable Long sceneId,
+                        @Parameter(description = "Scene video ID") @PathVariable Long sceneVideoId) {
+                sceneMediaService.activateExport(userId(userDetails), sceneId, sceneVideoId);
+                return ApiResponse.success();
+        }
+
         private static Long userId(CustomUserDetails userDetails) {
                 return userDetails.getUserId();
         }

@@ -24,6 +24,9 @@ public interface SceneVideoMapper {
                                         @Param("limit") int limit,
                                         @Param("offset") int offset);
 
+    int activateBySceneId(@Param("sceneId") Long sceneId,
+                          @Param("sceneVideoId") Long sceneVideoId);
+
     Optional<SceneVideo> findActiveBySceneIdAndSignature(@Param("sceneId") Long sceneId,
                                                         @Param("mergeSignature") String mergeSignature);
 

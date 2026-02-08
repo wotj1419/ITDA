@@ -12,6 +12,7 @@ import com.itda.backend.scene.domain.Scene;
 import com.itda.backend.scene.repository.SceneMapper;
 import com.itda.backend.timeline.domain.SceneVideo;
 import com.itda.backend.timeline.repository.SceneVideoMapper;
+import com.itda.backend.timeline.repository.TimelineMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,6 +25,7 @@ public class SceneMediaService {
 
     private final SceneMapper sceneMapper;
     private final SceneVideoMapper sceneVideoMapper;
+    private final TimelineMapper timelineMapper;
     private final ProjectAccessService projectAccessService;
     private final MediaUrlResolver mediaUrlResolver;
     private final AssetUrlResolver assetUrlResolver;
@@ -68,40 +70,64 @@ public class SceneMediaService {
         int offset = (safePage - 1) * safeSize;
         List<SceneVideo> videos = sceneVideoMapper.findBySceneIdPaged(sceneId, safeSize, offset);
         List<SceneExportItemResponse> items = mapSceneExports(sceneId, videos);
-        return new SceneExportListResponse(items, safePage, safeSize, totalCount, totalPages);
+        SceneExportItemResponse activeItem = sceneVideoMapper.findActiveBySceneId(sceneId)
+                .map(video -> mapSceneExport(sceneId, video))
+                .orElse(null);
+        return new SceneExportListResponse(items, safePage, safeSize, totalCount, totalPages, activeItem);
+    }
+
+    private SceneExportItemResponse mapSceneExport(Long sceneId, SceneVideo video) {
+        String previewFallback = mediaUrlResolver.sceneExportPreviewUrl(sceneId, video.getId());
+        String downloadFallback = mediaUrlResolver.sceneExportFileUrl(sceneId, video.getId());
+        String previewUrl = assetUrlResolver.resolveUrl(video.getAssetId(), previewFallback);
+        String downloadUrl = assetUrlResolver.resolveDownloadUrl(
+                video.getAssetId(),
+                downloadFallback,
+                "scene-" + sceneId + ".mp4"
+        );
+        String thumbnailUrl = assetUrlResolver.resolveUrl(
+                video.getThumbnailAssetId(),
+                video.getThumbnailUrl()
+        );
+        return new SceneExportItemResponse(
+                video.getId(),
+                video.getSceneId(),
+                video.getAssetId(),
+                previewUrl,
+                downloadUrl,
+                thumbnailUrl,
+                video.getMergeSignature(),
+                video.getStatus(),
+                video.getDurationMs(),
+                Boolean.TRUE.equals(video.getIsActive()),
+                video.getCreatedAt(),
+                video.getUpdatedAt()
+        );
     }
 
     private List<SceneExportItemResponse> mapSceneExports(Long sceneId, List<SceneVideo> videos) {
         return videos.stream()
-                .map(video -> {
-                    String previewFallback = mediaUrlResolver.sceneExportPreviewUrl(sceneId, video.getId());
-                    String downloadFallback = mediaUrlResolver.sceneExportFileUrl(sceneId, video.getId());
-                    String previewUrl = assetUrlResolver.resolveUrl(video.getAssetId(), previewFallback);
-                    String downloadUrl = assetUrlResolver.resolveDownloadUrl(
-                            video.getAssetId(),
-                            downloadFallback,
-                            "scene-" + sceneId + ".mp4"
-                    );
-                    String thumbnailUrl = assetUrlResolver.resolveUrl(
-                            video.getThumbnailAssetId(),
-                            video.getThumbnailUrl()
-                    );
-                    return new SceneExportItemResponse(
-                            video.getId(),
-                            video.getSceneId(),
-                            video.getAssetId(),
-                            previewUrl,
-                            downloadUrl,
-                            thumbnailUrl,
-                            video.getMergeSignature(),
-                            video.getStatus(),
-                            video.getDurationMs(),
-                            Boolean.TRUE.equals(video.getIsActive()),
-                            video.getCreatedAt(),
-                            video.getUpdatedAt()
-                    );
-                })
+                .map(video -> mapSceneExport(sceneId, video))
                 .toList();
+    }
+
+    @Transactional
+    public void activateExport(Long userId, Long sceneId, Long sceneVideoId) {
+        Scene scene = sceneMapper.findById(sceneId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.SCENE_NOT_FOUND));
+        projectAccessService.ensureProjectAccessible(scene.getProjectId(), userId);
+
+        SceneVideo sceneVideo = sceneVideoMapper.findById(sceneVideoId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.EXPORT_NOT_FOUND));
+        if (!sceneId.equals(sceneVideo.getSceneId())) {
+            throw new BusinessException(ErrorCode.EXPORT_NOT_FOUND);
+        }
+        if (!"COMPLETED".equals(sceneVideo.getStatus()) || sceneVideo.getAssetId() == null) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST, "Only completed exports can be activated");
+        }
+
+        sceneVideoMapper.activateBySceneId(sceneId, sceneVideoId);
+        timelineMapper.updateSceneTimelineItemsVideoId(sceneId, sceneVideoId);
     }
 
     @Transactional
