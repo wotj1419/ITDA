@@ -17,4 +17,5 @@ public class ProjectSummary {
     private Integer memberCount;
     private Integer sceneCount;
     private LocalDateTime updatedAt;
+    private LocalDateTime deletedAt;
 }
