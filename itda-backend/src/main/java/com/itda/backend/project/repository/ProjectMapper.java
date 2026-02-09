@@ -16,11 +16,19 @@ public interface ProjectMapper {
 
     Optional<Project> findById(@Param("id") Long id);
 
+    Optional<Project> findByIdIncludingDeleted(@Param("id") Long id);
+
     int countByUserId(@Param("userId") Long userId);
+
+    int countDeletedByUserId(@Param("userId") Long userId);
 
     List<ProjectSummary> findAllByUserId(@Param("userId") Long userId,
                                          @Param("limit") int limit,
                                          @Param("offset") int offset);
+
+    List<ProjectSummary> findDeletedByUserId(@Param("userId") Long userId,
+                                             @Param("limit") int limit,
+                                             @Param("offset") int offset);
 
     Optional<ProjectPreviewCandidate> findProjectMergePreview(@Param("projectId") Long projectId);
 
@@ -32,6 +40,10 @@ public interface ProjectMapper {
                       @Param("title") String title,
                       @Param("description") String description,
                       @Param("genre") String genre);
+
+    int softDeleteProject(@Param("id") Long id);
+
+    int restoreProject(@Param("id") Long id);
 
     int deleteProject(@Param("id") Long id);
 }

@@ -40,6 +40,22 @@ export async function deleteProject(projectId: number): Promise<void> {
     await apiClient.delete(`/projects/${projectId}`)
 }
 
+export async function fetchDeletedProjects(): Promise<Project[]> {
+    const response = await apiClient.get<ApiResponse<Project[] | ProjectListResponse>>('/projects/deleted')
+    const data = response.data.data
+    if (!data) return []
+    if (Array.isArray(data)) return data
+    return data.items || []
+}
+
+export async function restoreProject(projectId: number): Promise<void> {
+    await apiClient.post(`/projects/${projectId}/restore`)
+}
+
+export async function deleteProjectPermanently(projectId: number): Promise<void> {
+    await apiClient.delete(`/projects/${projectId}/permanent`)
+}
+
 export async function leaveProject(projectId: number): Promise<void> {
     await apiClient.delete(`/projects/${projectId}/members/me`)
 }
