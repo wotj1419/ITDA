@@ -7,7 +7,10 @@ import {
   fetchProjectMembers,
   createProject,
   deleteProject,
+  deleteProjectPermanently,
+  fetchDeletedProjects,
   leaveProject,
+  restoreProject as restoreProjectApi,
   updateProject as updateProjectApi,
 } from '../services/api/projects'
 import { useAsyncAction } from './helpers/useAsyncAction'
@@ -125,7 +128,21 @@ export const useProjectStore = defineStore('project', () => {
   async function loadProjects(): Promise<void> {
     await run(async () => {
       const fetched = await fetchProjects()
-      projects.value = fetched.map((project) => {
+
+      // Fetch members for each project in parallel (Frontend-only approach)
+      const projectsWithMembers = await Promise.all(
+        fetched.map(async (project) => {
+          try {
+            const members = await fetchProjectMembers(project.projectId)
+            return { ...project, members }
+          } catch (e) {
+            console.error(`Failed to fetch members for project ${project.projectId}`, e)
+            return { ...project, members: [] }
+          }
+        })
+      )
+
+      projects.value = projectsWithMembers.map((project) => {
         const lastAccessed = lastAccessedMap.value[project.projectId]
         if (lastAccessed) {
           const updatedAt = new Date(project.updatedAt).getTime()
@@ -256,16 +273,17 @@ export const useProjectStore = defineStore('project', () => {
   }
 
   async function getDeletedProjects(): Promise<Project[]> {
-    const result = await run(async () => [], { errorMessage: 'Failed to load deleted projects' })
+    const result = await run(() => fetchDeletedProjects(), { errorMessage: 'Failed to load deleted projects' })
     return result ?? []
   }
 
-  async function restoreProject(_projectId: number): Promise<void> {
+  async function restoreProject(projectId: number): Promise<void> {
+    await run(() => restoreProjectApi(projectId), { errorMessage: 'Failed to restore project' })
     await loadProjects()
   }
 
   async function permanentDeleteProject(projectId: number): Promise<void> {
-    await run(() => deleteProject(projectId), { errorMessage: 'Failed to permanently delete project' })
+    await run(() => deleteProjectPermanently(projectId), { errorMessage: 'Failed to permanently delete project' })
   }
 
   async function inviteMember(projectId: number, email: string, role: 'ADMIN' | 'EDITOR' | 'VIEWER'): Promise<void> {

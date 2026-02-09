@@ -36,7 +36,10 @@ public record ProjectSummaryResponse(
         Integer sceneCount,
 
         @Schema(description = "Updated at", example = "2026-01-15T12:00:00")
-        LocalDateTime updatedAt
+        LocalDateTime updatedAt,
+
+        @Schema(description = "Deleted at", example = "2026-01-20T12:00:00")
+        LocalDateTime deletedAt
 ) {
     public static ProjectSummaryResponse from(
             ProjectSummary summary,
@@ -53,7 +56,8 @@ public record ProjectSummaryResponse(
                 summary.getMyRole(),
                 summary.getMemberCount(),
                 summary.getSceneCount(),
-                summary.getUpdatedAt()
+                summary.getUpdatedAt(),
+                summary.getDeletedAt()
         );
     }
 }

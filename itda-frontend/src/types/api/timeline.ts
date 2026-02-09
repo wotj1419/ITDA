@@ -33,3 +33,27 @@ export interface ProjectTimeline {
   items: TimelineItem[];
   totalDuration: number;
 }
+
+export interface SceneExportItem {
+  sceneVideoId: number;
+  sceneId: number;
+  assetId?: number | null;
+  previewUrl?: string | null;
+  downloadUrl?: string | null;
+  thumbnailUrl?: string | null;
+  mergeSignature?: string | null;
+  status: string;
+  durationMs?: number | null;
+  active: boolean;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+}
+
+export interface SceneExportListResponse {
+  items: SceneExportItem[];
+  page: number;
+  size: number;
+  totalCount: number;
+  totalPages: number;
+  activeItem?: SceneExportItem | null;
+}

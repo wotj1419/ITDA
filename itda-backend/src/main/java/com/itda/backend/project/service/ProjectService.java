@@ -68,6 +68,23 @@ public class ProjectService {
     }
 
     @Transactional(readOnly = true)
+    public ProjectListResponse listDeletedProjects(Long userId, int page, int size) {
+        validatePaging(page, size);
+        int total = projectMapper.countDeletedByUserId(userId);
+        if (total == 0) {
+            return emptyProjectList(page, size, total);
+        }
+        int offset = safeOffset(page, size);
+        if (isOutOfRange(offset, total)) {
+            return emptyProjectList(page, size, total);
+        }
+
+        List<ProjectSummaryResponse> items = fetchDeletedProjectSummaries(userId, size, offset);
+
+        return new ProjectListResponse(items, page, size, total);
+    }
+
+    @Transactional(readOnly = true)
     public ProjectDetailResponse getProjectDetail(Long userId, Long projectId) {
         Project project = requireProject(projectId);
         String role = requireMemberRole(projectId, userId);
@@ -88,9 +105,37 @@ public class ProjectService {
     }
 
     @Transactional
-    public void deleteProject(Long userId, Long projectId) {
+    public void moveToTrash(Long userId, Long projectId) {
         requireProject(projectId);
         requireOwnerRole(projectId, userId);
+
+        int deleted = projectMapper.softDeleteProject(projectId);
+        if (deleted == 0) {
+            throw new BusinessException(ErrorCode.PROJECT_NOT_FOUND);
+        }
+    }
+
+    @Transactional
+    public void restoreProject(Long userId, Long projectId) {
+        Project project = requireProjectIncludingDeleted(projectId);
+        requireOwnerRole(projectId, userId);
+        if (project.getDeletedAt() == null) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST);
+        }
+
+        int restored = projectMapper.restoreProject(projectId);
+        if (restored == 0) {
+            throw new BusinessException(ErrorCode.PROJECT_NOT_FOUND);
+        }
+    }
+
+    @Transactional
+    public void permanentDeleteProject(Long userId, Long projectId) {
+        Project project = requireProjectIncludingDeleted(projectId);
+        requireOwnerRole(projectId, userId);
+        if (project.getDeletedAt() == null) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST);
+        }
 
         int deleted = projectMapper.deleteProject(projectId);
         if (deleted == 0) {
@@ -138,6 +183,12 @@ public class ProjectService {
 
     private List<ProjectSummaryResponse> fetchProjectSummaries(Long userId, int size, int offset) {
         return projectMapper.findAllByUserId(userId, size, offset).stream()
+                .map(this::toProjectSummaryResponse)
+                .toList();
+    }
+
+    private List<ProjectSummaryResponse> fetchDeletedProjectSummaries(Long userId, int size, int offset) {
+        return projectMapper.findDeletedByUserId(userId, size, offset).stream()
                 .map(this::toProjectSummaryResponse)
                 .toList();
     }
@@ -223,6 +274,11 @@ public class ProjectService {
 
     private Project requireProject(Long projectId) {
         return projectMapper.findById(projectId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.PROJECT_NOT_FOUND));
+    }
+
+    private Project requireProjectIncludingDeleted(Long projectId) {
+        return projectMapper.findByIdIncludingDeleted(projectId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.PROJECT_NOT_FOUND));
     }
 
