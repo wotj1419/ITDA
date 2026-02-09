@@ -16,6 +16,7 @@ export interface Project {
   createdAt?: string;
   isDeleted?: boolean;
   deletedAt?: string;
+  members?: ProjectMember[];
 }
 
 export interface ProjectListItem extends Project {
