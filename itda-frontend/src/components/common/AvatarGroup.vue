@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { resolveApiUrl } from '../../services/api/urls'
 interface AvatarItem {
   src?: string
   alt?: string
@@ -48,8 +49,9 @@ function getEmoji(userId?: number, name?: string): string {
 const visibleAvatars = computed(() => props.avatars.slice(0, props.max))
 const remaining = computed(() => props.avatars.length - props.max)
 
+const resolveAvatarSrc = (src?: string) => resolveApiUrl(src)
 const getAvatarEmoji = (avatar: AvatarItem) => getEmoji(avatar.userId, avatar.alt || avatar.fallback || '')
-const shouldShowEmoji = (avatar: AvatarItem) => props.useEmoji && !avatar.src
+const shouldShowEmoji = (avatar: AvatarItem) => props.useEmoji && !resolveAvatarSrc(avatar.src)
 </script>
 
 <template>
@@ -66,8 +68,8 @@ const shouldShowEmoji = (avatar: AvatarItem) => props.useEmoji && !avatar.src
       @click="avatar.onClick && avatar.onClick()"
     >
       <img
-        v-if="avatar.src"
-        :src="avatar.src"
+        v-if="resolveAvatarSrc(avatar.src)"
+        :src="resolveAvatarSrc(avatar.src) || ''"
         :alt="avatar.alt || 'Avatar'"
         class="avatar-image"
       />

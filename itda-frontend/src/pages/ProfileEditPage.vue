@@ -1,5 +1,5 @@
 ﻿<script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ArrowLeft } from 'lucide-vue-next'
 import DefaultLayout from '../layouts/DefaultLayout.vue'
@@ -14,8 +14,11 @@ const uiStore = useUIStore()
 
 const form = ref({
   name: '',
-  profileImageUrl: '',
 })
+
+const fileInputRef = ref<HTMLInputElement | null>(null)
+const selectedFile = ref<File | null>(null)
+const filePreviewUrl = ref<string | null>(null)
 
 const isSubmitting = ref(false)
 const isLoading = computed(() => authStore.isAuthenticated && !authStore.user)
@@ -24,7 +27,9 @@ const currentName = computed(() => authStore.user?.name ?? '')
 const currentProfileImageUrl = computed(() => authStore.user?.profileImageUrl ?? '')
 
 const normalizedName = computed(() => form.value.name.trim())
-const normalizedProfileImageUrl = computed(() => form.value.profileImageUrl.trim())
+
+const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp']
+const MAX_IMAGE_SIZE = 5 * 1024 * 1024
 
 const nameError = computed(() => {
   if (!normalizedName.value) return '이름을 입력해주세요.'
@@ -33,27 +38,31 @@ const nameError = computed(() => {
   return ''
 })
 
-const profileImageError = computed(() => {
-  if (normalizedProfileImageUrl.value.length > 500) {
-    return '이미지 URL은 500자 이하로 입력해주세요.'
+const fileError = computed(() => {
+  if (!selectedFile.value) return ''
+  const type = selectedFile.value.type.toLowerCase()
+  if (!ALLOWED_IMAGE_TYPES.includes(type)) {
+    return '지원하지 않는 이미지 형식입니다.'
+  }
+  if (selectedFile.value.size > MAX_IMAGE_SIZE) {
+    return '이미지 파일은 5MB 이하로 업로드해주세요.'
   }
   return ''
 })
 
-const isDirty = computed(() => {
-  if (!authStore.user) return false
-  return (
-    normalizedName.value !== currentName.value ||
-    normalizedProfileImageUrl.value !== currentProfileImageUrl.value
-  )
-})
+const hasNameChange = computed(() => normalizedName.value !== currentName.value)
+const hasImageChange = computed(() => !!selectedFile.value)
 
 const canSubmit = computed(() => {
-  return !!authStore.user && !isSubmitting.value && !nameError.value && !profileImageError.value && isDirty.value
+  return !!authStore.user
+    && !isSubmitting.value
+    && !nameError.value
+    && !fileError.value
+    && (hasNameChange.value || hasImageChange.value)
 })
 
 const previewImageUrl = computed(() => {
-  if (normalizedProfileImageUrl.value) return normalizedProfileImageUrl.value
+  if (filePreviewUrl.value) return filePreviewUrl.value
   if (currentProfileImageUrl.value) return currentProfileImageUrl.value
   return undefined
 })
@@ -61,25 +70,54 @@ const previewImageUrl = computed(() => {
 const syncForm = () => {
   if (!authStore.user) return
   form.value.name = authStore.user.name ?? ''
-  form.value.profileImageUrl = authStore.user.profileImageUrl ?? ''
 }
 
 watch(() => authStore.user, () => syncForm(), { immediate: true })
+
+watch(selectedFile, (file) => {
+  if (filePreviewUrl.value) {
+    URL.revokeObjectURL(filePreviewUrl.value)
+    filePreviewUrl.value = null
+  }
+  if (file) {
+    filePreviewUrl.value = URL.createObjectURL(file)
+  }
+})
+
+onBeforeUnmount(() => {
+  if (filePreviewUrl.value) {
+    URL.revokeObjectURL(filePreviewUrl.value)
+  }
+})
+
+const resetFileInput = () => {
+  if (fileInputRef.value) {
+    fileInputRef.value.value = ''
+  }
+}
+
+const handleFileChange = (event: Event) => {
+  const target = event.target as HTMLInputElement | null
+  const file = target?.files?.[0] ?? null
+  selectedFile.value = file
+}
 
 const handleSave = async () => {
   if (!canSubmit.value) return
   isSubmitting.value = true
 
-  const payload: UpdateProfileRequest = {}
-  if (normalizedName.value !== currentName.value) {
-    payload.name = normalizedName.value
-  }
-  if (normalizedProfileImageUrl.value !== currentProfileImageUrl.value) {
-    payload.profileImageUrl = normalizedProfileImageUrl.value
-  }
-
   try {
-    await authStore.updateProfile(payload)
+    if (selectedFile.value) {
+      await authStore.uploadProfileImage(selectedFile.value)
+      selectedFile.value = null
+      resetFileInput()
+    }
+
+    if (hasNameChange.value) {
+      const payload: UpdateProfileRequest = { name: normalizedName.value }
+      await authStore.updateProfile(payload)
+    }
+
     uiStore.showToast({
       type: 'success',
       title: '저장 완료',
@@ -141,16 +179,16 @@ onMounted(() => {
             </div>
 
             <div class="form-group">
-              <label class="form-label">프로필 이미지 URL</label>
+              <label class="form-label">프로필 이미지</label>
               <input
-                type="url"
+                ref="fileInputRef"
+                type="file"
                 class="form-input"
-                v-model="form.profileImageUrl"
-                placeholder="https://..."
-                maxlength="500"
+                accept="image/png, image/jpeg, image/webp"
+                @change="handleFileChange"
               />
-              <p v-if="profileImageError" class="form-error">{{ profileImageError }}</p>
-              <p class="form-hint">이미지 업로드는 준비 중이며 URL로만 변경 가능합니다.</p>
+              <p v-if="fileError" class="form-error">{{ fileError }}</p>
+              <p class="form-hint">JPG/PNG/WebP, 최대 5MB</p>
             </div>
           </div>
 

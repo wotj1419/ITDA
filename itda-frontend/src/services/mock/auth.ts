@@ -51,6 +51,16 @@ export const mockAuthService: AuthService = {
         return { ...mockUser };
     },
 
+    async uploadProfileImage(file: File) {
+        await new Promise((resolve) => setTimeout(resolve, 300));
+        const dataUrl = await readFileAsDataUrl(file);
+        mockUser = {
+            ...mockUser,
+            profileImageUrl: dataUrl,
+        };
+        return { ...mockUser };
+    },
+
     async requestPasswordReset(_data: PasswordResetRequest) {
         await new Promise((resolve) => setTimeout(resolve, 400));
         void _data;
@@ -65,3 +75,12 @@ export const mockAuthService: AuthService = {
         // No-op for mock
     }
 };
+
+function readFileAsDataUrl(file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : '');
+        reader.onerror = () => reject(reader.error);
+        reader.readAsDataURL(file);
+    });
+}

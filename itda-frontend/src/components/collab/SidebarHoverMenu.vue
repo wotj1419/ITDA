@@ -4,6 +4,7 @@ import { useCollabStore } from '../../stores/collab'
 import type { CollabParticipant } from '../../types/ui/collab'
 import { ChevronDown, ChevronUp, MessageCircle, Mic, MicOff, Phone, PhoneOff, Search, Send, X } from 'lucide-vue-next'
 import Avatar from '../common/Avatar.vue'
+import { resolveApiUrl } from '../../services/api/urls'
 
 interface Props {
   projectId?: number | null
@@ -229,7 +230,7 @@ const currentMatchId = computed(() => {
 function getAvatarUrl(senderId: string | undefined) {
   if (!senderId) return '';
   const participant = collabStore.participants.find((p) => p.odps === senderId);
-  return participant?.avatarUrl ?? '';
+  return resolveApiUrl(participant?.avatarUrl) ?? '';
 }
 
 function isParticipantSpeaking(id: string | undefined) {

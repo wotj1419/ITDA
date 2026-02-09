@@ -34,6 +34,13 @@ export const apiAuthService: AuthService = {
         return response.data.data!;
     },
 
+    async uploadProfileImage(file: File) {
+        const formData = new FormData();
+        formData.append('file', file);
+        const response = await apiClient.patch<ApiResponse<User>>('/auth/me/profile-image', formData);
+        return response.data.data!;
+    },
+
     async requestPasswordReset(data: PasswordResetRequest) {
         await apiClient.post('/auth/password/reset/request', data);
     },

@@ -49,6 +49,15 @@ export const useAuthStore = defineStore('auth', () => {
     return updated;
   }
 
+  async function uploadProfileImage(file: File): Promise<User> {
+    if (!accessToken.value) {
+      throw new Error('Not authenticated');
+    }
+    const updated = await authService.uploadProfileImage(file);
+    user.value = updated;
+    return updated;
+  }
+
   function logout(): void {
     user.value = null
     accessToken.value = null
@@ -71,6 +80,7 @@ export const useAuthStore = defineStore('auth', () => {
     signup,
     fetchMe,
     updateProfile,
+    uploadProfileImage,
     logout,
   }
 })

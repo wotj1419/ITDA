@@ -56,7 +56,8 @@ public class SecurityConfig {
                                 "/api/auth/login",
                                 "/api/auth/refresh",
                                 "/api/auth/password/reset/request",
-                                "/api/auth/password/reset/confirm"
+                                "/api/auth/password/reset/confirm",
+                                "/api/profile-images/**"
                         ).permitAll()
                         .requestMatchers("/", "/error", "/health").permitAll()
                         .requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**").permitAll()

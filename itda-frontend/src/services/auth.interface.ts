@@ -15,5 +15,6 @@ export interface AuthService {
     requestPasswordReset(data: PasswordResetRequest): Promise<void>;
     confirmPasswordReset(data: PasswordResetConfirmRequest): Promise<void>;
     updateProfile(data: UpdateProfileRequest): Promise<User>;
+    uploadProfileImage(file: File): Promise<User>;
     logout(): void;
 }

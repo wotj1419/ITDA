@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { resolveApiUrl } from '../../services/api/urls'
 
 interface Props {
   src?: string
@@ -47,6 +48,8 @@ const classes = computed(() => [
   `avatar-${props.size}`,
 ])
 
+const resolvedSrc = computed(() => resolveApiUrl(props.src))
+
 const emoji = computed(() => getEmoji(props.userId, props.alt || ''))
 
 const initials = computed(() => {
@@ -62,14 +65,14 @@ const initials = computed(() => {
   return '?'
 })
 
-const showEmoji = computed(() => props.useEmoji && !props.src && !props.showMore)
+const showEmoji = computed(() => props.useEmoji && !resolvedSrc.value && !props.showMore)
 </script>
 
 <template>
   <div :class="classes">
     <img
-      v-if="src"
-      :src="src"
+      v-if="resolvedSrc"
+      :src="resolvedSrc"
       :alt="alt"
       class="avatar-image"
     />
