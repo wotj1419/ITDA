@@ -8,6 +8,7 @@ import type {
     LoginResponse,
     PasswordResetRequest,
     PasswordResetConfirmRequest,
+    UpdateProfileRequest,
 } from '../../types/api/auth';
 
 export const apiAuthService: AuthService = {
@@ -25,6 +26,11 @@ export const apiAuthService: AuthService = {
 
     async fetchMe() {
         const response = await apiClient.get<ApiResponse<User>>('/auth/me');
+        return response.data.data!;
+    },
+
+    async updateProfile(data: UpdateProfileRequest) {
+        const response = await apiClient.put<ApiResponse<User>>('/auth/me', data);
         return response.data.data!;
     },
 

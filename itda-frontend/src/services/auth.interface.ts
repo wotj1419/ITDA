@@ -5,6 +5,7 @@ import type {
     LoginResponse,
     PasswordResetRequest,
     PasswordResetConfirmRequest,
+    UpdateProfileRequest,
 } from '../types/api/auth';
 
 export interface AuthService {
@@ -13,5 +14,6 @@ export interface AuthService {
     fetchMe(): Promise<User>;
     requestPasswordReset(data: PasswordResetRequest): Promise<void>;
     confirmPasswordReset(data: PasswordResetConfirmRequest): Promise<void>;
+    updateProfile(data: UpdateProfileRequest): Promise<User>;
     logout(): void;
 }

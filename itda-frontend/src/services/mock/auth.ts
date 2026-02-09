@@ -4,7 +4,16 @@ import type {
     SignupRequest,
     PasswordResetRequest,
     PasswordResetConfirmRequest,
+    UpdateProfileRequest,
 } from '../../types/api/auth';
+
+let mockUser = {
+    id: 1,
+    email: 'minjun@example.com',
+    name: 'Minjun Kim',
+    profileImageUrl: 'https://i.pravatar.cc/150?u=user123',
+    role: 'USER',
+};
 
 export const mockAuthService: AuthService = {
     async login(_credentials: LoginRequest) {
@@ -29,13 +38,17 @@ export const mockAuthService: AuthService = {
 
     async fetchMe() {
         await new Promise((resolve) => setTimeout(resolve, 300));
-        return {
-            id: 1,
-            email: 'minjun@example.com',
-            name: 'Minjun Kim',
-            profileImageUrl: 'https://i.pravatar.cc/150?u=user123',
-            role: 'USER',
+        return { ...mockUser };
+    },
+
+    async updateProfile(data: UpdateProfileRequest) {
+        await new Promise((resolve) => setTimeout(resolve, 300));
+        mockUser = {
+            ...mockUser,
+            ...(data.name !== undefined ? { name: data.name } : {}),
+            ...(data.profileImageUrl !== undefined ? { profileImageUrl: data.profileImageUrl } : {}),
         };
+        return { ...mockUser };
     },
 
     async requestPasswordReset(_data: PasswordResetRequest) {
