@@ -78,6 +78,20 @@ public class ProjectController {
                 return ApiResponse.success(response);
         }
 
+        @Operation(summary = "Deleted projects list", description = "List deleted projects for the current user (owner only).")
+        @ApiResponses({
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Success", content = @Content(schema = @Schema(implementation = ProjectListResponse.class))),
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized")
+        })
+        @GetMapping("/deleted")
+        public ResponseEntity<ApiResponse<ProjectListResponse>> listDeletedProjects(
+                        @AuthenticationPrincipal CustomUserDetails userDetails,
+                        @RequestParam(defaultValue = "0") int page,
+                        @RequestParam(defaultValue = "20") int size) {
+                ProjectListResponse response = projectService.listDeletedProjects(userDetails.getUserId(), page, size);
+                return ApiResponse.success(response);
+        }
+
         @Operation(summary = "프로젝트 상세 조회", description = "프로젝트의 상세 정보 및 메타데이터를 조회합니다.")
         @ApiResponses({
                         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "조회 성공", content = @Content(schema = @Schema(implementation = ProjectDetailResponse.class))),
@@ -122,7 +136,39 @@ public class ProjectController {
         public ResponseEntity<ApiResponse<Void>> deleteProject(
                         @AuthenticationPrincipal CustomUserDetails userDetails,
                         @Parameter(description = "프로젝트 ID") @PathVariable Long projectId) {
-                projectService.deleteProject(userDetails.getUserId(), projectId);
+                projectService.moveToTrash(userDetails.getUserId(), projectId);
+                return ApiResponse.success();
+        }
+
+        @Operation(summary = "Restore project", description = "Restore a deleted project (owner only).")
+        @ApiResponses({
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Success"),
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Invalid request"),
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized"),
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden"),
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Not found")
+        })
+        @PostMapping("/{projectId}/restore")
+        public ResponseEntity<ApiResponse<Void>> restoreProject(
+                        @AuthenticationPrincipal CustomUserDetails userDetails,
+                        @PathVariable Long projectId) {
+                projectService.restoreProject(userDetails.getUserId(), projectId);
+                return ApiResponse.success();
+        }
+
+        @Operation(summary = "Permanently delete project", description = "Hard delete a project (owner only, deleted projects only).")
+        @ApiResponses({
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Success"),
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Invalid request"),
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized"),
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden"),
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Not found")
+        })
+        @DeleteMapping("/{projectId}/permanent")
+        public ResponseEntity<ApiResponse<Void>> permanentDeleteProject(
+                        @AuthenticationPrincipal CustomUserDetails userDetails,
+                        @PathVariable Long projectId) {
+                projectService.permanentDeleteProject(userDetails.getUserId(), projectId);
                 return ApiResponse.success();
         }
 

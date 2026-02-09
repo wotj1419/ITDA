@@ -24,6 +24,7 @@
         <result property="memberCount" column="member_count"/>
         <result property="sceneCount" column="scene_count"/>
         <result property="updatedAt" column="updated_at"/>
+        <result property="deletedAt" column="deleted_at"/>
     </resultMap>
 
     <insert id="insertProject" parameterType="com.itda.backend.project.domain.Project"
@@ -36,6 +37,13 @@
         SELECT id, owner_id, title, description, genre, status, created_at, updated_at, deleted_at
         FROM projects
         WHERE id = #{id}
+          AND deleted_at IS NULL
+    </select>
+
+    <select id="findByIdIncludingDeleted" resultMap="ProjectResultMap">
+        SELECT id, owner_id, title, description, genre, status, created_at, updated_at, deleted_at
+        FROM projects
+        WHERE id = #{id}
     </select>
 
     <select id="countByUserId" resultType="int">
@@ -43,6 +51,16 @@
         FROM projects p
         JOIN project_members pm ON pm.project_id = p.id
         WHERE pm.user_id = #{userId}
+          AND p.deleted_at IS NULL
+    </select>
+
+    <select id="countDeletedByUserId" resultType="int">
+        SELECT COUNT(*)
+        FROM projects p
+        JOIN project_members pm ON pm.project_id = p.id
+        WHERE pm.user_id = #{userId}
+          AND pm.role = 'OWNER'
+          AND p.deleted_at IS NOT NULL
     </select>
 
     <select id="findAllByUserId" resultMap="ProjectSummaryMap">
@@ -52,11 +70,31 @@
             pm.role AS my_role,
             (SELECT COUNT(*) FROM project_members pm2 WHERE pm2.project_id = p.id) AS member_count,
             (SELECT COUNT(*) FROM scenes s WHERE s.project_id = p.id) AS scene_count,
-            p.updated_at
+            p.updated_at,
+            p.deleted_at
         FROM projects p
         JOIN project_members pm ON pm.project_id = p.id
         WHERE pm.user_id = #{userId}
+          AND p.deleted_at IS NULL
         ORDER BY p.updated_at DESC
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <select id="findDeletedByUserId" resultMap="ProjectSummaryMap">
+        SELECT
+            p.id AS project_id,
+            p.title,
+            pm.role AS my_role,
+            (SELECT COUNT(*) FROM project_members pm2 WHERE pm2.project_id = p.id) AS member_count,
+            (SELECT COUNT(*) FROM scenes s WHERE s.project_id = p.id) AS scene_count,
+            p.updated_at,
+            p.deleted_at
+        FROM projects p
+        JOIN project_members pm ON pm.project_id = p.id
+        WHERE pm.user_id = #{userId}
+          AND pm.role = 'OWNER'
+          AND p.deleted_at IS NOT NULL
+        ORDER BY p.deleted_at DESC, p.updated_at DESC
         LIMIT #{limit} OFFSET #{offset}
     </select>
 
@@ -132,6 +170,22 @@
             updated_at = CURRENT_TIMESTAMP
         </set>
         WHERE id = #{id}
+    </update>
+
+    <update id="softDeleteProject">
+        UPDATE projects
+        SET deleted_at = CURRENT_TIMESTAMP,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = #{id}
+          AND deleted_at IS NULL
+    </update>
+
+    <update id="restoreProject">
+        UPDATE projects
+        SET deleted_at = NULL,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = #{id}
+          AND deleted_at IS NOT NULL
     </update>
 
     <!-- deleteProject: Hard Delete -->
