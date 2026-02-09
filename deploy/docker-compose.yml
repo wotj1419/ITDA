@@ -20,6 +20,7 @@ services:
     environment:
       SPRING_PROFILES_ACTIVE: prod
       VERTEX_TEXT_MODEL: ${VERTEX_TEXT_MODEL}
+      VERTEX_TIMEOUT_MS: ${VERTEX_TIMEOUT_MS}
       SERVER_PORT: 18080
       DB_URL: jdbc:mysql://mysql:13306/${MYSQL_DATABASE}?useSSL=false&serverTimezone=Asia/Seoul&allowPublicKeyRetrieval=true
       DB_USERNAME: ${DB_USERNAME}
@@ -86,6 +87,7 @@ services:
       GOOGLE_APPLICATION_CREDENTIALS: /secrets/gcp-sa.json
       GCP_PROJECT_ID: ${GCP_PROJECT_ID}
       GCP_LOCATION: ${GCP_LOCATION}
+      VERTEX_TIMEOUT_MS: ${VERTEX_TIMEOUT_MS}
     networks:
       - internal
       - public
@@ -120,6 +122,7 @@ services:
       GOOGLE_APPLICATION_CREDENTIALS: /secrets/gcp-sa.json
       GCP_PROJECT_ID: ${GCP_PROJECT_ID}
       GCP_LOCATION: ${GCP_LOCATION}
+      VERTEX_TIMEOUT_MS: ${VERTEX_TIMEOUT_MS}
     networks:
       - internal
       - public
@@ -154,6 +157,7 @@ services:
       GOOGLE_APPLICATION_CREDENTIALS: /secrets/gcp-sa.json
       GCP_PROJECT_ID: ${GCP_PROJECT_ID}
       GCP_LOCATION: ${GCP_LOCATION}
+      VERTEX_TIMEOUT_MS: ${VERTEX_TIMEOUT_MS}
     networks:
       - internal
       - public
