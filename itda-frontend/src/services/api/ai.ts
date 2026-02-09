@@ -1,7 +1,7 @@
 /**
  * AI API Service
  * @module services/api/ai
- * 
+ *
  * AI 프롬프트 생성, 이미지/영상 생성, Job 상태 조회 API
  */
 import apiClient from './client';
@@ -15,6 +15,56 @@ import type {
     PromptPreviewRequest,
     PromptPreviewResponse,
 } from '../../types/api';
+
+const GENERATE_NODE_RETRY_MAX_ATTEMPTS = 2;
+const GENERATE_NODE_RETRY_BASE_DELAY_MS = 1500;
+
+function sleep(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function shouldRetryGenerateNode(error: unknown): boolean {
+    if (!error || typeof error !== 'object') {
+        return false;
+    }
+    const axiosLike = error as {
+        response?: { status?: number };
+        code?: string;
+        message?: string;
+    };
+    const status = axiosLike.response?.status;
+    const code = axiosLike.code;
+    if (status === 502 || status === 503 || status === 504) {
+        return true;
+    }
+    if (code === 'ECONNABORTED') {
+        return true;
+    }
+    const message = (axiosLike.message ?? '').toLowerCase();
+    return message.includes('timeout');
+}
+
+function toFriendlyGenerateNodeError(error: unknown): Error {
+    if (error instanceof Error) {
+        const axiosLike = error as Error & {
+            response?: { status?: number };
+            code?: string;
+            message?: string;
+        };
+        const status = axiosLike.response?.status;
+        const code = axiosLike.code;
+        const message = (axiosLike.message ?? '').toLowerCase();
+        const isTimeout = status === 504 || code === 'ECONNABORTED' || message.includes('timeout');
+        if (isTimeout) {
+            return new Error('생성 요청 시간이 초과되었습니다. 생성은 계속 진행될 수 있으니 잠시 후 결과를 확인해주세요.');
+        }
+        if (status === 502 || status === 503) {
+            return new Error('생성 서버 응답이 일시적으로 지연되고 있습니다. 잠시 후 다시 시도해주세요.');
+        }
+        return error;
+    }
+    return new Error('생성 요청 처리 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.');
+}
 
 // =============================================================================
 // AI Prompt Generation
@@ -158,21 +208,41 @@ export async function generateNode(
         requeueIfExisting?: boolean;
     }
 ): Promise<number> {
-    const response = await apiClient.post<ApiResponse<GenerateJobResponse>>(
-        `/nodes/${nodeId}/generate`,
-        {
-            prompt,
-            nodeType: options?.nodeType,
-            settings: options?.settings,
-            promptEnFinalOverride: options?.promptEnFinalOverride,
-            referenceObjectIds: options?.referenceObjectIds,
-            requeueIfExisting: options?.requeueIfExisting,
+    const payload = {
+        prompt,
+        nodeType: options?.nodeType,
+        settings: options?.settings,
+        promptEnFinalOverride: options?.promptEnFinalOverride,
+        referenceObjectIds: options?.referenceObjectIds,
+        requeueIfExisting: options?.requeueIfExisting,
+    };
+
+    let attempt = 0;
+    while (true) {
+        try {
+            const response = await apiClient.post<ApiResponse<GenerateJobResponse>>(
+                `/nodes/${nodeId}/generate`,
+                payload
+            );
+            if (!response.data.data?.jobId) {
+                throw new Error('Failed to start generation job');
+            }
+            return response.data.data.jobId;
+        } catch (error) {
+            const retryable = shouldRetryGenerateNode(error);
+            const canRetry =
+                retryable &&
+                attempt < GENERATE_NODE_RETRY_MAX_ATTEMPTS;
+            if (!canRetry) {
+                if (retryable) {
+                    throw toFriendlyGenerateNodeError(error);
+                }
+                throw error;
+            }
+            attempt += 1;
+            await sleep(GENERATE_NODE_RETRY_BASE_DELAY_MS * attempt);
         }
-    );
-    if (!response.data.data?.jobId) {
-        throw new Error('Failed to start generation job');
     }
-    return response.data.data.jobId;
 }
 
 export async function previewPrompt(
