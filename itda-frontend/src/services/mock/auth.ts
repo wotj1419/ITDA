@@ -5,9 +5,10 @@ import type {
     PasswordResetRequest,
     PasswordResetConfirmRequest,
     UpdateProfileRequest,
+    User,
 } from '../../types/api/auth';
 
-let mockUser = {
+let mockUser: User = {
     id: 1,
     email: 'minjun@example.com',
     name: 'Minjun Kim',
