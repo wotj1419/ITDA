@@ -165,6 +165,28 @@ public class AuthService {
         return UserResponse.from(updatedUser);
     }
 
+    /**
+     * Profile image removal
+     */
+    @Transactional
+    public UserResponse removeProfileImage(Long userId) {
+        User user = getUserByIdOrThrow(userId);
+        String previousProfileUrl = user.getProfileImageUrl();
+
+        if (previousProfileUrl == null || previousProfileUrl.isBlank()) {
+            return UserResponse.from(user);
+        }
+
+        int updated = userMapper.clearProfileImage(userId);
+        if (updated == 0) {
+            throw new BusinessException(ErrorCode.USER_NOT_FOUND);
+        }
+
+        cleanupPreviousProfileImage(userId, previousProfileUrl, null);
+        User updatedUser = getUserByIdOrThrow(userId);
+        return UserResponse.from(updatedUser);
+    }
+
     // ===== Private Methods =====
 
     /**

@@ -19,6 +19,7 @@ const form = ref({
 const fileInputRef = ref<HTMLInputElement | null>(null)
 const selectedFile = ref<File | null>(null)
 const filePreviewUrl = ref<string | null>(null)
+const clearImage = ref(false)
 
 const isSubmitting = ref(false)
 const isLoading = computed(() => authStore.isAuthenticated && !authStore.user)
@@ -52,16 +53,18 @@ const fileError = computed(() => {
 
 const hasNameChange = computed(() => normalizedName.value !== currentName.value)
 const hasImageChange = computed(() => !!selectedFile.value)
+const hasImageRemoval = computed(() => clearImage.value && !selectedFile.value && !!currentProfileImageUrl.value)
 
 const canSubmit = computed(() => {
   return !!authStore.user
     && !isSubmitting.value
     && !nameError.value
     && !fileError.value
-    && (hasNameChange.value || hasImageChange.value)
+    && (hasNameChange.value || hasImageChange.value || hasImageRemoval.value)
 })
 
 const previewImageUrl = computed(() => {
+  if (clearImage.value) return undefined
   if (filePreviewUrl.value) return filePreviewUrl.value
   if (currentProfileImageUrl.value) return currentProfileImageUrl.value
   return undefined
@@ -100,11 +103,28 @@ const handleFileChange = (event: Event) => {
   const target = event.target as HTMLInputElement | null
   const file = target?.files?.[0] ?? null
   selectedFile.value = file
+  if (file) {
+    clearImage.value = false
+  }
+}
+
+const handleRemoveImage = () => {
+  if (!currentProfileImageUrl.value && !selectedFile.value) return
+  clearImage.value = true
+  if (filePreviewUrl.value) {
+    URL.revokeObjectURL(filePreviewUrl.value)
+    filePreviewUrl.value = null
+  }
+  selectedFile.value = null
+  resetFileInput()
 }
 
 const handleSave = async () => {
   if (!canSubmit.value) return
   isSubmitting.value = true
+  const shouldUpdateName = hasNameChange.value
+  const nameToUpdate = normalizedName.value
+  const shouldRemoveImage = hasImageRemoval.value
 
   try {
     if (selectedFile.value) {
@@ -113,8 +133,13 @@ const handleSave = async () => {
       resetFileInput()
     }
 
-    if (hasNameChange.value) {
-      const payload: UpdateProfileRequest = { name: normalizedName.value }
+    if (!selectedFile.value && shouldRemoveImage) {
+      await authStore.removeProfileImage()
+      clearImage.value = false
+    }
+
+    if (shouldUpdateName) {
+      const payload: UpdateProfileRequest = { name: nameToUpdate }
       await authStore.updateProfile(payload)
     }
 
@@ -189,6 +214,14 @@ onMounted(() => {
               />
               <p v-if="fileError" class="form-error">{{ fileError }}</p>
               <p class="form-hint">JPG/PNG/WebP, 최대 5MB</p>
+              <button
+                type="button"
+                class="btn btn-ghost remove-image-btn"
+                :disabled="(!currentProfileImageUrl && !selectedFile) || clearImage"
+                @click="handleRemoveImage"
+              >
+                기본 이미지로 되돌리기
+              </button>
             </div>
           </div>
 
@@ -302,6 +335,13 @@ onMounted(() => {
   font-size: 0.75rem;
   color: var(--gray-500);
   margin-top: 0.35rem;
+}
+
+.remove-image-btn {
+  margin-top: 0.5rem;
+  align-self: flex-start;
+  font-size: 0.75rem;
+  padding: 0.35rem 0.75rem;
 }
 
 .form-actions {

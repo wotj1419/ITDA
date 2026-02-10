@@ -35,6 +35,11 @@ public interface UserMapper {
                       @Param("profileImageUrl") String profileImageUrl);
 
     /**
+     * 프로필 이미지 제거
+     */
+    int clearProfileImage(@Param("id") Long id);
+
+    /**
      * 비밀번호 변경
      */
     void updatePassword(@Param("id") Long id,

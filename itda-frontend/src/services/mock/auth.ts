@@ -61,6 +61,15 @@ export const mockAuthService: AuthService = {
         return { ...mockUser };
     },
 
+    async removeProfileImage() {
+        await new Promise((resolve) => setTimeout(resolve, 200));
+        mockUser = {
+            ...mockUser,
+            profileImageUrl: null,
+        };
+        return { ...mockUser };
+    },
+
     async requestPasswordReset(_data: PasswordResetRequest) {
         await new Promise((resolve) => setTimeout(resolve, 400));
         void _data;

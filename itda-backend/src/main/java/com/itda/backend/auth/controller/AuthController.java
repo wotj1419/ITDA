@@ -244,4 +244,27 @@ public class AuthController {
         UserResponse response = authService.updateProfileImage(userDetails.getUserId(), file);
         return ApiResponse.success(response);
     }
+
+    @Operation(
+            summary = "프로필 이미지 삭제",
+            description = "기본 프로필 이미지(이모지)로 되돌립니다."
+    )
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "200",
+                    description = "삭제 성공",
+                    content = @Content(schema = @Schema(implementation = UserResponse.class))
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "401",
+                    description = "인증 실패"
+            )
+    })
+    @DeleteMapping("/me/profile-image")
+    public ResponseEntity<ApiResponse<UserResponse>> removeProfileImage(
+            @AuthenticationPrincipal CustomUserDetails userDetails
+    ) {
+        UserResponse response = authService.removeProfileImage(userDetails.getUserId());
+        return ApiResponse.success(response);
+    }
 }

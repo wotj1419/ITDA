@@ -41,6 +41,11 @@ export const apiAuthService: AuthService = {
         return response.data.data!;
     },
 
+    async removeProfileImage() {
+        const response = await apiClient.delete<ApiResponse<User>>('/auth/me/profile-image');
+        return response.data.data!;
+    },
+
     async requestPasswordReset(data: PasswordResetRequest) {
         await apiClient.post('/auth/password/reset/request', data);
     },
