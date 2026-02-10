@@ -117,12 +117,7 @@ router.beforeEach((to, _from, next) => {
   const isAuthenticated = !!getAccessToken()
 
   if (to.meta.requiresAuth && !isAuthenticated) {
-    next({ name: 'landing' })
-    return
-  }
-
-  if (to.name === 'landing' && isAuthenticated) {
-    next({ name: 'dashboard' })
+    next({ name: 'auth', query: { redirect: to.fullPath } })
     return
   }
 
