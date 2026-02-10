@@ -4,6 +4,7 @@ import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { useUIStore } from '../../stores/ui'
 import { useAuthStore } from '../../stores/auth'
 import { useSidebarShortcut } from '../../composables/useSidebarShortcut'
+import { resolveApiUrl } from '../../services/api/urls'
 import {
   Folder,
   Star,
@@ -54,6 +55,7 @@ function getEmoji(userId?: number, name?: string): string {
 }
 
 const userEmoji = computed(() => getEmoji(authStore.user?.id, authStore.user?.name))
+const resolvedProfileImageUrl = computed(() => resolveApiUrl(authStore.user?.profileImageUrl))
 
 const toggleProfileMenu = () => {
   showProfileMenu.value = !showProfileMenu.value
@@ -128,12 +130,12 @@ const sidebarClasses = computed(() => [
         <div
           class="user-avatar"
           :style="{
-            backgroundImage: authStore.user?.profileImageUrl
-              ? `url(${authStore.user.profileImageUrl})`
+            backgroundImage: resolvedProfileImageUrl
+              ? `url(${resolvedProfileImageUrl})`
               : undefined,
           }"
         >
-          <span v-if="!authStore.user?.profileImageUrl" class="avatar-emoji">{{ userEmoji }}</span>
+          <span v-if="!resolvedProfileImageUrl" class="avatar-emoji">{{ userEmoji }}</span>
         </div>
         <div class="user-info-text">
           <div class="user-name">{{ authStore.user?.name || 'Guest' }}</div>
@@ -149,12 +151,12 @@ const sidebarClasses = computed(() => [
              <div
                 class="user-avatar header-avatar"
                 :style="{
-                  backgroundImage: authStore.user?.profileImageUrl
-                    ? `url(${authStore.user.profileImageUrl})`
+                  backgroundImage: resolvedProfileImageUrl
+                    ? `url(${resolvedProfileImageUrl})`
                     : undefined,
                 }"
               >
-                <span v-if="!authStore.user?.profileImageUrl" class="avatar-emoji">{{ userEmoji }}</span>
+                <span v-if="!resolvedProfileImageUrl" class="avatar-emoji">{{ userEmoji }}</span>
               </div>
               <div class="user-info-text">
                 <div class="user-name">{{ authStore.user?.name || 'Guest' }}</div>

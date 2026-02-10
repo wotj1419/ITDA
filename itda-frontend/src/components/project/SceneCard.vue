@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, onMounted, onUnmounted } from 'vue'
 import { RouterLink } from 'vue-router'
-import { GripVertical, Image, Pencil, Check, Loader2, MoreVertical, Trash2 } from 'lucide-vue-next'
+import { GripVertical, Image, Pencil, Check, Loader2, MoreVertical, Trash2, Layers } from 'lucide-vue-next'
 import type { Scene, SceneStatus } from '../../types/api/scenes'
 import Badge from '../common/Badge.vue'
 import Button from '../common/Button.vue'
@@ -61,6 +61,14 @@ const editLink = computed(() => ({
   name: 'scene-edit',
   params: {
     projectId: props.projectId,
+    sceneId: props.scene.sceneId,
+  },
+}))
+
+const timelineLink = computed(() => ({
+  name: 'scene-timeline',
+  params: {
+    id: props.projectId,
     sceneId: props.scene.sceneId,
   },
 }))
@@ -135,6 +143,16 @@ const editLink = computed(() => ({
           </Button>
           <transition name="fade">
             <div v-if="showMenu" class="scene-menu-dropdown">
+              <RouterLink :to="timelineLink" custom v-slot="{ navigate }">
+                <button
+                  type="button"
+                  class="scene-menu-item"
+                  @click.stop="() => { showMenu = false; navigate() }"
+                >
+                  <Layers class="icon-sm" />
+                  타임라인
+                </button>
+              </RouterLink>
               <button
                 type="button"
                 class="scene-menu-item text-danger"

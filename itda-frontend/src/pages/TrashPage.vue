@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import DefaultLayout from '../layouts/DefaultLayout.vue'
 import { Trash2 } from 'lucide-vue-next'
 import { useProjectStore } from '../stores/project'
+import type { Project } from '../types/api/projects'
 import { useUIStore } from '../stores/ui'
 import { useAuthStore } from '../stores/auth'
 import ProjectCard from '../components/project/ProjectCard.vue'
@@ -17,7 +18,7 @@ const authStore = useAuthStore()
 const isCreatingProject = ref(false)
 
 // State
-const deletedProjects = ref<any[]>([]) 
+const deletedProjects = ref<Project[]>([])
 const isLoading = ref(true)
 
 // Modal State

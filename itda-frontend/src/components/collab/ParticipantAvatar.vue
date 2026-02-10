@@ -1,6 +1,8 @@
 <script setup lang="ts">
+import { computed } from 'vue';
 import type { CollabParticipant } from '../../types/ui';
 import { MicOff } from 'lucide-vue-next'
+import { resolveApiUrl } from '../../services/api/urls';
 
 interface Props {
   participant: CollabParticipant;
@@ -14,14 +16,16 @@ const props = withDefaults(defineProps<Props>(), {
   isSpeaking: false,
   isMuted: false,
 });
+
+const resolvedAvatarUrl = computed(() => resolveApiUrl(props.participant.avatarUrl));
 </script>
 
 <template>
   <div class="participant">
     <div :class="['avatar', { me: props.isMe, speaking: props.isSpeaking }]">
       <img
-        v-if="props.participant.avatarUrl"
-        :src="props.participant.avatarUrl"
+        v-if="resolvedAvatarUrl"
+        :src="resolvedAvatarUrl || ''"
         :alt="props.participant.name"
       />
       <span v-else>{{ props.participant.name.substring(0, 2) }}</span>

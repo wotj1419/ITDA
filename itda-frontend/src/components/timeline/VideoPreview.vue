@@ -90,7 +90,11 @@ function handleKeydown(event: KeyboardEvent): void {
 
 <template>
   <div class="video-preview" tabindex="0" @keydown="handleKeydown">
-    <div ref="containerRef" class="preview-container">
+    <div
+      ref="containerRef"
+      class="preview-container"
+      :class="{ 'is-empty': !hasClips }"
+    >
       <template v-if="hasClips">
         <video
           v-if="hasVideo"
@@ -157,6 +161,11 @@ function handleKeydown(event: KeyboardEvent): void {
   overflow: hidden;
 }
 
+.preview-container.is-empty {
+  background: linear-gradient(180deg, var(--rose-100), var(--rose-50));
+  border: 1px dashed var(--rose-300);
+}
+
 .preview-video,
 .preview-image {
   width: 100%;
@@ -170,8 +179,9 @@ function handleKeydown(event: KeyboardEvent): void {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--gray-300);
+  color: var(--gray-600);
   font-size: 0.875rem;
+  font-weight: 500;
 }
 
 .controls {

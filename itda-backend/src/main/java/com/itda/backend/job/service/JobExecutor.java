@@ -92,7 +92,7 @@ public class JobExecutor {
                     mergeResultService.recordSceneMergeResult(
                             job,
                             result.resultAssetId(),
-                            null,
+                            result.durationMs(),
                             result.thumbnailAssetId(),
                             null
                     );

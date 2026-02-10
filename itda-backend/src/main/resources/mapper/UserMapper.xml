@@ -53,6 +53,14 @@
         WHERE id = #{id}
     </update>
 
+    <!-- 프로필 이미지 제거 -->
+    <update id="clearProfileImage">
+        UPDATE users
+        SET profile_image_url = NULL,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = #{id}
+    </update>
+
     <!-- 비밀번호 변경 -->
     <update id="updatePassword">
         UPDATE users
