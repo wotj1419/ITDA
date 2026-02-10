@@ -1,399 +1,216 @@
-<script setup lang="ts">
-import { RouterLink } from 'vue-router'
-import { Edit2, MapPin, Link as LinkIcon, Mail, Film, Users, Heart, Eye } from 'lucide-vue-next'
+﻿<script setup lang="ts">
+import { computed, onMounted } from 'vue'
+import { RouterLink, useRouter } from 'vue-router'
 import DefaultLayout from '../layouts/DefaultLayout.vue'
+import Avatar from '../components/common/Avatar.vue'
+import { useAuthStore } from '../stores/auth'
 
-// Mock Data
-const user = {
-  name: 'Minjun Kim',
-  email: 'minjun@example.com',
-  jobTitle: 'Filmmaker & AI Artist',
-  bio: 'AI 기술을 활용해 상상을 현실로 만드는 영화 제작자입니다. 주로 SF와 판타지 장르를 다루며, 새로운 시각적 경험을 탐구합니다.',
-  location: 'Seoul, South Korea',
-  website: 'minjun.art',
-  avatarUrl: 'https://i.pravatar.cc/150?u=user123',
-  stats: {
-    projects: 12,
-    followers: '1.5k',
-    following: 840,
-  },
+const authStore = useAuthStore()
+const router = useRouter()
+
+const user = computed(() => authStore.user)
+const isLoading = computed(() => authStore.isAuthenticated && !authStore.user)
+
+const displayName = computed(() => user.value?.name || '이름 미등록')
+const displayEmail = computed(() => user.value?.email || '이메일 미등록')
+const displayAvatarUrl = computed(() => user.value?.profileImageUrl ?? undefined)
+
+const handleLogout = () => {
+  authStore.logout()
+  router.push('/')
 }
 
-const publicProjects = [
-  {
-    id: 1,
-    title: 'The Martian Red',
-    genre: 'Sci-Fi',
-    description: 'A survival story on Mars. The protagonist finds an ancient ruin.',
-    likes: 342,
-    views: '1.2k',
-    timeAgo: '2h ago',
-    thumbnailUrl: 'https://images.unsplash.com/photo-1626814026160-2237a95fc5a0?w=600&auto=format',
-    duration: '00:45',
-    badgeVariant: 'rose',
-  },
-  {
-    id: 2,
-    title: 'Neon Dreams',
-    genre: 'Draft',
-    description: 'Cyberpunk thriller set in neo-Tokyo.',
-    likes: 156,
-    views: 890,
-    timeAgo: '1 day ago',
-    thumbnailUrl: 'https://images.unsplash.com/photo-1518770660439-4636190af475?w=600&auto=format',
-    duration: '',
-    badgeVariant: 'default',
-  },
-  {
-    id: 3,
-    title: 'Ocean Mystery',
-    genre: 'Docu',
-    description: 'Exploring the deep sea.',
-    likes: 52,
-    views: 230,
-    timeAgo: '3 days ago',
-    thumbnailUrl: 'https://images.unsplash.com/photo-1440404653325-ab127d49abc1?w=600&auto=format',
-    duration: '',
-    badgeVariant: 'default',
-  },
-]
+onMounted(() => {
+  if (authStore.isAuthenticated && !authStore.user) {
+    authStore.fetchMe()
+  }
+})
 </script>
 
 <template>
   <DefaultLayout>
-    <div class="profile-container">
-      <!-- Profile Header Card -->
-      <div class="card profile-header-card">
-        <div
-          class="profile-avatar"
-          :style="{ backgroundImage: `url(${user.avatarUrl})` }"
-        ></div>
+    <div class="account-page">
+      <div class="page-header">
+        <div>
+          <h1 class="page-title">계정/설정</h1>
+          <p class="page-description">계정 정보와 보안 설정을 관리합니다.</p>
+        </div>
+        <RouterLink to="/profile/edit" class="btn btn-primary">
+          계정 정보 수정
+        </RouterLink>
+      </div>
 
-        <div class="profile-info">
-          <div class="profile-header-row">
-            <div>
-              <h1 class="profile-name">{{ user.name }}</h1>
-              <p class="profile-job">{{ user.jobTitle }}</p>
+      <div v-if="isLoading" class="loading-state">계정 정보를 불러오는 중...</div>
+
+      <div v-else class="settings-grid">
+        <section class="card settings-card">
+          <div class="section-header">
+            <h2 class="section-title">계정 정보</h2>
+            <p class="section-desc">로그인에 사용되는 기본 정보입니다.</p>
+          </div>
+
+          <div class="account-summary">
+            <Avatar
+              :src="displayAvatarUrl"
+              :alt="displayName"
+              size="lg"
+              :user-id="user?.id"
+            />
+            <div class="account-text">
+              <div class="account-name">{{ displayName }}</div>
+              <div class="account-email">{{ displayEmail }}</div>
             </div>
-            <RouterLink to="/profile/edit" class="btn btn-secondary">
-              <Edit2 class="w-4 h-4" />
-              프로필 수정
+          </div>
+
+          <div class="info-list">
+            <div class="info-item">
+              <span class="info-label">이메일</span>
+              <span class="info-value">{{ displayEmail }}</span>
+            </div>
+          </div>
+        </section>
+
+        <section class="card settings-card">
+          <div class="section-header">
+            <h2 class="section-title">보안</h2>
+            <p class="section-desc">비밀번호 재설정 및 세션을 관리합니다.</p>
+          </div>
+
+          <div class="security-actions">
+            <RouterLink to="/auth/forgot" class="btn btn-secondary">
+              비밀번호 재설정
             </RouterLink>
+            <button type="button" class="btn btn-ghost" @click="handleLogout">
+              로그아웃
+            </button>
           </div>
-
-          <p class="profile-bio">
-            {{ user.bio }}
+          <p class="hint-text">
+            비밀번호 재설정은 이메일 인증을 통해 진행됩니다.
           </p>
-
-          <div class="profile-meta">
-            <div class="profile-meta-item">
-              <MapPin class="w-4 h-4" />
-              {{ user.location }}
-            </div>
-            <div class="profile-meta-item">
-              <LinkIcon class="w-4 h-4" />
-              <a :href="`https://${user.website}`" target="_blank" class="link-underline">{{ user.website }}</a>
-            </div>
-            <div class="profile-meta-item">
-              <Mail class="w-4 h-4" />
-              {{ user.email }}
-            </div>
-          </div>
-        </div>
+        </section>
       </div>
-
-      <!-- Stats Row -->
-      <div class="stats-row">
-        <div class="card stat-card">
-          <div class="stat-icon-wrapper">
-            <Film class="w-6 h-6" />
-          </div>
-          <div>
-            <div class="stat-value">{{ user.stats.projects }}</div>
-            <div class="stat-label">Projects</div>
-          </div>
-        </div>
-        <div class="card stat-card">
-          <div class="stat-icon-wrapper">
-            <Users class="w-6 h-6" />
-          </div>
-          <div>
-            <div class="stat-value">{{ user.stats.followers }}</div>
-            <div class="stat-label">Followers</div>
-          </div>
-        </div>
-        <div class="card stat-card">
-          <div class="stat-icon-wrapper">
-            <Heart class="w-6 h-6" />
-          </div>
-          <div>
-            <div class="stat-value">{{ user.stats.following }}</div>
-            <div class="stat-label">Following</div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Projects Section -->
-      <section>
-        <div class="section-header">
-          <h2 class="h3">Public Projects</h2>
-          <div class="flex gap-2">
-            <select class="form-select" style="width: auto; padding-right: 2rem;">
-              <option>Latest</option>
-              <option>Popular</option>
-            </select>
-          </div>
-        </div>
-
-        <div class="projects-grid">
-          <RouterLink
-            v-for="project in publicProjects"
-            :key="project.id"
-            :to="`/projects/${project.id}`"
-            class="card card-clickable project-card"
-          >
-            <div
-              class="card-thumbnail"
-              :style="{ backgroundImage: `url(${project.thumbnailUrl})` }"
-            >
-              <div v-if="project.duration" class="duration-badge">
-                {{ project.duration }}
-              </div>
-            </div>
-            <div class="p-4">
-              <div class="flex items-center justify-between mb-2">
-                <h3 class="project-title">{{ project.title }}</h3>
-                <span class="badge" :class="`badge-${project.badgeVariant}`">{{ project.genre }}</span>
-              </div>
-              <p class="project-desc">{{ project.description }}</p>
-              <div class="project-footer">
-                <div class="project-stats">
-                  <Heart class="w-3 h-3" /> {{ project.likes }}
-                  <Eye class="w-3 h-3 ml-2" /> {{ project.views }}
-                </div>
-                <span class="project-time">{{ project.timeAgo }}</span>
-              </div>
-            </div>
-          </RouterLink>
-        </div>
-      </section>
     </div>
   </DefaultLayout>
 </template>
 
 <style scoped>
-.profile-container {
+.account-page {
   max-width: 1000px;
   margin: 0 auto;
 }
 
-.profile-header-card {
-  margin-bottom: 2rem;
-  display: flex;
-  align-items: flex-start;
-  gap: 2rem;
-  padding: 2rem;
-}
-
-.profile-avatar {
-  width: 120px;
-  height: 120px;
-  border-radius: 50%;
-  background-position: center;
-  background-size: cover;
-  border: 4px solid var(--rose-50);
-  flex-shrink: 0;
-}
-
-.profile-info {
-  flex: 1;
-}
-
-.profile-header-row {
+.page-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 0.5rem;
-}
-
-.profile-name {
-  font-size: 2rem;
-  font-weight: 700;
-  margin-bottom: 0.25rem;
-  color: var(--gray-900);
-}
-
-.profile-job {
-  font-size: 1.125rem;
-  color: var(--gray-500);
-}
-
-.profile-bio {
-  color: var(--gray-600);
-  max-width: 600px;
-  margin-bottom: 1.5rem;
-  line-height: 1.6;
-}
-
-.profile-meta {
-  display: flex;
-  gap: 1rem;
-  font-size: 0.875rem;
-  color: var(--gray-500);
-}
-
-.profile-meta-item {
-  display: flex;
-  align-items: center;
-  gap: 0.25rem;
-}
-
-.link-underline {
-  text-decoration: underline;
-  color: inherit;
-}
-
-/* Stats */
-.stats-row {
-  display: flex;
   gap: 1rem;
   margin-bottom: 2rem;
+  flex-wrap: wrap;
 }
 
-.stat-card {
-  flex: 1;
-  padding: 1rem;
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-}
-
-.stat-icon-wrapper {
-  width: 48px;
-  height: 48px;
-  background: var(--rose-50);
-  border-radius: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--rose-500);
-}
-
-.stat-value {
+.page-title {
   font-size: 1.5rem;
   font-weight: 700;
-  color: var(--gray-900);
-}
-
-.stat-label {
-  font-size: 0.875rem;
-  color: var(--gray-500);
-}
-
-/* Projects */
-.projects-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 1.5rem;
-}
-
-.project-card {
-  padding: 0;
-  overflow: hidden;
-  text-decoration: none;
-  color: inherit;
-}
-
-.card-thumbnail {
-  aspect-ratio: 16/9;
-  background-position: center;
-  background-size: cover;
-  position: relative;
-}
-
-.duration-badge {
-  position: absolute;
-  bottom: 0.5rem;
-  right: 0.5rem;
-  background: rgba(0, 0, 0, 0.6);
-  padding: 0.25rem 0.5rem;
-  border-radius: 4px;
-  font-size: 0.625rem;
-  color: white;
-}
-
-.project-title {
-  font-weight: 600;
-  font-size: 1rem;
   color: var(--gray-900);
   margin: 0;
 }
 
-.project-desc {
+.page-description {
+  color: var(--gray-500);
+  margin: 0.5rem 0 0;
+}
+
+.settings-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1.5rem;
+}
+
+.settings-card {
+  padding: 1.5rem;
+}
+
+.section-header {
+  margin-bottom: 1.25rem;
+}
+
+.section-title {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--gray-900);
+  margin: 0;
+}
+
+.section-desc {
   font-size: 0.875rem;
   color: var(--gray-500);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  margin-bottom: 0.75rem;
+  margin-top: 0.35rem;
 }
 
-.project-footer {
+.account-summary {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem;
+  border-radius: 12px;
+  background: var(--gray-50);
+  margin-bottom: 1.25rem;
 }
 
-.project-stats {
+.account-text {
   display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 0.75rem;
-  color: var(--gray-500);
+  flex-direction: column;
+  gap: 0.25rem;
 }
 
-.project-time {
-  font-size: 0.75rem;
-  color: var(--gray-500);
-}
-
-/* Utils */
-.h3 {
-  font-size: 1.25rem;
+.account-name {
   font-weight: 600;
   color: var(--gray-900);
 }
 
-.section-header {
+.account-email {
+  font-size: 0.875rem;
+  color: var(--gray-500);
+}
+
+.info-list {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.info-item {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 1rem;
-}
-
-.form-select {
-  padding: 0.5rem 2rem 0.5rem 1rem;
-  border: 1px solid var(--rose-200);
-  border-radius: 8px;
-  background: white;
+  gap: 0.75rem;
   font-size: 0.875rem;
-  color: var(--gray-700);
 }
 
-.badge {
-  padding: 0.25rem 0.5rem;
-  border-radius: 4px;
+.info-label {
+  color: var(--gray-500);
+}
+
+.info-value {
+  color: var(--gray-900);
+  font-weight: 500;
+}
+
+.security-actions {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.75rem;
+}
+
+.hint-text {
   font-size: 0.75rem;
-  font-weight: 600;
+  color: var(--gray-500);
+  margin: 0;
 }
 
-.badge-rose {
-  background: var(--rose-100);
-  color: var(--rose-600);
-}
-
-.badge-default {
-  background: var(--gray-100);
-  color: var(--gray-600);
+.loading-state {
+  padding: 2rem;
+  text-align: center;
+  color: var(--gray-500);
 }
 </style>

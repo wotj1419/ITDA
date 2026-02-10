@@ -8,6 +8,11 @@ import com.itda.backend.auth.domain.User;
 import com.itda.backend.auth.domain.UserRole;
 import com.itda.backend.auth.repository.RefreshTokenRepository;
 import com.itda.backend.auth.repository.UserMapper;
+import com.itda.backend.asset.domain.Asset;
+import com.itda.backend.asset.repository.AssetMapper;
+import com.itda.backend.auth.storage.ProfileImageCleaner;
+import com.itda.backend.auth.storage.ProfileImageStorage;
+import com.itda.backend.auth.storage.ProfileImageStorageResult;
 import com.itda.backend.global.exception.BusinessException;
 import com.itda.backend.global.exception.UnauthorizedException;
 import com.itda.backend.global.response.ErrorCode;
@@ -18,7 +23,10 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.util.Objects;
+import java.util.Set;
 /**
  * 인증 서비스
  * 회원가입, 로그인, 토큰 갱신, 로그아웃 처리
@@ -32,6 +40,17 @@ public class AuthService {
     private final RefreshTokenRepository refreshTokenRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider jwtTokenProvider;
+    private final ProfileImageStorage profileImageStorage;
+    private final ProfileImageAssetRegistrar profileImageAssetRegistrar;
+    private final ProfileImageCleaner profileImageCleaner;
+    private final AssetMapper assetMapper;
+
+    private static final Set<String> ALLOWED_CONTENT_TYPES = Set.of(
+            "image/jpeg",
+            "image/jpg",
+            "image/png",
+            "image/webp"
+    );
 
     /**
      * 회원가입
@@ -114,6 +133,60 @@ public class AuthService {
         return UserResponse.from(updatedUser);
     }
 
+    /**
+     * Profile image upload
+     */
+    @Transactional
+    public UserResponse updateProfileImage(Long userId, MultipartFile file) {
+        validateImageFile(file);
+
+        User user = getUserByIdOrThrow(userId);
+        String previousProfileUrl = user.getProfileImageUrl();
+
+        ProfileImageStorageResult storedImage = storeProfileImageOrThrow(userId, file);
+        Long assetId = null;
+        try {
+            assetId = profileImageAssetRegistrar.registerProfileImage(
+                    userId,
+                    storedImage.storageKey(),
+                    storedImage.sizeBytes(),
+                    storedImage.contentType(),
+                    storedImage.storageProvider()
+            );
+            String profileImageUrl = buildProfileImageUrl(assetId);
+            ensureProfileUpdatedOrThrow(userId, null, profileImageUrl);
+        } catch (RuntimeException e) {
+            cleanupStoredAsset(assetId, storedImage);
+            throw e;
+        }
+
+        cleanupPreviousProfileImage(userId, previousProfileUrl, assetId);
+        User updatedUser = getUserByIdOrThrow(userId);
+        return UserResponse.from(updatedUser);
+    }
+
+    /**
+     * Profile image removal
+     */
+    @Transactional
+    public UserResponse removeProfileImage(Long userId) {
+        User user = getUserByIdOrThrow(userId);
+        String previousProfileUrl = user.getProfileImageUrl();
+
+        if (previousProfileUrl == null || previousProfileUrl.isBlank()) {
+            return UserResponse.from(user);
+        }
+
+        int updated = userMapper.clearProfileImage(userId);
+        if (updated == 0) {
+            throw new BusinessException(ErrorCode.USER_NOT_FOUND);
+        }
+
+        cleanupPreviousProfileImage(userId, previousProfileUrl, null);
+        User updatedUser = getUserByIdOrThrow(userId);
+        return UserResponse.from(updatedUser);
+    }
+
     // ===== Private Methods =====
 
     /**
@@ -176,6 +249,111 @@ public class AuthService {
             return;
         }
         throw new BusinessException(ErrorCode.USER_NOT_FOUND);
+    }
+
+    private void validateImageFile(MultipartFile file) {
+        if (file == null || file.isEmpty()) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE, "image file is required");
+        }
+        String contentType = file.getContentType();
+        if (contentType == null || !ALLOWED_CONTENT_TYPES.contains(normalizeContentType(contentType))) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE, "unsupported image content type");
+        }
+        String filename = file.getOriginalFilename();
+        if (filename != null && !filename.isBlank() && !hasAllowedExtension(filename)) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE, "unsupported image file extension");
+        }
+    }
+
+    private boolean hasAllowedExtension(String filename) {
+        String lower = filename.toLowerCase();
+        return lower.endsWith(".jpg")
+                || lower.endsWith(".jpeg")
+                || lower.endsWith(".png")
+                || lower.endsWith(".webp");
+    }
+
+    private String normalizeContentType(String contentType) {
+        String trimmed = contentType.trim().toLowerCase();
+        int semicolon = trimmed.indexOf(';');
+        return semicolon > 0 ? trimmed.substring(0, semicolon).trim() : trimmed;
+    }
+
+    private ProfileImageStorageResult storeProfileImageOrThrow(Long userId, MultipartFile file) {
+        try {
+            return profileImageStorage.save(userId, file.getBytes(), file.getContentType());
+        } catch (Exception e) {
+            throw new BusinessException(ErrorCode.INTERNAL_ERROR, e);
+        }
+    }
+
+    private String buildProfileImageUrl(Long assetId) {
+        if (assetId == null) {
+            return null;
+        }
+        return "/api/profile-images/" + assetId;
+    }
+
+    private void cleanupStoredAsset(Long assetId, ProfileImageStorageResult storedImage) {
+        if (assetId != null) {
+            try {
+                assetMapper.deleteById(assetId);
+            } catch (Exception e) {
+                log.warn("[AuthService] Failed to rollback profile asset record: assetId={}", assetId, e);
+            }
+        }
+        if (storedImage != null) {
+            profileImageCleaner.delete(storedImage.storageProvider(), storedImage.storageKey());
+        }
+    }
+
+    private void cleanupPreviousProfileImage(Long userId, String previousUrl, Long newAssetId) {
+        Long assetId = extractProfileImageAssetId(previousUrl);
+        if (assetId == null || assetId.equals(newAssetId)) {
+            return;
+        }
+        Asset asset = assetMapper.findById(assetId).orElse(null);
+        if (asset == null || asset.getProjectId() != null) {
+            return;
+        }
+        if (!Objects.equals(asset.getOwnerId(), userId)) {
+            return;
+        }
+        try {
+            assetMapper.deleteById(assetId);
+        } catch (Exception e) {
+            log.warn("[AuthService] Failed to delete profile asset record: assetId={}", assetId, e);
+        }
+        profileImageCleaner.delete(asset.getStorageProvider(), asset.getStorageKey());
+    }
+
+    private Long extractProfileImageAssetId(String profileImageUrl) {
+        if (profileImageUrl == null) {
+            return null;
+        }
+        String marker = "/api/profile-images/";
+        String trimmed = profileImageUrl.trim();
+        int index = trimmed.indexOf(marker);
+        if (index < 0) {
+            return null;
+        }
+        String tail = trimmed.substring(index + marker.length());
+        int queryIndex = tail.indexOf('?');
+        if (queryIndex >= 0) {
+            tail = tail.substring(0, queryIndex);
+        }
+        int slashIndex = tail.indexOf('/');
+        if (slashIndex >= 0) {
+            tail = tail.substring(0, slashIndex);
+        }
+        if (tail.isBlank()) {
+            return null;
+        }
+        try {
+            return Long.parseLong(tail);
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
 
     private void saveOrRotateRefreshToken(

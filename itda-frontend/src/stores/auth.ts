@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import type { User, LoginRequest, SignupRequest } from '../types/api/auth'
+import type { User, LoginRequest, SignupRequest, UpdateProfileRequest } from '../types/api/auth'
 import { authService } from '../services'
 
 export const useAuthStore = defineStore('auth', () => {
@@ -40,6 +40,33 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
+  async function updateProfile(data: UpdateProfileRequest): Promise<User> {
+    if (!accessToken.value) {
+      throw new Error('Not authenticated');
+    }
+    const updated = await authService.updateProfile(data);
+    user.value = updated;
+    return updated;
+  }
+
+  async function uploadProfileImage(file: File): Promise<User> {
+    if (!accessToken.value) {
+      throw new Error('Not authenticated');
+    }
+    const updated = await authService.uploadProfileImage(file);
+    user.value = updated;
+    return updated;
+  }
+
+  async function removeProfileImage(): Promise<User> {
+    if (!accessToken.value) {
+      throw new Error('Not authenticated');
+    }
+    const updated = await authService.removeProfileImage();
+    user.value = updated;
+    return updated;
+  }
+
   function logout(): void {
     user.value = null
     accessToken.value = null
@@ -61,6 +88,9 @@ export const useAuthStore = defineStore('auth', () => {
     login,
     signup,
     fetchMe,
+    updateProfile,
+    uploadProfileImage,
+    removeProfileImage,
     logout,
   }
 })

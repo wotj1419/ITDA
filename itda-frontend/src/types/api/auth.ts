@@ -23,6 +23,11 @@ export interface SignupRequest {
   name: string;
 }
 
+export interface UpdateProfileRequest {
+  name?: string;
+  profileImageUrl?: string | null;
+}
+
 export interface PasswordResetRequest {
   email: string;
 }
