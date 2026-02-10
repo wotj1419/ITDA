@@ -1,5 +1,5 @@
-export const redirectToAuth = () => {
-  window.location.assign('/auth');
+export const redirectToLanding = () => {
+  window.location.assign('/');
 };
 
 export const redirectToAccessDenied = () => {

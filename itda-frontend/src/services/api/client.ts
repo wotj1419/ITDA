@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { API_BASE_URL } from './constants';
 import { getAccessToken, clearAuthTokens } from './authTokens';
-import { redirectToAccessDenied, redirectToAuth } from './redirects';
+import { redirectToAccessDenied, redirectToLanding } from './redirects';
 
 // Create a configured axios instance
 
@@ -67,7 +67,7 @@ apiClient.interceptors.response.use(
 
         if (status === 401 && !originalRequest._retry && !isAuthLogin && !isPasswordReset) {
             clearAuthTokens();
-            redirectToAuth();
+            redirectToLanding();
             return Promise.reject(error);
         }
 
