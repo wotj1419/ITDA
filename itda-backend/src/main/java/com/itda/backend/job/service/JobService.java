@@ -18,6 +18,8 @@ import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
 
 /**
  * Job 비즈니스 로직 서비스
@@ -269,5 +271,30 @@ public class JobService {
     @Transactional(readOnly = true)
     public List<Job> getJobsByStatus(JobStatus status) {
         return jobMapper.findByStatus(status);
+    }
+
+    @Transactional(readOnly = true)
+    public Optional<Job> findLatestInProgressSceneMerge(Long sceneId, String mergeSignature) {
+        return jobMapper.findLatestInProgressSceneMerge(sceneId, mergeSignature);
+    }
+
+    @Transactional
+    public Job createForcedSceneMergeJob(Long projectId,
+            Long sceneId,
+            String requestJson,
+            String mergeSignature) {
+        String baseKey = JobIdempotencyKey.forMerge(projectId, JobType.SCENE_MERGE, MergeSource.SCENE, mergeSignature);
+        String forceKey = baseKey + ":force:" + UUID.randomUUID();
+        return createAndEnqueue(
+                new JobCreateRequest(
+                        JobType.SCENE_MERGE,
+                        projectId,
+                        sceneId,
+                        null,
+                        requestJson,
+                        forceKey,
+                        mergeSignature,
+                        MergeSource.SCENE),
+                false);
     }
 }

@@ -78,6 +78,17 @@
         ORDER BY created_at ASC
     </select>
 
+    <select id="findLatestInProgressSceneMerge" resultMap="JobResultMap">
+        SELECT <include refid="jobColumns"/>
+        FROM generation_jobs
+        WHERE job_type = 'SCENE_MERGE'
+          AND scene_id = #{sceneId}
+          AND merge_signature = #{mergeSignature}
+          AND status IN ('PENDING', 'RUNNING')
+        ORDER BY created_at DESC
+        LIMIT 1
+    </select>
+
     <!-- UPDATE Status (조건부 - 낙관적 락) -->
     <update id="updateStatusIfExpected">
         UPDATE generation_jobs
