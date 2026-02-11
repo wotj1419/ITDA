@@ -90,6 +90,15 @@
         LIMIT 1
     </select>
 
+    <select id="findLatestBySceneIdAndSignature" resultMap="SceneVideoMap">
+        SELECT id, scene_id, asset_id, thumbnail_asset_id, merge_signature, status, duration_ms, thumbnail_url, is_active, created_at, updated_at
+        FROM scene_videos
+        WHERE scene_id = #{sceneId}
+          AND merge_signature = #{mergeSignature}
+        ORDER BY id DESC
+        LIMIT 1
+    </select>
+
     <select id="findActiveBySceneId" resultMap="SceneVideoMap">
         SELECT id, scene_id, asset_id, thumbnail_asset_id, merge_signature, status, duration_ms, thumbnail_url, is_active, created_at, updated_at
         FROM scene_videos

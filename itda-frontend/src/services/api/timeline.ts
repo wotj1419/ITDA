@@ -2,6 +2,12 @@ import apiClient from './client'
 import type { ApiResponse } from '../../types/api/common'
 import type { ProjectTimeline, SceneTimeline, SceneExportListResponse } from '../../types/api/timeline'
 
+export type MergeRequestResult = {
+    jobId: number | null
+    status: string
+    cached: boolean
+}
+
 export async function fetchProjectTimeline(projectId: number): Promise<ProjectTimeline> {
     const response = await apiClient.get<ApiResponse<ProjectTimeline>>(`/projects/${projectId}/timeline`)
     return response.data.data || { items: [], totalDuration: 0 }
@@ -24,16 +30,16 @@ export async function reorderProjectTimeline(projectId: number, orderedVideoNode
     })
 }
 
-export async function requestProjectMerge(projectId: number): Promise<{ jobId: number; status: string }> {
-    const response = await apiClient.post<ApiResponse<{ jobId: number; status: string }>>(`/projects/${projectId}/merge`)
+export async function requestProjectMerge(projectId: number): Promise<MergeRequestResult> {
+    const response = await apiClient.post<ApiResponse<MergeRequestResult>>(`/projects/${projectId}/merge`)
     if (!response.data.data) {
         throw new Error('Failed to request merge')
     }
     return response.data.data
 }
 
-export async function requestSceneMerge(sceneId: number): Promise<{ jobId: number; status: string }> {
-    const response = await apiClient.post<ApiResponse<{ jobId: number; status: string }>>(`/scenes/${sceneId}/merge`)
+export async function requestSceneMerge(sceneId: number): Promise<MergeRequestResult> {
+    const response = await apiClient.post<ApiResponse<MergeRequestResult>>(`/scenes/${sceneId}/merge`)
     if (!response.data.data) {
         throw new Error('Failed to request merge')
     }

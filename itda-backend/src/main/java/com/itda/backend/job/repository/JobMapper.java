@@ -40,6 +40,12 @@ public interface JobMapper {
     List<Job> findByStatus(@Param("status") JobStatus status);
 
     /**
+     * 동일 scene/signature의 진행 중(PENDING/RUNNING) SCENE_MERGE Job 조회
+     */
+    Optional<Job> findLatestInProgressSceneMerge(@Param("sceneId") Long sceneId,
+                                                 @Param("mergeSignature") String mergeSignature);
+
+    /**
      * 상태 조건부 업데이트 (낙관적 락)
      * <p>
      * 현재 상태가 expectedStatuses 중 하나일 때만 새 상태로 변경.

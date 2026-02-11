@@ -6,6 +6,7 @@ import com.itda.backend.global.exception.BusinessException;
 import com.itda.backend.global.response.ErrorCode;
 import com.itda.backend.asset.service.AssetUrlResolver;
 import com.itda.backend.job.domain.Job;
+import com.itda.backend.job.domain.JobStatus;
 import com.itda.backend.job.domain.JobType;
 import com.itda.backend.job.domain.MergeSource;
 import com.itda.backend.job.service.JobCreateRequest;
@@ -88,12 +89,21 @@ public class TimelineService {
         boolean includeMusic = request != null && request.includeMusicOrFalse();
         String mergeSignature = mergeSignatureService.computeSceneSignature(sceneId, includeMusic, timelineItems);
 
-        // 캐시 체크: 동일 signature의 active 결과 존재 확인
         if (sceneVideoMapper.findActiveBySceneIdAndSignature(sceneId, mergeSignature).isPresent()) {
             return MergeResponse.cacheHit();
         }
 
-        // 캐시 미스: 새 Job 생성
+        var cachedSceneVideo = sceneVideoMapper.findLatestBySceneIdAndSignature(sceneId, mergeSignature);
+        if (cachedSceneVideo.isPresent()) {
+            var sceneVideo = cachedSceneVideo.get();
+            if ("COMPLETED".equals(sceneVideo.getStatus()) && sceneVideo.getAssetId() != null) {
+                Long sceneVideoId = sceneVideo.getId();
+                sceneVideoMapper.activateBySceneId(sceneId, sceneVideoId);
+                timelineMapper.updateSceneTimelineItemsVideoId(sceneId, sceneVideoId);
+                return MergeResponse.cacheHit();
+            }
+        }
+
         String requestJson = serializePayload(Map.of("includeMusic", includeMusic));
         Job job = jobService.createAndEnqueue(
                 new JobCreateRequest(
@@ -106,6 +116,20 @@ public class TimelineService {
                         mergeSignature,
                         MergeSource.SCENE),
                 true);
+
+        if (job.getStatus() == JobStatus.SUCCEEDED
+                && sceneVideoMapper.findLatestBySceneIdAndSignature(sceneId, mergeSignature).isEmpty()) {
+            var inProgressJob = jobService.findLatestInProgressSceneMerge(sceneId, mergeSignature);
+            if (inProgressJob.isPresent()) {
+                return MergeResponse.from(inProgressJob.get());
+            }
+            Job forcedJob = jobService.createForcedSceneMergeJob(
+                    scene.getProjectId(),
+                    sceneId,
+                    requestJson,
+                    mergeSignature);
+            return MergeResponse.from(forcedJob);
+        }
 
         return MergeResponse.from(job);
     }

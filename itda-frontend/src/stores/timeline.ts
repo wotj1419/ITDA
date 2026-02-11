@@ -459,11 +459,12 @@ export const useTimelineStore = defineStore('timeline', () => {
         ? await requestSceneMerge(currentSceneId.value)
         : await requestProjectMerge(currentProjectId.value)
       mergeJobId.value = result.jobId
+      const isCached = result.cached === true
 
       if (result.status === 'SUCCEEDED') {
         mergeStatus.value = 'done'
         mergeProgress.value = 100
-        mergeStatusText.value = '병합 완료 (캐시됨)'
+        mergeStatusText.value = isCached ? '병합 완료 (캐시 복원)' : '병합 완료'
         stopMergePolling()
         downloadUrl.value = await fetchExportUrl()
         return true
@@ -473,7 +474,7 @@ export const useTimelineStore = defineStore('timeline', () => {
         stopMergePolling()
         return false
       } else {
-        mergeStatusText.value = '병합 진행 중'
+        mergeStatusText.value = '신규 병합 실행 중'
         return true
       }
     } catch (e) {

@@ -30,6 +30,9 @@ public interface SceneVideoMapper {
     Optional<SceneVideo> findActiveBySceneIdAndSignature(@Param("sceneId") Long sceneId,
                                                         @Param("mergeSignature") String mergeSignature);
 
+    Optional<SceneVideo> findLatestBySceneIdAndSignature(@Param("sceneId") Long sceneId,
+                                                          @Param("mergeSignature") String mergeSignature);
+
     Optional<SceneVideo> findActiveBySceneId(@Param("sceneId") Long sceneId);
 
     int deleteInactiveById(@Param("sceneVideoId") Long sceneVideoId,
