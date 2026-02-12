@@ -278,6 +278,11 @@ public class JobService {
         return jobMapper.findLatestInProgressSceneMerge(sceneId, mergeSignature);
     }
 
+    @Transactional(readOnly = true)
+    public Optional<Job> findLatestInProgressProjectMerge(Long projectId, String mergeSignature) {
+        return jobMapper.findLatestInProgressProjectMerge(projectId, mergeSignature);
+    }
+
     @Transactional
     public Job createForcedSceneMergeJob(Long projectId,
             Long sceneId,
@@ -295,6 +300,25 @@ public class JobService {
                         forceKey,
                         mergeSignature,
                         MergeSource.SCENE),
+                false);
+    }
+
+    @Transactional
+    public Job createForcedProjectMergeJob(Long projectId,
+            String requestJson,
+            String mergeSignature) {
+        String baseKey = JobIdempotencyKey.forMerge(projectId, JobType.PROJECT_MERGE, MergeSource.PROJECT, mergeSignature);
+        String forceKey = baseKey + ":force:" + UUID.randomUUID();
+        return createAndEnqueue(
+                new JobCreateRequest(
+                        JobType.PROJECT_MERGE,
+                        projectId,
+                        null,
+                        null,
+                        requestJson,
+                        forceKey,
+                        mergeSignature,
+                        MergeSource.PROJECT),
                 false);
     }
 }

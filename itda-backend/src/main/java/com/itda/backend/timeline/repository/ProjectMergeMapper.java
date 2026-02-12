@@ -13,7 +13,13 @@ public interface ProjectMergeMapper {
 
     int deactivateByProjectId(@Param("projectId") Long projectId);
 
+    int activateByProjectId(@Param("projectId") Long projectId,
+                            @Param("projectMergeId") Long projectMergeId);
+
     Optional<ProjectMerge> findActiveByProjectIdAndSignature(@Param("projectId") Long projectId,
+                                                             @Param("mergeSignature") String mergeSignature);
+
+    Optional<ProjectMerge> findLatestByProjectIdAndSignature(@Param("projectId") Long projectId,
                                                              @Param("mergeSignature") String mergeSignature);
 
     Optional<ProjectMerge> findActiveByProjectId(@Param("projectId") Long projectId);
