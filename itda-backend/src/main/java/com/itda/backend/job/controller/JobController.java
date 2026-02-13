@@ -110,10 +110,12 @@ public class JobController {
             @AuthenticationPrincipal CustomUserDetails userDetails,
             @Parameter(description = "Job ID") @PathVariable Long jobId
     ) {
-        Job job = jobService.requeueIfExecutable(jobId);
-        ensureAccessible(userDetails, job);
-        String resultUrl = jobResultResolver.resolve(job);
-        return ApiResponse.success(JobResponse.from(job, resultUrl));
+        Job existingJob = jobService.getJob(jobId);
+        ensureAccessible(userDetails, existingJob);
+
+        Job requeuedJob = jobService.requeueIfExecutable(jobId);
+        String resultUrl = jobResultResolver.resolve(requeuedJob);
+        return ApiResponse.success(JobResponse.from(requeuedJob, resultUrl));
     }
 
     private void ensureAccessible(CustomUserDetails userDetails, Job job) {
