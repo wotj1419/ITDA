@@ -49,7 +49,6 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             "/ws/**",
             "/error",
             "/health",
-            "/test/**",
             "/actuator/**"
     );
 
