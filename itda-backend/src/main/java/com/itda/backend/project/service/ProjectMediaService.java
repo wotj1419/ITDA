@@ -6,6 +6,7 @@ import com.itda.backend.global.exception.BusinessException;
 import com.itda.backend.global.response.ErrorCode;
 import com.itda.backend.asset.service.AssetUrlResolver;
 import com.itda.backend.job.domain.Job;
+import com.itda.backend.job.domain.JobStatus;
 import com.itda.backend.job.domain.JobType;
 import com.itda.backend.job.domain.MergeSource;
 import com.itda.backend.job.service.JobCreateRequest;
@@ -61,18 +62,38 @@ public class ProjectMediaService {
         if (timelineItems.isEmpty()) {
             throw new BusinessException(ErrorCode.INVALID_REQUEST);
         }
+
         boolean includeMusic = false;
         String mergeSignature = mergeSignatureService.computeProjectSignatureFromVideoNodes(
                 projectId,
                 includeMusic,
                 timelineItems);
-        // 캐시 체크: 동일 signature의 active 결과 존재 확인
+
         if (projectMergeMapper.findActiveByProjectIdAndSignature(projectId, mergeSignature).isPresent()) {
             return MergeResponse.cacheHit();
         }
-        // 캐시 미스: 새 Job 생성
+
+        var cachedProjectMerge = projectMergeMapper.findLatestByProjectIdAndSignature(projectId, mergeSignature);
+        if (cachedProjectMerge.isPresent()) {
+            var projectMerge = cachedProjectMerge.get();
+            if ("COMPLETED".equals(projectMerge.getStatus()) && projectMerge.getAssetId() != null) {
+                projectMergeMapper.activateByProjectId(projectId, projectMerge.getId());
+                return MergeResponse.cacheHit();
+            }
+        }
+
         String requestJson = buildMergeRequestJson(projectId, includeMusic);
         Job job = enqueueProjectMergeJob(projectId, requestJson, mergeSignature);
+        if (job.getStatus() == JobStatus.SUCCEEDED
+                && projectMergeMapper.findLatestByProjectIdAndSignature(projectId, mergeSignature).isEmpty()) {
+            var inProgressJob = jobService.findLatestInProgressProjectMerge(projectId, mergeSignature);
+            if (inProgressJob.isPresent()) {
+                return MergeResponse.from(inProgressJob.get());
+            }
+            Job forcedJob = jobService.createForcedProjectMergeJob(projectId, requestJson, mergeSignature);
+            return MergeResponse.from(forcedJob);
+        }
+
         return MergeResponse.from(job);
     }
 
@@ -213,3 +234,4 @@ public class ProjectMediaService {
         }
     }
 }
+

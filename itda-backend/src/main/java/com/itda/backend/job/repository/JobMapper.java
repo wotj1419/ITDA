@@ -46,6 +46,12 @@ public interface JobMapper {
                                                  @Param("mergeSignature") String mergeSignature);
 
     /**
+     * 동일 project/signature의 진행 중(PENDING/RUNNING) PROJECT_MERGE Job 조회
+     */
+    Optional<Job> findLatestInProgressProjectMerge(@Param("projectId") Long projectId,
+                                                   @Param("mergeSignature") String mergeSignature);
+
+    /**
      * 상태 조건부 업데이트 (낙관적 락)
      * <p>
      * 현재 상태가 expectedStatuses 중 하나일 때만 새 상태로 변경.
