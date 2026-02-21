@@ -4,7 +4,17 @@ import type {
     SignupRequest,
     PasswordResetRequest,
     PasswordResetConfirmRequest,
+    UpdateProfileRequest,
+    User,
 } from '../../types/api/auth';
+
+let mockUser: User = {
+    id: 1,
+    email: 'minjun@example.com',
+    name: 'Minjun Kim',
+    profileImageUrl: 'https://i.pravatar.cc/150?u=user123',
+    role: 'USER',
+};
 
 export const mockAuthService: AuthService = {
     async login(_credentials: LoginRequest) {
@@ -29,13 +39,36 @@ export const mockAuthService: AuthService = {
 
     async fetchMe() {
         await new Promise((resolve) => setTimeout(resolve, 300));
-        return {
-            id: 1,
-            email: 'minjun@example.com',
-            name: 'Minjun Kim',
-            profileImageUrl: 'https://i.pravatar.cc/150?u=user123',
-            role: 'USER',
+        return { ...mockUser };
+    },
+
+    async updateProfile(data: UpdateProfileRequest) {
+        await new Promise((resolve) => setTimeout(resolve, 300));
+        mockUser = {
+            ...mockUser,
+            ...(data.name !== undefined ? { name: data.name } : {}),
+            ...(data.profileImageUrl !== undefined ? { profileImageUrl: data.profileImageUrl } : {}),
         };
+        return { ...mockUser };
+    },
+
+    async uploadProfileImage(file: File) {
+        await new Promise((resolve) => setTimeout(resolve, 300));
+        const dataUrl = await readFileAsDataUrl(file);
+        mockUser = {
+            ...mockUser,
+            profileImageUrl: dataUrl,
+        };
+        return { ...mockUser };
+    },
+
+    async removeProfileImage() {
+        await new Promise((resolve) => setTimeout(resolve, 200));
+        mockUser = {
+            ...mockUser,
+            profileImageUrl: null,
+        };
+        return { ...mockUser };
     },
 
     async requestPasswordReset(_data: PasswordResetRequest) {
@@ -52,3 +85,12 @@ export const mockAuthService: AuthService = {
         // No-op for mock
     }
 };
+
+function readFileAsDataUrl(file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : '');
+        reader.onerror = () => reject(reader.error);
+        reader.readAsDataURL(file);
+    });
+}

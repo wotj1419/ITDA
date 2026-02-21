@@ -1,4 +1,8 @@
 spring:
+  servlet:
+    multipart:
+      max-file-size: ${SPRING_SERVLET_MULTIPART_MAX_FILE_SIZE:20MB}
+      max-request-size: ${SPRING_SERVLET_MULTIPART_MAX_REQUEST_SIZE:20MB}
   datasource:
     url: ${DB_URL}
     username: ${DB_USERNAME}
@@ -31,6 +35,9 @@ ai:
     model: ${VEO_MODEL:veo-3.1-generate-001}
     timeout-ms: ${VEO_TIMEOUT_MS:180000}
     poll-interval-ms: ${VEO_POLL_INTERVAL_MS:2000}
+    retry-max-attempts: ${VEO_RETRY_MAX_ATTEMPTS:3}
+    retry-initial-backoff-ms: ${VEO_RETRY_INITIAL_BACKOFF_MS:1000}
+    retry-max-backoff-ms: ${VEO_RETRY_MAX_BACKOFF_MS:8000}
 
 logging:
   level:

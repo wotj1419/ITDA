@@ -9,6 +9,7 @@ import Badge from '../components/common/Badge.vue'
 import Button from '../components/common/Button.vue'
 import ShareButton from '../components/common/ShareButton.vue'
 import AvatarGroup from '../components/common/AvatarGroup.vue'
+import { resolveApiUrl } from '../services/api/urls'
 import ShareProjectModal from '../components/project/ShareProjectModal.vue'
 import ProjectInfoDrawer from '../components/project/ProjectInfoDrawer.vue'
 import PresencePanel from '../components/collab/PresencePanel.vue'
@@ -80,7 +81,7 @@ const memberList = computed(() => props.project?.members || [])
 
 const memberAvatars = computed(() =>
   memberList.value.slice(0, 3).map((member) => ({
-    src: member.profileImageUrl || '',
+    src: resolveApiUrl(member.profileImageUrl) || '',
     fallback: member.name?.[0]?.toUpperCase() || '?',
     alt: member.name,
     title: undefined,
@@ -88,6 +89,8 @@ const memberAvatars = computed(() =>
     onClick: toggleMemberMenu, // Add click handler
   }))
 )
+
+const resolveMemberImageUrl = (url?: string | null) => resolveApiUrl(url)
 
 const extraCount = computed(() => Math.max(memberList.value.length - memberAvatars.value.length, 0))
 const isMemberMenuOpen = ref(false)
@@ -284,10 +287,10 @@ onBeforeUnmount(() => {
               >
                 <span
                   class="member-avatar"
-                  :class="{ 'member-avatar--image': !!member.profileImageUrl }"
-                  :style="member.profileImageUrl ? { backgroundImage: `url(${member.profileImageUrl})` } : {}"
+                  :class="{ 'member-avatar--image': !!resolveMemberImageUrl(member.profileImageUrl) }"
+                  :style="resolveMemberImageUrl(member.profileImageUrl) ? { backgroundImage: `url(${resolveMemberImageUrl(member.profileImageUrl)})` } : {}"
                 >
-                  <span v-if="!member.profileImageUrl" class="member-avatar__emoji">
+                  <span v-if="!resolveMemberImageUrl(member.profileImageUrl)" class="member-avatar__emoji">
                     {{ getMemberEmoji(member.userId, member.name) }}
                   </span>
                 </span>

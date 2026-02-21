@@ -116,12 +116,20 @@ const getAccessToken = (): string | null => {
 router.beforeEach((to, _from, next) => {
   const isAuthenticated = !!getAccessToken()
 
+  // 인증 필요한 페이지인데 로그인 안 된 경우 → auth로
   if (to.meta.requiresAuth && !isAuthenticated) {
     next({ name: 'auth', query: { redirect: to.fullPath } })
     return
   }
 
+  // 로그인 상태에서 auth 페이지 접근 → dashboard로
   if (to.name === 'auth' && isAuthenticated) {
+    next({ name: 'dashboard' })
+    return
+  }
+
+  // 로그인 상태에서 랜딩페이지 접근 → dashboard로
+  if (to.name === 'landing' && isAuthenticated) {
     next({ name: 'dashboard' })
     return
   }

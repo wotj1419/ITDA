@@ -1,205 +1,347 @@
-<script setup lang="ts">
-import { ref } from 'vue'
+﻿<script setup lang="ts">
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ArrowLeft } from 'lucide-vue-next'
 import DefaultLayout from '../layouts/DefaultLayout.vue'
+import Avatar from '../components/common/Avatar.vue'
+import { useAuthStore } from '../stores/auth'
+import { useUIStore } from '../stores/ui'
+import type { UpdateProfileRequest } from '../types/api/auth'
 
 const router = useRouter()
+const authStore = useAuthStore()
+const uiStore = useUIStore()
 
-// Mock Form Data
 const form = ref({
-  name: 'Minjun Kim',
-  jobTitle: 'Filmmaker & AI Artist',
-  bio: 'AI 기술을 활용해 상상을 현실로 만드는 영화 제작자입니다. 주로 SF와 판타지 장르를 다루며, 새로운 시각적 경험을 탐구합니다.',
-  email: 'minjun@example.com',
-  website: 'https://minjun.art',
-  location: 'Seoul, South Korea',
+  name: '',
 })
 
-const handleSave = () => {
-  // Save logic here (mock)
-  router.push('/profile')
+const fileInputRef = ref<HTMLInputElement | null>(null)
+const selectedFile = ref<File | null>(null)
+const filePreviewUrl = ref<string | null>(null)
+const clearImage = ref(false)
+
+const isSubmitting = ref(false)
+const isLoading = computed(() => authStore.isAuthenticated && !authStore.user)
+
+const currentName = computed(() => authStore.user?.name ?? '')
+const currentProfileImageUrl = computed(() => authStore.user?.profileImageUrl ?? '')
+
+const normalizedName = computed(() => form.value.name.trim())
+
+const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp']
+const MAX_IMAGE_SIZE = 5 * 1024 * 1024
+
+const nameError = computed(() => {
+  if (!normalizedName.value) return '이름을 입력해주세요.'
+  if (normalizedName.value.length < 2) return '이름은 2자 이상이어야 합니다.'
+  if (normalizedName.value.length > 100) return '이름은 100자 이하로 입력해주세요.'
+  return ''
+})
+
+const fileError = computed(() => {
+  if (!selectedFile.value) return ''
+  const type = selectedFile.value.type.toLowerCase()
+  if (!ALLOWED_IMAGE_TYPES.includes(type)) {
+    return '지원하지 않는 이미지 형식입니다.'
+  }
+  if (selectedFile.value.size > MAX_IMAGE_SIZE) {
+    return '이미지 파일은 5MB 이하로 업로드해주세요.'
+  }
+  return ''
+})
+
+const hasNameChange = computed(() => normalizedName.value !== currentName.value)
+const hasImageChange = computed(() => !!selectedFile.value)
+const hasImageRemoval = computed(() => clearImage.value && !selectedFile.value && !!currentProfileImageUrl.value)
+
+const canSubmit = computed(() => {
+  return !!authStore.user
+    && !isSubmitting.value
+    && !nameError.value
+    && !fileError.value
+    && (hasNameChange.value || hasImageChange.value || hasImageRemoval.value)
+})
+
+const previewImageUrl = computed(() => {
+  if (clearImage.value) return undefined
+  if (filePreviewUrl.value) return filePreviewUrl.value
+  if (currentProfileImageUrl.value) return currentProfileImageUrl.value
+  return undefined
+})
+
+const syncForm = () => {
+  if (!authStore.user) return
+  form.value.name = authStore.user.name ?? ''
+}
+
+watch(() => authStore.user, () => syncForm(), { immediate: true })
+
+watch(selectedFile, (file) => {
+  if (filePreviewUrl.value) {
+    URL.revokeObjectURL(filePreviewUrl.value)
+    filePreviewUrl.value = null
+  }
+  if (file) {
+    filePreviewUrl.value = URL.createObjectURL(file)
+  }
+})
+
+onBeforeUnmount(() => {
+  if (filePreviewUrl.value) {
+    URL.revokeObjectURL(filePreviewUrl.value)
+  }
+})
+
+const resetFileInput = () => {
+  if (fileInputRef.value) {
+    fileInputRef.value.value = ''
+  }
+}
+
+const handleFileChange = (event: Event) => {
+  const target = event.target as HTMLInputElement | null
+  const file = target?.files?.[0] ?? null
+  selectedFile.value = file
+  if (file) {
+    clearImage.value = false
+  }
+}
+
+const handleRemoveImage = () => {
+  if (!currentProfileImageUrl.value && !selectedFile.value) return
+  clearImage.value = true
+  if (filePreviewUrl.value) {
+    URL.revokeObjectURL(filePreviewUrl.value)
+    filePreviewUrl.value = null
+  }
+  selectedFile.value = null
+  resetFileInput()
+}
+
+const handleSave = async () => {
+  if (!canSubmit.value) return
+  isSubmitting.value = true
+  const shouldUpdateName = hasNameChange.value
+  const nameToUpdate = normalizedName.value
+  const shouldRemoveImage = hasImageRemoval.value
+
+  try {
+    if (selectedFile.value) {
+      await authStore.uploadProfileImage(selectedFile.value)
+      selectedFile.value = null
+      resetFileInput()
+    }
+
+    if (!selectedFile.value && shouldRemoveImage) {
+      await authStore.removeProfileImage()
+      clearImage.value = false
+    }
+
+    if (shouldUpdateName) {
+      const payload: UpdateProfileRequest = { name: nameToUpdate }
+      await authStore.updateProfile(payload)
+    }
+
+    uiStore.showToast({
+      type: 'success',
+      title: '저장 완료',
+      message: '계정 정보가 업데이트되었습니다.',
+    })
+    router.push('/profile')
+  } catch (error) {
+    console.error(error)
+    uiStore.showToast({
+      type: 'error',
+      title: '저장 실패',
+      message: '계정 정보를 저장하는 중 오류가 발생했습니다.',
+    })
+  } finally {
+    isSubmitting.value = false
+  }
 }
 
 const handleCancel = () => {
   router.back()
 }
+
+onMounted(() => {
+  if (authStore.isAuthenticated && !authStore.user) {
+    authStore.fetchMe()
+  }
+})
 </script>
 
 <template>
   <DefaultLayout>
-    <!-- Header moved closer to left/top -->
-    <div class="edit-page-header">
-      <button class="btn btn-ghost" @click="handleCancel">
-        <ArrowLeft class="w-4 h-4" />
-        Back
-      </button>
-    </div>
-
-    <div class="profile-container" style="margin-top: 0;">
-      <div class="content-wrapper">
-        <div class="flex items-center justify-between mb-4">
-          <h1 class="h2">Edit Profile</h1>
+    <div class="account-edit">
+      <div class="page-header">
+        <button class="btn btn-ghost" type="button" @click="handleCancel">
+          <ArrowLeft class="w-4 h-4" />
+          뒤로
+        </button>
+        <div>
+          <h1 class="page-title">계정 정보 수정</h1>
+          <p class="page-description">이름과 프로필 이미지를 업데이트할 수 있습니다.</p>
         </div>
+      </div>
 
-        <div class="card p-6">
-          <form @submit.prevent="handleSave">
-            <!-- Avatar -->
-            <div class="form-group mb-6">
-              <label class="block text-sm font-semibold mb-2">Profile Photo</label>
-              <div class="flex items-center gap-4">
-                <div
-                  class="avatar-preview"
-                  style="background-image: url('https://i.pravatar.cc/150?u=user123')"
-                ></div>
-                <div>
-                  <button type="button" class="btn btn-secondary btn-sm mb-2">Change Photo</button>
-                  <div class="text-xs text-muted">JPG, GIF or PNG. Max size of 800K</div>
-                </div>
-              </div>
+      <div v-if="isLoading" class="loading-state">계정 정보를 불러오는 중...</div>
+
+      <div v-else class="card settings-card">
+        <form @submit.prevent="handleSave">
+          <div class="form-grid">
+            <div class="form-group">
+              <label class="form-label required">이름</label>
+              <input
+                type="text"
+                class="form-input"
+                v-model="form.name"
+                required
+                maxlength="100"
+              />
+              <p v-if="nameError" class="form-error">{{ nameError }}</p>
             </div>
 
-            <!-- Name -->
-            <div class="grid grid-cols-2 gap-4 mb-4">
-              <div class="form-group">
-                <label class="form-label required">Display Name</label>
-                <input type="text" class="form-input" v-model="form.name" required />
-              </div>
-              <div class="form-group">
-                <label class="form-label">Job Title</label>
-                <input type="text" class="form-input" v-model="form.jobTitle" />
-              </div>
+            <div class="form-group">
+              <label class="form-label">프로필 이미지</label>
+              <input
+                ref="fileInputRef"
+                type="file"
+                class="form-input"
+                accept="image/png, image/jpeg, image/webp"
+                @change="handleFileChange"
+              />
+              <p v-if="fileError" class="form-error">{{ fileError }}</p>
+              <p class="form-hint">JPG/PNG/WebP, 최대 5MB</p>
+              <button
+                type="button"
+                class="btn btn-ghost remove-image-btn"
+                :disabled="(!currentProfileImageUrl && !selectedFile) || clearImage"
+                @click="handleRemoveImage"
+              >
+                기본 이미지로 되돌리기
+              </button>
             </div>
+          </div>
 
-            <!-- Bio -->
-            <div class="form-group mb-4">
-              <label class="form-label">Bio</label>
-              <textarea
-                class="form-input form-textarea"
-                rows="4"
-                v-model="form.bio"
-              ></textarea>
-              <div class="text-xs text-right text-muted mt-1">{{ form.bio.length }} / 200</div>
+          <div class="preview-row">
+            <Avatar
+              :src="previewImageUrl"
+              :alt="normalizedName || '사용자'"
+              size="lg"
+              :user-id="authStore.user?.id"
+            />
+            <div class="preview-text">
+              <div class="preview-title">미리보기</div>
+              <div class="preview-desc">사이드바와 프로젝트 협업 영역에 표시됩니다.</div>
             </div>
+          </div>
 
-            <!-- Contact Info -->
-            <h3 class="h4 mb-4 mt-6 contact-header">Contact Information</h3>
-
-            <div class="grid grid-cols-2 gap-4 mb-4">
-              <div class="form-group">
-                <label class="form-label required">Email</label>
-                <input
-                  type="email"
-                  class="form-input"
-                  v-model="form.email"
-                  readonly
-                  style="background: var(--gray-50);"
-                />
-              </div>
-              <div class="form-group">
-                <label class="form-label">Website</label>
-                <input type="url" class="form-input" v-model="form.website" />
-              </div>
+          <div class="readonly-grid">
+            <div class="form-group">
+              <label class="form-label">이메일</label>
+              <input type="email" class="form-input" :value="authStore.user?.email || ''" readonly />
             </div>
+          </div>
 
-            <div class="form-group mb-8">
-              <label class="form-label">Location</label>
-              <input type="text" class="form-input" v-model="form.location" />
-            </div>
-
-            <!-- Buttons -->
-            <div class="form-actions">
-              <button type="button" class="btn btn-ghost" @click="handleCancel">Cancel</button>
-              <button type="submit" class="btn btn-primary">Save Changes</button>
-            </div>
-          </form>
-        </div>
+          <div class="form-actions">
+            <button type="button" class="btn btn-ghost" @click="handleCancel">취소</button>
+            <button type="submit" class="btn btn-primary" :disabled="!canSubmit">
+              {{ isSubmitting ? '저장 중...' : '저장' }}
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   </DefaultLayout>
 </template>
 
 <style scoped>
-.profile-container {
-  max-width: 1000px;
+.account-edit {
+  max-width: 900px;
   margin: 0 auto;
 }
 
-.edit-page-header {
-  padding: 0 1rem 1rem 1rem;
-  margin-left: -2rem; /* Align to the screen edge/sidebar edge */
+.page-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
 }
 
-.content-wrapper {
-  max-width: 800px;
-  margin: 0 auto;
-}
-
-.h2 {
+.page-title {
   font-size: 1.5rem;
   font-weight: 700;
   color: var(--gray-900);
+  margin: 0;
 }
 
-.h4 {
-  font-size: 1rem;
-  font-weight: 600;
-  color: var(--gray-900);
+.page-description {
+  color: var(--gray-500);
+  margin: 0.35rem 0 0;
 }
 
-.card {
-  background: white;
-  border: 1px solid var(--rose-100);
-  border-radius: 16px;
-}
-
-.p-6 {
+.settings-card {
   padding: 1.5rem;
 }
 
-.avatar-preview {
-  width: 80px;
-  height: 80px;
-  border-radius: 50%;
-  background-position: center;
-  background-size: cover;
-  border: 2px solid var(--rose-100);
-}
-
-.form-group {
-  display: flex;
-  flex-direction: column;
-}
-
-.form-label {
-  font-size: 0.875rem;
-  font-weight: 600;
-  color: var(--gray-700);
-  margin-bottom: 0.5rem;
-}
-
-.form-label.required::after {
-  content: '*';
-  color: var(--rose-500);
-  margin-left: 0.25rem;
-}
-
-.form-textarea {
-  resize: vertical;
-}
-
-.grid {
+.form-grid {
   display: grid;
   gap: 1rem;
 }
 
-.grid-cols-2 {
-  grid-template-columns: repeat(2, 1fr);
+.preview-row {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem;
+  margin-top: 1rem;
+  border-radius: 12px;
+  background: var(--gray-50);
 }
 
-.contact-header {
-  border-bottom: 1px solid var(--rose-100);
-  padding-bottom: 0.5rem;
+.preview-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.preview-title {
+  font-weight: 600;
+  color: var(--gray-900);
+}
+
+.preview-desc {
+  font-size: 0.875rem;
+  color: var(--gray-500);
+}
+
+.readonly-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem;
+  margin-top: 1.5rem;
+}
+
+.form-error {
+  font-size: 0.75rem;
+  color: var(--error);
+  margin-top: 0.5rem;
+}
+
+.form-hint {
+  font-size: 0.75rem;
+  color: var(--gray-500);
+  margin-top: 0.35rem;
+}
+
+.remove-image-btn {
+  margin-top: 0.5rem;
+  align-self: flex-start;
+  font-size: 0.75rem;
+  padding: 0.35rem 0.75rem;
 }
 
 .form-actions {
@@ -208,46 +350,13 @@ const handleCancel = () => {
   justify-content: flex-end;
   gap: 0.75rem;
   padding-top: 1.5rem;
+  margin-top: 1.5rem;
   border-top: 1px solid var(--rose-100);
 }
 
-.text-muted {
+.loading-state {
+  padding: 2rem;
+  text-align: center;
   color: var(--gray-500);
-}
-
-.text-sm {
-  font-size: 0.875rem;
-}
-
-.text-xs {
-  font-size: 0.75rem;
-}
-
-.block {
-  display: block;
-}
-
-.mb-2 {
-  margin-bottom: 0.5rem;
-}
-
-.mb-4 {
-  margin-bottom: 1rem;
-}
-
-.mb-6 {
-  margin-bottom: 1.5rem;
-}
-
-.mb-8 {
-  margin-bottom: 2rem;
-}
-
-.mt-1 {
-  margin-top: 0.25rem;
-}
-
-.mt-6 {
-  margin-top: 1.5rem;
 }
 </style>

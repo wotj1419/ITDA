@@ -41,11 +41,26 @@
         WHERE project_id = #{projectId}
     </update>
 
+    <update id="activateByProjectId">
+        UPDATE project_merges
+        SET is_active = CASE WHEN id = #{projectMergeId} THEN 1 ELSE 0 END
+        WHERE project_id = #{projectId}
+    </update>
+
     <select id="findActiveByProjectIdAndSignature" resultMap="ProjectMergeMap">
         SELECT id, project_id, asset_id, thumbnail_asset_id, merge_signature, status, is_active, created_at, updated_at
         FROM project_merges
         WHERE project_id = #{projectId}
           AND is_active = 1
+          AND merge_signature = #{mergeSignature}
+        ORDER BY id DESC
+        LIMIT 1
+    </select>
+
+    <select id="findLatestByProjectIdAndSignature" resultMap="ProjectMergeMap">
+        SELECT id, project_id, asset_id, thumbnail_asset_id, merge_signature, status, is_active, created_at, updated_at
+        FROM project_merges
+        WHERE project_id = #{projectId}
           AND merge_signature = #{mergeSignature}
         ORDER BY id DESC
         LIMIT 1
