@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref, type ComponentPublicInstance } from 'vue'
+import { nextTick, onMounted, onUnmounted, ref, type ComponentPublicInstance } from 'vue'
 import { RouterLink } from 'vue-router'
 import {
   Sparkles,
@@ -89,6 +89,7 @@ const stats = [
 
 const selectedHeroVideo = '/scene-1.mp4'
 const mainContainer = ref<HTMLElement | null>(null)
+const shouldLoadHeroVideo = ref(false)
 
 const {
   navBar,
@@ -115,11 +116,52 @@ const setMockupRef = (element: Element | ComponentPublicInstance | null) => {
 }
 
 let cleanupLandingAnimations: (() => void) | null = null
+let heroVideoObserver: IntersectionObserver | null = null
+
+const loadHeroVideo = async () => {
+  if (shouldLoadHeroVideo.value) return
+
+  shouldLoadHeroVideo.value = true
+  await nextTick()
+  playHeroVideo(heroVideoRef.value)
+  heroVideoObserver?.disconnect()
+  heroVideoObserver = null
+}
+
+const setupHeroVideoLazyLoad = () => {
+  if (!mockupRef.value) return
+
+  if (!('IntersectionObserver' in window)) {
+    void loadHeroVideo()
+    return
+  }
+
+  heroVideoObserver = new IntersectionObserver(
+    (entries) => {
+      const entry = entries[0]
+      if (!entry?.isIntersecting) return
+      void loadHeroVideo()
+    },
+    { threshold: 0.35 }
+  )
+
+  heroVideoObserver.observe(mockupRef.value)
+}
+
+const scrollToDemoVideo = () => {
+  void loadHeroVideo()
+  scrollTo('demo-video')
+}
+
+const toggleHeroVideoSoundAfterLoad = async () => {
+  await loadHeroVideo()
+  toggleHeroVideoSound()
+}
 
 onMounted(() => {
   window.addEventListener('scroll', onScroll, { passive: true })
   onScroll()
-  playHeroVideo(heroVideoRef.value)
+  setupHeroVideoLazyLoad()
 
   cleanupLandingAnimations = setupLandingAnimations({
     mainContainer,
@@ -131,6 +173,8 @@ onMounted(() => {
 
 onUnmounted(() => {
   window.removeEventListener('scroll', onScroll)
+  heroVideoObserver?.disconnect()
+  heroVideoObserver = null
   cleanupLandingAnimations?.()
   cleanupLandingAnimations = null
 })
@@ -211,7 +255,7 @@ onUnmounted(() => {
               <ArrowRight :size="18" />
             </span>
           </RouterLink>
-          <a href="#demo-video" class="btn-hero-secondary" @click.prevent="scrollTo('demo-video')">
+          <a href="#demo-video" class="btn-hero-secondary" @click.prevent="scrollToDemoVideo">
             <Play :size="16" class="play-icon" />
             데모 보기
           </a>
@@ -245,19 +289,19 @@ onUnmounted(() => {
             <div class="mockup-screen">
               <video
                 ref="heroVideoRef"
-                :src="selectedHeroVideo"
+                :src="shouldLoadHeroVideo ? selectedHeroVideo : undefined"
                 poster="/scene-1-poster.webp"
                 :muted="heroVideoMuted"
-                autoplay
+                :autoplay="shouldLoadHeroVideo"
                 loop
                 playsinline
-                preload="metadata"
+                preload="none"
                 class="mockup-video"
               ></video>
               <button
                 type="button"
                 class="hero-sound-toggle"
-                @click="toggleHeroVideoSound"
+                @click="toggleHeroVideoSoundAfterLoad"
                 :aria-label="heroVideoMuted ? '영상 소리 켜기' : '영상 음소거'"
               >
                 <VolumeX v-if="heroVideoMuted" :size="14" />
