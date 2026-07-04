@@ -246,6 +246,7 @@ onUnmounted(() => {
               <video
                 ref="heroVideoRef"
                 :src="selectedHeroVideo"
+                poster="/scene-1-poster.webp"
                 :muted="heroVideoMuted"
                 autoplay
                 loop
