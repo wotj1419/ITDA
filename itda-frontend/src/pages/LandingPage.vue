@@ -250,7 +250,7 @@ onUnmounted(() => {
                 autoplay
                 loop
                 playsinline
-                preload="auto"
+                preload="metadata"
                 class="mockup-video"
               ></video>
               <button
