@@ -499,6 +499,104 @@ Toss 폰트와 다르면 UI 인상이 달라질 수 있음
 
 따라서 현재 목표가 "UI 변화 최소화"인 동안에는 후순위로 둡니다.
 
+## Phase 4.5. Hero Video Poster 초기 요청 최적화
+
+추가 이유:
+
+```txt
+Phase 4 이후 실제 Lighthouse 결과를 확인한 결과,
+다음 계획이었던 icon.png보다 scene-1-poster.webp의 초기 전송량이 더 컸습니다.
+
+Phase 4 Mobile 기준:
+scene-1-poster.webp: 약 112KB
+icon.png: 약 34KB
+unused JS 예상 절감: 약 73KB
+
+따라서 기존 계획의 Phase 5 icon 최적화보다,
+hero video poster 초기 요청을 먼저 점검하는 것이 더 효과적인 순서입니다.
+```
+
+목표:
+
+```txt
+scene-1.mp4 lazy loading은 유지하면서,
+초기 화면에서 반드시 필요하지 않은 poster 이미지 요청도 지연할 수 있는지 검토합니다.
+UI 시각 변화는 최소화하고, mockup 영역 근처 진입 시점에 poster/video가 자연스럽게 준비되도록 합니다.
+```
+
+현재 상태:
+
+```vue
+<video
+  :src="shouldLoadHeroVideo ? selectedHeroVideo : undefined"
+  poster="/scene-1-poster.webp"
+  preload="none"
+/>
+```
+
+문제:
+
+```txt
+video src는 shouldLoadHeroVideo가 true가 될 때까지 연결되지 않지만,
+poster 속성은 초기 렌더링 시점부터 연결되어 scene-1-poster.webp가 초기 요청됩니다.
+이 poster는 약 112KB로, 현재 남은 앱 자체 이미지 리소스 중 가장 큽니다.
+```
+
+개선 후보:
+
+```txt
+1. poster 속성도 shouldLoadHeroVideo 또는 별도 shouldLoadHeroPoster 상태와 연결
+2. mockup 영역이 viewport 근처에 들어오기 전까지 poster 요청 지연
+3. poster 지연 중에는 기존 mockup-screen 배경색과 layout을 유지해 레이아웃 변화 방지
+4. IntersectionObserver rootMargin을 사용해 사용자가 mockup에 도달하기 전 미리 poster/video 준비
+```
+
+예상 코드 방향:
+
+```vue
+<video
+  :src="shouldLoadHeroVideo ? selectedHeroVideo : undefined"
+  :poster="shouldLoadHeroPoster ? '/scene-1-poster.webp' : undefined"
+  preload="none"
+/>
+```
+
+주의:
+
+```txt
+poster는 mockup 영역의 시각 안정성을 위해 추가한 리소스입니다.
+너무 늦게 로드하면 사용자가 mockup 영역을 볼 때 검은 배경이 먼저 보일 수 있습니다.
+따라서 UI 변화를 최소화하려면 rootMargin을 두고 화면 진입 전에 poster를 먼저 연결해야 합니다.
+```
+
+검증 항목:
+
+```txt
+초기 Network에서 scene-1-poster.webp 요청이 사라지는지
+mockup 영역 근처 진입 시 poster 또는 video가 자연스럽게 로드되는지
+scene-1.mp4 초기 요청 제거가 유지되는지
+FCP/LCP/Speed Index가 악화되지 않는지
+CLS가 증가하지 않는지
+스크린샷 또는 녹화 기준으로 mockup 영역 시각 변화가 허용 가능한지
+```
+
+측정 파일명:
+
+```txt
+performance-reports/measurements/after/phase4_5/lighthouse_desktop_after_phase4_5.json
+performance-reports/measurements/after/phase4_5/lighthouse_mobile_after_phase4_5.json
+```
+
+예상 효과:
+
+```txt
+초기 전송량 약 112KB 감소 가능
+scene-1.mp4 0 bytes 유지
+Mobile total transfer 감소 가능
+```
+
+다만 poster는 LCP 대상은 아니므로 Lighthouse 점수 상승 폭은 크지 않을 수 있습니다.
+
 ## Phase 5. Icon image 최적화
 
 목표:
@@ -536,6 +634,16 @@ Mobile Lighthouse image delivery 경고가 줄어드는지
 ```
 
 ## Phase 6. 전역 CSS / Unused JS 점검
+
+Phase 4 이후 계획 수정:
+
+```txt
+기존 계획에서는 전역 CSS와 unused JS를 함께 점검하는 것으로 작성했지만,
+Phase 4 Mobile Lighthouse 결과에서는 unused-css-rules 점수가 1로 문제 없음이 확인됐습니다.
+
+반면 unused-javascript에서는 약 73KiB 절감 가능성이 표시됐습니다.
+따라서 Phase 6은 전역 CSS 분리보다 초기 entry JS에 불필요한 모듈이 포함되는지 확인하는 작업을 우선합니다.
+```
 
 목표:
 
@@ -734,4 +842,75 @@ UI는 유지한 상태에서 hero video의 preload 전략을 조정하고 poster
 [ ] Phase 3.5: below-the-fold 애니메이션 초기화 지연
 [ ] Phase 3.5 재측정
 [ ] 폰트 최적화 방식 결정
+```
+
+## 10. Phase 4 이후 실제 우선순위 업데이트
+
+업데이트 기준:
+
+```txt
+Phase 1~4까지 실제 Vercel Preview Lighthouse 측정을 완료한 뒤,
+남은 병목과 리소스 크기를 기준으로 이후 작업 순서를 재조정했습니다.
+```
+
+완료된 작업:
+
+```txt
+[x] Phase 1: hero video preload 전략 개선
+[x] Phase 2: hero video poster 적용
+[x] Phase 3: hero video lazy loading 적용
+[x] Phase 3.5: landing animation lazy initialization 적용
+[x] Phase 4: Toss font CSS loading 최적화
+```
+
+Phase 4 이후 확인된 상태:
+
+```txt
+scene-1.mp4 초기 전송: 0KiB 유지
+Mobile TBT: 0ms 유지
+Toss main.css / others.css render-blocking 항목 제거
+Mobile CSS transfer: 123.93KiB -> 45.71KiB
+
+남은 주요 후보:
+scene-1-poster.webp: 약 112KB
+unused JS 예상 절감: 약 73KB
+icon.png: 약 34KB
+font transfer: 약 443KB
+```
+
+수정된 진행 순서:
+
+```txt
+1. Phase 4.5: hero video poster 초기 요청 최적화
+2. Vercel Preview 배포
+3. Lighthouse Desktop/Mobile 재측정
+4. Phase 4.5 결과 문서화
+5. Phase 5: icon.png 최적화
+6. Phase 6: unused JS / 초기 entry chunk 분석
+7. 필요 시 font-weight 축소 또는 self-hosting 검토
+```
+
+계획 수정 이유:
+
+```txt
+기존 계획에서는 Phase 4 다음 작업이 icon.png 최적화였지만,
+실제 Phase 4 측정 결과 icon.png보다 scene-1-poster.webp의 초기 전송량이 더 컸습니다.
+
+또한 unused-css-rules는 문제가 없었고 unused-javascript에서 약 73KiB 절감 가능성이 잡혔습니다.
+따라서 다음 작업은 icon보다 poster 초기 요청 최적화를 먼저 진행하고,
+이후 Phase 6은 CSS보다 JS chunk 분석 중심으로 진행하는 것이 더 합리적입니다.
+```
+
+보류할 작업:
+
+```txt
+Toss font weight 축소 또는 system font 전환은 성능 효과가 클 수 있지만 UI 글자 굵기 변화 가능성이 큽니다.
+현재 목표가 UI 변화 최소화이므로 바로 진행하지 않고, 스크린샷 비교와 사용자 확인 이후에만 검토합니다.
+```
+
+다음에 바로 진행할 작업:
+
+```txt
+Phase 4.5: LandingPage.vue에서 scene-1-poster.webp poster 요청을 초기 렌더링에서 분리할 수 있는지 구현합니다.
+단, mockup 영역 진입 시 검은 화면이 오래 보이면 UI 체감이 나빠질 수 있으므로 rootMargin 기반 선로딩을 함께 검토합니다.
 ```
