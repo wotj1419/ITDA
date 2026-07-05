@@ -885,8 +885,8 @@ font transfer: 약 443KB
 2. Vercel Preview 배포
 3. Lighthouse Desktop/Mobile 재측정
 4. Phase 4.5 결과 문서화
-5. Phase 5: icon.png 최적화
-6. Phase 6: unused JS / 초기 entry chunk 분석
+5. Phase 6: unused JS / 초기 entry chunk 분석
+6. Phase 5: icon.png 최적화
 7. 필요 시 font-weight 축소 또는 self-hosting 검토
 ```
 
@@ -901,6 +901,19 @@ font transfer: 약 443KB
 이후 Phase 6은 CSS보다 JS chunk 분석 중심으로 진행하는 것이 더 합리적입니다.
 ```
 
+Phase 4.5 이후 추가 수정:
+
+```txt
+Phase 4.5에서 poster 속성을 조건부로 분리했지만,
+mockup 영역이 초기 viewport와 가까워 scene-1-poster.webp 요청은 초기 로딩에 그대로 포함됐습니다.
+
+즉, UI 안정성을 유지하는 범위에서는 poster 지연 로딩의 실측 효과가 작았습니다.
+반면 Phase 4.5 Lighthouse에서도 unused-javascript 절감 가능성은 약 65KiB 이상으로 유지됐습니다.
+
+따라서 다음 개발은 Phase 5 icon 최적화가 아니라
+Phase 6 unused JS / 초기 entry chunk 분석을 먼저 진행합니다.
+```
+
 보류할 작업:
 
 ```txt
@@ -911,6 +924,7 @@ Toss font weight 축소 또는 system font 전환은 성능 효과가 클 수 �
 다음에 바로 진행할 작업:
 
 ```txt
-Phase 4.5: LandingPage.vue에서 scene-1-poster.webp poster 요청을 초기 렌더링에서 분리할 수 있는지 구현합니다.
-단, mockup 영역 진입 시 검은 화면이 오래 보이면 UI 체감이 나빠질 수 있으므로 rootMargin 기반 선로딩을 함께 검토합니다.
+Phase 6: 초기 entry JS에 불필요한 모듈이 포함되는 원인을 분석합니다.
+router lazy loading, services/index.ts barrel export, stores/project.ts import 구조,
+Vite build warning의 dynamic/static import 혼재 여부를 우선 확인합니다.
 ```
