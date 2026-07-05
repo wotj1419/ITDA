@@ -1,5 +1,3 @@
-@import url('https://static.toss.im/tps/main.css');
-@import url('https://static.toss.im/tps/others.css');
 @import './_node-base.css';
 @import './_panel.css';
 
@@ -7,11 +5,11 @@
   margin: 0;
   padding: 0;
   box-sizing: border-box;
-  font-family: 'Toss Product Sans';
+  font-family: 'Toss Product Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
 
 body {
-  font-family: 'Toss Product Sans';
+  font-family: 'Toss Product Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   background: var(--rose-canvas);
   color: var(--gray-900);
   line-height: 1.5;
