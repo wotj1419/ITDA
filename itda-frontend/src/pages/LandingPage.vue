@@ -89,6 +89,7 @@ const stats = [
 
 const selectedHeroVideo = '/scene-1.mp4'
 const mainContainer = ref<HTMLElement | null>(null)
+const shouldLoadHeroPoster = ref(false)
 const shouldLoadHeroVideo = ref(false)
 
 const {
@@ -116,9 +117,20 @@ const setMockupRef = (element: Element | ComponentPublicInstance | null) => {
 }
 
 let cleanupLandingAnimations: (() => void) | null = null
+let heroPosterObserver: IntersectionObserver | null = null
 let heroVideoObserver: IntersectionObserver | null = null
 
+const loadHeroPoster = () => {
+  if (shouldLoadHeroPoster.value) return
+
+  shouldLoadHeroPoster.value = true
+  heroPosterObserver?.disconnect()
+  heroPosterObserver = null
+}
+
 const loadHeroVideo = async () => {
+  loadHeroPoster()
+
   if (shouldLoadHeroVideo.value) return
 
   shouldLoadHeroVideo.value = true
@@ -126,6 +138,29 @@ const loadHeroVideo = async () => {
   playHeroVideo(heroVideoRef.value)
   heroVideoObserver?.disconnect()
   heroVideoObserver = null
+}
+
+const setupHeroVideoPosterLazyLoad = () => {
+  if (!mockupRef.value) return
+
+  if (!('IntersectionObserver' in window)) {
+    loadHeroPoster()
+    return
+  }
+
+  heroPosterObserver = new IntersectionObserver(
+    (entries) => {
+      const entry = entries[0]
+      if (!entry?.isIntersecting) return
+      loadHeroPoster()
+    },
+    {
+      rootMargin: '0px 0px 120px 0px',
+      threshold: 0,
+    }
+  )
+
+  heroPosterObserver.observe(mockupRef.value)
 }
 
 const setupHeroVideoLazyLoad = () => {
@@ -161,6 +196,7 @@ const toggleHeroVideoSoundAfterLoad = async () => {
 onMounted(() => {
   window.addEventListener('scroll', onScroll, { passive: true })
   onScroll()
+  setupHeroVideoPosterLazyLoad()
   setupHeroVideoLazyLoad()
 
   cleanupLandingAnimations = setupLandingAnimations({
@@ -173,6 +209,8 @@ onMounted(() => {
 
 onUnmounted(() => {
   window.removeEventListener('scroll', onScroll)
+  heroPosterObserver?.disconnect()
+  heroPosterObserver = null
   heroVideoObserver?.disconnect()
   heroVideoObserver = null
   cleanupLandingAnimations?.()
@@ -290,7 +328,7 @@ onUnmounted(() => {
               <video
                 ref="heroVideoRef"
                 :src="shouldLoadHeroVideo ? selectedHeroVideo : undefined"
-                poster="/scene-1-poster.webp"
+                :poster="shouldLoadHeroPoster ? '/scene-1-poster.webp' : undefined"
                 :muted="heroVideoMuted"
                 :autoplay="shouldLoadHeroVideo"
                 loop
