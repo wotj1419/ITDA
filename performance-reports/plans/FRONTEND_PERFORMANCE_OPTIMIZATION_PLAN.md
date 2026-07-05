@@ -313,6 +313,117 @@ mockup 영역 진입 시 영상이 자연스럽게 로드되는지
 사용자 체감상 빈 영역이 생기지 않는지
 ```
 
+## Phase 3.5. Mobile TBT / JS 실행 비용 개선
+
+목표:
+
+```txt
+Phase 3 이후 Mobile Lighthouse에서 증가한 TBT와 long task를 줄임
+초기 렌더링에 반드시 필요하지 않은 랜딩 애니메이션 초기화를 지연
+UI 레이아웃과 디자인은 유지하면서 JavaScript 실행 시점만 조정
+```
+
+Phase 3.5 추가 이유:
+
+```txt
+기존 계획은 Phase 3 hero video lazy loading 이후 Phase 4 Toss 폰트 최적화로 넘어가는 흐름이었습니다.
+하지만 Phase 3 측정 결과, 원래 가장 큰 병목이었던 scene-1.mp4 초기 전송 문제는 해결되었고 새로운 병목이 드러났습니다.
+
+해결된 병목:
+scene-1.mp4 초기 요청: 7.8MiB -> 0
+Mobile 총 전송량: 8.48MiB -> 0.79MiB
+
+새로 드러난 병목:
+Mobile Performance: 69 -> 63
+Mobile TBT: 0ms -> 350ms
+LandingPage JS long task: 257ms
+index JS long task: 196ms
+
+즉, 병목이 네트워크 전송량에서 초기 JavaScript 실행 비용으로 이동했습니다.
+Phase 4의 Toss 폰트 최적화는 LCP와 render-blocking 개선에는 도움이 될 수 있지만,
+현재 점수 하락의 직접 원인인 TBT와 long task를 먼저 해결하는 작업은 아닙니다.
+
+따라서 측정 결과에 따라 우선순위를 조정해 Phase 3과 Phase 4 사이에 Phase 3.5를 추가했습니다.
+번호를 3.5로 둔 이유는 기존 Phase 4, 5, 6 계획을 유지하면서 Phase 3 결과로 새로 발견된 병목을 중간에 반영하기 위해서입니다.
+```
+
+포트폴리오 기록 관점:
+
+```txt
+정해진 최적화 순서를 그대로 진행한 것이 아니라,
+Lighthouse와 Network 측정 결과를 기반으로 병목이 video 전송량에서 JavaScript 실행 비용으로 이동했음을 확인했습니다.
+그 결과 다음 개선 우선순위를 Toss 폰트 최적화가 아니라 Mobile TBT와 long task 개선으로 재조정했습니다.
+```
+
+적용 조건:
+
+```txt
+Phase 3 측정 후 scene-1.mp4 초기 요청은 제거되었지만 Mobile Performance 점수가 하락할 때 진행
+Mobile TBT가 의미 있게 증가하거나 long task가 LandingPage JS에서 발생할 때 진행
+```
+
+Phase 3 측정에서 확인된 문제:
+
+```txt
+Mobile Performance: 69 -> 63
+Mobile TBT: 0ms -> 350ms
+LandingPage JS long task: 257ms
+index JS long task: 196ms
+Main-thread work: 4.7s
+```
+
+작업 파일:
+
+```txt
+itda-frontend/src/pages/landing/useLandingAnimations.ts
+itda-frontend/src/pages/LandingPage.vue
+```
+
+우선 분석할 내용:
+
+```txt
+setupLandingAnimations가 mount 직후 어떤 DOM query와 GSAP timeline을 실행하는지 확인
+첫 화면 hero 영역에 필요한 애니메이션과 아래쪽 섹션 애니메이션을 분리할 수 있는지 확인
+features/workflow/node-edge/cta 등 화면 아래 섹션의 애니메이션을 지연 초기화할 수 있는지 확인
+```
+
+개선 방법:
+
+```txt
+1. hero 영역에 필요한 애니메이션만 mount 직후 실행
+2. below-the-fold 섹션 애니메이션은 IntersectionObserver 또는 ScrollTrigger 진입 시점에 초기화
+3. 초기 렌더링에 필요 없는 무거운 DOM query/GSAP timeline 생성을 지연
+4. requestIdleCallback을 사용할 수 있으면 idle 시점에 보조 애니메이션 초기화
+5. requestIdleCallback 미지원 브라우저는 setTimeout fallback 사용
+```
+
+주의:
+
+```txt
+애니메이션 모양, 순서, 사용자 체감 UI는 유지해야 함
+초기 렌더링 점수 개선을 위해 애니메이션 자체를 삭제하지 않음
+prefers-reduced-motion 동작을 유지해야 함
+ScrollTrigger/observer 정리 함수가 누락되지 않도록 unmount cleanup 확인
+```
+
+검증 항목:
+
+```txt
+Mobile TBT가 감소했는지
+LandingPage JS long task 시간이 줄었는지
+FCP/LCP/Speed Index가 악화되지 않았는지
+랜딩 페이지 애니메이션이 기존처럼 동작하는지
+스크롤 후 features/workflow/node-edge 섹션 애니메이션이 정상 실행되는지
+Desktop 성능이 유지되는지
+```
+
+측정 파일명 예시:
+
+```txt
+performance-reports/measurements/after/phase4/lighthouse_desktop_after_phase4.json
+performance-reports/measurements/after/phase4/lighthouse_mobile_after_phase4.json
+```
+
 ## Phase 4. Toss 폰트 최적화
 
 목표:
@@ -480,6 +591,18 @@ UI 변화를 최소화하기 위해 다음 순서로 진행합니다.
 10. Phase 6: 전역 CSS/unused JS 점검
 ```
 
+Phase 3 측정 이후 업데이트된 실제 다음 순서:
+
+```txt
+1. Phase 3 결과 확인: scene-1.mp4 초기 요청 제거 여부 확인
+2. Mobile TBT / long task 증가 여부 확인
+3. Phase 3.5: 랜딩 애니메이션 초기화 지연 및 JS 실행 비용 개선
+4. Vercel Preview 재배포
+5. Lighthouse Desktop/Mobile 재측정
+6. TBT, long task, Main-thread work 개선 여부 확인
+7. 이후 Phase 4: Toss 폰트 최적화 검토
+```
+
 가장 먼저 진행할 작업:
 
 ```txt
@@ -516,6 +639,10 @@ performance-reports/measurements/after/phase1/lighthouse_desktop_after_phase1.js
 performance-reports/measurements/after/phase1/lighthouse_mobile_after_phase1.json
 performance-reports/measurements/after/phase2/lighthouse_desktop_after_phase2.json
 performance-reports/measurements/after/phase2/lighthouse_mobile_after_phase2.json
+performance-reports/measurements/after/phase3/lighthouse_desktop_after_phase3.json
+performance-reports/measurements/after/phase3/lighthouse_mobile_after_phase3.json
+performance-reports/measurements/after/phase4/lighthouse_desktop_after_phase4.json
+performance-reports/measurements/after/phase4/lighthouse_mobile_after_phase4.json
 ```
 
 반드시 기록할 항목:
@@ -602,5 +729,9 @@ UI는 유지한 상태에서 hero video의 preload 전략을 조정하고 poster
 [ ] poster 적용
 [ ] 재측정
 [ ] Phase 3 lazy loading 필요 여부 판단
+[ ] Phase 3 결과에서 Mobile TBT / long task 확인
+[ ] Phase 3.5: useLandingAnimations.ts 초기화 비용 분석
+[ ] Phase 3.5: below-the-fold 애니메이션 초기화 지연
+[ ] Phase 3.5 재측정
 [ ] 폰트 최적화 방식 결정
 ```
