@@ -10,6 +10,8 @@ import {
   deleteScene,
   reorderScenes as reorderScenesApi,
 } from '../services/api/scenes'
+import { isPublicDemo } from '../services/config'
+import { publicDemoRepository } from '../services/demo/publicDemoRepository'
 import { useAsyncAction } from './helpers/useAsyncAction'
 
 export interface GenerateScenesRequest {
@@ -77,6 +79,12 @@ export const useSceneStore = defineStore('scene', () => {
   async function loadScenes(projectId: number): Promise<void> {
     currentProjectId.value = projectId
 
+    if (isPublicDemo) {
+      scenes.value = publicDemoRepository.listScenes(projectId).map((scene) => normalizeScene(scene))
+      setCompletedCount(projectId, scenes.value)
+      return
+    }
+
     await run(async () => {
       const fetched = await fetchScenes(projectId)
       scenes.value = fetched.map((scene) => normalizeScene(scene))
@@ -88,6 +96,13 @@ export const useSceneStore = defineStore('scene', () => {
     if (!currentProjectId.value) {
       error.value = 'No project selected'
       return null
+    }
+
+    if (isPublicDemo) {
+      const newScene = normalizeScene(publicDemoRepository.createScene(currentProjectId.value, data))
+      scenes.value.push(newScene)
+      setCompletedCount(currentProjectId.value, scenes.value)
+      return newScene
     }
 
     const newScene = await run(async () => {
@@ -109,6 +124,13 @@ export const useSceneStore = defineStore('scene', () => {
       return []
     }
 
+    if (isPublicDemo) {
+      const newScenes = dataList.map((data) => normalizeScene(publicDemoRepository.createScene(currentProjectId.value as number, data)))
+      scenes.value.push(...newScenes)
+      setCompletedCount(currentProjectId.value, scenes.value)
+      return newScenes
+    }
+
     const newScenes = await run(async () => {
       const created = await createScenes(currentProjectId.value as number, dataList)
       return created.map((scene) => normalizeScene(scene))
@@ -127,6 +149,15 @@ export const useSceneStore = defineStore('scene', () => {
     if (!currentProjectId.value) {
       error.value = 'No project selected'
       return false
+    }
+
+    if (isPublicDemo) {
+      const updated = publicDemoRepository.updateScene(currentProjectId.value, sceneId, data)
+      if (!updated) return false
+      const index = scenes.value.findIndex((scene) => scene.sceneId === sceneId)
+      if (index !== -1) scenes.value[index] = normalizeScene(updated)
+      setCompletedCount(currentProjectId.value, scenes.value)
+      return true
     }
 
     const updated = await run(() => updateSceneApi(sceneId, data), {
@@ -153,6 +184,14 @@ export const useSceneStore = defineStore('scene', () => {
       return false
     }
 
+    if (isPublicDemo) {
+      const success = publicDemoRepository.removeScene(currentProjectId.value, sceneId)
+      if (!success) return false
+      scenes.value = publicDemoRepository.listScenes(currentProjectId.value).map((scene) => normalizeScene(scene))
+      setCompletedCount(currentProjectId.value, scenes.value)
+      return true
+    }
+
     const success = await run(async () => {
       await deleteScene(sceneId)
       scenes.value = scenes.value.filter((s) => s.sceneId !== sceneId)
@@ -171,6 +210,11 @@ export const useSceneStore = defineStore('scene', () => {
     if (!currentProjectId.value) {
       error.value = 'No project selected'
       return false
+    }
+
+    if (isPublicDemo) {
+      scenes.value = publicDemoRepository.reorderScenes(currentProjectId.value, sceneIds).map((scene) => normalizeScene(scene))
+      return true
     }
 
     const success = await run(async () => {

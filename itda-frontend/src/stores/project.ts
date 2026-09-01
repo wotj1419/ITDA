@@ -13,6 +13,8 @@ import {
   restoreProject as restoreProjectApi,
   updateProject as updateProjectApi,
 } from '../services/api/projects'
+import { isPublicDemo } from '../services/config'
+import { publicDemoRepository } from '../services/demo/publicDemoRepository'
 import { useAsyncAction } from './helpers/useAsyncAction'
 
 export const useProjectStore = defineStore('project', () => {
@@ -73,6 +75,15 @@ export const useProjectStore = defineStore('project', () => {
   }
 
   function toggleFavorite(projectId: number): void {
+    if (isPublicDemo) {
+      publicDemoRepository.toggleFavorite(projectId)
+      favoriteIds.value = new Set(
+        projects.value
+          .filter((project) => publicDemoRepository.isFavorite(project.projectId))
+          .map((project) => project.projectId)
+      )
+      return
+    }
     if (favoriteIds.value.has(projectId)) {
       favoriteIds.value.delete(projectId)
     } else {
@@ -126,6 +137,16 @@ export const useProjectStore = defineStore('project', () => {
   }
 
   async function loadProjects(): Promise<void> {
+    if (isPublicDemo) {
+      const fetched = publicDemoRepository.listProjects()
+      projects.value = fetched
+      favoriteIds.value = new Set(
+        fetched
+          .filter((project) => publicDemoRepository.isFavorite(project.projectId))
+          .map((project) => project.projectId)
+      )
+      return
+    }
     await run(async () => {
       const fetched = await fetchProjects()
 
@@ -159,6 +180,13 @@ export const useProjectStore = defineStore('project', () => {
   }
 
   async function loadProject(projectId: number): Promise<void> {
+    if (isPublicDemo) {
+      const result = publicDemoRepository.getProject(projectId)
+      currentProject.value = result
+      if (result) touchProject(projectId)
+      if (!result) error.value = 'Project not found'
+      return
+    }
     const result = await run(() => fetchProjectById(projectId), {
       errorMessage: 'Failed to load project',
     })
@@ -173,6 +201,19 @@ export const useProjectStore = defineStore('project', () => {
   }
 
   async function loadProjectMembers(projectId: number): Promise<void> {
+    if (isPublicDemo) {
+      const members = publicDemoRepository.getProjectMembers(projectId)
+      const memberCount = members.length
+      if (currentProject.value?.projectId === projectId) {
+        currentProject.value = { ...currentProject.value, members, memberCount }
+      }
+      const index = projects.value.findIndex((project) => project.projectId === projectId)
+      if (index > -1) {
+        const existing = projects.value[index]
+        if (existing) projects.value[index] = { ...existing, memberCount }
+      }
+      return
+    }
     try {
       const members = await fetchProjectMembers(projectId)
       const memberCount = members.length
@@ -199,6 +240,12 @@ export const useProjectStore = defineStore('project', () => {
   }
 
   async function addProject(data: CreateProjectRequest): Promise<Project | null> {
+    if (isPublicDemo) {
+      const newProject = publicDemoRepository.createProject(data)
+      projects.value.push(newProject)
+      touchProject(newProject.projectId)
+      return newProject
+    }
     const newProject = await run(() => createProject(data), {
       errorMessage: 'Failed to create project',
     })
@@ -218,6 +265,14 @@ export const useProjectStore = defineStore('project', () => {
   }
 
   async function moveToTrash(projectId: number): Promise<boolean> {
+    if (isPublicDemo) {
+      const moved = publicDemoRepository.moveToTrash(projectId)
+      if (moved) {
+        projects.value = projects.value.filter((project) => project.projectId !== projectId)
+        if (currentProject.value?.projectId === projectId) currentProject.value = null
+      }
+      return moved
+    }
     const project =
       projects.value.find((item) => item.projectId === projectId) ??
       (currentProject.value?.projectId === projectId ? currentProject.value : null)
@@ -241,6 +296,18 @@ export const useProjectStore = defineStore('project', () => {
   }
 
   async function updateProject(projectId: number, data: Partial<Project>): Promise<Project | null> {
+    if (isPublicDemo) {
+      const updatedProject = publicDemoRepository.updateProject(projectId, data)
+      if (updatedProject) {
+        const index = projects.value.findIndex((project) => project.projectId === projectId)
+        if (index > -1) projects.value[index] = updatedProject
+        if (currentProject.value?.projectId === projectId) {
+          currentProject.value = { ...currentProject.value, ...updatedProject }
+        }
+        touchProject(projectId)
+      }
+      return updatedProject
+    }
     const existing =
       currentProject.value?.projectId === projectId
         ? currentProject.value
@@ -273,20 +340,31 @@ export const useProjectStore = defineStore('project', () => {
   }
 
   async function getDeletedProjects(): Promise<Project[]> {
+    if (isPublicDemo) return publicDemoRepository.getDeletedProjects()
     const result = await run(() => fetchDeletedProjects(), { errorMessage: 'Failed to load deleted projects' })
     return result ?? []
   }
 
   async function restoreProject(projectId: number): Promise<void> {
+    if (isPublicDemo) {
+      publicDemoRepository.restoreProject(projectId)
+      await loadProjects()
+      return
+    }
     await run(() => restoreProjectApi(projectId), { errorMessage: 'Failed to restore project' })
     await loadProjects()
   }
 
   async function permanentDeleteProject(projectId: number): Promise<void> {
+    if (isPublicDemo) {
+      publicDemoRepository.deleteProjectPermanently(projectId)
+      return
+    }
     await run(() => deleteProjectPermanently(projectId), { errorMessage: 'Failed to permanently delete project' })
   }
 
   async function inviteMember(projectId: number, email: string, role: 'ADMIN' | 'EDITOR' | 'VIEWER'): Promise<void> {
+    if (isPublicDemo) return
     await run(async () => {
       // Dynamic import to avoid circular dependency if any, though explicit import is better if safe
       const api = await import('../services/api/projects')
@@ -296,6 +374,7 @@ export const useProjectStore = defineStore('project', () => {
   }
 
   async function updateMemberRole(projectId: number, userId: number, role: 'ADMIN' | 'EDITOR' | 'VIEWER'): Promise<void> {
+    if (isPublicDemo) return
     await run(async () => {
       const api = await import('../services/api/projects')
       await api.updateMemberRole(projectId, userId, role)
@@ -304,6 +383,7 @@ export const useProjectStore = defineStore('project', () => {
   }
 
   async function removeMember(projectId: number, userId: number): Promise<void> {
+    if (isPublicDemo) return
     await run(async () => {
       const api = await import('../services/api/projects')
       await api.removeMember(projectId, userId)

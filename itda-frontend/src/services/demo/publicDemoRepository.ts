@@ -28,7 +28,7 @@ const sharedOwner: ProjectMember = {
   role: 'OWNER',
 }
 
-const createSeedScenes = (projectId: number, firstSceneId: number): Scene[] => [
+const createSeedScenes = (firstSceneId: number): Scene[] => [
   {
     sceneId: firstSceneId,
     title: '장면 1. 이야기의 시작',
@@ -124,10 +124,10 @@ const createSeedState = (): DemoState => {
     projects,
     projectDetails,
     scenesByProject: {
-      101: createSeedScenes(101, 1001),
-      102: createSeedScenes(102, 1011),
-      103: createSeedScenes(103, 1021),
-      104: createSeedScenes(104, 1031),
+      101: createSeedScenes(1001),
+      102: createSeedScenes(1011),
+      103: createSeedScenes(1021),
+      104: createSeedScenes(1031),
     },
     favoriteIds: [101],
     nextProjectId: 1000,
@@ -185,7 +185,7 @@ const updateSceneCount = (state: DemoState, projectId: number): void => {
 const createGeneratedScenes = (state: DemoState): Scene[] => {
   const firstSceneId = state.nextSceneId
   state.nextSceneId += 3
-  return createSeedScenes(0, firstSceneId)
+  return createSeedScenes(firstSceneId)
 }
 
 export function createPublicDemoRepository(storage: StorageLike) {

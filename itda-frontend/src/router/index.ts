@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import type { RouteRecordRaw } from 'vue-router'
+import { isPublicDemo } from '../services/config'
 
 const routes: RouteRecordRaw[] = [
   {
@@ -116,7 +117,7 @@ router.beforeEach((to, _from, next) => {
   const isAuthenticated = !!getAccessToken()
 
   // 인증 필요한 페이지인데 로그인 안 된 경우 → auth로
-  if (to.meta.requiresAuth && !isAuthenticated) {
+  if (to.meta.requiresAuth && !isAuthenticated && !isPublicDemo) {
     next({ name: 'auth', query: { redirect: to.fullPath } })
     return
   }
