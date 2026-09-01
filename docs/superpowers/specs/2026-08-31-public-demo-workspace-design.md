@@ -15,7 +15,7 @@ The demo includes these public routes:
 - `/projects/:id`
 - `/projects/:projectId/scenes/:sceneId`
 
-The existing Vercel SPA rewrite remains the only hosting requirement, so direct navigation and browser refresh continue to work on every route.
+The existing Vercel SPA rewrite remains the only hosting requirement, so direct navigation and browser refresh continue to work on every route. These routes bypass the existing login guard only while the explicit `VITE_PUBLIC_DEMO` flag is true; all other builds retain their existing authentication requirement.
 
 ## Architecture
 
