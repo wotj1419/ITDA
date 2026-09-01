@@ -29,6 +29,7 @@ import NodeDeleteConfirmModal from '../components/scene-editor/NodeDeleteConfirm
 import { useLayoutButtonPosition } from '../composables/useLayoutButtonPosition';
 import { useSceneEditorEvents } from '../composables/useSceneEditorEvents';
 import { getSceneNodeDisplayName } from '../utils/sceneNodeLabels';
+import { isPublicDemo } from '../services/config';
 
 // =============================================================================
 // Composables & Stores
@@ -54,6 +55,7 @@ const NODE_DELETE_MODAL_ID = 'node-delete-confirm';
  */
 const isPanelOpen = computed(() => !!nodeStore.selectedNodeId);
 const isMockMode = computed(() => import.meta.env.DEV && String(route.query.mock ?? '') === 'true');
+const isDemoEditorMode = computed(() => isPublicDemo || isMockMode.value);
 
 // =============================================================================
 // Route Parameters
@@ -105,6 +107,14 @@ onMounted(async () => {
   window.addEventListener('keydown', handleEditorKeydown);
   window.addEventListener('beforeunload', handleBeforeUnload);
   if (projectId.value && sceneId.value) {
+    if (isPublicDemo) {
+      await Promise.all([
+        projectStore.loadProject(projectId.value),
+        sceneStore.loadScenes(projectId.value),
+      ]);
+      nodeStore.loadMockSceneNodes(sceneId.value, true);
+      return;
+    }
     if (isMockMode.value) {
       const now = new Date().toISOString();
 
@@ -187,9 +197,14 @@ watch([projectId, sceneId], async ([, newSceneId]) => {
       nodeStore.flushPersistNodePositions();
       nodeStore.flushSave();
     }
-    if (isMockMode.value) {
+    if (isDemoEditorMode.value) {
+      if (isPublicDemo && projectId.value) {
+        await sceneStore.loadScenes(projectId.value);
+      }
       if (projectId.value) {
-        await objectStore.loadObjects(projectId.value);
+        if (!isPublicDemo) {
+          await objectStore.loadObjects(projectId.value);
+        }
       }
       nodeStore.loadMockSceneNodes(newSceneId as string, true);
       return;

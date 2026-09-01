@@ -5,6 +5,7 @@ import { useSceneStore } from '../../../stores/scene';
 import { useObjectStore } from '../../../stores/object';
 import { useUIStore } from '../../../stores/ui';
 import { useScenarioStore } from '../../../stores/scenario';
+import { isPublicDemo } from '../../../services/config';
 import type { Scene, SceneStatus } from '../../../types/api/scenes';
 import type { ObjectSheet } from '../../../types/api/objects';
 import { acquireMediaLease, releaseMediaLease, type MediaUrlLease } from '../../../services/api/media';
@@ -79,10 +80,10 @@ export function useProjectDetail() {
     if (projectId.value) {
       await projectStore.loadProject(projectId.value);
       await projectStore.loadProjectMembers(projectId.value);
-      await Promise.all([
-        sceneStore.loadScenes(projectId.value),
-        objectStore.loadObjects(projectId.value),
-      ]);
+      await sceneStore.loadScenes(projectId.value);
+      if (!isPublicDemo) {
+        await objectStore.loadObjects(projectId.value);
+      }
 
       scenarioStore.switchProject(projectId.value);
 
@@ -118,10 +119,10 @@ export function useProjectDetail() {
 
         await projectStore.loadProject(id);
         await projectStore.loadProjectMembers(id);
-        await Promise.all([
-          sceneStore.loadScenes(id),
-          objectStore.loadObjects(id),
-        ]);
+        await sceneStore.loadScenes(id);
+        if (!isPublicDemo) {
+          await objectStore.loadObjects(id);
+        }
       }
     }
   );
@@ -192,6 +193,10 @@ export function useProjectDetail() {
   };
 
   const loadScenePreviews = async () => {
+    if (isPublicDemo) {
+      scenePreviewMap.value = {};
+      return;
+    }
     if (!projectId.value || scenes.value.length === 0) {
       scenePreviewMap.value = {};
       return;

@@ -54,6 +54,7 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useCollabStore } from '../stores/collab'
 import { useTimelineStore } from '../stores/timeline'
 import { useUIStore } from '../stores/ui'
+import { isPublicDemo } from '../services/config'
 
 const collabStore = useCollabStore()
 const timelineStore = useTimelineStore()
@@ -63,7 +64,7 @@ const isPreviewTimelineActive = ref(false)
 const projectPreviewClips = computed(() => timelineStore.orderedClips)
 const isTimelinePreviewOpen = computed(() => uiStore.activeModal === TIMELINE_PLAYBACK_MODAL_ID)
 // Hide Scenes tab UI (page disabled for now).
-const isScenesTabHidden = true
+const isScenesTabHidden = !isPublicDemo
 const visibleTabs = computed(() =>
   tabItems.filter((tab) => (isScenesTabHidden ? tab.key !== 'scenes' : true))
 )
@@ -71,7 +72,7 @@ const visibleTabs = computed(() =>
 // ... existing code ...
 
 onMounted(() => {
-  if (projectId.value) {
+  if (projectId.value && !isPublicDemo) {
     collabStore.joinRoom(Number(projectId.value))
     collabStore.updateLocation('SCENE_LIST')
   }
@@ -79,7 +80,7 @@ onMounted(() => {
 
 // Watch for ID changes (e.g. reload or route update)
 watch(projectId, (newId) => {
-    if (newId) {
+    if (newId && !isPublicDemo) {
         collabStore.joinRoom(Number(newId))
         collabStore.updateLocation('SCENE_LIST')
     }

@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
 import { Plus } from 'lucide-vue-next'
 import { useProjectStore } from '../stores/project'
 import { useInviteStore } from '../stores/invites'
@@ -8,6 +7,7 @@ import type { ProjectInvite } from '../types/api/invites'
 import { useUIStore } from '../stores/ui'
 import { useCollabStore } from '../stores/collab'
 import { useAuthStore } from '../stores/auth'
+import { isPublicDemo } from '../services/config'
 import type { ProjectRole } from '../types/api/projects'
 import DefaultLayout from '../layouts/DefaultLayout.vue'
 import ProjectCard from '../components/project/ProjectCard.vue'
@@ -16,13 +16,11 @@ import StartCollabModal from '../components/project/StartCollabModal.vue'
 import ConfirmModal from '../components/common/ConfirmModal.vue'
 import UserWelcomeTitle from '../components/common/UserWelcomeTitle.vue'
 
-const router = useRouter()
 const projectStore = useProjectStore()
 const inviteStore = useInviteStore()
 const uiStore = useUIStore()
 const collabStore = useCollabStore()
 const authStore = useAuthStore()
-const isCreatingProject = ref(false)
 const viewMode = ref<'grid' | 'list'>('grid')
 const unreadNotifications = computed(() => inviteStore.unreadCount)
 const isNotificationOpen = ref(false)
@@ -58,8 +56,10 @@ const projectToDelete = ref<{ projectId: number; title: string; role: ProjectRol
 onMounted(async () => {
   await projectStore.loadProjects()
   isProjectsLoaded.value = true
-  await inviteStore.loadInvites()
-  startInvitePolling()
+  if (!isPublicDemo) {
+    await inviteStore.loadInvites()
+    startInvitePolling()
+  }
   document.addEventListener('click', handleNotificationClickOutside)
 })
 
@@ -88,26 +88,8 @@ const handleToggleFavorite = (projectId: number) => {
   projectStore.toggleFavorite(projectId)
 }
 
-const createEmptyProject = async () => {
-  if (isCreatingProject.value) return
-  isCreatingProject.value = true
-  const newProject = await projectStore.addProject({
-    title: '새 프로젝트',
-    description: '',
-    genre: '',
-  })
-  isCreatingProject.value = false
-
-  if (newProject) {
-    router.push({ name: 'project-detail', params: { id: newProject.projectId } })
-    return
-  }
-
-  uiStore.showToast({
-    type: 'error',
-    title: '프로젝트 생성 실패',
-    message: '잠시 후 다시 시도해주세요.',
-  })
+const openNewProjectModal = () => {
+  uiStore.openModal('new-project')
 }
 
 const toggleNotifications = () => {
@@ -205,6 +187,7 @@ const openStartCollabModal = () => {
 }
 
 const handleStartCollab = async (projectId: number) => {
+  if (isPublicDemo) return
   await collabStore.joinRoom(projectId)
   collabStore.showFloatingBar(true)
 }
@@ -311,8 +294,7 @@ const cancelDelete = () => {
       <button
         class="button"
         type="button"
-        :disabled="isCreatingProject"
-        @click="createEmptyProject"
+        @click="openNewProjectModal"
       >
         <span class="button__text">새 프로젝트</span>
         <span class="button__icon">
@@ -335,7 +317,7 @@ const cancelDelete = () => {
           <h2 class="promo-title">영상 제작, 두려워 마세요!</h2>
           <p class="promo-description">잇다와 함께 당신의 아이디어를 빛내세요.</p>
           
-          <button class="promo-cta" type="button" @click="createEmptyProject">
+          <button class="promo-cta" type="button" @click="openNewProjectModal">
             지금 바로 시작하기
             <span class="promo-cta-arrow" aria-hidden="true">→</span>
           </button>
@@ -437,7 +419,7 @@ const cancelDelete = () => {
           />
 
           <!-- Add New Project Card -->
-          <button class="add-project-card" :disabled="isCreatingProject" @click="createEmptyProject">
+          <button class="add-project-card" @click="openNewProjectModal">
             <div class="add-project-icon">
               <Plus class="icon-lg" />
             </div>

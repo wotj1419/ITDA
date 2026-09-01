@@ -6,6 +6,7 @@ import ModalBase from '../common/ModalBase.vue'
 import Button from '../common/Button.vue'
 import { useProjectStore } from '../../stores/project'
 import { useUIStore } from '../../stores/ui'
+import { isPublicDemo } from '../../services/config'
 
 const router = useRouter()
 const projectStore = useProjectStore()
@@ -54,14 +55,17 @@ const toggleAISection = () => {
 
 const generateScenario = async () => {
   isGenerating.value = true
-  // Simulate AI generation
-  await new Promise((resolve) => setTimeout(resolve, 2000))
+  if (!isPublicDemo) {
+    await new Promise((resolve) => setTimeout(resolve, 2000))
+  } else {
+    form.sceneCount = 3
+  }
   isGenerating.value = false
   aiGenerated.value = true
   uiStore.showToast({
     type: 'success',
     title: 'AI 시나리오 생성 완료',
-    message: `${form.sceneCount}개의 씬이 자동 생성되었습니다.`,
+    message: isPublicDemo ? '예시 씬 3개가 준비되었습니다.' : `${form.sceneCount}개의 씬이 자동 생성되었습니다.`,
   })
 }
 
@@ -88,7 +92,9 @@ const createProject = async () => {
     uiStore.showToast({
       type: 'success',
       title: '프로젝트 생성 완료',
-      message: `${form.title} 프로젝트가 생성되었습니다.`,
+      message: isPublicDemo
+        ? `${form.title} 프로젝트와 예시 씬 3개가 생성되었습니다.`
+        : `${form.title} 프로젝트가 생성되었습니다.`,
     })
     uiStore.closeModal()
 
