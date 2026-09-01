@@ -43,11 +43,11 @@ The existing default layout exposes the dashboard, favorites, shared, and trash 
 
 ### Create a project with scenarios
 
-The dashboard's `새 프로젝트` action opens the existing project creation form. The visitor supplies a project title and submits it. Demo mode creates the project and automatically creates three draft scenarios with fixed Korean portfolio copy. The app then navigates to the new project detail route.
+The dashboard's `새 프로젝트` action opens the existing `새 프로젝트 만들기` modal. The visitor can open its `AI 시나리오 생성` section, select a scene count, and press the existing generation control; public-demo mode presents the existing completion state without calling an AI service. When the visitor submits a project title, demo mode creates the project and automatically creates exactly three draft scenarios with fixed Korean portfolio copy. The app then navigates to the new project detail route.
 
 ### Select a scenario
 
-Project detail displays the three scenarios. The existing scenario navigation/sidebar is populated from the local repository. Selecting a scenario navigates to its scene-edit route and displays its stored title and description. The creation flow therefore has an unbroken path from project creation to scenario selection.
+Project detail displays the three scenarios in its existing scene view. Selecting a scenario navigates to its existing scene-edit route and displays its stored title and description. The editor continues to use its existing right-side properties panel: selecting one of the seeded example nodes opens that panel. The creation flow therefore has an unbroken path from project creation to scenario selection and the existing right-side editor panel.
 
 ### Favorites, shared, and trash
 
@@ -64,6 +64,7 @@ If a project or scene ID does not exist in the local repository, the existing em
 Automated tests verify:
 
 - Public-demo mode returns seeded active, shared, favorite, and deleted data.
+- The existing project creation modal is opened from the dashboard and, in public-demo mode, its AI-generation control completes without a network request.
 - Creating a project creates exactly three draft scenarios and makes them retrievable by project ID.
 - Local favorite and trash mutations affect the corresponding lists.
 - All in-scope routes are public in the router configuration.
